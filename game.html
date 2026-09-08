@@ -874,9 +874,14 @@ function allAtDoor(o){
   }
   return true;
 }
-/* Укрытие для пряток игрок проходит насквозь — иначе за него не спрятаться. */
+/* Укрытие для пряток игрок проходит насквозь — иначе за него не спрятаться.
+   Ядовитый объект тоже не solid: иначе физика сначала аккуратно ставит
+   игрока на крышку (как на обычный блок), а проверка на смерть ниже видит
+   уже НЕ пересекающиеся хитбоксы — и на верхушке шипа можно стоять живым.
+   Без solid игрок проваливается в хитбокс, где его и находит die(). */
 var solid  = function(o){ return SOLID.indexOf(o.type) !== -1 && !opened(o)
-                              && o.ghost !== true && o.hideSpot !== true; };
+                              && o.ghost !== true && o.hideSpot !== true
+                              && o.deadly !== true; };
 var hazard = function(o){ return o.deadly === true && !opened(o); };
 function hit(ax,ay,aw,ah,bx,by,bw,bh){ return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by; }
 
@@ -2138,8 +2143,8 @@ requestAnimationFrame(loop);
 <script src="account.js?v=100" defer></script>
 
 
-<script src="game.js?v=106"></script>
-        <script src="i18n.js?v=105"></script>
+<script src="game.js?v=107"></script>
+        <script src="i18n.js?v=106"></script>
         <script src="owner.js?v=102" defer></script>
         <script src="skinAvatar.js?v=100" defer></script>
 </body>

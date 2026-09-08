@@ -200,3 +200,12 @@ ok('превью-картинка на месте', fs.existsSync(__dirname + '/
 console.log('\nпрыжок:');
 ok('удержание = повтор',    /if\(keys\.u && !pl\.selfJump && \(pl\.ground \|\| coy > 0\)\) buf = BUFFER;/.test(src));
 ok('то же в игре',          /if\(keys\.u && !pl\.selfJump && \(pl\.ground \|\| coy > 0\)\) buf = BUFFER;/.test(game));
+
+console.log('\nядовитые объекты не solid:');
+// раньше "яд" считался solid наравне с обычным блоком — физика ставила
+// игрока на крышку целым и невредимым, а проверка на смерть после этого
+// видела уже не пересекающиеся хитбоксы. Живьём через Playwright проверено:
+// без deadly!==true в solid() игрок спокойно ходит по ядовитой платформе.
+const solidDef = /var solid\s*=\s*function\(o\)\{[\s\S]*?\};/;
+ok('в редакторе deadly исключён из solid', /o\.deadly !== true/.test(src.match(solidDef)[0]));
+ok('в игре deadly исключён из solid',      /o\.deadly !== true/.test(game.match(solidDef)[0]));
