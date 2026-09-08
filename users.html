@@ -241,7 +241,9 @@
           + '<div class="who"><a href="game.html?view=' + encodeURIComponent(m.mapName)
           +   '&author=' + encodeURIComponent(who) + '">' + esc(m.mapName) + '</a>'
           +   '<span>' + m.mapType + ' · ' + T('colRating', 'рейтинг') + ' ' + m.rating + '</span></div>'
-          + (isMe ? '<button class="bad" data-map="' + esc(m.mapName) + '">'
+          + (isMe ? '<button class="go" data-edit-map="' + esc(m.mapName) + '">'
+                    + T('editTxt', 'Изменить') + '</button>'
+                  + '<button class="bad" data-map="' + esc(m.mapName) + '">'
                     + T('removeTxt', 'Удалить') + '</button>' : '')
           + '</div>';
       }).join('');
@@ -294,6 +296,13 @@
       var m2 = { accept: '/acceptFriendRequest', cancel: '/cancelFriendRequest', unfriend: '/unfriend' };
       post(m2[act.dataset.act], { name: act.dataset.n }).then(function () { showTab(tab); })
         .catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var em = e.target.closest && e.target.closest('[data-edit-map]');
+    if (em) {
+      location.href = 'editor.html?editMap=' + encodeURIComponent(em.dataset.editMap)
+                     + '&editAuthor=' + encodeURIComponent(who);
       return;
     }
 
