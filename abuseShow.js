@@ -284,11 +284,17 @@
   }
 
   /* ---------- летающее медиа ---------- */
+  /* Каждый шаг очистки — в своём try/catch: если один элемент бросит
+     исключение (например, видео ещё не готово к pause()), это не должно
+     обрывать цикл и оставлять остальные элементы висеть на экране
+     навсегда (баг «застывает всё» при нажатии «убрать всё»). */
+  function releaseMedia(el) {
+    try { if (el.pause) el.pause(); } catch (e) {}
+    try { if (el.tagName === 'VIDEO') { el.removeAttribute('src'); el.load(); } } catch (e) {}
+    try { el.remove(); } catch (e) {}
+  }
   function rebuildMedia(list) {
-    for (var i = 0; i < media.length; i++) {
-      try { if (media[i].el.pause) media[i].el.pause(); } catch (e) {}
-      media[i].el.remove();
-    }
+    for (var i = 0; i < media.length; i++) releaseMedia(media[i].el);
     media.length = 0;
     if (!list || !list.length) return;
     ensureLayer();
@@ -361,7 +367,7 @@
   function drop(el) {
     for (var i = media.length - 1; i >= 0; i--)
       if (media[i].el === el) { media.splice(i, 1); break; }
-    el.remove();
+    try { el.remove(); } catch (e) {}
   }
 
   function moveMedia() {

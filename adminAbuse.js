@@ -48,26 +48,45 @@
   }
 
   var CSS = ''
-    + '#aaFab{position:fixed;right:14px;bottom:14px;z-index:10000;padding:10px 14px;border-radius:12px;'
-    + 'background:#b91c1c;color:#fff;font:700 12.5px system-ui,sans-serif;letter-spacing:.4px;'
-    + 'cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.25);user-select:none}'
-    + '#aaFab:hover{background:#dc2626}'
-    + '#aaPanel{position:fixed;right:14px;bottom:60px;z-index:10000;width:296px;max-height:78vh;'
-    + 'overflow:auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:12px;'
-    + 'display:none;box-shadow:0 12px 34px rgba(15,23,42,.22);font:13px system-ui,sans-serif;color:#0f172a}'
+    + '#aaFab{position:fixed;right:14px;bottom:14px;z-index:10000;display:flex;align-items:center;gap:7px;'
+    + 'padding:11px 16px;border-radius:999px;border:none;'
+    + 'background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;font:700 12.5px system-ui,sans-serif;'
+    + 'letter-spacing:.3px;cursor:pointer;box-shadow:0 8px 22px rgba(185,28,28,.38);user-select:none;'
+    + 'transition:transform .15s,box-shadow .15s}'
+    + '#aaFab:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(185,28,28,.46)}'
+    + '#aaFab svg{width:16px;height:16px;flex:none}'
+    + '#aaFab.on{border-radius:12px}'
+    + '#aaPanel{position:fixed;right:14px;bottom:64px;z-index:10000;width:308px;max-width:calc(100vw - 28px);'
+    + 'max-height:78vh;overflow:auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;'
+    + 'display:none;box-shadow:0 16px 40px rgba(15,23,42,.28);font:13px system-ui,sans-serif;color:#0f172a}'
     + '#aaPanel.on{display:block}'
+    + '#aaHead{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;'
+    + 'padding:12px 14px;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;'
+    + 'border-radius:16px 16px 0 0}'
+    + '#aaHead b{font-size:13px;letter-spacing:.3px}'
+    + '#aaClose{width:24px;height:24px;border-radius:50%;border:none;background:rgba(255,255,255,.2);'
+    + 'color:#fff;font:16px/1 system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;'
+    + 'justify-content:center;padding:0}'
+    + '#aaClose:hover{background:rgba(255,255,255,.32)}'
+    + '#aaBody{padding:12px 14px 14px}'
     + '.aaH{font-weight:700;font-size:11px;letter-spacing:.5px;text-transform:uppercase;'
-    + 'color:#b91c1c;margin:10px 0 6px}'
-    + '.aaH:first-child{margin-top:0}'
-    + '#aaPanel input,#aaPanel select{width:100%;box-sizing:border-box;padding:7px 8px;margin-bottom:6px;'
-    + 'border:1px solid #e2e8f0;border-radius:8px;font:inherit;font-size:12.5px;background:#f8fafc}'
+    + 'color:#b91c1c;margin:14px 0 6px;padding-top:10px;border-top:1px solid #f1f5f9}'
+    + '.aaH:first-child{margin-top:0;padding-top:0;border-top:none}'
+    + '#aaPanel input,#aaPanel select{width:100%;box-sizing:border-box;padding:8px 9px;margin-bottom:6px;'
+    + 'border:1px solid #e2e8f0;border-radius:9px;font:inherit;font-size:12.5px;background:#f8fafc;'
+    + 'transition:border-color .15s}'
+    + '#aaPanel input:focus,#aaPanel select:focus{outline:none;border-color:#b91c1c}'
     + '.aaRow{display:flex;gap:6px}.aaRow input{margin-bottom:0}'
-    + '#aaPanel button{padding:7px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;'
-    + 'font:inherit;font-size:12px;font-weight:600;cursor:pointer;margin:0 4px 4px 0}'
+    + '#aaPanel button{padding:7px 11px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;'
+    + 'font:inherit;font-size:12px;font-weight:600;cursor:pointer;margin:0 5px 5px 0;'
+    + 'transition:border-color .15s,color .15s,background .15s}'
     + '#aaPanel button:hover{border-color:#b91c1c;color:#b91c1c}'
     + '#aaPanel button.go{background:#b91c1c;border-color:#b91c1c;color:#fff}'
-    + '#aaMsg{font-size:11.5px;color:#64748b;min-height:15px;margin-top:4px;line-height:1.5}'
-    + '#aaNote{font-size:11px;color:#94a3b8;line-height:1.5;margin-top:6px}';
+    + '#aaPanel button.go:hover{background:#dc2626;border-color:#dc2626;color:#fff}'
+    + '#aaPanel button.danger{color:#b91c1c}'
+    + '#aaPanel button.danger:hover{background:#fef2f2}'
+    + '#aaMsg{font-size:11.5px;color:#334155;min-height:15px;margin-top:6px;line-height:1.5;font-weight:600}'
+    + '#aaNote{font-size:11px;color:#94a3b8;line-height:1.5;margin-top:8px}';
 
   function build() {
     var st = document.createElement('style');
@@ -76,13 +95,17 @@
 
     fab = document.createElement('div');
     fab.id = 'aaFab';
-    fab.textContent = 'Admin Abuse';
+    fab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+      + 'stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v6c0 5 4 8.5 9 9 5-.5 9-4 9-9V7z"/>'
+      + '<path d="M9 12l2 2 4-4"/></svg><span>Admin Abuse</span>';
     document.body.appendChild(fab);
 
     panel = document.createElement('div');
     panel.id = 'aaPanel';
     panel.innerHTML =
-        '<div class="aaH">Летающее медиа</div>'
+        '<div id="aaHead"><b>Admin Abuse</b><button id="aaClose" type="button" aria-label="Закрыть">&times;</button></div>'
+      + '<div id="aaBody">'
+      + '<div class="aaH">Летающее медиа</div>'
       + '<input id="aaUrl" placeholder="ссылка на картинку, гифку или видео">'
       + '<input id="aaFile" type="file" multiple accept="image/*,video/*,audio/*">'
       + '<label style="display:block;font-size:12px;margin:2px 0 6px">'
@@ -100,7 +123,7 @@
       +   '<input id="aaFull" type="checkbox" style="width:auto;margin-right:6px">'
       +   'во весь экран</label>'
       + '<button class="go" id="aaGo">Запустить всем</button>'
-      + '<button id="aaClr">Убрать медиа</button>'
+      + '<button class="danger" id="aaClr">Убрать медиа</button>'
 
       + '<div class="aaH">Музыка</div>'
       + '<input id="aaSong" placeholder="ссылка на mp3">'
@@ -139,14 +162,21 @@
       + '<button id="aaTimeOff">Убрать таймер</button>'
 
       + '<div class="aaH">Разное</div>'
-      + '<button id="aaAll">Убрать всё шоу</button>'
+      + '<button class="danger" id="aaAll">Убрать всё шоу</button>'
       + '<div id="aaMsg"></div>'
       + '<div id="aaNote">Всё, что тут включено, видят все игроки на всех '
       +   'страницах. Обновляется у них в течение трёх секунд. Файлов за раз — '
-      +   'сколько выберешь, в полёте держится до тридцати.</div>';
+      +   'сколько выберешь, в полёте держится до тридцати.</div>'
+      + '</div>';
     document.body.appendChild(panel);
 
-    fab.onclick = function () { panel.classList.toggle('on'); };
+    function togglePanel(on) {
+      var next = typeof on === 'boolean' ? on : !panel.classList.contains('on');
+      panel.classList.toggle('on', next);
+      fab.classList.toggle('on', next);
+    }
+    fab.onclick = function () { togglePanel(); };
+    document.getElementById('aaClose').onclick = function () { togglePanel(false); };
 
     function opts() {
       return {

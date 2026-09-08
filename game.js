@@ -431,7 +431,9 @@
       banner(TR('emptyTitle', 'Здесь пока пусто'), TR('emptyText', 'Никто ещё не опубликовал карту для этого режима. Открой Map Editor и выложи свою.'), true);
       return;
     }
-    banner('', '', false);
+    // карта фоном грузится и во время ожидания игроков — баннер тогда трогать не надо,
+    // иначе фоновая подгрузка молча гасит «Ожидание игроков» посреди ожидания
+    if (phase !== 'waiting') banner('', '', false);
     $('gMapName').textContent = m.mapName;
     $('gMapAuthor').textContent = TR('mapBy', 'автор: ') + m.author;
     try {
@@ -669,9 +671,12 @@
     connect();
 
     if (MODE === 'hideAndSeek') {
+      /* Раньше тут висел свой баннер «роли распределятся через 30 секунд» —
+         неверный, если в итоге играть не с кем, и всё равно почти сразу
+         гас от nextMap() ниже. Реальное состояние (лобби/раунд/ожидание
+         игроков) сервер пришлёт через hsPhase/hsState через мгновение
+         после join — тем баннером и живём, см. showWaitingForPlayers(). */
       phase = 'lobby'; phaseEnds = Date.now() + LOBBY_MS;
-      banner(TR('waitTitle', 'Ожидание игроков'), TR('waitText', 'Роли распределятся через 30 секунд.'), true);
-      setTimeout(function () { banner('', '', false); }, 3500);
     } else {
       phase = 'round'; phaseEnds = Date.now() + ROUND_MS;
     }
