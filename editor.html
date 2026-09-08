@@ -2360,6 +2360,31 @@ resetView();
 view.x = 40; view.y = -60;
 render();
 requestAnimationFrame(loop);
+
+/* Открытие своей карты на редактирование: со страницы профиля кнопка
+   «Изменить» у карты передаёт ?editMap=&editAuthor=. Подгружаем данные
+   через тот же /getMapData, что и просмотр карты, и запоминаем имя —
+   кнопка «Опубликовать» ниже подставит его по умолчанию, чтобы
+   пересохранить карту под тем же названием, а не завести дубликат. */
+(function(){
+  var qs = new URLSearchParams(location.search);
+  var em = qs.get("editMap"), ea = qs.get("editAuthor");
+  if(!em || !ea) return;
+  fetch("/getMapData?author=" + encodeURIComponent(ea) + "&mapName=" + encodeURIComponent(em),
+        {credentials:"same-origin"})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!data){ dialog("Карта не найдена", "Не удалось загрузить «" + em + "».", null); return; }
+      GAME.loadMap(data);
+      document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
+      syncTools();
+      if(!toolOK(tool)) setTool("select");
+      sel = null; inspect();
+      GAME.editingMapName = em;
+      document.title = "AIBrofist Editor — " + em;
+    })
+    .catch(function(){ dialog("Сервер недоступен", "Не удалось загрузить карту для редактирования.", null); });
+})();
 })();
 
 /* Второе соединение убрано: блок открывал лишний socket и заводил призрака
@@ -2484,7 +2509,10 @@ requestAnimationFrame(loop);
   }
 
   btn.onclick = function(){
-    ask('Публикация карты', 'Название карты (2–30 символов):', '', function(name){
+    // редактируем свою уже опубликованную карту — подставляем её имя,
+    // чтобы публикация по умолчанию перезаписала именно её
+    var defName = (window.GAME && window.GAME.editingMapName) || '';
+    ask('Публикация карты', 'Название карты (2–30 символов):', defName, function(name){
       name = String(name || '').trim();
       if (name.length < 2) { say('Слишком короткое название', 'Нужно хотя бы 2 символа.'); return; }
       send(name, false);
