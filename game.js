@@ -813,6 +813,7 @@
       lastSk = null;
       prev.x = prev.y = prev.w = prev.h = null;
       prev.c = prev.s = prev.f = prev.d = null;
+      dupBlocked = false;      // новое соединение — даём серверу решить заново
 
       Promise.all([
         fetch('/iSigned', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return null; }),
@@ -828,7 +829,7 @@
         // запасной путь: старый сервер ничего о рулетке не знает — тогда,
         // как и раньше, искателем становится игрок с наименьшим id
         setTimeout(function () {
-          if (hsEver || MODE !== 'hideAndSeek' || VIEW || !socket.connected) return;
+          if (hsEver || dupBlocked || MODE !== 'hideAndSeek' || VIEW || !socket.connected) return;
           var lowest = socket.id;
           Object.keys(others).forEach(function (id) { if (id < lowest) lowest = id; });
           applySeeker(lowest);
@@ -844,6 +845,20 @@
     socket.on('nameFixed', function (d) {
       if (d && d.name) me.name = d.name;
       joined = true;                        // вход подтверждён — можно слать движение
+    });
+
+    /* Один аккаунт уже играет в другой вкладке или на другом устройстве:
+       сервер отказал во входе и не добавил нас в комнату — join больше не
+       подтвердится, поэтому просто показываем причину и ничего не шлём. */
+    socket.on('joinDenied', function (d) {
+      if (!d || d.reason !== 'duplicateAccount') return;
+      dupBlocked = true;
+      joined = false;
+      var rb = $('gRoleBox'); if (rb) rb.style.display = 'none';
+      var tb = $('gTimeBox'); if (tb) tb.style.display = 'none';
+      hideChance();
+      banner(TR('dupTitle', 'Аккаунт уже в игре'),
+             TR('dupText', 'Этот аккаунт уже открыт в другой вкладке или на другом устройстве. Закрой её и обнови эту страницу.'), true);
     });
 
     socket.on('state', function (list) {
@@ -1043,6 +1058,7 @@
      уже пометит скин отправленным и больше не повторит его. Раньше из-за
      этой гонки на пинге 100+ мс чужие скины пропадали почти всегда. */
   var joined = false;
+  var dupBlocked = false;      // сервер отказал: аккаунт уже играет в другой вкладке
   setInterval(function () {
     if (!socket || !joined || !GAME.playing) return;
     var p = GAME.pl;
