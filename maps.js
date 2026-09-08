@@ -24,14 +24,14 @@ const OBJ_LIMIT   = 2000;              // максимум объектов в �
    а дверь — воротами. Типы оставлены в списке, чтобы старые карты
    принимались: редактор превращает их в свойства при загрузке. */
 const TOOL_MODES = {
-  rect:null, circle:null, triangle:null, box:null, text:null, coin:null,
+  rect:null, circle:null, triangle:null, text:null, coin:null,
   gate:null, spawn:null, finishline:null,
   button:null, lever:null, water:null,
   cover:['hideAndSeek'],
   checkpoint:['race'],
   // устаревшие типы — принимаем, но в палитре их больше нет
   poison:null, spike:null, bounce:null, platform:null, rotator:null,
-  door:null, seeker:null, liquid:null
+  door:null, seeker:null, liquid:null, box:null
 };
 const TOOL_RU = {
   cover:'Укрытие', seeker:'Ищущий', door:'Дверь', button:'Кнопка',
