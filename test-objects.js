@@ -33,12 +33,12 @@ for(const c of cases){
 // движение/вращение/батут теперь по свойствам
 console.log('\nв движке:');
 const ok = (t,c)=>console.log('   '+t.padEnd(24)+':', c ? '✓' : '✗');
-ok('движение по свойству',  /if\(o\.moves && o\.type !== "box"\)\{/.test(src));
+ok('движение по свойству',  /if\(o\.moves && !o\.pushable\)\{/.test(src));
 ok('вращение по свойству',  /if\(o\.spins\)/.test(src));
 ok('батут по свойству',     /if\(o\.bouncy\)\{/.test(src));
 ok('несёт игрока',          /pl\.x \+= pl\.rideOn\._dx\|\|0; pl\.y \+= pl\.rideOn\._dy\|\|0;/.test(src));
 ok('сдвиг платформы один раз', !/if\(o\.moves\)\{ pl\.x \+=/.test(src) &&
-                                /if\(o\.moves \|\| o\.type === "box"\) pl\.rideOn = o;/.test(src));
+                                /if\(o\.moves \|\| o\.pushable\) pl\.rideOn = o;/.test(src));
 ok('сторона по «откуда пришёл»', /var fromLeft  = \(xBefore \+ pl\.w\) <= leftWas \+ 2;/.test(src) &&
                                 /var xBefore = pl\.x;/.test(src));
 ok('толчок в темпе платформы', /var lim  = Math\.abs\(pdx\) \+ Math\.abs\(pl\.vx\) \+ 4;/.test(src) &&
@@ -60,8 +60,8 @@ ok('прыжок не режется сразу', /MIN_HOLD = 7;/.test(src) && /
 ok('посадка по «откуда пришёл»', /var fromTop   = \(yBefore \+ pl\.h\) <= topWas \+ 2;/.test(src) &&
                                 /var yBefore = pl\.y;/.test(src));
 ok('удар головой по «откуда пришёл»', /pl\.vy < 0 && \(!o\.moves \|\| fromBelow\)/.test(src));
-ok('толчок только у движущихся и ящиков', /var pdx = \(o\.moves \|\| o\.type === "box"\) \? \(o\._dx\|\|0\) : 0;/.test(src) &&
-                                /var pdy = \(o\.moves \|\| o\.type === "box"\) \? \(o\._dy\|\|0\) : 0;/.test(src));
+ok('толчок только у движущихся и толкаемых', /var pdx = \(o\.moves \|\| o\.pushable\) \? \(o\._dx\|\|0\) : 0;/.test(src) &&
+                                /var pdy = \(o\.moves \|\| o\.pushable\) \? \(o\._dy\|\|0\) : 0;/.test(src));
 ok('статика ведёт себя как раньше', /if\(pl\.vx !== 0\) pl\.wall = 1;/.test(src));
 ok('то же в игре',          /pl\.rideOn/.test(game) && !/if\(o\.moves\)\{ pl\.x \+=/.test(game));
 ok('плоская заливка',       /function grad\([^)]*\)\{ return a; \}/.test(src));
@@ -81,7 +81,7 @@ ok('без градиента у круга', !/createRadialGradient/.test(three
 console.log('\nхитбоксы:');
 ok('круг многоугольником',  /CIRCLE_SIDES = 32/.test(src));
 ok('треугольник по 3 точкам', /o\.type === "triangle"[\s\S]{0,80}\[o\.w\/2,0\],\[o\.w,o\.h\],\[0,o\.h\]/.test(src));
-ok('SOLID = 4 фигуры (плюс ящик)', /var SOLID  = \["rect","circle","triangle","box"\];/.test(src));
+ok('SOLID = 3 фигуры',      /var SOLID  = \["rect","circle","triangle"\];/.test(src));
 
 // прятки
 console.log('\nпрятки:');
@@ -211,22 +211,28 @@ const solidDef = /var solid\s*=\s*function\(o\)\{[\s\S]*?\};/;
 ok('в редакторе deadly исключён из solid', /o\.deadly !== true/.test(src.match(solidDef)[0]));
 ok('в игре deadly исключён из solid',      /o\.deadly !== true/.test(game.match(solidDef)[0]));
 
-console.log('\nтолкаемые ящики:');
+console.log('\nтолкаемые объекты:');
 // "как в реальности" для физики попросили не трогая существующее движение
-// игрока — поэтому масса и импульс сделаны отдельным опциональным
-// объектом, а не переделкой гравитации/трения под всей картой.
-ok('ящик в палитре',        tools.some(t => t.t === 'box'));
-ok('ящик в SOLID',          /var SOLID  = \["rect","circle","triangle","box"\];/.test(src) &&
-                             /var SOLID  = \["rect","circle","triangle","box"\];/.test(game));
-ok('масса по умолчанию 1',  /if\(type === "box"\) o\.mass = 1;/.test(src) &&
-                             /if\(type === "box"\) o\.mass = 1;/.test(game));
-ok('скорость толчка зависит от массы', /function boxPushSpeed\(mass\)\{/.test(src) &&
-                             /BOX_PUSH_BASE \/ m/.test(src) &&
-                             /function boxPushSpeed\(mass\)\{/.test(game) &&
-                             /BOX_PUSH_BASE \/ m/.test(game));
-ok('своя физика падения',   /function stepBoxes\(\)\{/.test(src) && /o\._vy = \(o\._vy\|\|0\) \+ G\(\);/.test(src) &&
-                             /function stepBoxes\(\)\{/.test(game) && /o\._vy = \(o\._vy\|\|0\) \+ G\(\);/.test(game));
-ok('stepBoxes вызывается в step()', /\n\s*stepBoxes\(\);\n/.test(src) && /\n\s*stepBoxes\(\);\n/.test(game));
-ok('ящик не крутится синусоидой', /if\(o\.moves && o\.type !== "box"\)\{/.test(src) &&
-                             /if\(o\.moves && o\.type !== "box"\)\{/.test(game));
-ok('игрок едет на ящике как на платформе', /pl\.rideOn\.type === "box"/.test(src) && /pl\.rideOn\.type === "box"/.test(game));
+// игрока — поэтому масса и импульс сделаны свойством («Толкается»),
+// как рикошет/движение/вращение, а не переделкой физики игрока или
+// отдельным новым объектом. Доступно любой сплошной фигуре — блоку,
+// кругу, треугольнику.
+ok('нет отдельного объекта «ящик» в палитре', !tools.some(t => t.t === 'box'));
+ok('SOLID — по-прежнему три фигуры', /var SOLID  = \["rect","circle","triangle"\];/.test(src) &&
+                             /var SOLID  = \["rect","circle","triangle"\];/.test(game));
+ok('«Толкается» доступно любой сплошной фигуре', /chk\("Толкается", !!sel\.pushable,/.test(src) &&
+                             /chk\("Толкается", !!sel\.pushable,/.test(game));
+ok('несовместимо с «Двигается»/«Вращается»', /sel\.moves = false; sel\.spins = false;/.test(src) &&
+                             /sel\.moves = false; sel\.spins = false;/.test(game));
+ok('скорость толчка зависит от массы', /function pushSpeed\(mass\)\{/.test(src) &&
+                             /PUSH_BASE \/ m/.test(src) &&
+                             /function pushSpeed\(mass\)\{/.test(game) &&
+                             /PUSH_BASE \/ m/.test(game));
+ok('своя физика падения',   /function stepPushables\(\)\{/.test(src) && /o\._vy = \(o\._vy\|\|0\) \+ G\(\);/.test(src) &&
+                             /function stepPushables\(\)\{/.test(game) && /o\._vy = \(o\._vy\|\|0\) \+ G\(\);/.test(game));
+ok('stepPushables вызывается в step()', /\n\s*stepPushables\(\);\n/.test(src) && /\n\s*stepPushables\(\);\n/.test(game));
+ok('толкаемое не крутится синусоидой', /if\(o\.moves && !o\.pushable\)\{/.test(src) &&
+                             /if\(o\.moves && !o\.pushable\)\{/.test(game));
+ok('игрок едет на толкаемом как на платформе', /pl\.rideOn\.pushable/.test(src) && /pl\.rideOn\.pushable/.test(game));
+ok('старые карты с «ящиком» превращаются в блок', /if\(o\.type === "box"\)\{ o\.type = "rect"; o\.pushable = true; \}/.test(src) &&
+                             /if\(o\.type === "box"\)\{ o\.type = "rect"; o\.pushable = true; \}/.test(game));

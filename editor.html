@@ -386,19 +386,6 @@ var PAINT = {
     ctx.fillStyle = o.fill || C.ink;
     ctx.beginPath(); ctx.moveTo(o.w/2,0); ctx.lineTo(o.w,o.h); ctx.lineTo(0,o.h); ctx.closePath(); ctx.fill();
   },
-  /* Ящик красят отдельно от блока: сплошная заливка читалась бы как
-     обычная стена, а его можно толкать — нужен явный «предмет» на вид. */
-  box: function(o){
-    ctx.fillStyle = o.fill || "#92400e";
-    ctx.fillRect(0,0,o.w,o.h);
-    var lw = Math.max(1, Math.min(o.w,o.h)*0.07);
-    ctx.strokeStyle = "rgba(0,0,0,.4)"; ctx.lineWidth = lw;
-    ctx.strokeRect(lw/2,lw/2,o.w-lw,o.h-lw);
-    ctx.beginPath();
-    ctx.moveTo(lw,lw); ctx.lineTo(o.w-lw,o.h-lw);
-    ctx.moveTo(o.w-lw,lw); ctx.lineTo(lw,o.h-lw);
-    ctx.stroke();
-  },
   text: function(o){
     ctx.fillStyle = o.fill || C.ink;
     ctx.font = "800 " + Math.max(9,o.h) + "px -apple-system,Segoe UI,Roboto,sans-serif";
@@ -559,7 +546,6 @@ var TOOLS = [
   {t:"rect",       n:"Блок",        m:ALL},
   {t:"circle",     n:"Круг",        m:ALL},
   {t:"triangle",   n:"Треугольник", m:ALL},
-  {t:"box",        n:"Ящик",        m:ALL},
   {t:"text",       n:"Текст",       m:ALL},
   {t:"coin",       n:"Монета",      m:ALL},
   {t:"spawn",      n:"Точка старта",m:ALL},
@@ -583,17 +569,17 @@ var OBJ_LIMIT = 2000;   // максимум объектов в карте, од
 var INK = "#111827";
 var COLORS = {
   rect:INK, circle:INK, triangle:INK, text:INK,
-  coin:"", button:INK, lever:INK, box:"#92400e",
+  coin:"", button:INK, lever:INK,
   checkpoint:"", finishline:"", spawn:INK
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
-   Игрок 20x60, ровно три клетки в высоту. Ящик крупнее — два на два. */
+   Игрок 20x60, ровно три клетки в высоту. */
 var SIZES = {
   rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24], coin:[22,22],
-  button:[34,18], lever:[22,42], box:[40,40],
+  button:[34,18], lever:[22,42],
   checkpoint:[30,64], finishline:[42,86], spawn:[20,60]
 };
-var SOLID  = ["rect","circle","triangle","box"];
+var SOLID  = ["rect","circle","triangle"];
 /* Раньше яд, шипы и ротатор убивали просто потому, что так называются.
    Теперь смертельность — свойство объекта: галочка «Яд» есть у каждого,
    и её можно снять хоть с самого яда. Модели остались как были. */
@@ -681,9 +667,9 @@ function nearby(x, y, w, h){
 }
 var movers = [];
 function indexMovers(){
-  // ящики тоже меняют клетку каждый кадр, как платформы и роторы —
-  // тем же способом обходим устаревающую сетку (см. nearby)
-  movers = objects.filter(function(o){ return o.moves || o.spins || o.type === "box"; });
+  // толкаемые объекты тоже меняют клетку каждый кадр, как платформы и
+  // роторы — тем же способом обходим устаревающую сетку (см. nearby)
+  movers = objects.filter(function(o){ return o.moves || o.spins || o.pushable; });
 }
 function overLimit(extra){
   if(objects.length + (extra||1) <= OBJ_LIMIT) return false;
@@ -702,7 +688,6 @@ function mk(type,x,y,w,h){
   var o = {id:uid++, type:type, x:x, y:y, w:w, h:h, rot:0, fill:COLORS[type]||"",
            deadly: DEADLY_BY_DEFAULT.indexOf(type) !== -1};
   if(type === "text") o.text = "Text";
-  if(type === "box") o.mass = 1;
 
   if(type === "button" || type === "lever"){ o.customId = "w"+o.id; o.targetIds = ""; }
   return o;
@@ -1074,30 +1059,32 @@ function inside(o, x, y){
 }
 
 /* ══════════════════════════════════════════════════
-   ТОЛКАЕМЫЕ ЯЩИКИ
-   У ящика своя мини-физика: падает под той же гравитацией, что и
-   игрок, и стоит на любой твёрдой поверхности. Игрок толкает его,
-   упираясь сбоку, — чем больше «Масса», тем медленнее едет.
-   С игроком и остальной картой ящик общается ровно так же, как
+   ТОЛКАЕМЫЕ ОБЪЕКТЫ
+   «Толкается» — свойство, как «Рикошет» или «Двигается»: доступно
+   любой сплошной фигуре (блок, круг, треугольник), а не отдельный
+   объект. У такой фигуры своя мини-физика: падает под той же
+   гравитацией, что и игрок, и стоит на любой твёрдой поверхности.
+   Игрок толкает её, упираясь сбоку, — чем больше «Масса», тем
+   медленнее едет.
+   С игроком и остальной картой она общается ровно так же, как
    движущаяся платформа (через o._dx/o._dy): весь код, который умеет
    стоять на платформе, ехать вместе с ней и упираться сбоку, не
-   тронут и работает для ящика бесплатно — ему просто дали ещё один
-   источник движения, посчитанный не синусоидой, а физикой.
-   ══════════════════════════════════════════════════ */
-var BOX_PUSH_BASE = 2.6;   // px/кадр при массе 1 — столько же, сколько катится обычный блок
-function boxPushSpeed(mass){
+   тронут и работает бесплатно — фигуре просто дали ещё один источник
+   движения, посчитанный не синусоидой, а физикой. */
+var PUSH_BASE = 2.6;   // px/кадр при массе 1 — столько же, сколько катится обычный блок
+function pushSpeed(mass){
   var m = Math.max(0.2, mass || 1);
-  /* Ящик физически не может ехать быстрее, чем идёт сам игрок — иначе
-     он обгоняет его, разрывает контакт, и на следующем кадре игрок
-     догоняет уже неподвижный ящик и упирается в него как в стену
-     (толчок дёргался: кадр едет — кадр стоит намертво). Потолок в
-     maxVX() гарантирует, что ящик всегда остаётся впритык. */
-  return Math.max(0.15, Math.min(maxVX(), BOX_PUSH_BASE / m));
+  /* Толкаемая фигура физически не может ехать быстрее, чем идёт сам
+     игрок — иначе она обгоняет его, разрывает контакт, и на следующем
+     кадре игрок догоняет уже неподвижную фигуру и упирается в неё как
+     в стену (толчок дёргался: кадр едет — кадр стоит намертво).
+     Потолок в maxVX() гарантирует, что она всегда остаётся впритык. */
+  return Math.max(0.15, Math.min(maxVX(), PUSH_BASE / m));
 }
-function stepBoxes(){
+function stepPushables(){
   for(var bi=0; bi<objects.length; bi++){
     var o = objects[bi];
-    if(o.type !== "box"){ continue; }
+    if(!o.pushable){ continue; }
     if(opened(o)){ o._dx = 0; o._dy = 0; continue; }
 
     var near = nearby(o.x-60, o.y-60, o.w+120, o.h+120), blockers = [], i;
@@ -1125,13 +1112,22 @@ function stepBoxes(){
     // ---- горизонталь: толкает только игрок, и только стоящий на земле ящик ----
     var dx = 0;
     if(grounded && !pl.dead){
-      // игрок слева от ящика (его правый бок у левого бока ящика) и идёт
-      // вправо — толкает вправо; симметрично для правого бока
-      var touchLeftSide  = Math.abs((pl.x+pl.w) - o.x) < 3 && pl.y+pl.h > o.y+2 && pl.y < o.y+o.h-2;
-      var touchRightSide = Math.abs(pl.x - (o.x+o.w)) < 3 && pl.y+pl.h > o.y+2 && pl.y < o.y+o.h-2;
-      var speed = boxPushSpeed(o.mass);
-      if(touchLeftSide && pl.vx > 0.3) dx = speed;
-      else if(touchRightSide && pl.vx < -0.3) dx = -speed;
+      /* Грань берём точным многоугольником (spanX на уровне игрока), а не
+         прямоугольной рамкой: у треугольника рамка шире реальной фигуры
+         почти везде, кроме основания. Если сверять касание по рамке, а
+         толчок в основном коде идёт по настоящей грани (та же spanX),
+         зазор между игроком и фигурой медленно расходится с каждым
+         кадром и через десяток шагов толчок «случайно» обрывается. */
+      var pushSpan = spanX(polyOf(o), pl.y + 2, pl.y + pl.h - 2);
+      var speed = pushSpeed(o.mass);
+      if(pushSpan){
+        // игрок слева от фигуры (его правый бок у левого бока фигуры) и
+        // идёт вправо — толкает вправо; симметрично для правого бока
+        var touchLeftSide  = Math.abs((pl.x+pl.w) - pushSpan[0]) < 3;
+        var touchRightSide = Math.abs(pl.x - pushSpan[1]) < 3;
+        if(touchLeftSide && pl.vx > 0.3) dx = speed;
+        else if(touchRightSide && pl.vx < -0.3) dx = -speed;
+      }
     }
     if(dx !== 0){
       var xBefore = o.x;
@@ -1155,9 +1151,10 @@ function step(){
   objects.forEach(function(o){
     // Движение и вращение — свойства объекта, а не отдельные типы.
     // Так двигаться и крутиться может любой блок, круг или треугольник.
-    // Ящик — исключение: у него своя физика (см. stepBoxes), синусоида
-    // ему не нужна и конфликтовала бы с падением/толчком.
-    if(o.moves && o.type !== "box"){
+    // «Толкается» — исключение: у такой фигуры своя физика (см.
+    // stepPushables), синусоида ей не нужна и конфликтовала бы с
+    // падением/толчком. Инспектор не даёт включить оба свойства разом.
+    if(o.moves && !o.pushable){
       o._t += 0.012*(o.speed||1);
       var k = (Math.sin(o._t)+1)/2;
       var nx = o._hx + (o.moveX||0)*k, ny = o._hy + (o.moveY||0)*k;
@@ -1180,15 +1177,15 @@ function step(){
      и вжимала игрока внутрь, шла вверх — отрывала от себя и он парил
      в воздухе. Теперь игрок и платформа едут синхронно, а прижим к
      грани только доводит его до места. */
-  if(pl.ground && pl.rideOn && (pl.rideOn.moves || pl.rideOn.type === "box")){
+  if(pl.ground && pl.rideOn && (pl.rideOn.moves || pl.rideOn.pushable)){
     pl.x += pl.rideOn._dx||0; pl.y += pl.rideOn._dy||0;
   }
   pl.rideOn = null;
 
-  // ящики считаются раньше остальной физики игрока: к моменту, когда
-  // игрок упирается в них или встаёт сверху, o._dx/o._dy уже готовы —
-  // ровно то же самое, что раньше умели только движущиеся платформы
-  stepBoxes();
+  // толкаемые фигуры считаются раньше остальной физики игрока: к
+  // моменту, когда игрок упирается в них или встаёт сверху, o._dx/o._dy
+  // уже готовы — ровно то же самое, что раньше умели только платформы
+  stepPushables();
 
   // рядом с игроком объектов мало — дальние даже не проверяем
   var near = nearby(pl.x - 260, pl.y - 260, pl.w + 520, pl.h + 520);
@@ -1253,7 +1250,7 @@ function step(){
         return;
       }
     }
-    var pdx = (o.moves || o.type === "box") ? (o._dx||0) : 0;
+    var pdx = (o.moves || o.pushable) ? (o._dx||0) : 0;
     var goL;
     if(pdx !== 0){
       /* Движущийся блок. Сторону выбираем по тому, с какой стороны игрок
@@ -1279,12 +1276,13 @@ function step(){
       var move = Math.min(lim, Math.abs(edge - pl.x));
       pl.x += goL ? -move : move;
       if(Math.abs(edge - pl.x) < 0.01) pl.wall = goL ? 1 : -1;
-      /* Ящик — исключение: его толкает сам игрок, поэтому его собственная
-         скорость в ту же сторону — это не «встречный разбег» платформы,
-         которую нужно погасить, а причина, по которой ящик вообще едет.
-         Обнулять vx здесь означало бы вышибать игроку ноги на каждом
-         кадре толчка — ящик сдвигался бы на один кадр и вставал намертво. */
-      if((goL ? pl.vx > 0 : pl.vx < 0) && o.type !== "box") pl.vx = 0;     // встречный разбег гасим
+      /* Толкаемая фигура — исключение: её толкает сам игрок, поэтому его
+         собственная скорость в ту же сторону — это не «встречный разбег»
+         платформы, которую нужно погасить, а причина, по которой фигура
+         вообще едет. Обнулять vx здесь означало бы вышибать игроку ноги
+         на каждом кадре толчка — фигура сдвигалась бы на один кадр и
+         вставала намертво. */
+      if((goL ? pl.vx > 0 : pl.vx < 0) && !o.pushable) pl.vx = 0;     // встречный разбег гасим
       return;
     }
     // неподвижный блок — выталкивание против движения, ровно как раньше
@@ -1301,7 +1299,13 @@ function step(){
     /* Рикошет отражает движение, а не гасит его. Медленное касание не
        отражаем — иначе игрок дрожит, прижавшись к блоку. */
     if(o.ricochet && Math.abs(pl.vx) > RICO_MIN) ricochet(o);
-    else pl.vx = 0;
+    /* Толкаемая фигура: тут она просто ещё не поймала это как активный
+       толчок в этот самый кадр (например, зазор до настоящей грани на
+       долю пикселя больше порога у наклонной фигуры) — это не «врезался
+       в стену», а обычная стыковка перед толчком. Гасить скорость нельзя:
+       игрок и так уже прижат к грани, и на следующем кадре толчок либо
+       подхватится сам, либо честно погаснет от инерции воздуха/земли. */
+    else if(!o.pushable) pl.vx = 0;
   });
 
   var wasAir = !pl.ground;
@@ -1314,7 +1318,7 @@ function step(){
     var sp = spanY(P, pl.x + 2, pl.x + pl.w - 2);
     if(!sp || pl.y >= sp[1] || pl.y + pl.h <= sp[0]) return;
 
-    var pdy = (o.moves || o.type === "box") ? (o._dy||0) : 0;
+    var pdy = (o.moves || o.pushable) ? (o._dy||0) : 0;
     /* Откуда игрок пришёл — считаем не по глубине провала, а по тому, где
        были его ноги (голова) и где была грань ДО этого шага. Так одинаково
        ловится и быстрое падение, и платформа, подъехавшая под ноги сама.
@@ -1335,7 +1339,7 @@ function step(){
         pl.vy = 0; pl.selfJump = false;
       }
       // едем вместе с платформой — сдвиг применится в начале следующего шага
-      if(o.moves || o.type === "box") pl.rideOn = o;
+      if(o.moves || o.pushable) pl.rideOn = o;
     } else if(pl.vy < 0 && (!o.moves || fromBelow)){
       // удар головой снизу
       if(o.ricochet && Math.abs(pl.vy) > RICO_MIN){ pl.y = sp[1]; ricochet(o); }
@@ -1702,6 +1706,9 @@ document.getElementById("modes").addEventListener("click", function(e){
         delete o.bouncy;
       }
       if(o.type === "poison" || o.type === "spike"){ o.type = "rect"; o.deadly = true; }
+      // «Ящик» был отдельным объектом совсем недолго — стал свойством
+      // «Толкается» у обычных фигур, старые карты с ним превращаются в блок
+      if(o.type === "box"){ o.type = "rect"; o.pushable = true; }
       // Ворота, дверь и укрытие убраны — в старых картах становятся блоком,
       // чтобы геометрия уровня не разъехалась
       if(o.type === "door" || o.type === "gate" || o.type === "cover"){ o.type = "rect"; }
@@ -2147,14 +2154,10 @@ function inspect(){
      Коллизии у него нет — иначе внутрь не зайти. */
   if(SOLID.indexOf(sel.type) !== -1 && mode === "hideAndSeek")
     chk("Укрытие для пряток", !!sel.hideSpot, function(v){ sel.hideSpot = v; });
-  /* Рикошет, движение и вращение — свойства, а не отдельные объекты.
-     Любой блок можно сделать отражающим, подвижным или крутящимся. */
+  /* Рикошет, толкаемость, движение и вращение — свойства, а не отдельные
+     объекты. Любой блок, круг или треугольник можно сделать отражающим,
+     толкаемым, подвижным или крутящимся. */
   if(SOLID.indexOf(sel.type) !== -1){
-    /* Масса ящика: чем больше, тем медленнее его толкает игрок —
-       boxPushSpeed() в физике делит базовую скорость на массу. */
-    if(sel.type === "box")
-      rng("Масса", sel.mass === undefined ? 1 : sel.mass, 0.2, 5, 0.1,
-          function(v){ sel.mass = v; });
     /* Рикошет вместо батута: удар отражается от той грани, в которую
        попал игрок, а не подбрасывает его всегда вверх. */
     chk("Рикошет", !!sel.ricochet, function(v){ sel.ricochet = v; inspect(); });
@@ -2165,12 +2168,29 @@ function inspect(){
       rng("Сила отскока", sel.power === undefined ? 1 : sel.power, 0.2, 3, 0.1,
           function(v){ sel.power = v; });
 
-    /* Ящик двигается и вращается только своей физикой (см. stepBoxes) —
-       синусоида и вращение ей мешают, поэтому для него их не показываем. */
-    if(sel.type !== "box"){
+    /* Толкается — своя физика (см. stepPushables): падает и стоит на
+       земле сама, а не по синусоиде и не вращается, поэтому с
+       «Двигается»/«Вращается» несовместима — включение одного гасит
+       другое, а не остаётся висеть противоречивой галочкой. */
+    chk("Толкается", !!sel.pushable, function(v){
+      sel.pushable = v;
+      if(v){
+        if(sel.mass === undefined) sel.mass = 1;
+        sel.moves = false; sel.spins = false;
+      }
+      inspect();
+    });
+    if(sel.pushable)
+      rng("Масса", sel.mass === undefined ? 1 : sel.mass, 0.2, 5, 0.1,
+          function(v){ sel.mass = v; });
+
+    if(!sel.pushable){
       chk("Двигается", !!sel.moves, function(v){
         sel.moves = v;
-        if(v && !sel.moveX && !sel.moveY){ sel.moveX = 130; sel.moveY = 0; sel.speed = 1.1; }
+        if(v){
+          if(!sel.moveX && !sel.moveY){ sel.moveX = 130; sel.moveY = 0; sel.speed = 1.1; }
+          sel.pushable = false;
+        }
         inspect();
       });
       if(sel.moves){
@@ -2181,7 +2201,7 @@ function inspect(){
 
       chk("Вращается", !!sel.spins, function(v){
         sel.spins = v;
-        if(v && !sel.spin) sel.spin = 2;
+        if(v){ if(!sel.spin) sel.spin = 2; sel.pushable = false; }
         inspect();
       });
       if(sel.spins) num("Скорость вращения", sel.spin||2, function(v){ sel.spin = v; });
@@ -2474,6 +2494,9 @@ window.GAME = {
         delete o.bouncy;
       }
       if(o.type === "poison" || o.type === "spike"){ o.type = "rect"; o.deadly = true; }
+      // «Ящик» был отдельным объектом совсем недолго — стал свойством
+      // «Толкается» у обычных фигур, старые карты с ним превращаются в блок
+      if(o.type === "box"){ o.type = "rect"; o.pushable = true; }
       // Ворота, дверь и укрытие убраны — в старых картах становятся блоком,
       // чтобы геометрия уровня не разъехалась
       if(o.type === "door" || o.type === "gate" || o.type === "cover"){ o.type = "rect"; }
