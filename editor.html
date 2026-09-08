@@ -558,6 +558,7 @@ var TOOLS = [
 var MODE_OF = {};
 TOOLS.forEach(function(T){ MODE_OF[T.t] = T.m; });
 function allowedIn(type, m){
+  if (!Object.prototype.hasOwnProperty.call(MODE_OF, type)) return true;
   var s = MODE_OF[type];
   return !s || s.split(" ").indexOf(m) !== -1;
 }
@@ -2293,7 +2294,17 @@ window.GAME = {
   loadMap: function(json){
     var d = (typeof json === "string") ? JSON.parse(json) : json;
     if(playing) stop();
-    objects = (d.objects || []).map(function(o){ return Object.assign({}, o); });
+    // Object.assign копирует через обычное присваивание — ключ "__proto__"
+    // в объекте из чужого файла карты через него подменяет прототип именно
+    // этой копии (attacker-controlled toString/valueOf на объекте, которому
+    // редактор доверяет). Копируем ключи вручную и этот один пропускаем.
+    objects = (d.objects || []).map(function(o){
+      var out = {};
+      Object.keys(o).forEach(function(k){
+        if (k !== "__proto__" && k !== "constructor" && k !== "prototype") out[k] = o[k];
+      });
+      return out;
+    });
     if(d.mode) mode = d.mode;
     // режимы sandbox и twoPlayer убраны — старые карты открываем как прятки
     if(mode === "sandbox" || mode === "twoPlayer") mode = "hideAndSeek";

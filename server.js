@@ -104,13 +104,22 @@ setInterval(() => {
   const now = Date.now();
   RL_BUCKETS.forEach((b, k) => { if (now - b.start > 120000) RL_BUCKETS.delete(k); });
 }, 60000).unref();
+/* За Cloudflare реальный адрес приходит в CF-Connecting-IP — но эти
+   заголовки шлёт КЛИЕНТ, и если перед Node в моменте нет прокси, который
+   их сам перезаписывает (например, прямой заход на *.up.railway.app без
+   Cloudflare), любой запрос может подставить туда что угодно и на каждый
+   запрос менять "свой IP" — лимитер и защита от брутфорса тогда не значат
+   ничего. Доверяем этим заголовкам только если оператор явно подтвердил,
+   что перед сервером всегда стоит такой прокси. */
+const TRUST_PROXY_IP = /^(1|true|yes)$/i.test(String(process.env.TRUST_PROXY_IP || ''));
 function clientKey(req) {
-  // за Cloudflare реальный адрес приходит в CF-Connecting-IP;
-  // крайний левый элемент X-Forwarded-For подделывается клиентом
-  const cf = String(req.headers['cf-connecting-ip'] || '').trim();
-  if (cf) return cf;
-  const xff = String(req.headers['x-forwarded-for'] || '');
-  if (xff) return xff.split(',').pop().trim();
+  if (TRUST_PROXY_IP) {
+    const cf = String(req.headers['cf-connecting-ip'] || '').trim();
+    if (cf) return cf;
+    // крайний левый элемент X-Forwarded-For подделывается клиентом
+    const xff = String(req.headers['x-forwarded-for'] || '');
+    if (xff) return xff.split(',').pop().trim();
+  }
   return (req.socket && req.socket.remoteAddress) || 'unknown';
 }
 function rateLimit(limit, windowMs) {
@@ -256,7 +265,11 @@ require('./backup.js').register(app, {
    поэтому для ЭТОГО маршрута тело должно вмещать десятки мегабайт.
    Остальные маршруты получают скромный лимит: огромные тела —
    это лазейка для забивания памяти. */
-app.post('/abuse/upload', express.urlencoded({ extended: false, limit: '60mb' }));
+// клиент шлёт этот запрос как JSON (adminAbuse.js: form-urlencoded раздувал
+// бы 40-мегабайтное видео втрое из-за процентного кодирования base64) —
+// увеличенный лимит должен висеть именно на json-парсере, иначе тело режет
+// глобальный express.json({limit:'512kb'}) ниже, и загрузка молча падает.
+app.post('/abuse/upload', express.json({ limit: '60mb' }));
 // картинка новости приходит тем же способом — base64 в теле запроса
 app.post('/log/upload', express.urlencoded({ extended: false, limit: '20mb' }));
 app.use(express.urlencoded({ extended: false, limit: '512kb' }));

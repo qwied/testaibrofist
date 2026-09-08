@@ -24,6 +24,12 @@
   }
 
   // пройтись по DOM и заменить оставшиеся эмодзи (в т.ч. в текстах с сервера)
+  /* Раньше весь текст узла целиком уходил в innerHTML — если рядом с монеткой
+     в том же узле оказывался чужой текст с «<» или «>» (например, из поля
+     "о себе", куда его положили ЧЕРЕЗ textContent и посчитали безопасным),
+     он внезапно исполнялся как разметка. Теперь эмодзи вырезается точечно:
+     вокруг него остаются обычные текстовые узлы, а картинка — единственный
+     новый элемент, который мы создаём сами через createElement. */
   function sweep(root) {
     root = root || document.body;
     if (!root || !root.querySelectorAll) return;
@@ -33,9 +39,21 @@
     var list = [], node;
     while ((node = w.nextNode())) if (node.nodeValue.indexOf('🪙') !== -1) list.push(node);
     list.forEach(function (tn) {
-      var span = document.createElement('span');
-      span.innerHTML = fix(tn.nodeValue, 16);
-      tn.parentNode.replaceChild(span, tn);
+      var parts = tn.nodeValue.split('🪙');
+      var frag = document.createDocumentFragment();
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i]) frag.appendChild(document.createTextNode(parts[i]));
+        if (i < parts.length - 1) {
+          var img = document.createElement('img');
+          img.className = 'bfCoinIcon';
+          img.src = '/coin.png';
+          img.width = 16; img.height = 16;
+          img.alt = 'монета';
+          img.style.verticalAlign = '-0.18em';
+          frag.appendChild(img);
+        }
+      }
+      tn.parentNode.replaceChild(frag, tn);
     });
   }
 

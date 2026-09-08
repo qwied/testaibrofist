@@ -307,8 +307,10 @@
 
   /* Кеш скинов-картинок по нику. Запрашиваем пачкой и только один раз
      на игрока: сама картинка может быть на сотни килобайт. */
-  var imgCache = {};                  // ник -> url ('' если картинки нет)
-  var imgWanted = {};
+  // Object.create(null) — без прototype: ник "__proto__"/"constructor" не
+  // должен резолвиться в унаследованный объект вместо реального значения
+  var imgCache = Object.create(null);  // ник -> url ('' если картинки нет)
+  var imgWanted = Object.create(null);
   var imgTimer = null;
   function imgOf(name) {
     if (!name) return '';
@@ -323,7 +325,7 @@
   function askImgs() {
     var names = Object.keys(imgWanted);
     if (!names.length) return;
-    imgWanted = {};
+    imgWanted = Object.create(null);
     fetch('/skins/many?names=' + encodeURIComponent(names.join(',')), { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -388,7 +390,9 @@
   /* Реплики копятся стопкой: новая не стирает предыдущую, а встаёт под
      ней. Раньше здесь лежала одна запись на игрока, поэтому второе
      сообщение затирало первое ещё до того, как его успевали прочитать. */
-  var spoken = {};
+  // Object.create(null): игрок по имени "__proto__" не должен получать
+  // унаследованный Object.prototype вместо своего личного массива реплик
+  var spoken = Object.create(null);
   function speak(who, text) {
     if (!text) return;
     text = cleanSay(text);   // невидимые bidi-символы не переворачивают слова на экране
@@ -580,7 +584,10 @@
     for (var i = 0; i < list.length; i++) if (list[i].id === d.winnerId) { winIdx = i; break; }
     // рендер скинов может ещё не загрузиться — рулетку это больше не отменяет,
     // карточки просто появятся с силуэтом и дорисуются, когда он будет готов
-    if (!list.length || winIdx < 0) return;
+    // Если состав рассинхронизирован и победителя вообще нет в списке —
+    // анимацию не показать, но роль всё равно нужно назначить: иначе раунд
+    // проходит без искателя вообще ни у кого.
+    if (!list.length || winIdx < 0) { applySeeker(d.winnerId); return; }
 
     banner('', '', false);            // рулетка вместо плашки ожидания
 
@@ -698,6 +705,11 @@
         if (Date.now() - phaseEnds > 10000) hsSync = false;   // сервер молчит — вернёмся к своим таймерам
         return;
       }
+      /* checkAllCaught/checkAllFinished уже решили сменить фазу и сами
+         вызовут advance() по своему таймеру — если естественный конец
+         времени совпадает с этим моментом, второй, параллельный advance()
+         отсюда даёт двойную смену карты. */
+      if (switching) return;
       advance();
     }
   }, 250);
@@ -1022,7 +1034,7 @@
 
     socket.on('chatMessage', function (m) {
       if (m.playerName !== me.name) speak(m.playerName, m.text);
-      watchCaught(m.text);
+      watchCaught(m.playerId, m.text);
     });
 
     /* ---------- прятки: серверные события ---------- */
@@ -1032,7 +1044,7 @@
       hsSync = true; hsEver = true;
       if (MODE !== 'hideAndSeek' || !d) return;
       phase = 'lobby';
-      if (d.msLeft) phaseEnds = Date.now() + d.msLeft;
+      if (d.msLeft) phaseEnds = Date.now() + (Number(d.msLeft) || 0);
       hsWinnerId = null;                 // пока крутится — ролей нет, никого не видно
       me.role = 'hider';
       $('gRoleBox').style.display = 'none';
@@ -1048,14 +1060,14 @@
       if (d.phase === 'round') {
         roulStop();
         phase = 'round';
-        phaseEnds = Date.now() + (d.msLeft || ROUND_MS);
+        phaseEnds = Date.now() + (Number(d.msLeft) || ROUND_MS);
         clearCaught();
         if (d.seekerId) applySeeker(d.seekerId);
         banner('', '', false);
         log(TR('roundStart', 'Раунд начался! 2 минуты'));
       } else if (d.phase === 'lobby') {
         phase = 'lobby';
-        phaseEnds = Date.now() + (d.msLeft || LOBBY_MS);
+        phaseEnds = Date.now() + (Number(d.msLeft) || LOBBY_MS);
         hsWinnerId = null;
         me.role = 'hider';
         $('gRoleBox').style.display = 'none';
@@ -1070,7 +1082,7 @@
       hsSync = true; hsEver = true;
       if (MODE !== 'hideAndSeek' || !d || !d.phase) return;
       phase = d.phase;
-      phaseEnds = Date.now() + (d.msLeft || (d.phase === 'round' ? ROUND_MS : LOBBY_MS));
+      phaseEnds = Date.now() + (Number(d.msLeft) || (d.phase === 'round' ? ROUND_MS : LOBBY_MS));
       if (d.phase === 'round') {
         roulStop();
         if (d.seekerId) applySeeker(d.seekerId);
@@ -1167,8 +1179,14 @@
   }
 
   // пойманным считает тот, кого назвали в чате
-  function watchCaught(text) {
+  function watchCaught(fromId, text) {
     if (MODE !== 'hideAndSeek' || me.role === 'seeker') return;
+    /* Сообщение о поимке — обычный чат, а чат может отправить кто угодно.
+       Раньше любой игрок мог прислать «Чужое-имя поймана!» и подделать
+       чужой статус (вплоть до подставного «Все пойманы», досрочно
+       обрывающего раунд). Доверяем только тому, кто сейчас реально
+       искатель — его id сервер уже сообщил через hsPhase/hsRoulette. */
+    if (!hsWinnerId || fromId !== hsWinnerId) return;
     /* Сообщение о поимке имеет вид «Имя пойман!». Сверяем именно эту
        форму: искать имя подстрокой нельзя — игрока с коротким именем
        помечало бы пойманным от любой чужой реплики. */

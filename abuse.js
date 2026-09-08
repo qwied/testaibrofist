@@ -45,6 +45,15 @@ function decode(raw) {
   return { buf, mime: m[1] };
 }
 
+// когда медиа выкидывают из шоу (лимит, очистка), файл на диске должен
+// уйти вместе с ним — иначе data/abuse/ растёт вечно без предела
+function unlinkAbuseFile(url) {
+  if (typeof url !== 'string' || url.indexOf('/abusefile/') !== 0) return;
+  const name = url.slice('/abusefile/'.length);
+  if (!/^[A-Za-z0-9]+\.[A-Za-z0-9]+$/.test(name)) return;   // чужая/внешняя ссылка — не трогаем
+  try { fs.unlinkSync(path.join(FILE_DIR, name)); } catch (e) {}
+}
+
 const EXT = {
   'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp',
   'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
@@ -151,12 +160,15 @@ function register(app, acc) {
         full: String(req.body.full) === 'true',
         sound: String(req.body.sound) === 'true'
       });
-      while (state.media.length > MAX_MEDIA) state.media.shift();
+      while (state.media.length > MAX_MEDIA) unlinkAbuseFile(state.media.shift().url);
       bump();
       return res.json({ status: 'success', count: state.media.length });
     }
 
-    if (what === 'mediaClear') { state.media = []; bump(); return res.json({ status: 'success' }); }
+    if (what === 'mediaClear') {
+      state.media.forEach(m => unlinkAbuseFile(m.url));
+      state.media = []; bump(); return res.json({ status: 'success' });
+    }
 
     if (what === 'song') {
       const url = String(req.body.url || '').trim();
@@ -166,6 +178,7 @@ function register(app, acc) {
     }
 
     if (what === 'clear') {
+      state.media.forEach(m => unlinkAbuseFile(m.url));
       state = { v: (state.v || 0) + 1, weather: 'none', until: 0, count: 1,
                 media: [], song: null };
       save();
