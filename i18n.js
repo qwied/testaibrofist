@@ -222,6 +222,7 @@
     roulSpin:     ['Кому искать в этом раунде?','Who is seeking this round?','Кому шукати в цьому раунді?','Wer sucht diese Runde?','Qui cherche cette manche ?','¿Quién busca esta ronda?','Quem procura nesta ronda?','Kto szuka w tej rundzie?','Bu turda kim arayacak?','这一回合谁来找？'],
     roulYouSeek:  ['Ты — искатель!','You are the seeker!','Ти — шукач!','Du bist der Sucher!','Tu es le chercheur !','¡Eres el buscador!','És o procurador!','Jesteś szukającym!','Aranayan sensin!','你是寻找者！'],
     chanceLbl:    ['Твой шанс','Your chance','Твій шанс','Deine Chance','Ta chance','Tu probabilidad','A tua hipótese','Twoja szansa','Şansın','你的概率'],
+    chatBtn:      ['Чат','Chat','Чат','Chat','Chat','Chat','Chat','Czat','Sohbet','聊天'],
     allCaughtC:   ['Все пойманы','Everyone caught','Усі спіймані','Alle gefangen','Tous attrapés','Todos atrapados','Todos apanhados','Wszyscy złapani','Herkes yakalandı','全部被抓住'],
     allFinished:  ['Все на финише — новая карта!','Everyone finished — new map!','Усі на фініші — нова карта!','Alle im Ziel — neue Karte!','Tous à l\'arrivée — nouvelle carte !','Todos en la meta — ¡mapa nuevo!','Todos na meta — novo mapa!','Wszyscy na mecie — nowa mapa!','Herkes varışta — yeni harita!','全部到达终点——新地图！'],
     finishSolo:   ['Финиш! Новая карта','Finish! New map','Фініш! Нова карта','Ziel! Neue Karte','Arrivée ! Nouvelle carte','¡Meta! Mapa nuevo','Meta! Novo mapa','Meta! Nowa mapa','Bitiş! Yeni harita','到达终点！新地图'],

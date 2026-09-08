@@ -148,10 +148,14 @@
     + '#gChat{position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0}'
     + '#gMsg{width:1px}'
     + '#gTalk{display:none;position:fixed;right:14px;top:50%;transform:translateY(-50%);z-index:61;'
-    + 'width:52px;height:52px;border-radius:50%;border:none;background:rgba(33,150,243,.85);'
-    + 'color:#fff;font-size:22px;cursor:pointer}'
-    + 'html.is-mobile #gTalk,html.is-tablet #gTalk{display:block}'
-    + 'html.is-mobile #gTalk,html.is-tablet #gTalk{width:58px;height:58px;font-size:21px;touch-action:manipulation}'
+    + 'width:52px;height:52px;border-radius:50%;border:1px solid #d7dee7;background:#fff;'
+    + 'color:#2196F3;cursor:pointer;padding:0;align-items:center;justify-content:center;'
+    + 'box-shadow:0 8px 20px -10px rgba(15,23,42,.45)}'
+    + '#gTalk:active{background:#f2f7fd}'
+    + '#gTalk svg{width:24px;height:24px;display:block;pointer-events:none}'
+    + 'html.is-mobile #gTalk,html.is-tablet #gTalk{display:flex}'
+    + 'html.is-mobile #gTalk,html.is-tablet #gTalk{width:58px;height:58px;touch-action:manipulation}'
+    + 'html.is-mobile #gTalk svg,html.is-tablet #gTalk svg{width:26px;height:26px}'
     // на телефоне: шапка компактнее, карточка карты уходит наверх, чтобы не мешать кнопкам
     + 'html.is-mobile #gTop,html.is-tablet #gTop{padding:5px 9px;gap:8px;font-size:12px}'
     + 'html.is-mobile #gExit,html.is-tablet #gExit{padding:9px 14px;font-size:13px}'
@@ -221,7 +225,10 @@
     + '<div id="gRoulRes"></div></div>'
     + '<div id="gChance"><span id="gChanceL">Твой шанс</span><b id="gChanceV">—</b></div>'
     + '<div id="gChat"><input id="gMsg" maxlength="90"></div>'
-    + '<button id="gTalk">Чат</button>'
+    + '<button id="gTalk" aria-label="Чат"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+    + '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 '
+    + '8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>'
 );
 
   /* надписи верхней панели обновляются при смене языка */
@@ -233,6 +240,8 @@
     $('gExit').textContent = TR('menu', 'Меню');
     var cl = $('gChanceL');                      // подпись плашки шанса
     if (cl) cl.textContent = TR('chanceLbl', 'Твой шанс');
+    var tk = $('gTalk');                          // кнопка чата — теперь иконка, подпись только для скринридера
+    if (tk) tk.setAttribute('aria-label', TR('chatBtn', 'Чат'));
   }
   window.addEventListener('bf-lang', refreshGameLabels);
 
