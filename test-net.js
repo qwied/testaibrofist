@@ -116,12 +116,12 @@ ok('история чата только своей комнаты', !/const roo
 
 console.log('\nклиент:');
 ok('темп отправки: 30 Гц на старом сервере / 20 Гц через воркер / 1 Гц одному',
-   /var minGap = alone \? 1000 : sendGap;/.test(game) && /sendGap = wsActive \? 50 : 33;/.test(game) && /now - lastSent < minGap/.test(game));
+   /var minGap = alone \? 1000 : sendGap;/.test(game) && /sendGap = wsActive \? 50 : 33;/.test(game) && /now - lastSent >= minGap/.test(game));
 ok('быстрый сервер включается одной строкой (DEFAULT_WS_URL)', /var DEFAULT_WS_URL = ''/.test(game));
 ok('воркер: шим socket.io на чистом WebSocket', /function makeSocket/.test(game) && /new WebSocket\(url\)/.test(game));
 ok('воркер недоступен — авто-возврат на старый сервер', /wsGaveUp = true;/.test(game) && /setTimeout\(connect, 0\)/.test(game));
 ok('переподключение не плодит таймеры пинга', /if \(pingTimer\) clearInterval\(pingTimer\);/.test(game));
-ok('стоящий игрок не шлёт пакеты', /if \(!moved && !force\) return;/.test(game));
+ok('стоящий игрок не шлёт пакеты', /if \(now - lastSent >= minGap && \(moved \|\| force\)\) \{/.test(game));
 ok('контрольный пакет раз в секунду', /now - lastForce > 1000/.test(game));
 ok('скин уходит только при смене', /if \(mySkinStr !== lastSk\)/.test(game));
 ok('рисуем по буферу, а не догоняем', /var s = sample\(o, rt\);/.test(game));

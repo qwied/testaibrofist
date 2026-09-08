@@ -8,13 +8,13 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-'));
 let fails = 0;
 const ok = (n, c, x) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', n, x === undefined ? '' : x); };
 
-function harness(mod, extra) {
+function harness(mod, extra, userName) {
   const routes = {};
   const app = {
     get: (p, h) => routes['GET ' + p] = h,
     post: (p, h) => routes['POST ' + p] = h
   };
-  const user = { name: 'tester', coins: 0 };
+  const user = { name: userName || 'tester', coins: 0 };
   const acc = Object.assign({
     currentUser: () => user,
     save: () => {},
@@ -62,14 +62,18 @@ function harness(mod, extra) {
   console.log('\nоценки:');
   const V = harness('./maps.js');
   await V.call('POST /uploadMap', map('voted'));
-  r = await V.call('POST /uploadVote', { author: 'tester', mapName: 'voted', vote: '1' });
+  // голосует другой игрок — на своей карте оценка не считается (см. ниже)
+  const Voter = harness('./maps.js', {}, 'voter1');
+  r = await Voter.call('POST /uploadVote', { author: 'tester', mapName: 'voted', vote: '1' });
   ok('лайк засчитан', r.likes === 1, JSON.stringify(r));
-  r = await V.call('POST /uploadVote', { author: 'tester', mapName: 'voted', vote: '1' });
+  r = await Voter.call('POST /uploadVote', { author: 'tester', mapName: 'voted', vote: '1' });
   ok('повторный клик снимает', r.likes === 0);
-  r = await V.call('POST /uploadVote', { author: 'tester', mapName: 'voted', vote: 'абв' });
+  r = await Voter.call('POST /uploadVote', { author: 'tester', mapName: 'voted', vote: 'абв' });
   ok('мусор не считается дизлайком', r.status === 'error', JSON.stringify(r));
-  r = await V.call('POST /uploadVote', { author: 'tester', mapName: 'voted', vote: '0' });
+  r = await Voter.call('POST /uploadVote', { author: 'tester', mapName: 'voted', vote: '0' });
   ok('ноль тоже отклоняется', r.status === 'error');
+  r = await V.call('POST /uploadVote', { author: 'tester', mapName: 'voted', vote: '1' });
+  ok('автору за свою карту не засчитать', r.status === 'error', JSON.stringify(r));
 
   console.log('\nлимит объектов:');
   const L = harness('./maps.js');
