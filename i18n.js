@@ -367,12 +367,18 @@
 
   // подмена текстов, которые рисует чужой код
   function autoText(root) {
+    // hasOwnProperty: короткий текст вроде "constructor"/"toString" иначе
+    // резолвится через прототип в унаследованную функцию, а не в undefined,
+    // и D[...][0] на ней рвёт весь проход по DOM с TypeError
+    var has = Object.prototype.hasOwnProperty;
     if (lang === 'ru') {
       // русский — переводим только английские подписи вендора
-      walk(root, function (s) { return AUTO[s] && D[AUTO[s]][0] !== s ? t(AUTO[s]) : null; });
+      walk(root, function (s) {
+        return has.call(AUTO, s) && D[AUTO[s]][0] !== s ? t(AUTO[s]) : null;
+      });
       return;
     }
-    walk(root, function (s) { return AUTO[s] ? t(AUTO[s]) : null; });
+    walk(root, function (s) { return has.call(AUTO, s) ? t(AUTO[s]) : null; });
   }
 
   function walk(root, map) {

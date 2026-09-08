@@ -52,6 +52,10 @@ function objectsOf(raw) {
 function wrongForMode(list, mode) {
   const bad = new Set();
   list.forEach(o => {
+    // o.type — строка из присланного JSON; "constructor"/"toString" и т.п.
+    // резолвятся через прототип в обычную функцию Object, а не в undefined,
+    // и .indexOf на ней рвёт запрос — hasOwnProperty отсекает это заранее
+    if (!Object.prototype.hasOwnProperty.call(TOOL_MODES, o.type)) return;
     const allowed = TOOL_MODES[o.type];
     if (allowed && allowed.indexOf(mode) === -1) bad.add(o.type);
   });
@@ -138,6 +142,11 @@ function register(app, getUser, acc) {
       return res.json({ status: 'error', message: 'Карта пустая' });
 
     const list = objectsOf(mapData);
+    // objectsOf молча возвращает [] на любой мусор/битый JSON — без этой
+    // проверки такой mapData спокойно проходил все лимиты (0 не больше
+    // 2000, 0 монет не больше 3) и приносил полную награду ни за что
+    if (!list.length)
+      return res.json({ status: 'error', message: 'Карта повреждена или пуста' });
 
     if (list.length > OBJ_LIMIT)
       return res.json({
@@ -296,6 +305,8 @@ function register(app, getUser, acc) {
     const m = maps.find(x => low(x.author) === low(req.body.author) &&
                              low(x.mapName) === low(req.body.mapName));
     if (!m) return res.json({ status: 'error', message: 'Карта не найдена' });
+    if (low(m.author) === low(u.name))
+      return res.json({ status: 'error', message: 'Нельзя оценивать свою карту' });
     // мусор в запросе не должен молча превращаться в дизлайк
     const raw = parseInt(req.body.vote, 10);
     if (!(raw === 1 || raw === -1))

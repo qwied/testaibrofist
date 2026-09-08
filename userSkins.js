@@ -99,6 +99,15 @@ function saveImage(buf, ext, id) {
   return '/skinimg/' + name;
 }
 
+/* Удаляет старую картинку скина с диска. Имя файла всегда генерирует сам
+   сервер, но раз путь берётся из сохранённых данных — формат проверяем
+   жёстко, чтобы даже гипотетическая подстановка «../» не унесла чужой файл. */
+function unlinkSkinImg(url) {
+  const m = /^\/skinimg\/([a-z0-9]+\.(?:png|jpg|gif|webp))$/.exec(String(url || ''));
+  if (!m) return;
+  try { fs.unlinkSync(path.join(IMG_DIR, m[1])); } catch (e) {}
+}
+
 // data:image/png;base64,.... -> буфер
 function fromDataUrl(raw) {
   const m = /^data:([\w/+.-]+);base64,([\s\S]+)$/.exec(String(raw || '').trim());
@@ -159,10 +168,36 @@ async function fromUrl(raw) {
   const len = parseInt(r.headers.get('content-length') || '0', 10);
   if (len > IMG_MAX) return { bad: 'Картинка больше 3 МБ' };
 
-  const buf = Buffer.from(await r.arrayBuffer());
+  /* Content-Length — это то, что СКАЗАЛ чужой сервер, а не факт. При
+     chunked-ответе заголовка может не быть вовсе (len тогда 0, проверка
+     выше молча проходит), и раньше весь ответ грузился в память ЦЕЛИКОМ
+     ещё до проверки размера — чужой сервер мог стримить гигабайты и
+     положить процесс. Теперь режем поток сами, как только он превысил лимит. */
+  const buf = await readLimited(r.body, IMG_MAX);
+  if (buf === null) return { bad: 'Картинка больше 3 МБ' };
   if (!buf.length) return { bad: 'Пустой ответ' };
-  if (buf.length > IMG_MAX) return { bad: 'Картинка больше 3 МБ' };
   return { buf, ext };
+}
+
+// читает поток не больше max байт; вернёт null, если лимит превышен
+async function readLimited(stream, max) {
+  if (!stream || typeof stream.getReader !== 'function') {
+    // окружение без поддержки потокового Response.body — fallback на разовое чтение
+    return null;
+  }
+  const reader = stream.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    let step;
+    try { step = await reader.read(); }
+    catch (e) { return null; }
+    if (step.done) break;
+    total += step.value.length;
+    if (total > max) { try { reader.cancel(); } catch (e) {} return null; }
+    chunks.push(Buffer.from(step.value));
+  }
+  return Buffer.concat(chunks);
 }
 
 function register(app, acc, skinsApi) {
@@ -190,10 +225,12 @@ function register(app, acc, skinsApi) {
     try { img = saveImage(got.buf, got.ext, id); }
     catch (e) { return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message }); }
 
+    const oldImg = u.skinImg;
     u.skin = skinsApi.normalize(null);
     u.skinImg = img;
     u.wearing = '';
     saveUsers();
+    if (oldImg && oldImg !== img) unlinkSkinImg(oldImg);
     res.json({ status: 'success', img, message: 'Скин сохранён' });
   });
 
@@ -307,14 +344,21 @@ function register(app, acc, skinsApi) {
     const s = list.find(x => x.id === String(req.body.id || ''));
     if (!s) return res.json({ status: 'error', message: 'Скин не найден' });
     const raw = String(req.body.img || '').trim();
-    if (!raw) { delete s.img; save(); return res.json({ status: 'success', img: '' }); }
+    if (!raw) {
+      const had = s.img;
+      delete s.img; save();
+      unlinkSkinImg(had);
+      return res.json({ status: 'success', img: '' });
+    }
 
     let got = /^data:/i.test(raw) ? fromDataUrl(raw) : await fromUrl(raw);
     if (!got) return res.json({ status: 'error', message: 'Картинка не распознана' });
     if (got.bad) return res.json({ status: 'error', message: got.bad });
+    const oldImg = s.img;
     try { s.img = saveImage(got.buf, got.ext, s.id); }
     catch (e) { return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message }); }
     save();
+    if (oldImg && oldImg !== s.img) unlinkSkinImg(oldImg);
     res.json({ status: 'success', img: s.img || '' });
   });
 
@@ -380,16 +424,7 @@ function register(app, acc, skinsApi) {
     if (i === -1) return res.json({ status: 'error', message: 'Скин не найден' });
     if (low(list[i].author) !== low(u.name) && !isOwner(u))
       return res.json({ status: 'error', message: 'Можно удалять только свои скины' });
-    if (list[i].img) {
-      /* Подстраховка: имя файла всегда генерирует сам сервер, но раз
-         удаляем с диска по пути из данных — проверяем формат жёстко,
-         чтобы даже гипотетическая подстановка «../» не унесла чужой файл. */
-      const m = /^\/skinimg\/([a-z0-9]+\.(?:png|jpg|gif|webp))$/.exec(String(list[i].img));
-      if (m) {
-        try { fs.unlinkSync(path.join(IMG_DIR, m[1])); }
-        catch (e) {}
-      }
-    }
+    unlinkSkinImg(list[i].img);
     list.splice(i, 1);
     save();
     res.json({ status: 'success' });

@@ -94,13 +94,22 @@ function checkNewPassword(pw) {
   return '';
 }
 
-// реальный адрес игрока за прокси: Cloudflare отдаёт его в CF-Connecting-IP,
-// а первый элемент X-Forwarded-For клиент рисует себе сам
+/* Реальный адрес игрока за прокси: Cloudflare отдаёт его в CF-Connecting-IP.
+   Но это обычный заголовок запроса — если сервер доступен и без такого
+   прокси перед собой (например, напрямую по *.up.railway.app), любой
+   клиент подставляет туда что хочет и на каждый запрос выглядит новым
+   устройством: обходится и лимит попыток входа, и «один аккаунт на IP».
+   Доверяем заголовку только когда оператор явно подтвердил переменной
+   окружения, что прокси перед сервером есть всегда (см. server.js). */
+const TRUST_PROXY_IP = /^(1|true|yes)$/i.test(String(process.env.TRUST_PROXY_IP || ''));
 function clientIp(req) {
-  const cf = String(req.headers['cf-connecting-ip'] || '').trim();
-  if (cf) return cf;
-  const xff = String(req.headers['x-forwarded-for'] || '');
-  if (xff) return xff.split(',').pop().trim();
+  if (TRUST_PROXY_IP) {
+    const cf = String(req.headers['cf-connecting-ip'] || '').trim();
+    if (cf) return cf;
+    // первый элемент X-Forwarded-For клиент рисует себе сам
+    const xff = String(req.headers['x-forwarded-for'] || '');
+    if (xff) return xff.split(',').pop().trim();
+  }
   return (req.socket && req.socket.remoteAddress) || '';
 }
 
@@ -210,6 +219,13 @@ function register(app) {
     let err = checkName(name) || checkNewPassword(password);
     if (err) return res.json({ status: 'error', message: err });
     if (db.users[key(name)]) return res.json({ status: 'error', message: 'Такой логин уже занят' });
+    // права владельца выдаются по совпадению ника с OWNER_ALIASES (см. isOwner) —
+    // без этой проверки самозахват ника «System»/«AIBrofist» через обычную
+    // регистрацию давал бы полные права владельца. Сам аккаунт владельца
+    // заводится не через публичную форму, а вручную (data/users.json) или
+    // через /renameUser существующим владельцем.
+    if (OWNER_ALIASES.indexOf(key(name)) !== -1)
+      return res.json({ status: 'error', message: 'Этот логин зарезервирован' });
 
     const ip = ipKey(req);
     if (ip) {

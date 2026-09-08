@@ -179,7 +179,10 @@
       box.appendChild(inBtn);
       return;
     }
-    var name = el('div', 'bfDropName', me.name);
+    // el() кладёт третий аргумент в innerHTML — для чужого текста (имени
+    // аккаунта) это неверно, ставим textContent явно
+    var name = el('div', 'bfDropName');
+    name.textContent = me.name;
     box.appendChild(name);
 
     var p = el('div', 'bfDropItem', T('viewProfile', 'Мой профиль'));
