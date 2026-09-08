@@ -1,0 +1,2495 @@
+<!DOCTYPE html>
+<html data-page="editor" lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>AIBrofist — Map Editor</title>
+<style>
+:root{
+  --accent:#3b82f6; --accent-dark:#2563eb; --ink:#1e2530; --muted:#8b93a1;
+  --line:#dfe3ea; --panel:#ffffff; --shadow:0 6px 24px rgba(23,32,50,.10), 0 1px 3px rgba(23,32,50,.08);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;overflow:hidden;height:100%;width:100%;touch-action:none;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  background:#f4f6fa;color:var(--ink);-webkit-font-smoothing:antialiased}
+canvas{display:block;position:absolute;inset:0;touch-action:none}
+
+/* ===== мобильная раскладка редактора ===== */
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1100px){
+  #modes{top:8px;left:8px;right:8px;overflow-x:auto;max-width:calc(100vw - 16px);
+    -webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #modes::-webkit-scrollbar{display:none}
+  .modeBtn{padding:9px 11px;font-size:12px;white-space:nowrap}
+
+  #scene{top:auto;bottom:70px;left:50%;transform:translateX(-50%);
+    max-width:calc(100vw - 16px);overflow-x:auto;scrollbar-width:none}
+  #scene::-webkit-scrollbar{display:none}
+
+  #tools{left:0;right:0;top:auto;bottom:0;transform:none;width:auto;max-height:none;
+    flex-direction:row;overflow-x:auto;overflow-y:hidden;padding:6px 8px;
+    border-radius:0;gap:4px;scrollbar-width:none}
+  #tools::-webkit-scrollbar{display:none}
+  #tools > *{flex:0 0 auto}
+
+  /* панель свойств раньше растягивалась почти на весь экран и закрывала
+     карту белым — теперь это невысокий лист над панелью инструментов */
+  #insp{right:8px;left:8px;top:auto;bottom:64px;transform:none;width:auto;
+    max-height:34vh;border-radius:12px;z-index:20}
+  #props,#widgets{max-height:26vh}
+  #widgets{font-size:13.5px;padding:12px 14px}
+
+  #zIn,#zOut,#zLabel{padding:10px 12px}
+}
+/* пальцем удобнее целиться по крупным кнопкам */
+@media (pointer: coarse){
+  .sBtn,.tBtn,#tools > div{min-width:44px;min-height:44px}
+}
+
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);user-select:none}
+
+/* modes */
+#modes{position:fixed;top:14px;left:14px;display:flex;padding:4px;gap:2px;z-index:10}
+.modeBtn{padding:8px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;
+  color:var(--muted);transition:.14s;white-space:nowrap}
+.modeBtn:hover{background:#eef2f8;color:var(--ink)}
+.modeBtn.on{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(59,130,246,.35)}
+
+/* top bar */
+#scene{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;padding:4px;gap:2px;z-index:10}
+.sBtn{width:42px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;transition:.14s;position:relative}
+.sBtn:hover{background:#eef2f8}
+.sBtn:active{transform:scale(.93)}
+.sBtn svg{width:19px;height:19px;stroke:var(--ink);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.sBtn.play svg{fill:#16a34a;stroke:#16a34a}
+.sBtn.on{background:var(--accent)}
+.sBtn.on svg{stroke:#fff;fill:none}
+.sep{width:1px;background:var(--line);margin:6px 3px}
+.sBtn[data-tip]:hover::after{content:attr(data-tip);position:absolute;top:42px;left:50%;transform:translateX(-50%);
+  background:#1e2530;color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none}
+
+/* tools */
+#tools{position:fixed;left:14px;top:50%;transform:translateY(-50%);width:46px;padding:5px;
+  display:flex;flex-direction:column;gap:2px;z-index:10;max-height:82vh;overflow-y:auto;scrollbar-width:thin}
+#tools::-webkit-scrollbar{width:0}
+.tool{width:36px;height:36px;display:none;align-items:center;justify-content:center;border-radius:8px;
+  cursor:pointer;transition:.12s;flex-shrink:0;position:relative}
+.tool:hover{background:#eef2f8}
+.tool.on{background:var(--accent);box-shadow:0 2px 8px rgba(59,130,246,.35)}
+.tool canvas{position:static;width:24px;height:24px;pointer-events:none}
+.tool.on canvas{filter:brightness(0) invert(1)}
+.tool[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:44px;top:50%;transform:translateY(-50%);
+  background:#1e2530;color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:30;pointer-events:none}
+
+/* inspector */
+#insp{position:fixed;right:14px;top:50%;transform:translateY(-50%);width:248px;z-index:10;display:none;
+  max-height:78vh;overflow:hidden;display:none;flex-direction:column}
+#inspHead{display:flex;padding:4px;gap:2px;border-bottom:1px solid var(--line)}
+.tab{flex:1;text-align:center;padding:7px 0;border-radius:8px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
+.tab.on{background:#eef2f8;color:var(--ink)}
+#props,#widgets{padding:10px 12px;overflow-y:auto;font-size:12.5px}
+#objTitle{display:flex;align-items:center;gap:8px;font-weight:700;font-size:12px;letter-spacing:.4px;
+  text-transform:uppercase;color:var(--accent);margin-bottom:9px}
+#objTitle span{margin-left:auto;color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0}
+.pRow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0}
+.pRow label{color:#5b6472;font-size:12px}
+.pRow input[type=number],.pRow input[type=text]{width:94px;padding:5px 8px;border:1px solid var(--line);
+  border-radius:7px;font-size:12px;font-family:inherit;color:var(--ink);background:#fafbfd;outline:none}
+.pRow input:focus{border-color:var(--accent);background:#fff}
+.pRow input[type=color]{width:44px;height:26px;padding:1px;border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer}
+.pRow input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
+.pRow input[type=range]{width:100px;accent-color:var(--accent)}
+/* объяснение связей механизмов — свёрнуто, разворачивается по клику */
+.pHelp{margin:6px 0 2px}
+.pHelpHead{font-size:11.5px;color:var(--accent);cursor:pointer;padding:6px 0;user-select:none}
+.pHelpBody{display:none;font-size:11.5px;line-height:1.7;color:#5b6673;
+  background:#f6f8fb;border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-top:4px}
+.pHelpBody code{background:#e6ebf2;border-radius:4px;padding:1px 5px;font-size:11px}
+.grp{margin:13px 0 5px;padding-top:9px;border-top:1px solid var(--line);font-size:10.5px;font-weight:700;
+  letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+.zBtns{display:flex;gap:5px;margin-top:5px}
+.zBtns div{flex:1;text-align:center;padding:6px 0;border:1px solid var(--line);border-radius:7px;
+  font-size:11px;cursor:pointer;background:#fafbfd}
+.zBtns div:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+#widgets{color:#5b6472;line-height:1.65}
+#widgets code{background:#eef2f8;padding:1px 5px;border-radius:4px;font-size:11px;color:var(--accent-dark)}
+#widgets b{color:var(--ink)}
+
+/* bottom-left cluster */
+
+/* zoom */
+#zoomBox{position:fixed;right:14px;bottom:14px;display:flex;padding:3px;z-index:11}
+
+/* публикация — в общей панели, чёрная кнопка курсивом */
+#bfPublish{margin-left:6px;padding:0 14px;height:36px;border:none;border-radius:9px;
+  background:#111827;color:#fff;font-style:italic;font-weight:700;font-size:13.5px;
+  letter-spacing:.2px;cursor:pointer;white-space:nowrap;align-self:center;font-family:inherit}
+#bfPublish:hover{background:#2b3648}
+#bfPublish:active{transform:translateY(1px)}
+@media (max-width:900px){ #bfPublish{padding:0 10px;height:34px;font-size:12.5px} }
+.zBtn{min-width:32px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:7px;
+  cursor:pointer;font-size:15px;color:#5b6472;transition:.12s}
+.zBtn:hover{background:#eef2f8;color:var(--ink)}
+#zLabel{font-size:12px;font-weight:600;min-width:48px}
+
+/* play */
+/* В игре экран чистый: панели инструментов, свойств, режимов, зума,
+   подсказка и верхняя строка с сохранением и публикацией скрыты. */
+body.play #tools,body.play #insp,body.play #modes,body.play #zoomBox,
+body.play #hint,body.play #scene,body.play #bfPublish,
+body.play #genBox,body.play #aaPanel{display:none!important}
+/* HUD ушёл из-под верхней кромки в правый нижний угол: сверху он
+   налезал на панель и заслонял карту. Стал компактнее — иконки вместо
+   слов, подписи остались во всплывающих подсказках. */
+#hud{display:none;position:fixed;right:14px;bottom:14px;left:auto;top:auto;transform:none;
+  z-index:12;padding:6px 7px;align-items:center;gap:4px;border-radius:12px}
+body.play #hud{display:flex}
+.stat{display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:8px;
+  background:#f4f6fa;font-size:12px;font-weight:600;white-space:nowrap}
+.stat i{font-style:normal;font-size:13px}
+#exitBtn{padding:6px 13px;border-radius:8px;background:#fee2e2;color:#dc2626;font-size:12px;
+  font-weight:600;cursor:pointer;transition:.14s}
+#exitBtn:hover{background:#dc2626;color:#fff}
+#msg{position:fixed;top:42%;left:50%;transform:translate(-50%,-50%) scale(.9);z-index:13;text-align:center;
+  display:none;pointer-events:none;opacity:0;transition:.32s cubic-bezier(.2,1.2,.3,1)}
+#msg.show{display:block;opacity:1;transform:translate(-50%,-50%) scale(1)}
+#msg h1{margin:0;font-size:52px;font-weight:800;letter-spacing:-1.5px;
+  background:linear-gradient(180deg,#fbbf24,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 3px 10px rgba(245,158,11,.35))}
+#msg p{margin:8px 0 0;font-size:13.5px;color:#5b6472;font-weight:500}
+
+#pad{display:none;position:fixed;bottom:0;left:0;right:0;z-index:13;
+  padding:0 18px calc(20px + env(safe-area-inset-bottom));justify-content:space-between;pointer-events:none}
+body.play.mob #pad{display:flex}
+.padG{display:flex;gap:13px;pointer-events:auto}
+.pBtn{width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.9);border:1px solid var(--line);
+  box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:23px;color:#5b6472;
+  user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.pBtn:active{background:var(--accent);color:#fff;transform:scale(.93)}
+#pJump{width:78px;height:78px;font-size:13px;font-weight:800;letter-spacing:.5px}
+
+/* dialog */
+#dlg{position:fixed;inset:0;z-index:200;display:none}
+#dlg .bd{position:absolute;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(3px)}
+#dlg .card{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:300px;max-width:430px;
+  background:#fff;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.3);padding:20px 22px}
+#dlg h3{margin:0 0 7px;font-size:15px}
+#dlg p{margin:0 0 16px;font-size:13px;color:#5b6472;line-height:1.6}
+#dlg .acts{display:flex;gap:8px;justify-content:flex-end}
+#dIn{width:100%;box-sizing:border-box;padding:11px 12px;margin:0 0 14px;border:1px solid var(--line);
+  border-radius:9px;font-size:16px;font-family:inherit;color:var(--ink);background:#fafbfd;outline:none}
+#dIn:focus{border-color:var(--accent);background:#fff}
+#dlg button{padding:8px 15px;border:1px solid var(--line);background:#fff;border-radius:8px;font-size:12.5px;
+  font-family:inherit;font-weight:600;cursor:pointer}
+#dlg .ok{background:var(--accent);color:#fff;border-color:var(--accent)}
+#file{display:none}
+
+/* mobile */
+body.mob #modes{top:8px;bottom:auto;left:8px;right:8px;padding:3px}
+body.mob .modeBtn{padding:8px 9px;font-size:11px}
+body.mob #scene{top:8px;bottom:auto;padding:3px}
+body.mob .sBtn{width:38px;height:34px}
+body.mob #tools{left:0;right:0;bottom:0;top:auto;transform:none;width:100%;max-height:none;flex-direction:row;
+  border-radius:16px 16px 0 0;max-height:none;height:58px;overflow-x:auto;overflow-y:hidden;padding:6px 8px;gap:4px}
+body.mob .tool{width:42px;height:42px}
+body.mob .tool canvas{width:26px;height:26px}
+body.mob .tool[data-tip]:hover::after{display:none}
+body.mob #insp{left:8px;right:8px;width:auto;top:auto;bottom:64px;transform:none;max-height:34vh}
+body.mob #props,body.mob #widgets{max-height:26vh}
+#inspClose{flex:0 0 34px;color:#dc2626;font-size:14px}
+#inspClose:hover{background:#fee2e2}
+body.mob #hint{display:none}
+body.mob #zoomBox{bottom:68px;right:8px}
+body.mob #msg h1{font-size:38px}
+</style>
+        <script src="device.js?v=100"></script>
+        <script src="lzma.js?v=100"></script>
+        <script src="bfImport.js?v=100"></script>
+        <script src="skinRender.js?v=100"></script>
+        <script src="skinCanvas.js?v=100"></script>
+        <script src="coin.js?v=100"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=85">
+        <script src="theme.js?v=100"></script>
+        <link rel="icon" href="/favicon.ico" sizes="32x32">
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <link rel="manifest" href="/site.webmanifest">
+        <meta name="theme-color" content="#111827">
+        <link rel="canonical" href="https://aibrofist.online/editor.html">
+        <meta name="description" content="Map Editor: build your own map and publish it in the game.">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Map Editor">
+        <meta property="og:description" content="Map Editor: build your own map and publish it in the game.">
+        <meta property="og:url" content="https://aibrofist.online/editor.html">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<div id="modes" class="panel"></div>
+<div id="scene" class="panel"></div>
+<div id="tools" class="panel"></div>
+
+
+</div>
+
+<div id="insp" class="panel">
+  <div id="inspHead">
+    <div class="tab on" data-tab="props">Свойства</div>
+    <div class="tab" id="inspClose" title="Закрыть">Закрыть</div>
+  </div>
+  <div id="props"></div>
+  <div id="widgets" style="display:none"></div>
+</div>
+
+<div id="zoomBox" class="panel">
+  <div class="zBtn" id="zOut">−</div>
+  <div class="zBtn" id="zLabel">100%</div>
+  <div class="zBtn" id="zIn">+</div>
+</div>
+
+<div id="hud" class="panel">
+  <div class="stat" title="время забега"><i>⏱</i><span id="sTime">0.0</span></div>
+  <div class="stat" title="собрано монет"><i>🪙</i><span id="sCoin">0</span></div>
+  <div class="stat" title="объектов в карте (максимум 2000)"><i>▦</i><span id="sObj">0</span></div>
+  <div class="stat" title="смертей"><i>✖</i><span id="sDeath">0</span></div>
+  <div id="exitBtn" title="выйти из игры (Esc)">Выйти</div>
+</div>
+<div id="msg"><h1 id="msgT"></h1><p id="msgS"></p></div>
+
+<div id="pad">
+  <div class="padG"><div class="pBtn" id="pLeft">◀</div><div class="pBtn" id="pRight">▶</div></div>
+  <div class="padG"><div class="pBtn" id="pJump">JUMP</div></div>
+</div>
+
+<div id="dlg">
+  <div class="bd"></div>
+  <div class="card"><h3 id="dT"></h3><p id="dM"></p>
+    <input id="dIn" type="text" style="display:none">
+    <div class="acts"><button id="dNo">Отмена</button><button class="ok" id="dOk">OK</button></div></div>
+</div>
+
+<input type="file" id="file" accept=".txt,.json">
+<canvas id="c"></canvas>
+
+<!-- socket.io больше не нужен: realtime-соединение редактора убрано -->
+<script>
+(function(){
+"use strict";
+
+/* ══════════════════════════════════════════════════
+   ENVIRONMENT
+   ══════════════════════════════════════════════════ */
+var isMob = function(){
+  return matchMedia("(pointer:coarse)").matches || innerWidth <= 860 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+};
+function syncMob(){ document.body.classList.toggle("mob", isMob()); }
+syncMob(); addEventListener("resize", syncMob); addEventListener("orientationchange", syncMob);
+
+var cv = document.getElementById("c"), ctx = cv.getContext("2d");
+/* Адаптивное разрешение (v103): если устройство не тянет (кадр дороже 30 мс),
+   холст рисуется в уменьшенном разрешении — на слабых телефонах это
+   единственный способ удержать 30+ FPS. Как только тянет — качество
+   возвращается до полного. */
+var DPR_BASE = Math.min(2, devicePixelRatio || 1);
+var QUALITY = 1;                              // 1 — полное разрешение
+var DPR = DPR_BASE;
+function resize(){
+  DPR = DPR_BASE * QUALITY;
+  cv.width = Math.round(innerWidth * DPR); cv.height = Math.round(innerHeight * DPR);
+  cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px";
+  bgGrad = null;                              // фон пересоздаётся под новый размер
+}
+addEventListener("resize", resize);
+var VW = function(){ return cv.width / DPR; }, VH = function(){ return cv.height / DPR; };
+
+/* ══════════════════════════════════════════════════
+   MODEL DEFINITIONS  — every shape drawn by hand
+   ══════════════════════════════════════════════════ */
+var C = {
+  stone1:"#4b5563", stone2:"#374151", stone3:"#1f2937",
+  wood1:"#b45309", wood2:"#92400e",
+  poison1:"#4ade80", poison2:"#16a34a", poison3:"#15803d",
+  metal1:"#cbd5e1", metal2:"#94a3b8", metal3:"#64748b",
+  spring1:"#c084fc", spring2:"#9333ea",
+  gate1:"#60a5fa", gate2:"#2563eb",
+  gold1:"#fde047", gold2:"#f59e0b",
+  red1:"#f87171", red2:"#dc2626",
+  ink:"#111827"
+};
+/* Плоская заливка вместо градиента. Объекты выглядели «масляными»
+   из-за переливов и бликов — теперь это просто цвет. */
+function grad(x0,y0,x1,y1,a,b){ return a; }
+function rr(x,y,w,h,r){
+  r = Math.min(r, Math.abs(w)/2, Math.abs(h)/2);
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(x,y,w,h,r);
+  else{
+    ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+  }
+}
+var COIN_IMG = new Image();
+COIN_IMG.src = "coin.png";
+
+/* the player figure — clean silhouette from the reference art */
+var FIG_GAP = 0.049;
+var SKIN_IMGS = {};
+function skinImage(src){
+  if(!src) return null;
+  var im = SKIN_IMGS[src];
+  if(!im){ im = SKIN_IMGS[src] = new Image(); im.crossOrigin = "anonymous"; im.src = src; }
+  return (im.complete && im.naturalWidth) ? im : null;
+}
+
+function figure(w,h,col,accent,skin){
+  var d = w, top = d + h*FIG_GAP, bodyH = Math.max(0, h - top);
+  // скин-картинка от владельца заменяет фигуру целиком
+  if(skin && skin.img){
+    var pic = skinImage(skin.img);
+    if(pic){
+      var k = Math.min(w/pic.naturalWidth, h/pic.naturalHeight);
+      var pw = pic.naturalWidth*k, ph = pic.naturalHeight*k;
+      ctx.drawImage(pic, (w-pw)/2, h-ph, pw, ph);
+      return;
+    }
+    // пока картинка грузится — рисуем обычный силуэт
+  }
+  // «за спиной» уходит под силуэт
+  if(skin && window.BFSkinCanvas) BFSkinCanvas.behind(ctx, w, h, skin);
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.arc(w/2, d/2, d/2, 0, 6.2832); ctx.fill();
+  if(bodyH > 0){ rr(0, top, w, bodyH, Math.min(w*0.22, bodyH/2)); ctx.fill(); }
+  // одежда, лицо и головной убор — поверх
+  if(skin && window.BFSkinCanvas) BFSkinCanvas.front(ctx, w, h, skin);
+}
+
+/* Each painter draws the object in its own local space (0,0 → w,h). */
+var PAINT = {
+  /* Три базовые фигуры рисуются одной плоской заливкой: без скруглений,
+     градиентов и бликов. Что нарисовано — то и считает хитбокс. */
+  rect: function(o){
+    ctx.fillStyle = o.fill || C.ink;
+    ctx.fillRect(0,0,o.w,o.h);
+  },
+  circle: function(o){
+    ctx.fillStyle = o.fill || C.ink;
+    ctx.beginPath(); ctx.ellipse(o.w/2,o.h/2,o.w/2,o.h/2,0,0,6.2832); ctx.fill();
+  },
+  triangle: function(o){
+    ctx.fillStyle = o.fill || C.ink;
+    ctx.beginPath(); ctx.moveTo(o.w/2,0); ctx.lineTo(o.w,o.h); ctx.lineTo(0,o.h); ctx.closePath(); ctx.fill();
+  },
+  text: function(o){
+    ctx.fillStyle = o.fill || C.ink;
+    ctx.font = "800 " + Math.max(9,o.h) + "px -apple-system,Segoe UI,Roboto,sans-serif";
+    ctx.textBaseline = "top";
+    ctx.fillText(o.text || "Text", 0, 0);
+  },
+  spawn: function(o){ figure(o.w,o.h, o.fill || C.ink, true, (window.GAME && window.GAME.mySkin) || null); },
+  seeker: function(o){
+    figure(o.w,o.h, o.fill || "#b91c1c", true);
+    ctx.fillStyle = "#fff";                      // seeker gets eyes so he reads as the hunter
+    ctx.beginPath(); ctx.arc(o.w*0.34,o.w*0.46,o.w*0.1,0,6.2832); ctx.fill();
+    ctx.beginPath(); ctx.arc(o.w*0.66,o.w*0.46,o.w*0.1,0,6.2832); ctx.fill();
+  },
+  poison: function(o){
+    var t = anim*0.055;
+    ctx.fillStyle = grad(0,o.h*0.2,0,o.h,C.poison1,C.poison3);
+    ctx.beginPath(); ctx.moveTo(0,o.h*0.34);
+    var steps = Math.max(3, Math.round(o.w/22));
+    for(var i=0;i<steps;i++){
+      var x0 = o.w*i/steps, x1 = o.w*(i+1)/steps;
+      ctx.quadraticCurveTo((x0+x1)/2, o.h*0.34 + Math.sin(t+i*1.3)*o.h*0.26 - o.h*0.16, x1, o.h*0.34);
+    }
+    ctx.lineTo(o.w,o.h); ctx.lineTo(0,o.h); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.34)";     // bubbles
+    for(var b=0;b<Math.max(2,o.w/40);b++){
+      var bx = ((b*37)%Math.max(1,o.w-8))+4;
+      var by = o.h*0.9 - ((anim*0.6 + b*30) % (o.h*0.6));
+      ctx.beginPath(); ctx.arc(bx,by,1.6+ (b%2),0,6.2832); ctx.fill();
+    }
+  },
+  spike: function(o){
+    var n = Math.max(2, Math.round(o.w/15));
+    ctx.fillStyle = grad(0,0,0,o.h,C.metal1,C.metal3);
+    for(var s=0;s<n;s++){
+      ctx.beginPath();
+      ctx.moveTo(o.w*s/n, o.h); ctx.lineTo(o.w*(s+0.5)/n, 0); ctx.lineTo(o.w*(s+1)/n, o.h);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = "rgba(255,255,255,.5)";
+    for(var s2=0;s2<n;s2++){
+      ctx.beginPath(); ctx.moveTo(o.w*(s2+0.5)/n, 0);
+      ctx.lineTo(o.w*(s2+0.36)/n, o.h); ctx.lineTo(o.w*(s2+0.46)/n, o.h); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = C.stone3; ctx.fillRect(0, o.h-Math.max(2,o.h*0.13), o.w, Math.max(2,o.h*0.13));
+  },
+  bounce: function(o){
+    var sq = o._squash || 0;                     // squashes when the player lands
+    var h = o.h * (1 - sq*0.45), y = o.h - h;
+    ctx.fillStyle = C.stone3;
+    rr(o.w*0.06, o.h-Math.max(3,o.h*0.22), o.w*0.88, Math.max(3,o.h*0.22), 2); ctx.fill();
+    ctx.strokeStyle = C.metal2; ctx.lineWidth = Math.max(1.6, o.h*0.11);  // coil
+    ctx.beginPath();
+    for(var i=0;i<=10;i++){
+      var yy = y + h*0.42 + (h*0.42)*i/10, xx = o.w*(i%2?0.32:0.68);
+      i===0 ? ctx.moveTo(xx,yy) : ctx.lineTo(xx,yy);
+    }
+    ctx.stroke();
+    ctx.fillStyle = grad(0,y,0,y+h*0.5,C.spring1,C.spring2);
+    rr(0, y, o.w, Math.max(4,h*0.44), Math.min(o.w/2,h*0.22)); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = Math.max(1.4,o.h*0.1);
+    ctx.lineCap = "round"; ctx.beginPath();
+    ctx.moveTo(o.w*0.33, y+h*0.3); ctx.lineTo(o.w*0.5, y+h*0.1); ctx.lineTo(o.w*0.67, y+h*0.3);
+    ctx.stroke(); ctx.lineCap = "butt";
+  },
+  platform: function(o){
+    ctx.fillStyle = grad(0,0,0,o.h,C.metal2,C.metal3);
+    rr(0,0,o.w,o.h,Math.min(4,o.h/3)); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.4)"; ctx.fillRect(0,0,o.w,Math.max(1.5,o.h*0.16));
+    ctx.fillStyle = "rgba(0,0,0,.22)";           // tread marks
+    for(var i=6;i<o.w-4;i+=13) ctx.fillRect(i, o.h*0.42, 5, Math.max(2,o.h*0.3));
+  },
+  door: function(o){
+    ctx.fillStyle = grad(0,0,o.w,0,C.wood1,C.wood2);
+    rr(0,0,o.w,o.h,Math.min(o.w*0.14,6)); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.25)"; ctx.lineWidth = 1.4;
+    rr(o.w*0.16,o.h*0.09,o.w*0.68,o.h*0.36,3); ctx.stroke();
+    rr(o.w*0.16,o.h*0.54,o.w*0.68,o.h*0.36,3); ctx.stroke();
+    ctx.fillStyle = C.gold1;
+    ctx.beginPath(); ctx.arc(o.w*0.8,o.h*0.52,Math.max(2,o.w*0.07),0,6.2832); ctx.fill();
+  },
+  button: function(o){
+    var pressed = o._active;
+    ctx.fillStyle = C.stone3;
+    rr(0, o.h*0.62, o.w, o.h*0.38, 2); ctx.fill();
+    var by = pressed ? o.h*0.42 : o.h*0.06, bh = pressed ? o.h*0.22 : o.h*0.58;
+    ctx.fillStyle = grad(0,by,0,by+bh, pressed?"#4ade80":C.red1, pressed?"#15803d":C.red2);
+    rr(o.w*0.16, by, o.w*0.68, bh, Math.min(4,bh/2)); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.35)";
+    rr(o.w*0.22, by+1.5, o.w*0.56, Math.max(1.5,bh*0.24), 2); ctx.fill();
+  },
+  lever: function(o){
+    ctx.fillStyle = C.stone3;
+    rr(0, o.h*0.82, o.w, o.h*0.18, 2); ctx.fill();
+    ctx.save(); ctx.translate(o.w/2, o.h*0.86);
+    ctx.rotate(o._active ? 0.62 : -0.62);
+    ctx.fillStyle = C.metal3;
+    rr(-Math.max(1.4,o.w*0.09), -o.h*0.78, Math.max(2.8,o.w*0.18), o.h*0.78, 1.5); ctx.fill();
+    var kg = ctx.createRadialGradient(-1,-o.h*0.8,0,0,-o.h*0.78,Math.max(3.4,o.w*0.28));
+    kg.addColorStop(0, o._active?"#86efac":"#fca5a5"); kg.addColorStop(1, o._active?"#15803d":"#b91c1c");
+    ctx.fillStyle = kg;
+    ctx.beginPath(); ctx.arc(0,-o.h*0.78,Math.max(3.4,o.w*0.28),0,6.2832); ctx.fill();
+    ctx.restore();
+  },
+  rotator: function(o){
+    ctx.fillStyle = grad(0,0,0,o.h,"#a78bfa","#6d28d9");
+    rr(0,0,o.w,o.h,o.h/2); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.3)";
+    rr(o.w*0.06,o.h*0.18,o.w*0.88,Math.max(1.4,o.h*0.22),o.h*0.11); ctx.fill();
+    ctx.fillStyle = "#4c1d95";
+    ctx.beginPath(); ctx.arc(o.w/2,o.h/2,Math.max(3,o.h*0.72),0,6.2832); ctx.fill();
+    ctx.fillStyle = "#c4b5fd";
+    ctx.beginPath(); ctx.arc(o.w/2,o.h/2,Math.max(1.5,o.h*0.3),0,6.2832); ctx.fill();
+  },
+  checkpoint: function(o){
+    var pole = Math.max(2.5, o.w*0.15);
+    ctx.fillStyle = C.stone2; rr(0,0,pole,o.h,1); ctx.fill();
+    var wave = o._reached ? Math.sin(anim*0.13)*o.h*0.035 : 0;
+    ctx.fillStyle = o._reached ? grad(0,0,0,o.h*0.4,"#4ade80","#16a34a") : grad(0,0,0,o.h*0.4,C.red1,C.red2);
+    ctx.beginPath(); ctx.moveTo(pole, o.h*0.04);
+    ctx.quadraticCurveTo(o.w*0.6, o.h*0.1+wave, o.w, o.h*0.2);
+    ctx.quadraticCurveTo(o.w*0.6, o.h*0.3-wave, pole, o.h*0.4);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = C.stone3; rr(-o.w*0.1, o.h-Math.max(3,o.h*0.06), o.w*0.5, Math.max(3,o.h*0.06), 2); ctx.fill();
+  },
+  finishline: function(o){
+    var cs = Math.max(5, Math.min(o.w, o.h)/5);
+    for(var y=0;y<o.h;y+=cs) for(var x=0;x<o.w;x+=cs){
+      ctx.fillStyle = (((x/cs|0)+(y/cs|0))%2===0) ? "#1f2937" : "#f9fafb";
+      ctx.fillRect(x,y,Math.min(cs,o.w-x),Math.min(cs,o.h-y));
+    }
+    ctx.strokeStyle = C.stone3; ctx.lineWidth = 1.6; ctx.strokeRect(.8,.8,o.w-1.6,o.h-1.6);
+  },
+  coin: function(o){
+    // та же монета, что в профиле игрока (coin.png), с вращением
+    var sq = Math.abs(Math.cos(anim*0.045));
+    var w = Math.max(2, o.w*sq);
+    ctx.save(); ctx.translate(o.w/2, 0);
+    if(COIN_IMG.complete && COIN_IMG.naturalWidth){
+      ctx.drawImage(COIN_IMG, -w/2, 0, w, o.h);
+    } else {
+      ctx.fillStyle = grad(-w/2,0,w/2,o.h,C.gold1,C.gold2);
+      ctx.beginPath(); ctx.ellipse(0,o.h/2,w/2,o.h/2,0,0,6.2832); ctx.fill();
+    }
+    ctx.restore();
+  },
+};
+
+/* ══════════════════════════════════════════════════
+   TOOL TABLE
+   ══════════════════════════════════════════════════ */
+var ALL = "hideAndSeek race";
+/* У каждого режима свои объекты. Общие есть везде, остальные привязаны
+   к одному режиму и в другом просто не существуют — ни в палитре,
+   ни при загрузке карты, ни при публикации (это проверяет сервер). */
+var TOOLS = [
+  {t:"select",     n:"Выделение",   m:ALL},
+  {t:"hand",       n:"Рука (двигать карту)", m:ALL},
+  {t:"rect",       n:"Блок",        m:ALL},
+  {t:"circle",     n:"Круг",        m:ALL},
+  {t:"triangle",   n:"Треугольник", m:ALL},
+  {t:"text",       n:"Текст",       m:ALL},
+  {t:"coin",       n:"Монета",      m:ALL},
+  {t:"spawn",      n:"Точка старта",m:ALL},
+  {t:"button",     n:"Кнопка",      m:ALL},
+  {t:"lever",      n:"Рычаг",       m:ALL},
+  // только гонка
+  {t:"checkpoint", n:"Чекпоинт",    m:"race"},
+  {t:"finishline", n:"Финиш",       m:"race"}
+];
+var MODE_OF = {};
+TOOLS.forEach(function(T){ MODE_OF[T.t] = T.m; });
+function allowedIn(type, m){
+  var s = MODE_OF[type];
+  return !s || s.split(" ").indexOf(m) !== -1;
+}
+var OBJ_LIMIT = 2000;   // максимум объектов в карте, одинаково во всех режимах
+/* Строительные объекты по умолчанию чёрные — как сам игрок.
+   Опасные и служебные оставлены цветными: чёрные шипы на чёрном блоке
+   игрок просто не заметит, и карта станет нечестной. */
+var INK = "#111827";
+var COLORS = {
+  rect:INK, circle:INK, triangle:INK, text:INK,
+  coin:"", button:INK, lever:INK,
+  checkpoint:"", finishline:"", spawn:INK
+};
+/* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
+   Игрок 20x60, ровно три клетки в высоту. */
+var SIZES = {
+  rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24], coin:[22,22],
+  button:[34,18], lever:[22,42],
+  checkpoint:[30,64], finishline:[42,86], spawn:[20,60]
+};
+var SOLID  = ["rect","circle","triangle"];
+/* Раньше яд, шипы и ротатор убивали просто потому, что так называются.
+   Теперь смертельность — свойство объекта: галочка «Яд» есть у каждого,
+   и её можно снять хоть с самого яда. Модели остались как были. */
+var HAZARD = [];
+var DEADLY_BY_DEFAULT = [];
+/* Ворота и укрытие убраны, но механика связей осталась: цель кнопки или
+   рычага — теперь любой обычный блок, круг или треугольник. */
+var LINKED = ["rect","circle","triangle","button","lever"];
+
+/* ══════════════════════════════════════════════════
+   STATE
+   ══════════════════════════════════════════════════ */
+var COIN_LIMIT = 3;   // больше трёх монет в карту не положить — защита от накрутки
+/* Владельцу лимит не мешает: его карты для показов, а не для набивания
+   монет. Флаг приходит из инструментов владельца. */
+function coinCapped(){ return !window.BFAdminAbuse; }
+function countCoins(){ return objects.filter(function(o){ return o.type === "coin"; }).length; }
+function coinWarn(){
+  showMsg("Максимум " + COIN_LIMIT + " монеты", "Больше монет в карту положить нельзя.");
+  setTimeout(hideMsg, 1800);
+}
+var mode = "hideAndSeek", tool = "select", objects = [], sel = null, uid = 1;
+
+/* ══════════════════════════════════════════════════
+   ИНДЕКС ОБЪЕКТОВ
+   На больших картах перебирать все 2000 объектов каждый кадр дорого.
+   Раскладываем их по сетке ячеек и берём только те, что рядом.
+   ══════════════════════════════════════════════════ */
+var CELL = 260, grid = null, gridDirty = true;
+function markDirty(){ gridDirty = true; }
+function buildGrid(){
+  grid = {};
+  for(var i=0;i<objects.length;i++){
+    var o = objects[i], bb = bbox(o);
+    var cx0 = Math.floor(bb[0]/CELL), cx1 = Math.floor(bb[2]/CELL);
+    var cy0 = Math.floor(bb[1]/CELL), cy1 = Math.floor(bb[3]/CELL);
+    for(var cx=cx0; cx<=cx1; cx++)
+      for(var cy=cy0; cy<=cy1; cy++){
+        var k = cx + ":" + cy;
+        (grid[k] || (grid[k] = [])).push(o);
+      }
+  }
+  gridDirty = false;
+}
+/* Только что созданный объект добавляем в сетку точечно: капли струи
+   увидят новую клетку в тот же кадр, а полная перестройка индекса
+   откладывается до конца кадра. */
+function gridAdd(o){
+  if(gridDirty || !grid || typeof grid !== "object") return;
+  var bb = bbox(o);
+  var cx0 = Math.floor(bb[0]/CELL), cx1 = Math.floor(bb[2]/CELL);
+  var cy0 = Math.floor(bb[1]/CELL), cy1 = Math.floor(bb[3]/CELL);
+  for(var cx=cx0; cx<=cx1; cx++)
+    for(var cy=cy0; cy<=cy1; cy++){
+      var k = cx + ":" + cy;
+      (grid[k] || (grid[k] = [])).push(o);
+    }
+}
+function nearby(x, y, w, h){
+  var i, o;
+  if(gridDirty || !grid) buildGrid();
+  var seen = {}, out = [];
+  var cx0 = Math.floor(x/CELL), cx1 = Math.floor((x+w)/CELL);
+  var cy0 = Math.floor(y/CELL), cy1 = Math.floor((y+h)/CELL);
+  for(var cx=cx0; cx<=cx1; cx++)
+    for(var cy=cy0; cy<=cy1; cy++){
+      var list = grid[cx + ":" + cy];
+      if(!list) continue;
+      for(i=0;i<list.length;i++){
+        o = list[i];
+        if(seen[o.id]) continue;
+        seen[o.id] = 1; out.push(o);
+      }
+    }
+  // платформы и ротаторы меняют клетку каждый кадр, поэтому в сетке им
+  // верить нельзя — берём их напрямую, но только те, что реально рядом
+  for(i=0;i<movers.length;i++){
+    o = movers[i];
+    if(seen[o.id]) continue;
+    var mb = bbox(o);
+    if(mb[2] < x || mb[0] > x+w || mb[3] < y || mb[1] > y+h) continue;
+    seen[o.id] = 1; out.push(o);
+  }
+  return out;
+}
+var movers = [];
+function indexMovers(){
+  movers = objects.filter(function(o){ return o.moves || o.spins; });
+}
+function overLimit(extra){
+  if(objects.length + (extra||1) <= OBJ_LIMIT) return false;
+  showMsg("Предел " + OBJ_LIMIT + " объектов",
+          "В карте уже " + objects.length + ". Удалите лишнее, чтобы добавить новое.");
+  setTimeout(hideMsg, 2200);
+  return true;
+}
+var playing = false, anim = 0, grid = true, GRID = 10;
+/* Гравитация одинакова во всех картах: менять её больше нельзя,
+   иначе одна и та же карта играется по-разному у разных авторов. */
+var gravityScale = 9;
+var view = {s:1, x:0, y:0};
+
+function mk(type,x,y,w,h){
+  var o = {id:uid++, type:type, x:x, y:y, w:w, h:h, rot:0, fill:COLORS[type]||"",
+           deadly: DEADLY_BY_DEFAULT.indexOf(type) !== -1};
+  if(type === "text") o.text = "Text";
+
+  if(type === "button" || type === "lever"){ o.customId = "w"+o.id; o.targetIds = ""; }
+  return o;
+}
+objects = [];   // редактор открывается пустым: карту автор строит сам
+
+/* ══════════════════════════════════════════════════
+   UNDO / REDO
+   ══════════════════════════════════════════════════ */
+var undoStack = [], redoStack = [];
+function snap(){ return JSON.stringify({o: objects.map(function(o){
+  var c = {}; for(var k in o) if(k[0] !== "_") c[k] = o[k]; return c;
+})}); }
+function commit(){
+  undoStack.push(snap()); if(undoStack.length > 80) undoStack.shift();
+  redoStack.length = 0;
+}
+function restore(json){
+  var d = JSON.parse(json);
+  objects = d.o;
+  uid = objects.reduce(function(m,o){ return Math.max(m,(o.id||0)+1); },1);
+  sel = null; inspect();
+}
+function undo(){ if(!undoStack.length) return; redoStack.push(snap()); restore(undoStack.pop()); }
+function redo(){ if(!redoStack.length) return; undoStack.push(snap()); restore(redoStack.pop()); }
+
+/* ══════════════════════════════════════════════════
+   CAMERA
+   ══════════════════════════════════════════════════ */
+function toWorld(sx,sy){ return {x:(sx-view.x)/view.s, y:(sy-view.y)/view.s}; }
+function zoomAt(sx,sy,f){
+  var b = toWorld(sx,sy);
+  /* Границы зума: вверх — до 4000% (предохранитель от бесконечности,
+     на которой обрывается матрица холста), вниз — до 20%: дальше карта
+     теряется из виду, и работать с ней всё равно невозможно. */
+  view.s = Math.min(4000, Math.max(0.2, view.s*f));
+  view.x = sx - b.x*view.s; view.y = sy - b.y*view.s;
+  document.getElementById("zLabel").textContent = Math.round(view.s*100)+"%";
+}
+function resetView(){ view.s = 1; view.x = 0; view.y = 0; document.getElementById("zLabel").textContent = "100%"; }
+
+/* ══════════════════════════════════════════════════
+   PARTICLES
+   ══════════════════════════════════════════════════ */
+var parts = [];
+function burst(x,y,n,col,spd,life){
+  for(var i=0;i<n;i++){
+    var a = Math.random()*6.2832, v = spd*(0.35+Math.random());
+    parts.push({x:x,y:y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-1,life:life,max:life,c:col,r:1.4+Math.random()*2.4});
+  }
+}
+function puff(x,y,n){
+  for(var i=0;i<n;i++)
+    parts.push({x:x+(Math.random()-.5)*14,y:y,vx:(Math.random()-.5)*1.8,vy:-Math.random()*1.1,
+                life:22,max:22,c:"#cbd5e1",r:2+Math.random()*2.6});
+}
+function stepParts(){
+  for(var i=parts.length-1;i>=0;i--){
+    var p = parts[i];
+    p.x += p.vx; p.y += p.vy;
+    if(p.f){ p.vy -= 0.014; p.vx *= 0.97; }   // пузыри не падают, а всплывают
+    else { p.vy += 0.24; p.vx *= 0.98; }
+    p.life--;
+    if(p.life <= 0) parts.splice(i,1);
+  }
+}
+function drawParts(){
+  parts.forEach(function(p){
+    ctx.globalAlpha = Math.max(0, p.life/p.max);
+    ctx.fillStyle = p.c;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.2832); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+/* ══════════════════════════════════════════════════
+   PHYSICS  — гравитация постоянная (9), как в оригинальном редакторе
+   ══════════════════════════════════════════════════ */
+/* FRIC = 0 — на земле игрок останавливается сразу, без скольжения.
+   В воздухе инерция остаётся, иначе управление в прыжке ломается. */
+/* Прыжок поднимает на 168 px против прежних 122. На телефоне короткое
+   касание JUMP длится 3-5 кадров, а подъём — больше двадцати, поэтому
+   раньше тап давал всего ~80 px и до соседнего ряда полок (83-104 px)
+   игрок просто не долетал. Теперь тап берёт 133 px, зажатая кнопка — 161. */
+var JUMP_H = 152, MOVE_A = 0.9, MAX_VX = 5.2, FRIC = 0, AIR = 0.94,
+    COYOTE = 6, BUFFER = 7, WALL_SLIDE = 2.6, WALL_VX = 6.2, STEP_UP = 16,
+    MIN_HOLD = 7;   // столько кадров прыжок не подрезается, даже если кнопку отпустили
+function G(){ return gravityScale * 0.062; }          // 9 → 0.558 px/кадр²
+function jumpV(){ return -Math.sqrt(2 * Math.max(0.02, G()) * JUMP_H); }  // constant hop height
+/* Heavier gravity shortens airtime, so speed scales with it — otherwise a map
+   built at gravity 10 becomes physically unjumpable at 30. Reach stays constant. */
+function gk(){ return Math.max(0.45, Math.sqrt(Math.max(0.02, G()) / 0.62)); }
+function maxVX(){ return MAX_VX * gk(); }
+function moveA(){ return MOVE_A * gk(); }
+function wallVX(){ return WALL_VX * gk(); }
+function maxFall(){ return 12 + gravityScale * 0.8; }
+
+var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,selfJump:false,hidden:false,
+  rideOn:null,
+};
+var keys = {l:false,r:false,u:false};
+var coy = 0, buf = 0, hold = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
+var deaths = 0, coins = 0, coinsTotal = 0, timeMs = 0, shake = 0, acc = 0, last = 0;
+
+/* Где игрок относительно воды: верхняя кромка, под водой ли голова
+   и не кислота ли это. Считается по тем же объектам, что и коллизии. */
+function findSpawn(){ for(var i=0;i<objects.length;i++) if(objects[i].type === "spawn") return objects[i]; return null; }
+/* Старт вплотную к финишу — не карта, а кнопка: шаг вправо и уровень
+   пройден. Держим их на расстоянии, иначе так накручивают прохождения. */
+var SPAWN_GAP = 320;
+function spawnTooClose(){
+  var sp = findSpawn();
+  if(!sp) return null;
+  for(var i=0;i<objects.length;i++){
+    var o = objects[i];
+    if(o.type !== "finishline") continue;
+    var dx = (o.x + o.w/2) - (sp.x + sp.w/2);
+    var dy = (o.y + o.h/2) - (sp.y + sp.h/2);
+    var d = Math.sqrt(dx*dx + dy*dy);
+    if(d < SPAWN_GAP) return Math.round(d);
+  }
+  return null;
+}
+
+function play(){
+  var sp = findSpawn();
+  if(!sp){ dialog("Нет точки старта","Поставь инструмент «Точка старта», потом жми ▶.",null); return; }
+  var near = spawnTooClose();
+  if(near !== null){
+    dialog("Старт слишком близко к финишу",
+           "Между ними " + near + " точек, нужно хотя бы " + SPAWN_GAP +
+           ". Отодвинь старт или финиш.", null);
+    return;
+  }
+  playing = true; done = false; deaths = 0; coins = 0; timeMs = 0; parts.length = 0;
+  indexMovers(); markDirty();
+  // размер игрока задан движком и не редактируется
+  pl.w = SIZES.spawn[0]; pl.h = SIZES.spawn[1];
+  spawnPt = {x:sp.x, y:sp.y};
+  coinsTotal = objects.filter(function(o){ return o.type === "coin"; }).length;
+  objects.forEach(function(o){
+    o._hx = o.x; o._hy = o.y; o._t = 0; o._act = !!o.startsOpen;
+    o._got = false; o._reached = false; o._spin = 0; o._squash = 0;
+  });
+  respawn();
+  document.body.classList.add("play");
+  sel = null; inspect(); hideMsg(); last = 0; acc = 0; stat();
+}
+function stop(){
+  playing = false; document.body.classList.remove("play"); hideMsg(); parts.length = 0;
+  objects.forEach(function(o){ if(o._hx !== undefined){ o.x = o._hx; o.y = o._hy; }
+    o._act = false; o._reached = false; o._spin = 0; o._got = false; });
+  resetView();
+}
+/* Перезапуск забега без перезагрузки страницы: монеты, время, смерти
+   и все собранные предметы возвращаются на место, карта не трогается.
+   Раньше это было размазано по обработчику клавиши R, поэтому после
+   финиша пройти карту заново можно было только с клавиатуры. */
+function restartRun(){
+  done = false; hideMsg();
+  coins = 0; timeMs = 0; deaths = 0;
+  objects.forEach(function(o){
+    o._got = false; o._reached = false;
+    o._act = !!o.startsOpen; o._latch = false;
+  });
+  var sp = findSpawn();
+  if(sp) spawnPt = {x:sp.x, y:sp.y};
+  stat(); respawn();
+}
+
+function respawn(){
+  pl.x = spawnPt.x; pl.y = spawnPt.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
+  pl.rideOn = null;
+}
+function die(){
+  if(pl.dead || done) return;
+  pl.dead = true; deaths++; shake = 13; stat();
+  burst(pl.x+pl.w/2, pl.y+pl.h/2, 22, "#ef4444", 4.4, 34);
+  setTimeout(function(){ if(playing) respawn(); }, 300);
+}
+function stat(){
+  document.getElementById("sDeath").textContent = deaths;
+  document.getElementById("sCoin").textContent = coins + "/" + coinsTotal;
+  var so = document.getElementById("sObj");
+  if(so) so.textContent = objects.length + "/" + OBJ_LIMIT;
+}
+function showMsg(t,s){
+  document.getElementById("msgT").textContent = t;
+  document.getElementById("msgS").textContent = s;
+  var m = document.getElementById("msg"); m.style.display = "block";
+  requestAnimationFrame(function(){ m.classList.add("show"); });
+}
+function hideMsg(){ var m = document.getElementById("msg"); m.classList.remove("show"); m.style.display = "none"; }
+
+/* «Открыт» — объект, который включила кнопка или рычаг: он становится
+   полупрозрачным и проходимым. Сами кнопка и рычаг так не исчезают. */
+var opened = function(o){ return o.type !== "button" && o.type !== "lever" && !!o._act; };
+
+/* Все ли игроки уже в двери. В одиночном прогоне редактора игрок один,
+   поэтому условие выполняется сразу. В сетевой игре список приходит
+   из game.js через GAME.others. */
+function allAtDoor(o){
+  var others = (window.GAME && window.GAME.others) ? window.GAME.others() : null;
+  if(!others || !others.length) return true;
+  for(var i = 0; i < others.length; i++){
+    var p = others[i];
+    if(!p || p.gone) continue;
+    if(!overlaps(o, p.x, p.y, p.w || 22, p.h || 74)) return false;
+  }
+  return true;
+}
+/* Укрытие для пряток игрок проходит насквозь — иначе за него не спрятаться. */
+var solid  = function(o){ return SOLID.indexOf(o.type) !== -1 && !opened(o)
+                              && o.ghost !== true && o.hideSpot !== true; };
+var hazard = function(o){ return o.deadly === true && !opened(o); };
+function hit(ax,ay,aw,ah,bx,by,bw,bh){ return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by; }
+
+/* ══════════════════════════════════════════════════
+   ХИТБОКСЫ
+   Раньше столкновения считались по прямоугольнику вокруг объекта,
+   поэтому круг ловил игрока за углы, треугольник был стеной, а ротатор
+   вращался только на картинке. Теперь у каждого объекта настоящий
+   многоугольник, который поворачивается вместе с ним.
+   ══════════════════════════════════════════════════ */
+var CIRCLE_SIDES = 32;   // чем больше сторон, тем точнее хитбокс круга
+/* Рикошет — полное отражение импульса от той грани, в которую попал игрок.
+   Коэффициент чуть меньше единицы, иначе отскок копится до бесконечности. */
+var RICO_K = 0.96, RICO_MIN = 2.2, RICO_CAP = 26;
+
+/* Отскок считается от настоящей грани объекта, а не от осей экрана.
+   Ищем ближайшее ребро многоугольника и берём его наружную нормаль —
+   поэтому от лежащего батута отбрасывает вверх, от стоящего вбок,
+   а от повёрнутого под тем углом, под каким он стоит. */
+function faceNormal(o, px, py){
+  var pts = polyOf(o), n = pts.length;
+  var best = 1e9, nx = 0, ny = -1, i;
+  for(i=0;i<n;i++){
+    var a = pts[i], b = pts[(i+1)%n];
+    var ex = b[0]-a[0], ey = b[1]-a[1];
+    var len2 = ex*ex + ey*ey;
+    if(len2 < 0.0001) continue;
+    // ближайшая точка ребра к центру игрока
+    var t = ((px-a[0])*ex + (py-a[1])*ey) / len2;
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    var qx = a[0] + ex*t, qy = a[1] + ey*t;
+    var d = (px-qx)*(px-qx) + (py-qy)*(py-qy);
+    if(d >= best) continue;
+    best = d;
+    // нормаль к ребру, развёрнутая наружу — в сторону игрока
+    var len = Math.sqrt(len2);
+    var cx = -ey/len, cy = ex/len;
+    if((px-qx)*cx + (py-qy)*cy < 0){ cx = -cx; cy = -cy; }
+    nx = cx; ny = cy;
+  }
+  return [nx, ny];
+}
+
+/* Отражение импульса от грани. Сила берётся из свойства объекта:
+   1 — как пришёл, больше — подбрасывает сильнее. */
+function ricochet(o){
+  var px = pl.x + pl.w/2, py = pl.y + pl.h/2;
+  var nv = faceNormal(o, px, py);
+  var vx = pl.vx, vy = pl.vy;
+  var dot = vx*nv[0] + vy*nv[1];
+  if(dot > 0) dot = 0;                       // уже летим прочь — не разгоняем
+  var k = RICO_K * (o.power === undefined ? 1 : o.power);
+  var rx = (vx - 2*dot*nv[0]) * k;
+  var ry = (vy - 2*dot*nv[1]) * k;
+  var sp = Math.sqrt(rx*rx + ry*ry);
+  if(sp > RICO_CAP){ rx = rx/sp*RICO_CAP; ry = ry/sp*RICO_CAP; }
+  pl.vx = rx; pl.vy = ry;
+  /* coy обнуляем: иначе сразу после отскока остаётся «монетка времени»
+     от касания земли и игрок прыгает второй раз прямо в воздухе. */
+  pl.ground = false; pl.wall = 0; pl.selfJump = false; coy = 0; buf = 0;
+  o._squash = 1;
+  puff(px - nv[0]*pl.w*0.5, py - nv[1]*pl.h*0.5, 8);
+}
+
+function rawPoly(o){
+  var pts, i, a;
+  if(o.type === "triangle"){
+    pts = [[o.w/2,0],[o.w,o.h],[0,o.h]];
+  } else if(o.type === "circle"){
+    pts = [];
+    for(i=0;i<CIRCLE_SIDES;i++){
+      a = i/CIRCLE_SIDES*6.2831853;
+      pts.push([o.w/2 + Math.cos(a)*o.w/2, o.h/2 + Math.sin(a)*o.h/2]);
+    }
+  } else {
+    pts = [[0,0],[o.w,0],[o.w,o.h],[0,o.h]];
+  }
+  return pts;
+}
+
+// многоугольник в мировых координатах; пересчитывается только при изменениях
+function polyOf(o){
+  var ang = (o.spins && playing) ? (o._spin || 0) : (o.rot||0)*Math.PI/180;
+  var key = o.x + "," + o.y + "," + o.w + "," + o.h + "," + ang.toFixed(4) + "," + o.type;
+  if(o._pk === key) return o._poly;
+
+  var base = rawPoly(o), cx = o.w/2, cy = o.h/2, out = [], i, p, dx, dy;
+  var s = Math.sin(ang), c = Math.cos(ang);
+  for(i=0;i<base.length;i++){
+    p = base[i];
+    if(ang){
+      dx = p[0]-cx; dy = p[1]-cy;
+      out.push([o.x + cx + dx*c - dy*s, o.y + cy + dx*s + dy*c]);
+    } else {
+      out.push([o.x + p[0], o.y + p[1]]);
+    }
+  }
+  o._pk = key; o._poly = out;
+  // габариты для быстрой отбраковки
+  var x0=1/0,y0=1/0,x1=-1/0,y1=-1/0;
+  for(i=0;i<out.length;i++){
+    if(out[i][0]<x0)x0=out[i][0]; if(out[i][0]>x1)x1=out[i][0];
+    if(out[i][1]<y0)y0=out[i][1]; if(out[i][1]>y1)y1=out[i][1];
+  }
+  o._bb = [x0,y0,x1,y1];
+  return out;
+}
+function bbox(o){ polyOf(o); return o._bb; }
+
+// ширина фигуры в горизонтальной полосе [y0,y1] — нужна для движения по X
+function spanX(pts, y0, y1){
+  var lo=1/0, hi=-1/0, n=pts.length, i, a, b, t, x;
+  for(i=0;i<n;i++){
+    a = pts[i]; b = pts[(i+1)%n];
+    if(a[1] >= y0 && a[1] <= y1){ if(a[0]<lo)lo=a[0]; if(a[0]>hi)hi=a[0]; }
+    if((a[1]-y0)*(b[1]-y0) < 0){ t=(y0-a[1])/(b[1]-a[1]); x=a[0]+(b[0]-a[0])*t; if(x<lo)lo=x; if(x>hi)hi=x; }
+    if((a[1]-y1)*(b[1]-y1) < 0){ t=(y1-a[1])/(b[1]-a[1]); x=a[0]+(b[0]-a[0])*t; if(x<lo)lo=x; if(x>hi)hi=x; }
+  }
+  return lo<=hi ? [lo,hi] : null;
+}
+
+// высота фигуры в вертикальной полосе [x0,x1] — нужна для движения по Y
+function spanY(pts, x0, x1){
+  var lo=1/0, hi=-1/0, n=pts.length, i, a, b, t, y;
+  for(i=0;i<n;i++){
+    a = pts[i]; b = pts[(i+1)%n];
+    if(a[0] >= x0 && a[0] <= x1){ if(a[1]<lo)lo=a[1]; if(a[1]>hi)hi=a[1]; }
+    if((a[0]-x0)*(b[0]-x0) < 0){ t=(x0-a[0])/(b[0]-a[0]); y=a[1]+(b[1]-a[1])*t; if(y<lo)lo=y; if(y>hi)hi=y; }
+    if((a[0]-x1)*(b[0]-x1) < 0){ t=(x1-a[0])/(b[0]-a[0]); y=a[1]+(b[1]-a[1])*t; if(y<lo)lo=y; if(y>hi)hi=y; }
+  }
+  return lo<=hi ? [lo,hi] : null;
+}
+
+// настоящее пересечение игрока с фигурой (для шипов, монет, кнопок)
+function overlaps(o, x, y, w, h){
+  var bb = bbox(o);
+  if(x >= bb[2] || x+w <= bb[0] || y >= bb[3] || y+h <= bb[1]) return false;
+  var sp = spanX(polyOf(o), y + 2, y + h - 2);
+  return !!sp && x < sp[1] && x+w > sp[0];
+}
+
+// точка внутри фигуры — для выделения в редакторе
+function inside(o, x, y){
+  var pts = polyOf(o), n = pts.length, i, j, r = false;
+  for(i=0, j=n-1; i<n; j=i++){
+    if(((pts[i][1] > y) !== (pts[j][1] > y)) &&
+       (x < (pts[j][0]-pts[i][0])*(y-pts[i][1])/(pts[j][1]-pts[i][1]) + pts[i][0])) r = !r;
+  }
+  return r;
+}
+
+function step(){
+  anim++;
+  objects.forEach(function(o){
+    // Движение и вращение — свойства объекта, а не отдельные типы.
+    // Так двигаться и крутиться может любой блок, круг или треугольник.
+    if(o.moves){
+      o._t += 0.012*(o.speed||1);
+      var k = (Math.sin(o._t)+1)/2;
+      var nx = o._hx + (o.moveX||0)*k, ny = o._hy + (o.moveY||0)*k;
+      o._dx = nx-o.x; o._dy = ny-o.y; o.x = nx; o.y = ny;
+    }
+    if(o.spins) o._spin += (o.spin||2)*0.02;
+    if(o._squash) o._squash *= 0.82;
+  });
+  if(shake > 0) shake *= 0.86;
+  stepParts();
+  if(done || pl.dead) return;
+
+  timeMs += 16.67;
+  document.getElementById("sTime").textContent = (timeMs/1000).toFixed(1);
+
+  /* Поездка на движущейся платформе.
+     Смещение платформы применяется ОДИН раз и ДО собственной физики
+     игрока. Раньше его добавляли уже после того, как игрока прижали
+     к верхней грани, — сдвиг накладывался дважды: платформа шла вниз
+     и вжимала игрока внутрь, шла вверх — отрывала от себя и он парил
+     в воздухе. Теперь игрок и платформа едут синхронно, а прижим к
+     грани только доводит его до места. */
+  if(pl.ground && pl.rideOn && pl.rideOn.moves){
+    pl.x += pl.rideOn._dx||0; pl.y += pl.rideOn._dy||0;
+  }
+  pl.rideOn = null;
+
+  // рядом с игроком объектов мало — дальние даже не проверяем
+  var near = nearby(pl.x - 260, pl.y - 260, pl.w + 520, pl.h + 520);
+  var sol = [], i;
+  for(i=0;i<near.length;i++) if(solid(near[i])) sol.push(near[i]);
+
+  var dir = (keys.r?1:0)-(keys.l?1:0);
+  if(dir){
+    pl.vx += dir*moveA();
+    var cap = maxVX();
+    pl.vx = Math.max(-cap, Math.min(cap, pl.vx)); pl.face = dir;
+  } else {
+    pl.vx *= pl.ground ? FRIC : AIR;
+    if(Math.abs(pl.vx) < .05) pl.vx = 0;
+  }
+
+  if(coy > 0) coy--;
+  if(buf > 0) buf--;
+
+  {
+    /* Кнопку прыжка можно держать: как только игрок коснулся земли,
+       он прыгает снова, без повторного нажатия. */
+    if(keys.u && !pl.selfJump && (pl.ground || coy > 0)) buf = BUFFER;
+    if(buf > 0){
+      /* Карабканья по стенам нет: от стены не оттолкнуться и по ней
+         не забраться. Остаётся только скольжение — см. WALL_SLIDE ниже. */
+      if(coy > 0 || pl.ground){
+        pl.vy = jumpV(); buf = 0; coy = 0; hold = 0; pl.ground = false; pl.selfJump = true;
+        puff(pl.x+pl.w/2, pl.y+pl.h, 5);
+      }
+    }
+    if(hold < 1000) hold++;
+    /* Низкий прыжок при раннем отпускании остаётся, но первые MIN_HOLD
+       кадров подъём не режется — иначе быстрый тап на телефоне превращался
+       в подскок вдвое ниже нормального прыжка. */
+    if(!keys.u && pl.vy < 0 && pl.selfJump && hold > MIN_HOLD) pl.vy += G()*0.5;
+
+    pl.vy += G();
+    // трение о стену — только в воздухе
+    if(pl.wall !== 0 && pl.vy > WALL_SLIDE) pl.vy -= (pl.vy - WALL_SLIDE) * 0.55;
+    var fallCap = maxFall();
+    if(pl.vy > fallCap) pl.vy = fallCap;
+  }
+
+
+  var xBefore = pl.x;                              // где игрок был до этого шага
+  pl.x += pl.vx; pl.wall = 0;
+  sol.forEach(function(o){
+    var bb = bbox(o);
+    if(pl.x >= bb[2] || pl.x+pl.w <= bb[0] || pl.y >= bb[3] || pl.y+pl.h <= bb[1]) return;
+    var P = polyOf(o);
+    // полосу чуть поджимаем: иначе стоя точно на блоке игрок цепляет
+    // его боком и его выталкивает вбок
+    var sp = spanX(P, pl.y + 2, pl.y + pl.h - 2);
+    if(!sp || pl.x >= sp[1] || pl.x + pl.w <= sp[0]) return;
+
+    // пологий подъём: на склон и невысокий уступ игрок заходит, а не упирается
+    if(pl.ground){
+      var top = spanY(P, pl.x + 2, pl.x + pl.w - 2);
+      if(top && pl.y + pl.h - top[0] <= STEP_UP && top[0] < pl.y + pl.h){
+        pl.y = top[0] - pl.h;
+        return;
+      }
+    }
+    var pdx = o.moves ? (o._dx||0) : 0;
+    var goL;
+    if(pdx !== 0){
+      /* Движущийся блок. Сторону выбираем по тому, с какой стороны игрок
+         пришёл: сравниваем, где был его бок и где была грань ДО этого
+         шага. Платформа остаётся твёрдой и толкает игрока перед собой, а
+         сдвиг за кадр не больше её собственного.
+
+         Телепорт был именно из-за выбора стороны: её брали по знаку
+         pl.vx, и игрока, которого платформа догнала сзади, выбрасывало
+         на её противоположный край — через весь блок разом. */
+      var leftWas  = Math.max(sp[0], sp[0] - pdx);   // левая грань: где была или стала
+      var rightWas = Math.min(sp[1], sp[1] - pdx);
+      var fromLeft  = (xBefore + pl.w) <= leftWas + 2;
+      var fromRight = xBefore >= rightWas - 2;
+      if(fromLeft && (!fromRight || pl.vx >= 0)) goL = true;
+      else if(fromRight) goL = false;
+      else goL = pdx < 0;                            // уже внутри — толкаем по ходу
+      /* Толкаем к своей грани, но за кадр не дальше, чем прошла сама
+         платформа. То есть она везёт игрока перед собой в своём темпе —
+         это честный толчок, а не бросок через блок. */
+      var edge = goL ? sp[0] - pl.w : sp[1];
+      var lim  = Math.abs(pdx) + Math.abs(pl.vx) + 4;
+      var move = Math.min(lim, Math.abs(edge - pl.x));
+      pl.x += goL ? -move : move;
+      if(Math.abs(edge - pl.x) < 0.01) pl.wall = goL ? 1 : -1;
+      if(goL ? pl.vx > 0 : pl.vx < 0) pl.vx = 0;     // встречный разбег гасим
+      return;
+    }
+    // неподвижный блок — выталкивание против движения, ровно как раньше
+    goL = pl.vx > 0 ? true : (pl.vx < 0 ? false
+        : (pl.x + pl.w/2 < (sp[0]+sp[1])/2));
+    /* Страховка. Если вбок пришлось бы двигать дальше, чем игрок вообще мог
+       въехать за кадр, значит он оказался глубоко внутри блока. Вбок такого
+       не выталкиваем — из широкого блока это швыряло на всю его длину.
+       Вертикальный проход отработает это как угол (оттолкнёт вбок к ближней
+       грани) или как глубокий провал (поставит сверху). */
+    if((goL ? (pl.x + pl.w) - sp[0] : sp[1] - pl.x) > Math.abs(pl.vx) + 8) return;
+    if(goL){ pl.x = sp[0] - pl.w; if(pl.vx !== 0) pl.wall = 1; }
+    else   { pl.x = sp[1];        if(pl.vx !== 0) pl.wall = -1; }
+    /* Рикошет отражает движение, а не гасит его. Медленное касание не
+       отражаем — иначе игрок дрожит, прижавшись к блоку. */
+    if(o.ricochet && Math.abs(pl.vx) > RICO_MIN) ricochet(o);
+    else pl.vx = 0;
+  });
+
+  var wasAir = !pl.ground;
+  var yBefore = pl.y;                              // где игрок был до этого шага
+  pl.y += pl.vy; pl.ground = false;
+  sol.forEach(function(o){
+    var bb = bbox(o);
+    if(pl.x >= bb[2] || pl.x+pl.w <= bb[0] || pl.y >= bb[3] || pl.y+pl.h <= bb[1]) return;
+    var P = polyOf(o);
+    var sp = spanY(P, pl.x + 2, pl.x + pl.w - 2);
+    if(!sp || pl.y >= sp[1] || pl.y + pl.h <= sp[0]) return;
+
+    var pdy = o.moves ? (o._dy||0) : 0;
+    /* Откуда игрок пришёл — считаем не по глубине провала, а по тому, где
+       были его ноги (голова) и где была грань ДО этого шага. Так одинаково
+       ловится и быстрое падение, и платформа, подъехавшая под ноги сама.
+       У неподвижного блока pdy = 0, и оба условия сводятся к прежним —
+       статичная геометрия ведёт себя один в один. */
+    var topWas  = Math.max(sp[0], sp[0] - pdy);   // крышка: где была или где стала
+    var botWas  = Math.min(sp[1], sp[1] - pdy);   // то же для нижней грани
+    var fromTop   = (yBefore + pl.h) <= topWas + 2;
+    var fromBelow = yBefore >= botWas - 2;
+
+    if(pl.vy >= 0 && fromTop){
+      pl.y = sp[0] - pl.h; pl.ground = true; coy = COYOTE;
+      // приземление сверху: рикошет швыряет игрока обратно по нормали грани
+      if(o.ricochet && pl.vy > RICO_MIN){
+        ricochet(o);
+      } else {
+        if(wasAir && pl.vy > 6) puff(pl.x+pl.w/2, pl.y+pl.h, 5);
+        pl.vy = 0; pl.selfJump = false;
+      }
+      // едем вместе с платформой — сдвиг применится в начале следующего шага
+      if(o.moves) pl.rideOn = o;
+    } else if(pl.vy < 0 && (!o.moves || fromBelow)){
+      // удар головой снизу
+      if(o.ricochet && Math.abs(pl.vy) > RICO_MIN){ pl.y = sp[1]; ricochet(o); }
+      else { pl.y = sp[1]; pl.vy = 0; }
+    } else if(!o.moves){
+      /* Игрок сбоку от блока — это угол, а не посадка сверху.
+         Отталкиваем вбок к ближней грани, а не телепортируем наверх.
+         Иначе платформа, прижавшая игрока к стене, выбрасывает его
+         поверх соседнего объекта — в любую сторону и в любом месте.
+         Сторону выбираем по кратчайшему выходу из блока: у прижатого
+         к стене ближе боковая грань — его отодвигает вбок, у
+         продавленного в широкий пол ближе крышка — его поднимает
+         наверх. Порога в пикселях больше нет: именно он и оставлял
+         телепорт там, где платформа стыкуется с объектом вплотную. */
+      var spX = spanX(P, pl.y + 2, pl.y + pl.h - 2);
+      var lPen = spX ? (pl.x + pl.w) - spX[0] : 1e9;   // сколько вылезли слева
+      var rPen = spX ? spX[1] - pl.x : 1e9;            // и справа
+      var uPen = (pl.y + pl.h) - sp[0];                // сколько вылезли сверху
+      var dPen = sp[1] - pl.y;                         // и снизу
+      var side = Math.min(lPen, rPen), vert = Math.min(uPen, dPen);
+      if(side <= vert){
+        // ближе боковая грань — значит игрок пришёл сбоку: отодвигаем вбок
+        if(lPen <= rPen){ pl.x = spX[0] - pl.w; if(pl.vx > 0) pl.vx = 0; pl.wall = 1; }
+        else            { pl.x = spX[1];        if(pl.vx < 0) pl.vx = 0; pl.wall = -1; }
+      } else if(uPen <= dPen){
+        // ближе крышка — игрока продавили в блок сверху, ставим на него
+        pl.y = sp[0] - pl.h; pl.ground = true; coy = COYOTE; pl.vy = 0; pl.selfJump = false;
+      } else {
+        // ближе низ — выпускаем вниз, а не выдёргиваем через весь блок наверх
+        pl.y = sp[1]; if(pl.vy < 0) pl.vy = 0;
+      }
+    } else if(pdy !== 0){
+      /* Блок едет по вертикали и накрыл игрока сбоку — выносим к ближней
+         грани в его же темпе, а не рывком на всю высоту. */
+      var up = (pl.y + pl.h) - sp[0], dn = sp[1] - pl.y;
+      var limY = Math.abs(pdy) + Math.abs(pl.vy) + 4;
+      if(up <= dn){
+        pl.y -= Math.min(limY, up);
+        if(pl.y + pl.h <= sp[0] + 0.01){
+          pl.ground = true; coy = COYOTE; pl.vy = 0; pl.selfJump = false; pl.rideOn = o;
+        }
+      } else {
+        pl.y += Math.min(limY, dn);
+        if(pl.vy < 0) pl.vy = 0;
+      }
+    }
+    /* Иначе игрока накрыла сбоку платформа, едущая только вбок: её
+       разбирает горизонтальный проход, наверх игрока не выдёргиваем. */
+  });
+  if(pl.ground) pl.wall = 0;
+
+  pl.hidden = false;
+  near.forEach(function(o){
+    var over = overlaps(o, pl.x, pl.y, pl.w, pl.h);
+    // зашёл в укрытие — искатель не видит ни фигуру, ни ник
+    if(over && o.hideSpot === true) pl.hidden = true;
+    if(!over){
+      if(o.type === "button" && o._act){ o._act = false; drive(o); }
+      if(o.type === "lever") o._latch = false;
+      return;
+    }
+    if(hazard(o)){ die(); return; }
+    if(o.type === "coin" && !o._got){
+      o._got = true; coins++; stat();
+      burst(o.x+o.w/2, o.y+o.h/2, 12, "#fbbf24", 3, 26);
+    }
+    if(o.type === "checkpoint" && !o._reached){
+      o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h};
+      burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
+    }
+    // Дверь — это выход. В игре на двоих уровень засчитывается, когда
+    // в неё вошли ВСЕ игроки; одному достаточно дойти самому.
+    if(o.type === "finishline" && !done){
+      done = true; shake = 6;
+      burst(o.x+o.w/2, o.y+o.h/2, 40, "#fbbf24", 5, 60);
+      showMsg("ФИНИШ!",
+              "Время " + (timeMs/1000).toFixed(1) + "с · монет " + coins + "/" + coinsTotal +
+              " · смертей " + deaths + "   —   новый забег через мгновение");
+      /* Карта запускается заново сама: ни кнопок, ни перезагрузки. Пара
+         секунд — чтобы успеть увидеть время и салют, дальше снова старт. */
+      clearTimeout(finishTimer);
+      finishTimer = setTimeout(function(){ if(playing && done) restartRun(); }, 2200);
+    }
+    if(o.type === "button" && !o._act){ o._act = true; drive(o); }
+    if(o.type === "lever" && !o._latch){ o._act = !o._act; o._latch = true; drive(o); }
+  });
+
+  if(pl.y > 5000) die();
+}
+function drive(src){
+  if(!src.targetIds) return;
+  var ids = src.targetIds.split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+  objects.forEach(function(o){ if(o.customId && ids.indexOf(o.customId) !== -1) o._act = src._act; });
+}
+function follow(){
+  /* Камера прилипает к игроку НАМЕРТВО (v103): раньше экран догонял игрока
+     плавным лерпом 0.12 — при прыжке и падении персонаж уезжал к краю
+     экрана, и это выглядело как «лаги». Теперь ноль отставания: экран
+     движется ровно с той же скоростью, что и сам игрок. */
+  view.x = VW()/2 - (pl.x+pl.w/2)*view.s; view.y = VH()*0.6 - (pl.y+pl.h/2)*view.s;
+}
+
+/* ══════════════════════════════════════════════════
+   RENDER
+   ══════════════════════════════════════════════════ */
+function drawGrid(){
+  if(!grid || playing) return;
+  var step = GRID * view.s;
+  while(step < 9) step *= 2;
+  var ox = view.x % step, oy = view.y % step;
+  ctx.strokeStyle = "#e6eaf1"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for(var x = ox; x < VW(); x += step){ ctx.moveTo(x,0); ctx.lineTo(x,VH()); }
+  for(var y = oy; y < VH(); y += step){ ctx.moveTo(0,y); ctx.lineTo(VW(),y); }
+  ctx.stroke();
+  ctx.strokeStyle = "#cfd6e2"; ctx.lineWidth = 1.4; ctx.beginPath();
+  ctx.moveTo(view.x,0); ctx.lineTo(view.x,VH()); ctx.moveTo(0,view.y); ctx.lineTo(VW(),view.y);
+  ctx.stroke();
+}
+function paint(o, isSel){
+  if(o.type === "coin" && o._got) return;
+  var open = opened(o);
+  ctx.save();
+  ctx.translate(o.x+o.w/2, o.y+o.h/2);
+  ctx.rotate(o.spins && playing ? (o._spin||0) : (o.rot||0)*Math.PI/180);
+  ctx.translate(-o.w/2, -o.h/2);
+  if(open) ctx.globalAlpha = .2;
+  if(o.ghost) ctx.globalAlpha *= .45;      // проходимые видно, но они не мешают
+  (PAINT[o.type] || PAINT.rect)(o);
+  if(!playing && o.deadly && DEADLY_BY_DEFAULT.indexOf(o.type) === -1){
+    ctx.globalAlpha = 1; ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 2;
+    ctx.setLineDash([5,4]); ctx.strokeRect(-1,-1,o.w+2,o.h+2); ctx.setLineDash([]);
+  }
+  // укрытие для пряток видно только в редакторе — зелёной рамкой
+  if(!playing && o.hideSpot){
+    ctx.globalAlpha = 1; ctx.strokeStyle = "#16a34a"; ctx.lineWidth = 2;
+    ctx.setLineDash([3,3]); ctx.strokeRect(-2,-2,o.w+4,o.h+4); ctx.setLineDash([]);
+  }
+  ctx.restore();
+  if(isSel && o.type !== "spawn"){
+    var k = 1/view.s;
+    ctx.save();
+    ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.6*k; ctx.setLineDash([5*k,4*k]);
+    ctx.strokeRect(o.x-3*k, o.y-3*k, o.w+6*k, o.h+6*k); ctx.setLineDash([]);
+    ctx.fillStyle = "#fff"; ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.6*k;
+    grips(o).forEach(function(h){
+      ctx.beginPath(); ctx.arc(h.x,h.y,4.5*k,0,6.2832); ctx.fill(); ctx.stroke();
+    });
+    ctx.restore();
+  }
+}
+var bgGrad = null, bgH = 0;
+function render(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  /* Холст всегда светлый, независимо от темы сайта: карта — это
+     содержимое игры, и она должна выглядеть у всех одинаково.
+     Градиент фона создаётся один раз на размер окна — раньше он
+     пересоздавался 60 раз в секунду зря. */
+  if(!bgGrad || bgH !== VH()){
+    bgGrad = ctx.createLinearGradient(0,0,0,VH());
+    bgGrad.addColorStop(0,"#fbfcfe"); bgGrad.addColorStop(1,"#eef2f8");
+    bgH = VH();
+  }
+  ctx.fillStyle = bgGrad; ctx.fillRect(0,0,VW(),VH());
+  drawGrid();
+
+  var sx = shake > .4 ? (Math.random()-.5)*shake : 0, sy = shake > .4 ? (Math.random()-.5)*shake : 0;
+  ctx.setTransform(view.s*DPR,0,0,view.s*DPR, (view.x+sx)*DPR, (view.y+sy)*DPR);
+
+  // рисуем только то, что попадает на экран
+  var vx0 = -view.x/view.s - 80, vy0 = -view.y/view.s - 80;
+  var vx1 = vx0 + VW()/view.s + 160, vy1 = vy0 + VH()/view.s + 160;
+  var drawn = 0;
+  for(var ri=0; ri<objects.length; ri++){
+    var ro = objects[ri], rb = bbox(ro);
+    if(rb[2] < vx0 || rb[0] > vx1 || rb[3] < vy0 || rb[1] > vy1) continue;
+    /* Точка старта — это метка для автора карты, а не второй игрок.
+       Во время игры её не рисуем: иначе на экране две фигуры, живая и
+       та, что стоит на месте спавна. */
+    if(playing && ro.type === "spawn") continue;
+    paint(ro, !playing && ro === sel); drawn++;
+  }
+  if(playing && !pl.dead){
+    ctx.save(); ctx.translate(pl.x, pl.y);
+    // себя в укрытии видно бледным — чужие не видят вообще
+    if(pl.hidden) ctx.globalAlpha = 0.35;
+    figure(pl.w, pl.h, (window.GAME && window.GAME.myColor) || "#111827", true,
+           (window.GAME && window.GAME.mySkin) || null);
+    ctx.restore();
+  }
+  if(window.GAME && window.GAME.onDraw) window.GAME.onDraw(ctx);
+  drawParts();
+  if(!playing) anim++;
+  requestAnimationFrame(render);
+}
+/* Надзор за FPS: если кадр в среднем дороже 30 мс (ниже 33 FPS), снижаем
+   разрешение холста на шаг; когда устройство снова тянет — возвращаем.
+   Проверка не чаще раза в 1.5 с, чтобы качество не прыгало. */
+var govLast = 0, govAvg = 16.7, govAt = 0;
+function loop(ts){
+  if(playing){
+    if(!last) last = ts;
+    var dt = Math.min(100, ts-last); last = ts; acc += dt;
+    var g = 0;
+    while(acc >= 16.667 && g < 5){ step(); acc -= 16.667; g++; }
+    if(g >= 5) acc = 0;
+    follow();
+  }
+  if(govLast){
+    var gdt = ts - govLast;
+    if(gdt > 0 && gdt < 1000) govAvg = govAvg*0.95 + gdt*0.05;
+    if(ts - govAt > 1500){
+      govAt = ts;
+      if(govAvg > 30 && QUALITY > 0.55){ QUALITY = Math.max(0.5, QUALITY - 0.25); resize(); govAvg = 16.7; }
+      else if(govAvg < 19 && QUALITY < 1){ QUALITY = Math.min(1, QUALITY + 0.25); resize(); govAvg = 16.7; }
+    }
+  } else govAt = ts;
+  govLast = ts;
+  stepAlways();
+  requestAnimationFrame(loop);
+}
+/* Частицы (брызги, пыль) стареют и вне забега. */
+function stepAlways(){
+  if(!playing) stepParts();
+}
+
+/* ══════════════════════════════════════════════════
+   UI BUILD
+   ══════════════════════════════════════════════════ */
+var SVG = {
+  save:'<path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4z"/><path d="M8 4v5h7"/><rect x="7" y="14" width="10" height="7"/>',
+  open:'<path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/>',
+  play:'<path d="M7 4l13 8-13 8V4z"/>',
+  undo:'<path d="M4 9h11a5 5 0 0 1 0 10h-4"/><path d="M8 5L4 9l4 4"/>',
+  redo:'<path d="M20 9H9a5 5 0 0 0 0 10h4"/><path d="M16 5l4 4-4 4"/>',
+  copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
+  trash:'<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
+  grid:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>',
+  json:'<path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 17v3h16v-3"/>',
+  imp:'<path d="M12 20V7"/><path d="M7 12l5-5 5 5"/><path d="M4 4h16"/>'
+};
+function sBtn(id,icon,tip,cls){
+  var d = document.createElement("div");
+  d.className = "sBtn" + (cls ? " "+cls : ""); d.id = id; d.setAttribute("data-tip", tip);
+  d.innerHTML = '<svg viewBox="0 0 24 24">'+icon+'</svg>';
+  return d;
+}
+var sceneEl = document.getElementById("scene");
+[["bSave",SVG.save,"Сохранить .txt"],["bOpen",SVG.open,"Открыть"],["bJson",SVG.json,"Экспорт JSON"]]
+  .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2])); });
+sceneEl.appendChild(Object.assign(document.createElement("div"),{className:"sep"}));
+[["bUndo",SVG.undo,"Отменить (Ctrl+Z)"],["bRedo",SVG.redo,"Вернуть (Ctrl+Y)"],
+ ["bCopy",SVG.copy,"Дубликат (Ctrl+D)"],["bDel",SVG.trash,"Удалить (Del)"],["bGrid",SVG.grid,"Сетка (G)"]]
+  .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2])); });
+sceneEl.appendChild(Object.assign(document.createElement("div"),{className:"sep"}));
+sceneEl.appendChild(sBtn("bPlay",SVG.play,"Играть","play"));
+document.getElementById("bGrid").classList.add("on");
+
+["hideAndSeek","race"].forEach(function(m,i){
+  var d = document.createElement("div");
+  d.className = "modeBtn" + (i===0?" on":""); d.textContent = m; d.dataset.mode = m;
+  document.getElementById("modes").appendChild(d);
+});
+
+/* toolbar icons are the real painters, rendered to tiny canvases — icon always matches the object */
+var toolsEl = document.getElementById("tools");
+TOOLS.forEach(function(T){
+  var d = document.createElement("div");
+  d.className = "tool" + (T.t==="select"?" on":"");
+  d.dataset.tool = T.t; d.dataset.modes = T.m; d.setAttribute("data-tip", T.n);
+  var ic = document.createElement("canvas"); ic.width = 48; ic.height = 48;
+  d.appendChild(ic); toolsEl.appendChild(d);
+  drawIcon(ic, T.t);
+});
+function drawIcon(cvs, type){
+  var g = cvs.getContext("2d"), old = ctx;
+  ctx = g; g.clearRect(0,0,48,48); g.save(); g.translate(4,4);
+  if(type === "select"){
+    g.fillStyle = "#111827"; g.beginPath();
+    g.moveTo(6,3); g.lineTo(33,25); g.lineTo(21,26); g.lineTo(27,38); g.lineTo(21,40); g.lineTo(15,28); g.lineTo(6,35);
+    g.closePath(); g.fill();
+  } else if(type === "hand"){
+    // ладонь: четыре пальца и большой
+    g.fillStyle = "#111827";
+    [[13,10],[19,7],[25,8],[31,12]].forEach(function(f,i){
+      g.beginPath(); g.roundRect ? g.roundRect(f[0], f[1], 5, 20 - i*1.5, 2.5)
+                                 : g.rect(f[0], f[1], 5, 20 - i*1.5);
+      g.fill();
+    });
+    g.beginPath();
+    g.moveTo(11,20); g.quadraticCurveTo(4,24, 9,30);
+    g.lineTo(14,34); g.lineTo(18,28); g.closePath(); g.fill();
+    g.beginPath();
+    g.roundRect ? g.roundRect(11,22,25,16,7) : g.rect(11,22,25,16);
+    g.fill();
+  } else {
+    var s = SIZES[type] || [40,40], sc = Math.min(40/s[0], 40/s[1]);
+    g.translate((40-s[0]*sc)/2, (40-s[1]*sc)/2); g.scale(sc,sc);
+    var o = mk(type,0,0,s[0],s[1]); uid--;
+    (PAINT[type] || PAINT.rect)(o);
+  }
+  g.restore(); ctx = old;
+}
+
+/* ══════════════════════════════════════════════════
+   INTERACTION
+   ══════════════════════════════════════════════════ */
+function toolOK(t){ var e = document.querySelector('.tool[data-tool="'+t+'"]'); return !!e && e.dataset.modes.split(" ").indexOf(mode) !== -1; }
+function syncTools(){
+  document.querySelectorAll(".tool").forEach(function(t){
+    t.style.display = t.dataset.modes.split(" ").indexOf(mode) !== -1 ? "flex" : "none";
+  });
+}
+syncTools();
+document.getElementById("modes").addEventListener("click", function(e){
+  var b = e.target.closest(".modeBtn"); if(!b || playing) return;
+  document.querySelectorAll(".modeBtn").forEach(function(x){ x.classList.remove("on"); });
+  b.classList.add("on"); mode = b.dataset.mode;
+  var drop = objects.filter(function(o){ return !allowedIn(o.type, mode); });
+  if(drop.length){
+    commit();
+    objects = objects.filter(function(o){ return allowedIn(o.type, mode); });
+    // в старых картах галочки не было — восстанавливаем прежнее поведение
+    objects.forEach(function(o){
+      if(o.deadly === undefined && DEADLY_BY_DEFAULT.indexOf(o.type) !== -1) o.deadly = true;
+      // «Ищущий» убран из палитры: в старых картах превращаем его в старт
+      if(o.type === "seeker") o.type = "spawn";
+      // размер игрока больше не настраивается — приводим старые точки старта
+      if(o.type === "spawn"){ o.w = SIZES.spawn[0]; o.h = SIZES.spawn[1]; }
+      // Платформа, ротатор, батут, яд и шипы стали свойствами обычных
+      // объектов — переносим их поведение, чтобы старые карты играли так же
+      if(o.type === "platform"){ o.type = "rect"; o.moves = true;
+        if(!o.moveX && !o.moveY){ o.moveX = 130; o.moveY = 0; }
+        if(!o.speed) o.speed = 1.1; }
+      if(o.type === "rotator"){ o.type = "rect"; o.spins = true;
+        if(!o.spin) o.spin = 2; o.deadly = true; }
+      // Батут заменён полноценным рикошетом
+      if(o.type === "bounce"){ o.type = "rect"; o.ricochet = true; }
+      // старый батут: сила 17 при обычном прыжке 12.3 — это примерно 1.4
+      if(o.bouncy){
+        o.ricochet = true;
+        o.power = Math.max(0.2, Math.min(3, (o.power || 17) / 12.3));
+        delete o.bouncy;
+      }
+      if(o.type === "poison" || o.type === "spike"){ o.type = "rect"; o.deadly = true; }
+      // Ворота, дверь и укрытие убраны — в старых картах становятся блоком,
+      // чтобы геометрия уровня не разъехалась
+      if(o.type === "door" || o.type === "gate" || o.type === "cover"){ o.type = "rect"; }
+    });
+    objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid"; });
+    sel = null; markDirty(); indexMovers();
+    showMsg("Убрано объектов: " + drop.length,
+            "В режиме «" + mode + "» они не работают. Ctrl+Z вернёт их обратно.");
+    setTimeout(hideMsg, 2600);
+  }
+  syncTools();
+  if(!toolOK(tool)) setTool("select");
+  inspect();
+});
+toolsEl.addEventListener("click", function(e){
+  var t = e.target.closest(".tool"); if(t) setTool(t.dataset.tool);
+});
+function setTool(n){
+  tool = n;
+  document.querySelectorAll(".tool").forEach(function(t){ t.classList.toggle("on", t.dataset.tool === n); });
+  cv.style.cursor = n === "select" ? "default" : "crosshair";
+  if(n !== "select"){ sel = null; inspect(); }
+}
+
+
+function at(x,y){
+  // выделяем по настоящей форме, а не по рамке — иначе повёрнутые
+  // и круглые объекты ловятся мимо картинки
+  for(var i = objects.length-1; i >= 0; i--){
+    var o = objects[i];
+    if(o.type === "text"){
+      if(x >= o.x && x <= o.x+o.w && y >= o.y && y <= o.y+o.h) return o;
+      continue;
+    }
+    if(inside(o, x, y)) return o;
+  }
+  return null;
+}
+function grips(o){
+  return [{n:"nw",x:o.x,y:o.y},{n:"ne",x:o.x+o.w,y:o.y},{n:"sw",x:o.x,y:o.y+o.h},{n:"se",x:o.x+o.w,y:o.y+o.h}];
+}
+function gripAt(x,y){
+  // у точки старта ручек нет: размер игрока задан движком
+  if(!sel || sel.type === "spawn") return null;
+  var r = (document.body.classList.contains("mob") ? 15 : 7)/view.s, g = grips(sel);
+  for(var i=0;i<g.length;i++) if(Math.abs(x-g[i].x) <= r && Math.abs(y-g[i].y) <= r) return g[i].n;
+  return null;
+}
+var snapN = function(v){ return grid ? Math.round(v/GRID)*GRID : v; };
+
+/* ---- БУФЕР ОБМЕНА ----
+   mouseW — последняя позиция курсора в координатах карты: по ней
+   вставляется копия. */
+var clipboard = null;
+var mouseW = {x:0, y:0};
+function copySel(){
+  if(!sel) return false;
+  clipboard = Object.assign({}, sel);
+  showMsg("Скопировано", "Ctrl+V поставит копию под курсором");
+  setTimeout(hideMsg, 1200);
+  return true;
+}
+function pasteAt(x, y){
+  if(!clipboard || playing) return false;
+  if(overLimit(1)) return false;
+  if(clipboard.type === "coin" && coinCapped() && countCoins() >= COIN_LIMIT){ coinWarn(); return false; }
+  if(!allowedIn(clipboard.type, mode)) return false;
+  commit();
+  var c = Object.assign({}, clipboard);
+  c.id = uid++;
+  if(c.customId) c.customId = "w"+c.id;
+  // центр копии садится ровно под курсор
+  c.x = snapN(x - c.w/2);
+  c.y = snapN(y - c.h/2);
+  // точка старта в карте одна
+  if(c.type === "spawn"){
+    var ex = findSpawn();
+    if(ex) objects = objects.filter(function(o){ return o !== ex; });
+  }
+  objects.push(c); sel = c;
+  markDirty(); inspect();
+  return true;
+}
+
+var drag = null;
+function cPt(cx,cy){ var r = cv.getBoundingClientRect(); return {x:cx-r.left, y:cy-r.top}; }
+function down(x,y,alt,shift){
+  if(playing) return;
+  var g = gripAt(x,y);
+  if(g && sel){ commit(); drag = {m:"size", g:g, ox:x, oy:y, o:Object.assign({},sel)}; return; }
+  if(tool === "select"){
+    var h = at(x,y);
+    if(h){
+      commit();
+      /* Быстрое дублирование: Alt и потащить — копия остаётся под курсором,
+         оригинал на месте. Ctrl+D по-прежнему работает. */
+      if(alt && !overLimit(1)){
+        var c = Object.assign({}, h);
+        c.id = uid++;
+        if(c.customId) c.customId = "w"+c.id;
+        objects.push(c); h = c;
+      }
+      sel = h; drag = {m:"move", ox:x, oy:y, o:{x:h.x,y:h.y}};
+    }
+    else sel = null;
+    inspect(); return;
+  }
+  if(tool === "coin" && coinCapped() && countCoins() >= COIN_LIMIT){ coinWarn(); return; }
+  if(!allowedIn(tool, mode)){ setTool("select"); return; }
+  if(overLimit(1)) return;
+  commit();
+  if(tool === "spawn"){
+    var ex = findSpawn(); if(ex) objects = objects.filter(function(o){ return o !== ex; });
+  }
+  var d = SIZES[tool] || [50,50];
+  var o = mk(tool, x, y, 1, 1);
+  objects.push(o); sel = o;
+  drag = {m:"new", ox:x, oy:y, moved:false, w:d[0], h:d[1]};
+  inspect();
+}
+function move(x,y){
+  if(!drag || playing) return;
+  if(drag.m === "new"){
+    if(Math.abs(x-drag.ox) > 6 || Math.abs(y-drag.oy) > 6) drag.moved = true;
+    var o = objects[objects.length-1];
+    o.x = snapN(Math.min(drag.ox,x)); o.y = snapN(Math.min(drag.oy,y));
+    o.w = Math.max(4, snapN(Math.abs(x-drag.ox))); o.h = Math.max(4, snapN(Math.abs(y-drag.oy)));
+  } else if(drag.m === "move"){
+    sel.x = snapN(drag.o.x + (x-drag.ox)); sel.y = snapN(drag.o.y + (y-drag.oy));
+  } else if(drag.m === "size"){
+    var s = drag.o, dx = x-drag.ox, dy = y-drag.oy;
+    if(drag.g === "se"){ sel.w = Math.max(4,snapN(s.w+dx)); sel.h = Math.max(4,snapN(s.h+dy)); }
+    if(drag.g === "ne"){ sel.w = Math.max(4,snapN(s.w+dx)); sel.h = Math.max(4,snapN(s.h-dy)); sel.y = snapN(s.y+dy); }
+    if(drag.g === "sw"){ sel.w = Math.max(4,snapN(s.w-dx)); sel.h = Math.max(4,snapN(s.h+dy)); sel.x = snapN(s.x+dx); }
+    if(drag.g === "nw"){ sel.w = Math.max(4,snapN(s.w-dx)); sel.h = Math.max(4,snapN(s.h-dy)); sel.x = snapN(s.x+dx); sel.y = snapN(s.y+dy); }
+  }
+  inspect();
+}
+function up(){
+  if(drag && drag.m === "new" && !drag.moved){
+    var o = objects[objects.length-1];
+    o.w = drag.w; o.h = drag.h;
+    o.x = snapN(drag.ox-o.w/2); o.y = snapN(drag.oy-o.h/2);
+    inspect();
+  }
+  drag = null;
+}
+
+var pan = null, spaceDown = false;
+
+/* Двигать карту можно:
+     · правой кнопкой мыши (в любой момент)
+     · средней кнопкой или пробелом с левой
+     · инструментом «Рука»
+     · левой кнопкой по пустому месту, когда выбрано «Выделение»
+   На телефоне — просто протащить пальцем по пустому месту либо
+   включить «Руку» и тащить где угодно. */
+function startPan(sx, sy){
+  pan = {sx:sx, sy:sy, vx:view.x, vy:view.y};
+  cv.style.cursor = "grabbing";
+}
+function wantPan(x, y){
+  if(tool === "hand") return true;
+  if(tool !== "select") return false;
+  return !gripAt(x, y) && !at(x, y);      // пусто под курсором — тащим карту
+}
+
+cv.addEventListener("mousedown", function(e){
+  if(playing) return;
+  if(e.button === 1 || e.button === 2 || (e.button === 0 && spaceDown)){
+    startPan(e.offsetX, e.offsetY); e.preventDefault(); return;
+  }
+  if(e.button !== 0) return;
+  var p = toWorld(e.offsetX, e.offsetY);
+  if(wantPan(p.x, p.y)){
+    if(tool === "select" && sel){ sel = null; inspect(); }
+    startPan(e.offsetX, e.offsetY); e.preventDefault(); return;
+  }
+  down(p.x, p.y, e.altKey, e.shiftKey);
+});
+cv.addEventListener("mousemove", function(e){
+  if(playing) return;
+  if(pan){ view.x = pan.vx+(e.offsetX-pan.sx); view.y = pan.vy+(e.offsetY-pan.sy); return; }
+  var p = toWorld(e.offsetX, e.offsetY);
+  mouseW = p;                       // запоминаем для Ctrl+V
+  move(p.x, p.y);
+});
+addEventListener("mouseup", function(){
+  if(pan){ pan = null; cv.style.cursor = tool === "hand" ? "grab" : (tool === "select" ? "default" : "crosshair"); return; }
+  up();
+});
+cv.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+/* Колесо работает и в игре тоже: камера следит за игроком, но масштаб
+   остаётся тот, что выставил сам игрок. Раньше зум в игре был запрещён,
+   и разглядеть карту во время прохождения было нельзя. */
+cv.addEventListener("wheel", function(e){
+  e.preventDefault();
+  zoomAt(e.offsetX, e.offsetY, e.deltaY < 0 ? 1.12 : 1/1.12);
+}, {passive:false});
+
+var pinch = null;
+function tD(a,b){ var x = a.clientX-b.clientX, y = a.clientY-b.clientY; return Math.sqrt(x*x+y*y); }
+function tM(a,b){ return cPt((a.clientX+b.clientX)/2, (a.clientY+b.clientY)/2); }
+cv.addEventListener("touchstart", function(e){
+  if(playing) return;
+  if(e.touches.length === 2){ drag = null; var m = tM(e.touches[0],e.touches[1]);
+    pinch = {d:tD(e.touches[0],e.touches[1]), x:m.x, y:m.y}; e.preventDefault(); return; }
+  if(e.touches.length !== 1) return;
+  var c = cPt(e.touches[0].clientX, e.touches[0].clientY), p = toWorld(c.x,c.y);
+  if(wantPan(p.x, p.y)){
+    if(tool === "select" && sel){ sel = null; inspect(); }
+    startPan(c.x, c.y); e.preventDefault(); return;
+  }
+  down(p.x,p.y); e.preventDefault();
+}, {passive:false});
+cv.addEventListener("touchmove", function(e){
+  if(playing) return;
+  if(e.touches.length === 2 && pinch){
+    var d = tD(e.touches[0],e.touches[1]), m = tM(e.touches[0],e.touches[1]);
+    if(pinch.d > 0) zoomAt(m.x,m.y,d/pinch.d);
+    view.x += m.x-pinch.x; view.y += m.y-pinch.y;
+    pinch.d = d; pinch.x = m.x; pinch.y = m.y; e.preventDefault(); return;
+  }
+  if(e.touches.length !== 1 || pinch) return;
+  var c = cPt(e.touches[0].clientX, e.touches[0].clientY);
+  if(pan){
+    view.x = pan.vx + (c.x - pan.sx);
+    view.y = pan.vy + (c.y - pan.sy);
+    e.preventDefault(); return;
+  }
+  var p = toWorld(c.x,c.y);
+  move(p.x,p.y); e.preventDefault();
+}, {passive:false});
+cv.addEventListener("touchend", function(e){
+  if(playing) return;
+  if(e.touches.length === 0){
+    pinch = null;
+    if(pan){ pan = null; cv.style.cursor = tool === "hand" ? "grab" : "default"; }
+    else up();
+  }
+  e.preventDefault();
+}, {passive:false});
+
+/* Пока пишешь в чат, ходить всё равно можно: стрелки остаются за игроком,
+   а буквы уходят в текст. Раньше любое поле ввода блокировало управление
+   целиком, и во время набора игрок стоял столбом. */
+function typingInChat(){
+  var el = document.activeElement;
+  return !!(el && el.id === "gMsg");
+}
+function inSomeField(){
+  var el = document.activeElement;
+  if(!el) return false;
+  if(el.id === "gMsg") return false;                 // чат — особый случай
+  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+}
+function movementKey(code){
+  return code === "ArrowLeft" || code === "ArrowRight" || code === "ArrowUp";
+}
+
+document.addEventListener("keydown", function(e){
+  if(inSomeField()) return;
+  if(playing){
+    // в чате слушаем только стрелки, иначе буквы не набрать
+    if(typingInChat() && !movementKey(e.code)) return;
+    if(typingInChat()) e.preventDefault();           // курсор в поле не двигаем
+
+    if(e.code === "ArrowLeft" || e.code === "KeyA") keys.l = true;
+    if(e.code === "ArrowRight"|| e.code === "KeyD") keys.r = true;
+    if(e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Space"){ keys.u = true; buf = BUFFER; e.preventDefault(); }
+    if(e.code === "KeyR"){ clearTimeout(finishTimer); restartRun(); }
+    if(e.code === "Escape") stop();
+    return;
+  }
+  var mod = e.ctrlKey || e.metaKey;
+  if(mod && e.code === "KeyZ"){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if(mod && e.code === "KeyY"){ e.preventDefault(); redo(); return; }
+  if(mod && e.code === "KeyD"){ e.preventDefault(); duplicate(); return; }
+  /* Ctrl+C кладёт объект в буфер, Ctrl+V ставит копию по центру под
+     курсором — там, где мышь была в последний раз над холстом. */
+  if(mod && e.code === "KeyC"){ e.preventDefault(); copySel(); return; }
+  if(mod && e.code === "KeyV"){ e.preventDefault(); pasteAt(mouseW.x, mouseW.y); return; }
+  if(e.code === "Space"){ spaceDown = true; e.preventDefault(); }
+  if(e.code === "KeyG"){ grid = !grid; document.getElementById("bGrid").classList.toggle("on", grid); }
+  if((e.key === "Delete" || e.key === "Backspace") && sel){ removeSel(); }
+  if(e.key === "+" || e.key === "=") zoomAt(VW()/2, VH()/2, 1.15);
+  if(e.key === "-" || e.key === "_") zoomAt(VW()/2, VH()/2, 1/1.15);
+  if(e.key === "0") resetView();
+});
+document.addEventListener("keyup", function(e){
+  if(inSomeField()) return;
+  if(e.code === "Space") spaceDown = false;
+  if(playing){
+    if(e.code === "ArrowLeft" || e.code === "KeyA") keys.l = false;
+    if(e.code === "ArrowRight"|| e.code === "KeyD") keys.r = false;
+    if(e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Space") keys.u = false;
+  }
+});
+function pad(id, fn){
+  var e = document.getElementById(id);
+  ["touchstart","mousedown"].forEach(function(t){ e.addEventListener(t,function(ev){ fn(true); ev.preventDefault(); },{passive:false}); });
+  ["touchend","touchcancel","mouseup","mouseleave"].forEach(function(t){ e.addEventListener(t,function(ev){ fn(false); ev.preventDefault(); },{passive:false}); });
+}
+pad("pLeft",  function(v){ keys.l = v; });
+pad("pRight", function(v){ keys.r = v; });
+pad("pJump",  function(v){ keys.u = v; if(v) buf = BUFFER; });
+
+function duplicate(){
+  if(!sel) return;
+  if(sel.type === "coin" && coinCapped() && countCoins() >= COIN_LIMIT){ coinWarn(); return; }
+  if(overLimit(1)) return;
+  commit();
+  var c = JSON.parse(JSON.stringify(sel));
+  c.id = uid++; c.x += 20; c.y += 20;
+  if(c.customId) c.customId = "w"+c.id;
+  objects.push(c); sel = c; inspect();
+}
+function removeSel(){
+  if(!sel) return;
+  commit();
+  objects = objects.filter(function(o){ return o !== sel; });
+  sel = null;
+  inspect();
+}
+
+/* ══════════════════════════════════════════════════
+   INSPECTOR
+   ══════════════════════════════════════════════════ */
+var props = document.getElementById("props");
+document.getElementById("inspHead").addEventListener("click", function(e){
+  if(e.target.id === "inspClose"){ sel = null; inspect(); return; }
+  var t = e.target.closest(".tab"); if(!t || !t.dataset.tab) return;
+  document.querySelectorAll(".tab").forEach(function(x){ x.classList.toggle("on", x === t); });
+  props.style.display = t.dataset.tab === "props" ? "block" : "none";
+  document.getElementById("widgets").style.display = t.dataset.tab === "widgets" ? "block" : "none";
+});
+function pr(){ var d = document.createElement("div"); d.className = "pRow"; props.appendChild(d); return d; }
+function num(l,v,fn){
+  var r = pr(), a = document.createElement("label"); a.textContent = l;
+  var i = document.createElement("input"); i.type = "number"; i.value = Math.round(v);
+  i.addEventListener("focus", commit);
+  i.addEventListener("input", function(){ fn(parseFloat(i.value)||0); });
+  r.appendChild(a); r.appendChild(i);
+}
+/* Ползунок с числом рядом: удобнее, чем поле ввода, когда важно
+   быстро нащупать значение на слух, а не вписать точное. */
+function rng(l, v, lo, hi, step, fn){
+  var r = pr(), a = document.createElement("label"); a.textContent = l;
+  var i = document.createElement("input");
+  i.type = "range"; i.min = lo; i.max = hi; i.step = step; i.value = v;
+  i.style.cssText = "width:74px;accent-color:var(--accent)";
+  var b = document.createElement("b");
+  b.style.cssText = "font-size:11.5px;min-width:26px;text-align:right;color:var(--accent)";
+  b.textContent = (+v).toFixed(step < 1 ? 2 : 0);
+  i.addEventListener("focus", commit);
+  i.addEventListener("pointerdown", commit);
+  i.addEventListener("input", function(){
+    var val = parseFloat(i.value);
+    b.textContent = val.toFixed(step < 1 ? 2 : 0);
+    fn(val);
+  });
+  r.appendChild(a); r.appendChild(i); r.appendChild(b);
+}
+function txt(l,v,fn){
+  var r = pr(), a = document.createElement("label"); a.textContent = l;
+  var i = document.createElement("input"); i.type = "text"; i.value = v||"";
+  i.addEventListener("focus", commit);
+  i.addEventListener("input", function(){ fn(i.value); });
+  r.appendChild(a); r.appendChild(i);
+}
+function chk(l,v,fn){
+  var r = pr(), a = document.createElement("label"); a.textContent = l;
+  var i = document.createElement("input"); i.type = "checkbox"; i.checked = !!v;
+  i.addEventListener("change", function(){ commit(); fn(i.checked); });
+  r.appendChild(a); r.appendChild(i);
+}
+function grp(t){ var d = document.createElement("div"); d.className = "grp"; d.textContent = t; props.appendChild(d); }
+
+/* Как связать механизм. Показываем у кнопок, рычагов и их целей —
+   там, где это действительно нужно, и по клику, а не постоянной надписью. */
+function linkHelp(){
+  var d = document.createElement("div");
+  d.className = "pHelp";
+  var h = document.createElement("div");
+  h.className = "pHelpHead";
+  h.textContent = "Как связать? ▾";
+  var b = document.createElement("div");
+  b.className = "pHelpBody";
+  b.innerHTML =
+      "1. У <b>Ворот</b> задай <b>ID</b> — например <code>g1</code>.<br>"
+    + "2. У <b>Кнопки</b> или <b>Рычага</b> впиши тот же <code>g1</code> в поле <b>Цели</b>.<br>"
+    + "3. Нажми ▶ — блок откроется от кнопки.<br><br>"
+    + "Целей можно указать несколько через запятую: <code>g1,g2</code>.<br>"
+    + "Кнопка держит, пока на ней стоят. Рычаг переключает насовсем.";
+  h.onclick = function(){
+    var open = b.style.display === "block";
+    b.style.display = open ? "none" : "block";
+    h.textContent = open ? "Как связать? ▾" : "Как связать? ▴";
+  };
+  d.appendChild(h); d.appendChild(b);
+  props.appendChild(d);
+}
+function inspect(){
+  var box = document.getElementById("insp");
+  if(!sel || playing){ box.style.display = "none"; return; }
+  box.style.display = "flex";
+  props.innerHTML = "";
+  var T = TOOLS.filter(function(x){ return x.t === sel.type; })[0];
+  var head = document.createElement("div"); head.id = "objTitle";
+  head.innerHTML = (T ? T.n : sel.type) + "<span>#" + sel.id + "</span>";
+  props.appendChild(head);
+
+  num("X", sel.x, function(v){ sel.x = v; });
+  num("Y", sel.y, function(v){ sel.y = v; });
+  /* Размер игрока задан движком (20x60) и не редактируется, иначе одна
+     и та же карта проходится по-разному у разных авторов. */
+  if(sel.type !== "spawn"){
+    num("Ширина", sel.w, function(v){ sel.w = Math.max(1,v); });
+    num("Высота", sel.h, function(v){ sel.h = Math.max(1,v); });
+    num("Поворот", sel.rot||0, function(v){ sel.rot = v; });
+  } else {
+    var sr = pr();
+    sr.innerHTML = "<label>Размер</label><b style='font-size:12px'>20 x 60</b>";
+  }
+
+  {
+    var r = pr();
+    r.innerHTML = "<label>Цвет</label>";
+    var ci = document.createElement("input"); ci.type = "color";
+    ci.value = (sel.fill && sel.fill[0] === "#" && sel.fill.length === 7) ? sel.fill : "#4b5563";
+    ci.addEventListener("focus", commit);
+    ci.addEventListener("input", function(){ sel.fill = ci.value; });
+    r.appendChild(ci);
+  }
+  if(sel.type === "text") txt("Текст", sel.text, function(v){ sel.text = v; });
+
+  grp("Игровые свойства");
+  if(["spawn","checkpoint","finishline","coin"].indexOf(sel.type) === -1)
+    chk("Яд (убивает)", sel.deadly, function(v){ sel.deadly = v; });
+  if(SOLID.indexOf(sel.type) !== -1)
+    chk("Проходимый (декорация)", !!sel.ghost, function(v){ sel.ghost = v; });
+  /* Прятки: за таким объектом игрок исчезает для искателя вместе с ником.
+     Коллизии у него нет — иначе внутрь не зайти. */
+  if(SOLID.indexOf(sel.type) !== -1 && mode === "hideAndSeek")
+    chk("Укрытие для пряток", !!sel.hideSpot, function(v){ sel.hideSpot = v; });
+  /* Рикошет, движение и вращение — свойства, а не отдельные объекты.
+     Любой блок можно сделать отражающим, подвижным или крутящимся. */
+  if(SOLID.indexOf(sel.type) !== -1){
+    /* Рикошет вместо батута: удар отражается от той грани, в которую
+       попал игрок, а не подбрасывает его всегда вверх. */
+    chk("Рикошет", !!sel.ricochet, function(v){ sel.ricochet = v; inspect(); });
+    /* Сила отскока: 1 — вернуть с той же скоростью, больше — подбросить
+       сильнее. Направление берётся от той грани, в которую попал игрок,
+       поэтому наклонный батут отправляет по диагонали. */
+    if(sel.ricochet)
+      rng("Сила отскока", sel.power === undefined ? 1 : sel.power, 0.2, 3, 0.1,
+          function(v){ sel.power = v; });
+
+    chk("Двигается", !!sel.moves, function(v){
+      sel.moves = v;
+      if(v && !sel.moveX && !sel.moveY){ sel.moveX = 130; sel.moveY = 0; sel.speed = 1.1; }
+      inspect();
+    });
+    if(sel.moves){
+      num("Ход по X", sel.moveX||0, function(v){ sel.moveX = v; });
+      num("Ход по Y", sel.moveY||0, function(v){ sel.moveY = v; });
+      num("Скорость", sel.speed||1, function(v){ sel.speed = v; });
+    }
+
+    chk("Вращается", !!sel.spins, function(v){
+      sel.spins = v;
+      if(v && !sel.spin) sel.spin = 2;
+      inspect();
+    });
+    if(sel.spins) num("Скорость вращения", sel.spin||2, function(v){ sel.spin = v; });
+  }
+  if(LINKED.indexOf(sel.type) !== -1){
+    grp("Связи");
+    txt("ID", sel.customId, function(v){ sel.customId = v; });
+    if(sel.type === "button" || sel.type === "lever") txt("Цели", sel.targetIds, function(v){ sel.targetIds = v; });
+    if(SOLID.indexOf(sel.type) !== -1)
+      chk("Открыт сначала (проходим)", sel.startsOpen, function(v){ sel.startsOpen = v; });
+    linkHelp();
+  }
+
+  grp("Порядок");
+  var z = document.createElement("div"); z.className = "zBtns";
+  z.innerHTML = "<div data-z='b'>На зад</div><div data-z='f'>Вперёд</div>";
+  z.addEventListener("click", function(e){
+    var b = e.target.closest("[data-z]"); if(!b) return;
+    commit();
+    objects = objects.filter(function(o){ return o !== sel; });
+    b.dataset.z === "f" ? objects.push(sel) : objects.unshift(sel);
+  });
+  props.appendChild(z);
+}
+
+/* ══════════════════════════════════════════════════
+   DIALOG
+   ══════════════════════════════════════════════════ */
+var dlg = document.getElementById("dlg"), dCb = null;
+function dialog(t,m,cb,ask){
+  document.getElementById("dT").textContent = t;
+  document.getElementById("dM").textContent = m;
+  var inp = document.getElementById("dIn");
+  if(ask !== undefined && ask !== null){
+    inp.style.display = "block"; inp.value = String(ask);
+    setTimeout(function(){ inp.focus(); inp.select(); }, 40);
+  } else {
+    inp.style.display = "none"; inp.value = "";
+  }
+  dCb = cb; document.getElementById("dNo").style.display = cb ? "inline-block" : "none";
+  dlg.style.display = "block";
+}
+document.getElementById("dOk").addEventListener("click", function(){
+  var v = document.getElementById("dIn").value;
+  dlg.style.display = "none";
+  if(dCb) dCb(v);
+});
+document.getElementById("dIn").addEventListener("keydown", function(e){
+  if(e.key === "Enter"){ e.preventDefault(); document.getElementById("dOk").click(); }
+  if(e.key === "Escape"){ dlg.style.display = "none"; dCb = null; }
+});
+document.getElementById("dNo").addEventListener("click", function(){ dlg.style.display = "none"; });
+dlg.querySelector(".bd").addEventListener("click", function(){ dlg.style.display = "none"; });
+
+/* ══════════════════════════════════════════════════
+   SAVE / LOAD  (.txt of decimal numbers, signed)
+   ══════════════════════════════════════════════════ */
+var DEV_KEY = "ARTEM_DEV_ONLY";
+function fnv(s){
+  var h = 0x811c9dc5;
+  for(var i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = (h + ((h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24))) >>> 0; }
+  return h.toString(16).padStart(8,"0");
+}
+function nativeZip(){ return typeof CompressionStream !== "undefined" && typeof DecompressionStream !== "undefined"; }
+async function drain(rs){
+  var rd = rs.getReader(), ch = [], n = 0, r;
+  while(true){ r = await rd.read(); if(r.done) break; ch.push(r.value); n += r.value.length; }
+  var out = new Uint8Array(n), off = 0;
+  ch.forEach(function(c){ out.set(c,off); off += c.length; });
+  return out;
+}
+async function zip(str){
+  var raw = new TextEncoder().encode(str);
+  if(nativeZip()){
+    try{ var cs = new CompressionStream("deflate-raw"), w = cs.writable.getWriter();
+      w.write(raw); w.close(); return {b: await drain(cs.readable), m:1};
+    }catch(e){}
+  }
+  return {b:raw, m:0};
+}
+async function unzip(bytes, m){
+  if(m === 1 && nativeZip()){
+    var ds = new DecompressionStream("deflate-raw"), w = ds.writable.getWriter();
+    w.write(bytes); w.close();
+    return new TextDecoder().decode(await drain(ds.readable));
+  }
+  return new TextDecoder().decode(bytes);
+}
+function clean(){
+  return objects.map(function(o){ var c = {}; for(var k in o) if(k[0] !== "_") c[k] = o[k]; return c; });
+}
+document.getElementById("bSave").addEventListener("click", async function(){
+  var json = JSON.stringify({mode:mode, gravity:gravityScale, objects:clean(), version:4});
+  var sig = fnv(DEV_KEY + json), r = await zip(json);
+  var nums = new Array(r.b.length+1); nums[0] = r.m;
+  for(var i=0;i<r.b.length;i++) nums[i+1] = r.b[i];
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([sig+"|"+nums.join(",")], {type:"text/plain"}));
+  a.download = "map_"+mode+".txt"; a.click();
+});
+document.getElementById("bOpen").addEventListener("click", function(){ document.getElementById("file").click(); });
+/* ── Импорт карт из оригинального brofist.io ───────────────────────
+   Файл оттуда — список байтов со знаком, внутри LZMA, внутри JSON сцены.
+   Распаковка и перевод в наши объекты: lzma.js + bfImport.js.        */
+function importOriginal(raw){
+  if(!window.BFImport){ dialog("Импорт недоступен","Не загружен bfImport.js.",null); return false; }
+  var scene, want;
+  try{
+    scene = BFImport.parseScene(raw);
+    want = BFImport.suggestMode(scene);
+  }catch(err0){
+    dialog("Не получилось прочитать карту", String(err0.message || err0), null);
+    return false;
+  }
+
+  var switched = "";
+  if(want && want !== mode && allowedIn("rect", want)){
+    switched = mode + " → " + want;
+    mode = want;
+    document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
+    syncTools();
+    if(!toolOK(tool)) setTool("select");
+  }
+
+  var r;
+  try{
+    r = BFImport.convert(scene, {
+      mode: mode,
+      objLimit: OBJ_LIMIT,
+      coinLimit: COIN_LIMIT,
+      allowed: allowedIn
+    });
+  }catch(err){
+    dialog("Не получилось прочитать карту", String(err.message || err), null);
+    return false;
+  }
+  if(!r.objects.length){
+    dialog("Пусто","В файле не нашлось ни одного объекта.",null);
+    return false;
+  }
+
+  commit();
+  objects = r.objects;
+  uid = objects.reduce(function(m2,o){ return Math.max(m2,(o.id||0)+1); },1);
+  sel = null; markDirty(); indexMovers(); inspect(); resetView();
+
+  var st = r.stats, notes = [];
+  notes.push("Перенесено объектов: " + objects.length + " из " + st.total + " фигур.");
+  if(switched) notes.push("Режим переключён: " + switched + " — в карте есть его объекты.");
+  if(st.ghosts)    notes.push("Без столкновений (декорации): " + st.ghosts + ".");
+  if(st.wrongMode) notes.push("Не подходят режиму «" + mode + "»: " + st.wrongMode + ".");
+  if(st.coinsCut)  notes.push("Монет убрано сверх лимита " + COIN_LIMIT + ": " + st.coinsCut + ".");
+  if(st.overLimit) notes.push("Не влезло в лимит " + OBJ_LIMIT + ": " + st.overLimit + ".");
+  if(!st.spawn)    notes.push("Точки старта в файле не было — поставил сам, проверьте её.");
+  notes.push("Размер приведён к нашему игроку (масштаб 0.73).");
+  dialog("Карта из brofist.io загружена", notes.join(" "), null);
+  return true;
+}
+
+// файл из оригинала: только цифры и запятые, без нашей подписи
+function looksOriginal(raw){
+  var s = String(raw).trim();
+  if(s.indexOf("|") !== -1) return false;
+  return s[0] === "[" || /^-?\d+\s*,\s*-?\d+/.test(s);
+}
+
+document.getElementById("file").addEventListener("change", function(e){
+  var f = e.target.files[0]; if(!f) return;
+  var rd = new FileReader();
+  rd.onload = async function(){
+    try{
+      var raw = String(rd.result).trim(), p = raw.indexOf("|");
+      // карта из оригинального brofist.io — уводим в импорт
+      if(looksOriginal(raw)){ importOriginal(raw); return; }
+      if(p === -1){ dialog("Доступ запрещён","Файл не подписан этим редактором.",null); return; }
+      var sig = raw.slice(0,p), nums = raw.slice(p+1).split(",").map(function(s){ return parseInt(s,10); });
+      var json = await unzip(new Uint8Array(nums.slice(1)), nums[0]);
+      if(fnv(DEV_KEY+json) !== sig){ dialog("Доступ запрещён","Ключ карты не совпадает. Только разработчик.",null); return; }
+      var d = JSON.parse(json);
+      commit();
+      objects = d.objects || [];
+      uid = objects.reduce(function(m2,o){ return Math.max(m2,(o.id||0)+1); },1);
+      mode = d.mode || "hideAndSeek";
+      if(d.gravity !== undefined){
+        // гравитация из старой карты игнорируется: она всегда 9
+      }
+      document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
+      objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid"; });
+      syncTools(); sel = null; inspect();
+    }catch(err){ dialog("Ошибка","Не удалось прочитать файл карты.",null); }
+  };
+  rd.readAsText(f); e.target.value = "";
+});
+window.getEditorMap = function(){ return { mode: mode, data: JSON.stringify({mode:mode,gravity:gravityScale,objects:clean()}) }; };
+document.getElementById("bJson").addEventListener("click", function(){
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify({mode:mode,gravity:gravityScale,objects:clean()},null,2)],{type:"application/json"}));
+  a.download = "map_export.json"; a.click();
+});
+
+/* ══════════════════════════════════════════════════
+   WIRE UP
+   ══════════════════════════════════════════════════ */
+document.getElementById("bPlay").addEventListener("click", function(){ playing ? stop() : play(); });
+document.getElementById("exitBtn").addEventListener("click", stop);
+document.getElementById("bUndo").addEventListener("click", undo);
+document.getElementById("bRedo").addEventListener("click", redo);
+document.getElementById("bCopy").addEventListener("click", duplicate);
+document.getElementById("bDel").addEventListener("click", removeSel);
+document.getElementById("bGrid").addEventListener("click", function(){
+  grid = !grid; this.classList.toggle("on", grid);
+});
+document.getElementById("zIn").addEventListener("click", function(){ zoomAt(VW()/2,VH()/2,1.2); });
+document.getElementById("zOut").addEventListener("click", function(){ zoomAt(VW()/2,VH()/2,1/1.2); });
+document.getElementById("zLabel").addEventListener("click", resetView);
+
+
+/* ===== мост наружу: игровые страницы управляют движком через window.GAME ===== */
+window.GAME = {
+  figure: figure,
+  mySkin: null,
+  allowedIn: allowedIn,
+  dialog: dialog,
+  OBJ_LIMIT: OBJ_LIMIT,
+  COIN_LIMIT: COIN_LIMIT,
+  MODE_OF: MODE_OF,
+  play: play, stop: stop, respawn: respawn,
+  step: step,                     // один шаг физики — нужен автотестам
+  restartRun: restartRun,         // новый забег без перезагрузки
+  spawnTooClose: spawnTooClose,   // старт рядом с финишем
+  stepAlways: stepAlways,         // тик вне забега — для автотестов
+  zoomAt: zoomAt,                   // камера — тесты предела отдаления
+  removeSel: removeSel,
+  duplicate: duplicate,
+  copySel: copySel,
+  pasteAt: pasteAt,
+  get sel(){ return sel; },
+  undo: undo, redo: redo,           // откат и возврат правок
+  commit: commit,                   // снимок перед действием — так же зовёт инструмент
+  myColor: null, onDraw: null,
+  get keys(){ return keys; },          // состояние управления
+  get playing(){ return playing; },
+  get pl(){ return pl; },
+  get view(){ return view; },
+  get objects(){ return objects; },
+  get mode(){ return mode; },
+  get done(){ return done; },
+  get coins(){ return coins; },
+  get coinsTotal(){ return coinsTotal; },
+  loadMap: function(json){
+    var d = (typeof json === "string") ? JSON.parse(json) : json;
+    if(playing) stop();
+    objects = (d.objects || []).map(function(o){ return Object.assign({}, o); });
+    if(d.mode) mode = d.mode;
+    // режимы sandbox и twoPlayer убраны — старые карты открываем как прятки
+    if(mode === "sandbox" || mode === "twoPlayer") mode = "hideAndSeek";
+    // объекты чужого режима в карту не пускаем
+    objects = objects.filter(function(o){ return allowedIn(o.type, mode); });
+    // в старых картах галочки не было — восстанавливаем прежнее поведение
+    objects.forEach(function(o){
+      if(o.deadly === undefined && DEADLY_BY_DEFAULT.indexOf(o.type) !== -1) o.deadly = true;
+      // «Ищущий» убран из палитры: в старых картах превращаем его в старт
+      if(o.type === "seeker") o.type = "spawn";
+      // размер игрока больше не настраивается — приводим старые точки старта
+      if(o.type === "spawn"){ o.w = SIZES.spawn[0]; o.h = SIZES.spawn[1]; }
+      // Платформа, ротатор, батут, яд и шипы стали свойствами обычных
+      // объектов — переносим их поведение, чтобы старые карты играли так же
+      if(o.type === "platform"){ o.type = "rect"; o.moves = true;
+        if(!o.moveX && !o.moveY){ o.moveX = 130; o.moveY = 0; }
+        if(!o.speed) o.speed = 1.1; }
+      if(o.type === "rotator"){ o.type = "rect"; o.spins = true;
+        if(!o.spin) o.spin = 2; o.deadly = true; }
+      // Батут заменён полноценным рикошетом
+      if(o.type === "bounce"){ o.type = "rect"; o.ricochet = true; }
+      // старый батут: сила 17 при обычном прыжке 12.3 — это примерно 1.4
+      if(o.bouncy){
+        o.ricochet = true;
+        o.power = Math.max(0.2, Math.min(3, (o.power || 17) / 12.3));
+        delete o.bouncy;
+      }
+      if(o.type === "poison" || o.type === "spike"){ o.type = "rect"; o.deadly = true; }
+      // Ворота, дверь и укрытие убраны — в старых картах становятся блоком,
+      // чтобы геометрия уровня не разъехалась
+      if(o.type === "door" || o.type === "gate" || o.type === "cover"){ o.type = "rect"; }
+    });
+    objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid"; });
+    if(objects.length > OBJ_LIMIT) objects.length = OBJ_LIMIT;
+    objects.forEach(function(o){ if(o.id >= uid) uid = o.id + 1; });
+    indexMovers(); markDirty();
+    sel = null;
+    resetView();
+    return objects.length;
+  },
+  startPlay: function(){ if(!playing) play(); return playing; },
+  setGrid: function(v){ grid = !!v; document.getElementById("bGrid").classList.toggle("on", grid); },
+  clear: function(){ if(playing) stop(); objects = []; sel = null; resetView(); }
+};
+
+resize();
+resetView();
+view.x = 40; view.y = -60;
+render();
+requestAnimationFrame(loop);
+})();
+
+/* Второе соединение убрано: блок открывал лишний socket и заводил призрака
+   в комнату «editor:*» на каждого открывшего редактор. Карты публикуются
+   обычными HTTP-запросами — realtime соединение редактору не нужно. */
+
+</script>
+<script src="i18n.js?v=104"></script>
+<script src="abuseShow.js?v=100" defer></script>
+<script src="editorHelp.js?v=100"></script>
+<script src="editorAI.js?v=100" defer></script>
+<script src="account.js?v=100" defer></script>
+<script src="owner.js?v=102" defer></script>
+
+<script>
+/* Публикация карты в Maps Browser */
+(function(){
+  // свой диалог вместо системного: на телефоне пользователь может нажать
+  // «Блокировать диалоговые окна», и тогда alert/prompt перестают работать совсем
+  function say(title, text, onOk){
+    var G = window.GAME;
+    if (G && G.dialog) G.dialog(title, text, onOk || null);
+    else if (onOk) { if (confirm(title + '\n\n' + text)) onOk(); }
+    else alert(title + '\n\n' + text);
+  }
+  function ask(title, text, def, onOk){
+    var G = window.GAME;
+    if (G && G.dialog) G.dialog(title, text, function(v){ onOk(String(v == null ? '' : v)); }, def || '');
+    else { var v = prompt(text, def || ''); if (v !== null) onOk(v); }
+  }
+
+  /* Кнопка публикации стоит в общей панели рядом с сохранением и
+     открытием — раньше это был отдельный синий прямоугольник поверх карты. */
+  /* Своя кнопка вместо серого прямоугольника: значок облака со стрелкой
+     вверх и подпись. Стоит отдельно в правом верхнем углу, а не втиснута
+     в общую панель — так её видно и она не сжимает остальные кнопки. */
+  var pubCss = document.createElement('style');
+  pubCss.textContent =
+      '#bfPublish{position:fixed;top:14px;right:14px;z-index:19;display:flex;align-items:center;'
+    + 'gap:8px;padding:10px 16px;border:none;border-radius:12px;cursor:pointer;'
+    + 'background:linear-gradient(180deg,#2f8bff,#1667e0);color:#fff;'
+    + 'font:700 13px system-ui,sans-serif;letter-spacing:.2px;'
+    + 'box-shadow:0 6px 16px rgba(22,103,224,.32);transition:transform .12s,box-shadow .12s}'
+    + '#bfPublish:hover{transform:translateY(-1px);box-shadow:0 9px 22px rgba(22,103,224,.4)}'
+    + '#bfPublish:active{transform:translateY(1px);box-shadow:0 3px 10px rgba(22,103,224,.3)}'
+    + '#bfPublish svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:2;'
+    + 'stroke-linecap:round;stroke-linejoin:round}'
+    + '#bfPublish[disabled]{opacity:.55;cursor:default;transform:none;box-shadow:none}'
+    + '@media (max-width:640px){#bfPublish{padding:9px 12px;font-size:12px}'
+    + '#bfPublish span{display:none}}';
+  document.head.appendChild(pubCss);
+
+  var btn = document.createElement('button');
+  btn.id = 'bfPublish';
+  btn.type = 'button';
+  btn.title = 'Опубликовать в Maps Browser';
+  btn.innerHTML =
+      '<svg viewBox="0 0 24 24"><path d="M12 16V5"/><path d="M8 9l4-4 4 4"/>'
+    + '<path d="M4 15a4 4 0 0 1 1.4-7.7A6 6 0 0 1 17 8.3 3.6 3.6 0 0 1 20 15"/></svg>'
+    + '<span>Опубликовать</span>';
+  document.body.appendChild(btn);
+
+  function send(name, overwrite){
+    var data;
+    try {
+      var m = window.getEditorMap();
+      data = m.data; window.__mode = m.mode;
+      var parsed = JSON.parse(data);
+      var objs = parsed.objects || [];
+      var G = window.GAME || {};
+      var LIM = G.OBJ_LIMIT || 2000, CL = G.COIN_LIMIT || 3;
+      var ok = G.allowedIn || function(){ return true; };
+
+      if (objs.length > LIM) {
+        say('Слишком много объектов', 'В карте ' + objs.length + '. Разрешено не больше ' + LIM + '.');
+        return;
+      }
+      var coins = objs.filter(function(o){ return o.type === 'coin'; }).length;
+      if (coins > CL) {
+        say('Слишком много монет', 'В карте ' + coins + '. Разрешено не больше ' + CL + ' — уберите лишние.');
+        return;
+      }
+      var bad = objs.filter(function(o){ return !ok(o.type, m.mode); })
+                    .map(function(o){ return o.type; });
+      if (bad.length) {
+        say('Объекты не для этого режима', 'В режиме «' + m.mode + '» не работают: ' +
+            bad.filter(function(v,i,a){ return a.indexOf(v) === i; }).join(', '));
+        return;
+      }
+      // старт вплотную к финишу — то же правило, что и при запуске
+      var nearFin = (window.GAME && GAME.spawnTooClose) ? GAME.spawnTooClose() : null;
+      if (nearFin !== null) {
+        say('Старт слишком близко к финишу',
+            'Между ними ' + nearFin + ' точек. Отодвинь старт или финиш и попробуй снова.');
+        return;
+      }
+    } catch(e){
+      console.error('Публикация карты:', e);
+      say('Не удалось собрать карту', String(e && e.message ? e.message : e));
+      return;
+    }
+
+    var body = 'mapName=' + encodeURIComponent(name)
+             + '&mapType=' + encodeURIComponent(window.__mode || 'hideAndSeek')
+             + '&mapData=' + encodeURIComponent(data)
+             + '&mapOverwrite=' + (overwrite ? 'true' : 'false');
+
+    fetch('/uploadMap', {method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body})
+      .then(function(r){ return r.json(); })
+      .then(function(r){
+        if (r.status === 'success') {
+          say('Карта опубликована', r.message + ' Открыть Maps Browser?',
+              function(){ location.href = '/mapsBrowser.html'; });
+        } else if (r.status === 'exists') {
+          say('Карта уже есть', r.message, function(){ send(name, true); });
+        } else {
+          say('Не получилось', r.message || 'Ошибка');
+        }
+      })
+      .catch(function(){ say('Сервер недоступен', 'Не удалось связаться с сервером.'); });
+  }
+
+  btn.onclick = function(){
+    ask('Публикация карты', 'Название карты (2–30 символов):', '', function(name){
+      name = String(name || '').trim();
+      if (name.length < 2) { say('Слишком короткое название', 'Нужно хотя бы 2 символа.'); return; }
+      send(name, false);
+    });
+  };
+})();
+</script>
+        <script src="skinAvatar.js?v=100" defer></script>
+<script>
+/* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
+   не помещается, но уйти со страницы должно быть чем. */
+(function(){
+  var a = document.createElement('a');
+  a.id = 'bfHome'; a.href = '/'; a.title = 'На главную';
+  a.textContent = 'AIBROFIST';
+  a.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:12;padding:8px 12px;'
+    + 'border-radius:9px;background:#fff;border:1px solid #e2e8f0;color:#111827;'
+    + 'text-decoration:none;font:700 12.5px/1 sans-serif;box-shadow:0 2px 8px rgba(15,23,42,.10)';
+  if (window.matchMedia('(max-width: 900px)').matches) { a.style.bottom = '76px'; a.style.left = '8px'; }
+  document.body.appendChild(a);
+})();
+</script>
+</body>
+</html>

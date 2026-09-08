@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>AIBrofist — Leaderboards</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" type="text/css" href="style.css?v=85">
+        <link rel="stylesheet" type="text/css" href="Gplayer3.css?v=85">
+        <script src="jquery.min.js?v=100"></script>
+        <script src="gamemode.script.ejs.js?v=100"></script>
+        <script src="device.js?v=100"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=85">
+        <style>
+                .lbWrap{max-width:700px;margin:0 auto;padding:18px 14px 60px}
+                .lbWrap h1{font-size:26px;margin:12px 0 4px}
+                .lbWrap .sub{color:#8b93a1;font-size:13px;margin-bottom:20px}
+                .lbRow{display:flex;align-items:center;gap:12px;padding:11px 12px;border-bottom:1px solid #eef1f5}
+                .lbRow.me{background:#eaf4ff;border-radius:6px}
+                .lbPlace{width:34px;text-align:center;font-weight:bold;color:#8b93a1;flex:0 0 auto}
+                .lbRow:nth-child(1) .lbPlace{color:#e2a600;font-size:19px}
+                .lbRow:nth-child(2) .lbPlace{color:#9aa3ad;font-size:17px}
+                .lbRow:nth-child(3) .lbPlace{color:#c08457;font-size:17px}
+                .lbAva{width:34px;height:34px;border-radius:50%;border:1px solid #cfd6de;overflow:hidden;flex:0 0 auto}
+                .lbAva img{width:100%;display:block}
+                .lbName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                        color:#191919;cursor:pointer}
+                .lbName:hover{text-decoration:underline}
+                .lbCoins{font-weight:bold;color:#e2a600;flex:0 0 auto}
+                .mine{margin-top:22px;padding:13px;border:1px dashed #cfd6de;border-radius:8px;
+                        color:#5b6570;font-size:14px;text-align:center}
+                .empty{color:#8b93a1;text-align:center;padding:50px 10px}
+        </style>
+        <link rel="stylesheet" href="ui.css?v=85">
+        <script src="theme.js?v=100"></script>
+        <link rel="icon" href="/favicon.ico" sizes="32x32">
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <link rel="manifest" href="/site.webmanifest">
+        <meta name="theme-color" content="#111827">
+        <link rel="canonical" href="https://aibrofist.online/leaderboard.html">
+        <meta name="description" content="Top players by coins.">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Leaderboard">
+        <meta property="og:description" content="Top players by coins.">
+        <meta property="og:url" content="https://aibrofist.online/leaderboard.html">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+<div class="container"></div>
+
+<div class="lbWrap">
+        <h1 data-i18n="leaderboard">Таблица лидеров</h1>
+        <div class="sub" data-i18n="lbSub">Топ 10 по собранным монетам · обновляется автоматически</div>
+        <div id="lbList"><div class="empty">Загрузка…</div></div>
+        <div id="lbMine" class="mine" style="display:none"></div>
+</div>
+
+<script src="account.js?v=100" defer></script>
+<script>
+(function () {
+        var listEl = document.getElementById('lbList');
+        var mineEl = document.getElementById('lbMine');
+
+        /* переводы строк этого скрипта; i18n.js грузится позже — без него русский запасной вариант */
+        function T(k, f) {
+                try { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; } catch (e) { return f; }
+        }
+
+        function esc(s) { return String(s).replace(/[&<>"]/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+        function load() {
+                fetch('/getLeaderboard', { credentials: 'same-origin' })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) {
+                                var top = d.top || [];
+                                if (!top.length) {
+                                        listEl.innerHTML = '<div class="empty">' + T('lbEmpty', 'Пока никто не собрал ни одной монеты') + '</div>';
+                                } else {
+                                        listEl.innerHTML = top.map(function (u, i) {
+                                                var mine = d.me && d.me.name === u.name;
+                                                return '<div class="lbRow' + (mine ? ' me' : '') + '">'
+                                                        + '<div class="lbPlace">' + (i + 1) + '</div>'
+                                                        + '<div class="lbAva"><img src="/avatar/0.png" alt="" data-bf-name="' + esc(u.name) + '"></div>'
+                                                        + '<div class="lbName" data-n="' + esc(u.name) + '">' + esc(u.name) + '</div>'
+                                                        + '<div class="lbCoins">' + u.coins + ' ' +
+                                                          (window.BFCoin ? BFCoin.svg(15) : '') + '</div></div>';
+                                        }).join('');
+                                }
+
+                                if (d.me) {
+                                        mineEl.style.display = 'block';
+                                        mineEl.textContent = d.me.place > 10
+                                                ? T('lbPlaceN', 'Ты на {n} месте · {t} монет').replace('{n}', d.me.place).replace('{t}', d.me.coins)
+                                                : T('lbYouHave', 'У тебя {t} монет').replace('{t}', d.me.coins);
+                                } else {
+                                        mineEl.style.display = 'block';
+                                        mineEl.textContent = T('signForCoins', 'Войди в аккаунт, чтобы монеты сохранялись');
+                                }
+                        })
+                        .catch(function () { listEl.innerHTML = '<div class="empty">' + T('loadFailed', 'Не удалось загрузить') + '</div>'; });
+        }
+
+        listEl.addEventListener('click', function (e) {
+                var n = e.target.closest('.lbName');
+                if (n) location.href = 'users.html?name=' + encodeURIComponent(n.dataset.n);
+        });
+
+        load();
+        setInterval(load, 15000);
+})();
+</script>
+        <script src="i18n.js?v=104"></script>
+        <script src="owner.js?v=102" defer></script>
+        <script src="coin.js?v=100"></script>
+        <script src="skinRender.js?v=100"></script>
+        <script src="skinAvatar.js?v=100" defer></script>
+        <script src="shell.js?v=100"></script>
+<script src="abuseShow.js?v=100" defer></script>
+</body>
+</html>

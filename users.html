@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIBrofist — Profile</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="ui.css?v=85">
+<script src="theme.js?v=100"></script>
+<script src="device.js?v=100"></script>
+<style>
+.upSearch{display:flex;gap:8px;margin-bottom:18px}
+.upSearch .bfInput{margin-bottom:0}
+.upSearch .bfBtn{margin-bottom:0;width:auto;padding:11px 20px}
+.upFound{border:1px solid var(--line);border-radius:12px;margin-bottom:18px;overflow:hidden}
+.upFound a{display:block;padding:11px 14px;text-decoration:none;color:var(--ink);border-bottom:1px solid var(--line)}
+.upFound a:last-child{border-bottom:none}
+.upFound a:hover{background:var(--soft)}
+
+.upTop{display:flex;gap:20px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
+.upAva{width:136px;height:136px;border-radius:50%;overflow:hidden;flex:0 0 auto;
+  background:var(--soft);border:1px solid var(--line);display:flex;
+  align-items:center;justify-content:center}
+.upAva img{width:100%;height:100%;object-fit:contain;display:block}
+.upInfo{flex:1 1 240px;min-width:0}
+.upName{font-size:26px;font-weight:800;margin-bottom:4px;word-break:break-word}
+.upMeta{color:var(--muted);font-size:14px;margin-bottom:8px}
+.upCoins{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--gold);
+  font-size:16px;margin-bottom:10px}
+.upActs{display:flex;gap:8px;flex-wrap:wrap}
+.upActs button{padding:10px 18px;border-radius:9px;cursor:pointer;font-size:14px;
+  border:1px solid var(--blue);background:#fff;color:var(--blue)}
+.upActs button:hover{background:var(--blue);color:#fff}
+.upActs button.warn{border-color:var(--red);color:var(--red)}
+.upActs button.warn:hover{background:var(--red);color:#fff}
+
+.upAbout{border:1px dashed var(--line);border-radius:12px;padding:14px;margin-bottom:20px;
+  min-height:56px;font-size:14.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.upAbout .empty{color:var(--muted)}
+.upAboutEdit{display:none}
+.upAboutEdit textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:10px;
+  padding:11px;font:inherit;font-size:14.5px;resize:vertical;box-sizing:border-box}
+
+.upRow{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--line);
+  border-radius:12px;margin-bottom:9px;background:#fff}
+.upRow .ava{width:44px;height:44px;border-radius:50%;overflow:hidden;flex:0 0 auto;
+  background:var(--soft);display:flex;align-items:center;justify-content:center}
+.upRow .ava img{width:100%;height:100%;object-fit:contain}
+.upRow .ava img:not([src]){visibility:hidden}
+.upAva img:not([src]){visibility:hidden}
+.upRow .who{flex:1 1 auto;min-width:0}
+.upRow .who a{color:var(--ink);text-decoration:none;font-weight:600}
+.upRow .who span{display:block;color:var(--muted);font-size:12.5px}
+.upRow button{padding:9px 14px;border-radius:8px;font-size:13px;cursor:pointer;
+  border:1px solid var(--line);background:#fff;color:var(--muted)}
+.upRow button.go{border-color:var(--green);color:var(--green)}
+.upRow button.go:hover{background:var(--green);color:#fff}
+.upRow button.bad{border-color:var(--red);color:var(--red)}
+.upRow button.bad:hover{background:var(--red);color:#fff}
+
+.upGrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
+.upSkin{border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;background:#fff}
+.upSkin .art{background:var(--soft);border-radius:9px;padding:8px 0;margin-bottom:8px}
+.upSkin .nm{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upSkin .rt{font-size:12.5px;font-weight:700}
+.upSkin .rt.pos{color:var(--green)} .upSkin .rt.neg{color:var(--red)}
+
+@media (max-width:640px){
+  .upTop{gap:14px}
+  .upAva{width:104px;height:104px}
+  .upName{font-size:21px}
+  .upGrid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+        <link rel="icon" href="/favicon.ico" sizes="32x32">
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <link rel="manifest" href="/site.webmanifest">
+        <meta name="theme-color" content="#111827">
+        <link rel="canonical" href="https://aibrofist.online/users.html">
+        <meta name="description" content="Player profiles, friends and their works.">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Users">
+        <meta property="og:description" content="Player profiles, friends and their works.">
+        <meta property="og:url" content="https://aibrofist.online/users.html">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<div class="bfWrap">
+  <div class="upSearch">
+    <input class="bfInput" id="upQ" data-i18n-ph="searchUsers" placeholder="Поиск игроков">
+    <button class="bfBtn go" id="upGo" data-i18n="find">Найти</button>
+  </div>
+  <div id="upFound"></div>
+
+  <div id="upBody"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
+  <div class="bfMsg" id="upMsg"></div>
+</div>
+
+<link rel="stylesheet" href="mobile.css?v=85">
+<script src="i18n.js?v=104"></script>
+<script src="coin.js?v=100"></script>
+<script src="skinRender.js?v=100"></script>
+<script src="skinAvatar.js?v=100" defer></script>
+<script src="shell.js?v=100"></script>
+<script src="abuseShow.js?v=100" defer></script>
+<script src="account.js?v=100" defer></script>
+<script src="owner.js?v=102" defer></script>
+<script>
+(function () {
+  'use strict';
+  var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; };
+  var $ = function (id) { return document.getElementById(id); };
+
+  var who = decodeURIComponent((location.search.match(/[?&]name=([^&]*)/) || [, ''])[1] || '');
+  var me = null, tab = 'friends', byId = {}, isMe = false;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c];
+    });
+  }
+  function msg(t, ok) {
+    var m = $('upMsg');
+    m.textContent = t; m.style.color = ok ? 'var(--green)' : 'var(--red)';
+    clearTimeout(msg._t); msg._t = setTimeout(function () { m.textContent = ''; }, 4000);
+  }
+  function get(url) {
+    return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+  }
+  function post(url, data) {
+    return fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: Object.keys(data || {}).map(function (k) {
+        return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
+      }).join('&')
+    }).then(function (r) { return r.json(); });
+  }
+  function ago(ms) {
+    if (!ms) return '';
+    var d = Math.max(0, Date.now() - ms), m = Math.floor(d / 60000);
+    if (m < 1) return T('nowOnline', 'сейчас в сети');
+    if (m < 60) return m + ' ' + T('minAgo', 'мин назад');
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + ' ' + T('hoursAgo', 'ч назад');
+    return Math.floor(h / 24) + ' ' + T('daysAgo', 'дн назад');
+  }
+  function when(ms) {
+    var d = new Date(ms);
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined,
+      { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  /* ---------- шапка профиля ---------- */
+  function drawHead(d) {
+    isMe = me && !me.guest && String(me.name).toLowerCase() === who.toLowerCase();
+    var acts = '';
+    if (isMe) {
+      acts = '<button id="upEditAbout">' + T('editTxt', 'Изменить') + '</button>';
+    } else if (me && !me.guest) {
+      var r = d.relation;
+      var t = (r && r.type) || r;
+      if (t === '1') acts = '<button class="warn" data-rel="unfriend">' + T('removeFriend', 'Удалить из друзей') + '</button>';
+      else if (t === '2') acts = '<button data-rel="cancel">' + T('cancelReq', 'Отменить заявку') + '</button>'
+                               + '<button class="go" data-rel="accept">' + T('accept', 'Принять') + '</button>';
+      else acts = '<button data-rel="add">' + T('addFriend', 'Добавить в друзья') + '</button>';
+    }
+
+    return '<div class="upTop">'
+      + '<div class="upAva"><img class="profile-picture" data-bf-name="' + esc(who) + '" alt=""></div>'
+      + '<div class="upInfo">'
+      +   '<div class="upName">' + esc(who) + '</div>'
+      +   '<div class="upMeta">' + T('joinDate', 'Дата регистрации') + ': ' + when(d.joined) + '</div>'
+      +   '<div class="upCoins">' + (window.BFCoin ? BFCoin.svg(18) : '') + ' ' + d.coins + '</div>'
+      +   '<div class="upActs">' + acts + '</div>'
+      + '</div></div>'
+
+      + '<div class="upAbout" id="upAbout">'
+      +   (d.about ? esc(d.about) : '<span class="empty">' + T('noAbout', 'Ничего не написано') + '</span>')
+      + '</div>'
+      + '<div class="upAboutEdit" id="upAboutEdit">'
+      +   '<textarea id="upAboutText" maxlength="300">' + esc(d.about || '') + '</textarea>'
+      +   '<button class="bfBtn go" id="upAboutSave" style="max-width:200px;margin-top:8px">'
+      +     T('save', 'Сохранить') + '</button>'
+      + '</div>'
+
+      + '<div class="bfTabs" id="upTabs">'
+      +   '<div class="bfTab on" data-tab="friends">' + T('friendsTxt', 'Друзья') + '</div>'
+      +   (isMe ? '<div class="bfTab" data-tab="requests">' + T('requestsTxt', 'Заявки') + '</div>'
+                + '<div class="bfTab" data-tab="pending">' + T('pendingTxt', 'Отправленные') + '</div>' : '')
+      +   '<div class="bfTab" data-tab="maps">' + T('mapsTxt', 'Карты') + '</div>'
+      +   '<div class="bfTab" data-tab="skins">' + T('skinsTxt', 'Скины') + '</div>'
+      + '</div>'
+      + '<div id="upTabBody"></div>';
+  }
+
+  /* ---------- вкладки ---------- */
+  function drawFriends(kind) {
+    var box = $('upTabBody');
+    box.innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
+    get('/getFriendsList?name=' + encodeURIComponent(who) + '&type=' + kind + '&page=1')
+      .then(function (d) {
+        var list = d.relation || [];
+        if (!list.length) {
+          box.innerHTML = '<div class="bfHint">' + T('emptyHere', 'Пусто') + '</div>';
+          return;
+        }
+        box.innerHTML = list.map(function (u) {
+          var btn = '';
+          if (isMe && kind === 'requests')
+            btn = '<button class="go" data-act="accept" data-n="' + esc(u.name) + '">' + T('accept', 'Принять') + '</button>'
+                + '<button class="bad" data-act="cancel" data-n="' + esc(u.name) + '">' + T('decline', 'Отклонить') + '</button>';
+          else if (isMe && kind === 'pending')
+            btn = '<button class="bad" data-act="cancel" data-n="' + esc(u.name) + '">' + T('cancelReq', 'Отменить') + '</button>';
+          else if (isMe)
+            btn = '<button class="bad" data-act="unfriend" data-n="' + esc(u.name) + '">' + T('removeTxt', 'Удалить') + '</button>';
+
+          return '<div class="upRow">'
+            + '<div class="ava"><img data-bf-name="' + esc(u.name) + '" alt=""></div>'
+            + '<div class="who"><a href="users.html?name=' + encodeURIComponent(u.name) + '">'
+            +   esc(u.name) + '</a><span>' + ago(u.lastSeen) + '</span></div>'
+            + btn + '</div>';
+        }).join('');
+        if (window.BFAvatar) BFAvatar.scan(box);
+      })
+      .catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
+  }
+
+  function drawMaps() {
+    var box = $('upTabBody');
+    box.innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
+    get('/userMaps?name=' + encodeURIComponent(who)).then(function (d) {
+      var list = d.maps || [];
+      if (!list.length) { box.innerHTML = '<div class="bfHint">' + T('noMaps', 'Карт нет') + '</div>'; return; }
+      box.innerHTML = list.map(function (m) {
+        return '<div class="upRow">'
+          + '<div class="who"><a href="game.html?view=' + encodeURIComponent(m.mapName)
+          +   '&author=' + encodeURIComponent(who) + '">' + esc(m.mapName) + '</a>'
+          +   '<span>' + m.mapType + ' · ' + T('colRating', 'рейтинг') + ' ' + m.rating + '</span></div>'
+          + (isMe ? '<button class="bad" data-map="' + esc(m.mapName) + '">'
+                    + T('removeTxt', 'Удалить') + '</button>' : '')
+          + '</div>';
+      }).join('');
+    }).catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
+  }
+
+  function drawSkins() {
+    var box = $('upTabBody');
+    box.innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
+    get('/userSkins?name=' + encodeURIComponent(who)).then(function (d) {
+      var list = d.skins || [];
+      if (!list.length) { box.innerHTML = '<div class="bfHint">' + T('noSkins', 'Скинов нет') + '</div>'; return; }
+      box.innerHTML = '<div class="upGrid">' + list.map(function (s) {
+        var art = s.img
+          ? '<img src="' + esc(s.img) + '" alt="" style="height:132px;object-fit:contain">'
+          : (window.BFSkin ? BFSkin.svg(s.skin, byId, { height: 132 }) : '');
+        return '<div class="upSkin"><div class="art">' + art + '</div>'
+          + '<div class="nm">' + esc(s.skinName) + '</div>'
+          + '<div class="rt ' + (s.rating > 0 ? 'pos' : (s.rating < 0 ? 'neg' : '')) + '">' + s.rating + '</div></div>';
+      }).join('') + '</div>';
+    }).catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
+  }
+
+  function showTab(t) {
+    tab = t;
+    Array.prototype.forEach.call(document.querySelectorAll('#upTabs .bfTab'), function (x) {
+      x.classList.toggle('on', x.dataset.tab === t);
+    });
+    if (t === 'maps') drawMaps();
+    else if (t === 'skins') drawSkins();
+    else drawFriends(t);
+  }
+
+  /* ---------- действия ---------- */
+  document.addEventListener('click', function (e) {
+    var tb = e.target.closest && e.target.closest('#upTabs .bfTab');
+    if (tb) { showTab(tb.dataset.tab); return; }
+
+    var rel = e.target.closest && e.target.closest('[data-rel]');
+    if (rel) {
+      var map = { add: '/friendRequest', accept: '/acceptFriendRequest',
+                  cancel: '/cancelFriendRequest', unfriend: '/unfriend' };
+      post(map[rel.dataset.rel], { name: who }).then(function () { start(); })
+        .catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var act = e.target.closest && e.target.closest('[data-act]');
+    if (act) {
+      var m2 = { accept: '/acceptFriendRequest', cancel: '/cancelFriendRequest', unfriend: '/unfriend' };
+      post(m2[act.dataset.act], { name: act.dataset.n }).then(function () { showTab(tab); })
+        .catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var dm = e.target.closest && e.target.closest('[data-map]');
+    if (dm) {
+      if (dm.dataset.armed !== '1') {
+        dm.dataset.armed = '1';
+        dm.textContent = T('confirmDel', 'Точно удалить?');
+        setTimeout(function () {
+          if (dm.dataset.armed === '1') { dm.dataset.armed = ''; dm.textContent = T('removeTxt', 'Удалить'); }
+        }, 4000);
+        return;
+      }
+      post('/removeMap', { mapName: dm.dataset.map, author: who }).then(function (r) {
+        if (r.status === 'success') { msg(T('deleted', 'Карта удалена'), true); drawMaps(); }
+        else msg(r.message || T('errorTxt', 'Ошибка'));
+      }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+    }
+  });
+
+  /* ---------- поиск ---------- */
+  function search() {
+    var q = $('upQ').value.trim();
+    if (!q) { $('upFound').innerHTML = ''; return; }
+    get('/searchUser?name=' + encodeURIComponent(q)).then(function (list) {
+      $('upFound').innerHTML = (list && list.length)
+        ? '<div class="upFound">' + list.map(function (u) {
+            return '<a href="users.html?name=' + encodeURIComponent(u.name) + '">' + esc(u.name) + '</a>';
+          }).join('') + '</div>'
+        : '<div class="bfHint">' + T('nobodyFound', 'Никого не нашлось') + '</div>';
+    }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+  }
+  $('upGo').onclick = search;
+  $('upQ').addEventListener('keydown', function (e) { if (e.key === 'Enter') search(); });
+
+  /* ---------- загрузка ---------- */
+  function start() {
+    if (!who) { $('upBody').innerHTML = '<div class="bfHint">' + T('noUser', 'Игрок не указан') + '</div>'; return; }
+
+    Promise.all([
+      get('/whoAmI').catch(function () { return { guest: true }; }),
+      get('/getJoinDate?name=' + encodeURIComponent(who)).catch(function () { return 0; }),
+      get('/getCoins?name=' + encodeURIComponent(who)).catch(function () { return 0; }),
+      get('/getAboutMe?name=' + encodeURIComponent(who)).catch(function () { return ''; }),
+      get('/getRelation?name=' + encodeURIComponent(who)).catch(function () { return '0'; }),
+      get('/skin/catalog').catch(function () { return { items: [] }; })
+    ]).then(function (r) {
+      me = r[0];
+      (r[5].items || []).forEach(function (i) { byId[i.id] = i; });
+
+      var coins = typeof r[2] === 'object' ? (r[2].coins || 0) : r[2];
+      $('upBody').innerHTML = drawHead({
+        joined: typeof r[1] === 'object' ? r[1].date : r[1],
+        coins: coins,
+        about: typeof r[3] === 'object' ? (r[3].about || '') : r[3],
+        relation: r[4]
+      });
+
+      if (isMe) {
+        $('upEditAbout').onclick = function () {
+          $('upAbout').style.display = 'none';
+          $('upAboutEdit').style.display = 'block';
+          $('upAboutText').focus();
+        };
+        $('upAboutSave').onclick = function () {
+          var v = $('upAboutText').value;
+          post('/setAboutMe', { aboutMe: v }).then(function () {
+            $('upAbout').innerHTML = v
+              ? esc(v) : '<span class="empty">' + T('noAbout', 'Ничего не написано') + '</span>';
+            $('upAbout').style.display = '';
+            $('upAboutEdit').style.display = 'none';
+            msg(T('saved', 'Сохранено'), true);
+          }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+        };
+      }
+
+      if (window.BFAvatar) BFAvatar.scan(document);
+      showTab('friends');
+      if (window.I18N) I18N.apply(document.body);
+    });
+  }
+
+  start();
+  window.addEventListener('bf-lang', function () { if (window.I18N) I18N.apply(document.body); });
+})();
+</script>
+</body>
+</html>

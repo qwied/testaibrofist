@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIBrofist — Themes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="ui.css?v=85">
+<script src="device.js?v=100"></script>
+<style>
+/* переключатель светлой и тёмной темы */
+.thModes{display:flex;gap:14px;margin:6px 0 8px;flex-wrap:wrap}
+.thMode{border:2px solid var(--line);border-radius:14px;padding:10px;cursor:pointer;
+  width:190px;background:var(--panel,#fff)}
+.thMode.on{border-color:var(--blue)}
+.thModeArt{height:74px;border-radius:10px;padding:10px;display:flex;flex-direction:column;
+  gap:7px;justify-content:center}
+.thModeArt.light{background:#f4f6fa;border:1px solid #e3e7ee}
+.thModeArt.dark{background:#16181d;border:1px solid #333a46}
+.thModeArt span{display:block;height:9px;border-radius:5px}
+.thModeArt.light span:nth-child(1){width:62%;background:#c9d2df}
+.thModeArt.light span:nth-child(2){width:88%;background:#e2e7ef}
+.thModeArt.light span:nth-child(3){width:44%;background:#2196F3}
+.thModeArt.dark span:nth-child(1){width:62%;background:#3a4250}
+.thModeArt.dark span:nth-child(2){width:88%;background:#262b35}
+.thModeArt.dark span:nth-child(3){width:44%;background:#4aa8f0}
+.thModeName{text-align:center;font-weight:700;font-size:14.5px;margin-top:9px}
+@media (max-width:640px){ .thMode{width:calc(50% - 7px)} }
+
+/* ---------- замок ---------- */
+.thLock{border:1px solid var(--line);border-radius:16px;padding:26px 22px;text-align:center;
+  background:var(--soft);margin-bottom:20px}
+.thLock h3{margin:0 0 6px;font-size:19px}
+.thLock p{margin:0 0 16px;color:var(--muted);font-size:14.5px;line-height:1.55}
+.thLock .price{font-size:26px;font-weight:800;color:var(--gold);
+  display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px}
+.thLock button{max-width:280px;margin:0 auto}
+
+/* витрина тем под замком — смотреть можно, включить нельзя */
+.thLocked{opacity:.55;pointer-events:none;filter:grayscale(.35)}
+</style>
+	<link rel="icon" href="/favicon.ico" sizes="32x32">
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+	<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+	<link rel="manifest" href="/site.webmanifest">
+	<meta name="theme-color" content="#111827">
+	<link rel="canonical" href="https://aibrofist.online/themes.html">
+	<meta name="description" content="Colour themes for the site.">
+	<meta property="og:type" content="website">
+	<meta property="og:site_name" content="AIBrofist">
+	<meta property="og:title" content="AIBrofist — Themes">
+	<meta property="og:description" content="Colour themes for the site.">
+	<meta property="og:url" content="https://aibrofist.online/themes.html">
+	<meta property="og:image" content="https://aibrofist.online/preview.png">
+	<meta name="twitter:card" content="summary_large_image">
+	<meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<div class="bfWrap">
+  <div class="bfTitle" data-i18n="themes">Темы</div>
+  <div class="bfSub" data-i18n="themesSub">Светлое и тёмное оформление сайта.</div>
+
+  <div id="thLock"></div>
+
+  <div class="thModes" id="thModes">
+    <div class="thMode" data-mode="light">
+      <div class="thModeArt light"><span></span><span></span><span></span></div>
+      <div class="thModeName" data-i18n="lightTheme">Светлая</div>
+    </div>
+    <div class="thMode" data-mode="dark">
+      <div class="thModeArt dark"><span></span><span></span><span></span></div>
+      <div class="thModeName" data-i18n="darkTheme">Тёмная</div>
+    </div>
+  </div>
+  <div class="bfMsg" id="thMsg"></div>
+</div>
+
+<link rel="stylesheet" href="mobile.css?v=85">
+<script src="i18n.js?v=104"></script>
+<script src="coin.js?v=100"></script>
+<script src="theme.js?v=100"></script>
+<script src="skinRender.js?v=100"></script>
+<script src="skinAvatar.js?v=100" defer></script>
+<script src="shell.js?v=100"></script>
+<script src="abuseShow.js?v=100" defer></script>
+<script src="account.js?v=100" defer></script>
+<script>
+(function () {
+  'use strict';
+  var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; };
+  var $ = function (id) { return document.getElementById(id); };
+
+  function msg(text, ok) {
+    var m = $('thMsg');
+    m.textContent = text;
+    m.style.color = ok ? 'var(--green)' : 'var(--red)';
+    clearTimeout(msg._t);
+    msg._t = setTimeout(function () { m.textContent = ''; }, 4000);
+  }
+
+  function markMode(m) {
+    Array.prototype.forEach.call(document.querySelectorAll('.thMode'), function (el) {
+      el.classList.toggle('on', el.dataset.mode === m);
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.thMode'), function (el) {
+    el.onclick = function () {
+      markMode(el.dataset.mode);
+      BFTheme.setMode(el.dataset.mode).then(function (r) {
+        if (r && r.status === 'error') {
+          msg(r.message || T('errorTxt', 'Ошибка'));
+          markMode(BFTheme.state.mode);
+        }
+      });
+    };
+  });
+
+  /* ---------- замок ----------
+     Светлая и тёмная тема открываются один раз за монеты и после этого
+     доступны любому игроку — переключать можно сколько угодно. */
+  function drawLock(st) {
+    var box = $('thLock');
+    var modes = $('thModes');
+    if (st.unlocked) {
+      box.innerHTML = '';
+      modes.classList.remove('thLocked');
+      return;
+    }
+    modes.classList.add('thLocked');
+    box.className = 'thLock';
+    box.innerHTML =
+        '<h3>' + T('themesLocked', 'Темы пока закрыты') + '</h3>'
+      + '<p>' + T('themesWhat',
+          'Открывает светлое и тёмное оформление всего сайта: шапка, кнопки, карточки, списки. '
+          + 'Покупка разовая — дальше переключайте темы сколько угодно.') + '</p>'
+      + '<div class="price">' + st.price + ' ' + (window.BFCoin ? BFCoin.svg(24) : '') + '</div>'
+      + '<button class="bfBtn go" id="thBuy">' + T('unlockThemes', 'Открыть темы') + '</button>'
+      + '<div class="bfMsg" id="thLockMsg" style="margin-top:8px"></div>';
+
+    $('thBuy').onclick = function () {
+      var b = this; b.disabled = true;
+      BFTheme.unlock().then(function (r) {
+        b.disabled = false;
+        if (r.status !== 'success') {
+          $('thLockMsg').style.color = 'var(--red)';
+          $('thLockMsg').textContent = r.message || T('errorTxt', 'Ошибка');
+          return;
+        }
+        if (window.BFShell) BFShell.refreshCoins(r.coins);
+        start();
+      }).catch(function () {
+        b.disabled = false;
+        $('thLockMsg').textContent = T('serverDown', 'Сервер недоступен');
+      });
+    };
+  }
+
+  function start() {
+    BFTheme.load().then(function (st) {
+      markMode(st.mode || 'light');
+      drawLock(st);
+    });
+  }
+  start();
+
+  window.addEventListener('bf-lang', start);
+})();
+</script>
+</body>
+</html>

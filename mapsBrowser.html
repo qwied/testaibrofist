@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIBrofist — Maps Browser</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="ui.css?v=85">
+<script src="theme.js?v=100"></script>
+<script src="device.js?v=100"></script>
+<style>
+.mbFilters{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:9px;margin-bottom:6px}
+.mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
+.mbFilters .bfBtn{margin-bottom:0;width:auto;padding:11px 22px}
+
+.mbHead{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px 124px;gap:10px;
+  padding:0 14px 8px;font-size:13px;font-weight:700;color:var(--muted)}
+.mbList{display:flex;flex-direction:column;gap:10px}
+.mbRow{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px 124px;gap:10px 10px;
+  align-items:center;border:1px solid var(--line);border-radius:13px;padding:12px 14px;background:#fff}
+.mbRow:hover{border-color:var(--blue)}
+.mbName{font-weight:700;font-size:15.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Рейтинг — одно число: лайки минус дизлайки.
+   Выше нуля — зелёным, ниже нуля — красным, ноль — нейтральный. */
+.mbRate{font-weight:700;font-size:16.5px;text-align:center}
+.mbRate.pos{color:var(--green)} .mbRate.neg{color:var(--red)} .mbRate.zero{color:var(--muted)}
+.mbAuthor{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mbAuthor a{color:var(--blue);text-decoration:none}
+.mbDate{color:var(--muted);font-size:13.5px;white-space:nowrap}
+/* оценки карты: те же кнопки, что и в браузере скинов */
+.mbVote{display:flex;gap:6px}
+.mbVote button{flex:1;font-size:13px;padding:9px 0;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel,#fff);color:var(--muted);cursor:pointer;min-height:40px}
+.mbVote button:hover{border-color:var(--blue);color:var(--blue)}
+.mbVote button.up.on{border-color:var(--green);color:var(--green);background:#f0fdf4}
+.mbVote button.down.on{border-color:var(--red);color:var(--red);background:#fef2f2}
+
+.mbPlay{width:100%;padding:10px 0;border-radius:9px;border:1px solid var(--blue);
+  background:#fff;color:var(--blue);cursor:pointer;font-weight:600}
+.mbPlay:hover{background:var(--blue);color:#fff}
+.mbExtra{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* Проигрывание карты прямо в Maps Browser: страница не покидается,
+   адрес остаётся прежним, игра занимает весь экран. */
+.mbOverlay{position:fixed;inset:0;z-index:1000;display:none;background:rgba(15,23,42,.72)}
+.mbOverlay.open{display:block}
+.mbWindow{position:fixed;inset:0;width:100%;height:100%;background:#fff;
+  overflow:hidden;display:flex;flex-direction:column}
+.mbWindowBar{display:flex;align-items:center;gap:10px;padding:8px 12px;
+  background:var(--soft,#f1f5f9);border-bottom:1px solid var(--line,#e5e7eb)}
+.mbWindowBar .t{font-weight:700;font-size:14.5px;color:#111827;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.mbWindowBar .a{font-size:12.5px;color:#6b7280;white-space:nowrap}
+.mbClose{margin-left:auto;border:1px solid var(--red,#e74c3c);background:#fff;color:var(--red,#e74c3c);
+  border-radius:8px;padding:6px 13px;font-weight:700;cursor:pointer;font-size:13px}
+.mbClose:hover{background:var(--red,#e74c3c);color:#fff}
+.mbFrame{flex:1;border:0;width:100%}
+.mbDel{border:1px solid var(--red);color:var(--red);background:#fff;border-radius:8px;
+  padding:9px 15px;font-size:13px;cursor:pointer}
+.mbDel:hover{background:var(--red);color:#fff}
+
+@media (max-width:760px){
+  .mbFilters{grid-template-columns:1fr 1fr}
+  .mbFilters .bfBtn{grid-column:1/-1;width:100%}
+  .mbHead{display:none}
+  .mbRow{grid-template-columns:1fr auto;gap:2px 10px}
+  .mbName{grid-column:1}
+  .mbRate{grid-column:2;justify-content:flex-end}
+  .mbAuthor{grid-column:1;font-size:13.5px}
+  .mbDate{grid-column:2;text-align:right}
+  .mbVote{grid-column:1/-1;margin-top:8px}
+  .mbPlay{grid-column:1/-1;margin-top:8px}
+}
+</style>
+        <link rel="icon" href="/favicon.ico" sizes="32x32">
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <link rel="manifest" href="/site.webmanifest">
+        <meta name="theme-color" content="#111827">
+        <link rel="canonical" href="https://aibrofist.online/mapsBrowser.html">
+        <meta name="description" content="Player-made maps: rating, authors and modes.">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Maps Browser">
+        <meta property="og:description" content="Player-made maps: rating, authors and modes.">
+        <meta property="og:url" content="https://aibrofist.online/mapsBrowser.html">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<div class="bfWrap">
+  <div class="bfTitle" data-i18n="mapsBrowser">Maps Browser</div>
+  <div class="bfSub" data-i18n="mapsSub">Карты игроков. Открывайте, играйте и оценивайте.</div>
+
+  <div class="mbFilters">
+    <select class="bfSelect" id="mbMode">
+      <option value="" data-i18n="modeAll">Режим: все</option>
+      <option value="hideAndSeek" data-i18n="hideAndSeek">Прятки</option>
+      <option value="race" data-i18n="race">Гонка</option>
+    </select>
+    <input class="bfInput" id="mbAuthor" data-i18n-ph="colAuthor" placeholder="Автор">
+    <select class="bfSelect" id="mbSort">
+      <option value="date" data-i18n="sortDate">Сортировать по дате</option>
+      <option value="rating" data-i18n="sortRating">Сортировать по рейтингу</option>
+    </select>
+    <button class="bfBtn go" id="mbGo" data-i18n="refresh">Обновить</button>
+  </div>
+
+  <div class="bfPager">
+    <button id="mbPrev">&lt;</button><span id="mbPage">1/1</span><button id="mbNext">&gt;</button>
+  </div>
+
+  <div class="mbHead">
+    <div data-i18n="colName">Название</div>
+    <div data-i18n="colRating" style="text-align:center">Рейтинг</div>
+    <div data-i18n="colAuthor">Автор</div>
+    <div data-i18n="colDate">Дата</div>
+    <div data-i18n="colRating">Оценка</div>
+    <div></div>
+  </div>
+  <div id="mbList"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
+  <div class="bfMsg" id="mbMsg"></div>
+</div>
+
+<div class="mbOverlay" id="mbOverlay">
+  <div class="mbWindow">
+    <div class="mbWindowBar">
+      <span class="t" id="mbWinName"></span>
+      <span class="a" id="mbWinAuthor"></span>
+      <button class="mbClose" id="mbWinClose" data-i18n="close">Закрыть</button>
+    </div>
+    <iframe class="mbFrame" id="mbFrame" title="Map"></iframe>
+  </div>
+</div>
+
+<link rel="stylesheet" href="mobile.css?v=85">
+<script src="i18n.js?v=104"></script>
+<script src="coin.js?v=100"></script>
+<script src="skinRender.js?v=100"></script>
+<script src="skinAvatar.js?v=100" defer></script>
+<script src="shell.js?v=100"></script>
+<script src="abuseShow.js?v=100" defer></script>
+<script src="account.js?v=100" defer></script>
+<script src="owner.js?v=102" defer></script>
+<script>
+(function () {
+  'use strict';
+  var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; };
+  var $ = function (id) { return document.getElementById(id); };
+  var page = 1, pages = 1, me = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c];
+    });
+  }
+  function msg(t, ok) {
+    var m = $('mbMsg');
+    m.textContent = t; m.style.color = ok ? 'var(--green)' : 'var(--red)';
+    clearTimeout(msg._t); msg._t = setTimeout(function () { m.textContent = ''; }, 4000);
+  }
+  function post(url, data) {
+    return fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: Object.keys(data).map(function (k) {
+        return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
+      }).join('&')
+    }).then(function (r) { return r.json(); });
+  }
+  function when(ms) {
+    var d = new Date(ms);
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined,
+      { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  function row(m) {
+    var mine = me && !me.guest &&
+               String(me.name).toLowerCase() === String(m.author).toLowerCase();
+    var rc = m.rating > 0 ? 'pos' : (m.rating < 0 ? 'neg' : 'zero');
+    return '<div class="mbRow" data-map="' + esc(m.mapName) + '" data-author="' + esc(m.author) + '">'
+      + '<div class="mbName" title="' + esc(m.mapName) + '">' + esc(m.mapName) + '</div>'
+      + '<div class="mbRate ' + rc + '">' + m.rating + '</div>'
+      + '<div class="mbAuthor"><a href="users.html?name=' + encodeURIComponent(m.author) + '">'
+      +   esc(m.author) + '</a></div>'
+      + '<div class="mbDate">' + when(m.date) + '</div>'
+      + '<div class="mbVote">'
+      +   '<button class="up' + (m.myVote > 0 ? ' on' : '') + '" data-vote="1">'
+      +     '\uD83D\uDC4D ' + m.likes + '</button>'
+      +   '<button class="down' + (m.myVote < 0 ? ' on' : '') + '" data-vote="-1">'
+      +     '\uD83D\uDC4E ' + m.dislikes + '</button>'
+      + '</div>'
+      + '<button class="mbPlay" data-play="1">' + T('play', 'Играть') + '</button>'
+      + (mine ? '<div class="mbExtra"><button class="mbDel" data-del="1">'
+                + T('removeTxt', 'Удалить') + '</button></div>' : '')
+      + '</div>';
+  }
+
+  function load() {
+    $('mbList').innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
+    var q = '?page=' + page
+          + '&mapType=' + encodeURIComponent($('mbMode').value)
+          + '&author=' + encodeURIComponent($('mbAuthor').value.trim())
+          + '&sortBy=' + $('mbSort').value;
+    fetch('/getMapsForList' + q, { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var lbl = String(d.page || '1/1').split('/');
+        page = parseInt(lbl[0], 10) || 1;
+        pages = parseInt(lbl[1], 10) || d.pages || 1;
+        $('mbPage').textContent = page + '/' + pages;
+        $('mbPrev').disabled = page <= 1;
+        $('mbNext').disabled = page >= pages;
+        $('mbList').innerHTML = (d.maps && d.maps.length)
+          ? '<div class="mbList">' + d.maps.map(row).join('') + '</div>'
+          : '<div class="bfHint">' + T('noMaps', 'Карты не найдены') + '</div>';
+        // панель владельца дорисует свои кнопки, если она загружена
+        window.dispatchEvent(new CustomEvent('bf-maps-drawn', { detail: { maps: d.maps || [] } }));
+      })
+      .catch(function () {
+        $('mbList').innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>';
+      });
+  }
+
+  document.addEventListener('click', function (e) {
+    var r = e.target.closest && e.target.closest('.mbRow');
+    if (!r) return;
+
+    if (e.target.closest('[data-play]')) {
+      openPlay(r.dataset.map, r.dataset.author);
+      return;
+    }
+
+    var v = e.target.closest('[data-vote]');
+    if (v) {
+      post('/uploadVote', {
+        author: r.dataset.author, mapName: r.dataset.map, vote: v.dataset.vote
+      }).then(function (x) {
+        if (x.status !== 'success') { msg(x.message || T('errorTxt', 'Ошибка')); return; }
+        load();
+      }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var del = e.target.closest('[data-del]');
+    if (del) {
+      // удаление в два касания — чтобы карта не пропала от случайного тапа
+      if (del.dataset.armed !== '1') {
+        del.dataset.armed = '1';
+        del.textContent = T('confirmDel', 'Точно удалить?');
+        setTimeout(function () {
+          if (del.dataset.armed === '1') {
+            del.dataset.armed = ''; del.textContent = T('removeTxt', 'Удалить');
+          }
+        }, 4000);
+        return;
+      }
+      post('/removeMap', { mapName: r.dataset.map, author: r.dataset.author })
+        .then(function (x) {
+          if (x.status === 'success') { msg(T('deleted', 'Карта удалена'), true); load(); }
+          else msg(x.message || T('errorTxt', 'Ошибка'));
+        })
+        .catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+    }
+  });
+
+  /* ---- проигрывание карты внутри Maps Browser ----
+     Раньше PLAY уводил на game.html — ссылка в адресной строке менялась.
+     Теперь карта открывается поверх списка на весь экран: страница
+     и адрес остаются Maps Browser. */
+  function openPlay(mapName, author) {
+    $('mbWinName').textContent = mapName;
+    $('mbWinAuthor').textContent = T('colAuthor', 'Автор') + ': ' + author;
+    $('mbFrame').src = 'game.html?view=' + encodeURIComponent(mapName)
+                     + '&author=' + encodeURIComponent(author);
+    $('mbOverlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closePlay() {
+    $('mbOverlay').classList.remove('open');
+    $('mbFrame').src = 'about:blank';   // игра в кадре останавливается
+    document.body.style.overflow = '';
+  }
+  $('mbWinClose').onclick = closePlay;
+  $('mbOverlay').addEventListener('click', function (e) {
+    if (e.target === this) closePlay();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && $('mbOverlay').classList.contains('open')) closePlay();
+  });
+
+  $('mbGo').onclick = function () { page = 1; load(); };
+  $('mbPrev').onclick = function () { if (page > 1) { page--; load(); } };
+  $('mbNext').onclick = function () { if (page < pages) { page++; load(); } };
+  $('mbMode').onchange = function () { page = 1; load(); };
+  $('mbSort').onchange = function () { page = 1; load(); };
+  $('mbAuthor').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { page = 1; load(); }
+  });
+
+  fetch('/whoAmI', { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { me = d; load(); })
+    .catch(load);
+
+  window.addEventListener('bf-lang', load);
+})();
+</script>
+</body>
+</html>

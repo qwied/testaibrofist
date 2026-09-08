@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIBrofist — Race</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Race in AIBrofist: be the first to reach the finish.">
+<link rel="stylesheet" href="ui.css?v=85">
+<script src="theme.js?v=100"></script>
+<script src="device.js?v=100"></script>
+        <link rel="icon" href="/favicon.ico" sizes="32x32">
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <link rel="manifest" href="/site.webmanifest">
+        <meta name="theme-color" content="#111827">
+<style>
+.mdWrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:32px;align-items:center;
+  margin-top:22px}
+.mdArt{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--soft);
+  box-shadow:0 18px 40px -28px rgba(15,23,42,.55)}
+.mdArt img{display:block;width:100%;height:auto}
+.mdName{font-size:34px;font-weight:800;line-height:1.1;margin-bottom:12px}
+.mdText{font-size:16px;line-height:1.65;color:#374151;margin-bottom:16px}
+.mdList{list-style:none;padding:0;margin:0 0 22px}
+.mdList li{position:relative;padding-left:26px;margin-bottom:9px;font-size:15px;color:#374151}
+.mdList li::before{content:'';position:absolute;left:6px;top:8px;width:8px;height:8px;
+  border-radius:50%;background:var(--blue)}
+.mdPlay{display:inline-flex;align-items:center;justify-content:center;gap:10px;
+  min-width:220px;padding:16px 30px;border:none;border-radius:14px;cursor:pointer;
+  font-size:19px;font-weight:800;letter-spacing:.4px;color:#fff;text-transform:uppercase;
+  background:var(--bf-grad,var(--blue));box-shadow:0 12px 26px -12px rgba(33,150,243,.75)}
+.mdPlay:hover{filter:brightness(.95)}
+.mdPlay:active{transform:translateY(1px)}
+.mdBack{display:inline-block;margin-left:14px;color:var(--muted);text-decoration:none;font-size:15px}
+.mdBack:hover{color:var(--ink)}
+@media (max-width:900px){
+  .mdWrap{grid-template-columns:1fr;gap:20px}
+  .mdName{font-size:26px}
+  .mdPlay{width:100%}
+  .mdBack{display:block;margin:12px 0 0;text-align:center}
+}
+</style>
+        <link rel="canonical" href="https://aibrofist.online/race.html">
+        <meta name="description" content="Race mode: everyone runs for the flag at once.">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Race">
+        <meta property="og:description" content="Race mode: everyone runs for the flag at once.">
+        <meta property="og:url" content="https://aibrofist.online/race.html">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<div class="bfWrap">
+  <div class="mdWrap">
+    <div class="mdArt"><img src="mode-race.png?v=106" alt="Race"></div>
+    <div>
+      <div class="mdName" data-i18n="race">Гонка</div>
+      <div class="mdText" data-i18n="modeRaceText">Все стартуют одновременно и бегут к финишу. Побеждает тот, кто первым коснётся флага — но дорога к нему редко бывает прямой.</div>
+      <ul class="mdList">
+        <li data-i18n="raceRule1">Шипы и яд возвращают на последний чекпоинт, а не в начало.</li>
+        <li data-i18n="raceRule2">Батуты забрасывают выше, чем достаёт обычный прыжок.</li>
+        <li data-i18n="raceRule3">Платформы и ротаторы движутся — иногда выгоднее подождать.</li>
+        <li data-i18n="raceRule4">Монеты разбросаны в стороне от быстрого пути: решайте, стоят ли они времени.</li>
+        <li data-i18n="raceRule5">Время круга видно на экране, свой рекорд можно побить на той же карте.</li>
+      </ul>
+      <button class="mdPlay" id="mdPlay" data-i18n="play">ИГРАТЬ</button>
+      <a class="mdBack" href="/" data-i18n="mdBack">На главную</a>
+    </div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="mobile.css?v=85">
+<script src="i18n.js?v=104"></script>
+<script src="coin.js?v=100"></script>
+<script src="skinRender.js?v=100"></script>
+<script src="skinAvatar.js?v=100" defer></script>
+<script src="shell.js?v=100"></script>
+<script src="abuseShow.js?v=100" defer></script>
+<script src="account.js?v=100" defer></script>
+<script>
+document.getElementById('mdPlay').onclick = function () {
+  location.href = 'game.html?mode=race';
+};
+</script>
+</body>
+</html>

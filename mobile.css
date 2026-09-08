@@ -1,0 +1,791 @@
+/* ======= Мобильная адаптация AIBrofist =======
+   Подключается последним, поэтому перекрывает базовые стили.
+   Компьютерный вид не меняется — все правила внутри @media. */
+
+/* --- общее для сенсорных экранов --- */
+html.is-touch * { -webkit-tap-highlight-color: rgba(33,150,243,.2); }
+html.is-touch .card:hover,
+html.is-touch .play-button:hover,
+html.is-touch .refresh-button:hover { background: inherit; }
+
+@media (max-width: 900px) {
+  html, body { overflow-x: hidden; }
+
+  /* ---------- шапка ---------- */
+  .header {
+    height: auto;
+    flex-wrap: nowrap;
+    padding: 4px 6px;
+    box-sizing: border-box;
+  }
+  .brand-logo { font-size: 21px; margin-top: 6px; }
+  .brand-icon { width: 32px; }
+
+  .header-link-container {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .header-link-container::-webkit-scrollbar { display: none; }
+  .header-link-a,
+  .header-link-item-button { padding: 12px 9px; font-size: 14px; white-space: nowrap; }
+  .header-link-item { margin: 0 1px; }
+
+  .profile-icon { width: 36px; }
+  .auth-buttons { padding: 12px 8px; font-size: 14px; white-space: nowrap; }
+  .profile-menu { margin-left: -110px; margin-top: 42px; }
+  .menu-item { padding: 9px 26px; font-size: 15px; }
+}
+
+/* ---------- главное меню с карточками режимов ---------- */
+@media (max-width: 760px) {
+  .cards .cardContainer { width: 50% !important; }
+  .card { margin: 7%; }
+  .card div { font-size: 14px; }
+}
+@media (max-width: 430px) {
+  .cards .cardContainer { width: 100% !important; }
+  .card { margin: 5% 12%; }
+}
+
+/* ---------- страница режима: превью, PLAY, описание, скриншот ---------- */
+@media (max-width: 760px) {
+  .playContainer { margin-top: 6px; }
+  .playContainer img { max-width: 150px; width: 45%; }
+  .playContainer .title { font-size: 19px; padding: 6px; }
+  .playContainer .playButton {
+    max-width: none;
+    width: 92%;
+    margin: 10px auto;
+    float: none;
+    padding: 15px 0;
+    font-size: 18px;
+    border-radius: 6px;
+  }
+
+  /* блок описания и слайдшоу перестраиваем в колонку */
+  .slideShowAndAboutContainer {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column-reverse;
+    width: 100%;
+  }
+  .slideShowContainer { width: 100% !important; float: none !important; margin: 0 0 10px; }
+  .slideShowContainer img { width: 100%; height: auto; }
+  .contentContainer .aboutContent {
+    width: 100% !important;
+    float: none !important;
+    padding: 12px 14px !important;
+    box-sizing: border-box;
+    font-size: 14px;
+    line-height: 22px;
+  }
+  .prev, .next { padding: 20px 12px; font-size: 22px; opacity: .35; }
+  .contentContainer .roomsContent { height: auto; }
+}
+
+/* ---------- профиль игрока ---------- */
+@media (max-width: 760px) {
+  .search-users-container { position: static !important; margin-bottom: 8px; }
+  .full-profile-container {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center;
+    margin-top: 12px !important;
+  }
+  /* размеры аватарки заданы ниже, в общем блоке профиля */
+  .profile-data-wrapper { align-items: center; }
+  .profile-header, .profile-name, .profile-join-date, .profile-credits {
+    float: none !important;
+    margin-left: 0 !important;
+    text-align: center;
+    width: auto;
+  }
+  .profile-name { font-size: 21px; padding-left: 0 !important; }
+  .add-friend-button, .report-button {
+    float: none !important;
+    position: static !important;
+    display: inline-block !important;
+    margin: 8px 4px 0;
+    padding: 9px 18px !important;
+    font-size: 14px !important;
+  }
+  .status-container { height: auto; min-height: 44px; }
+
+  .user-content-header { display: flex; overflow-x: auto; align-items: center; }
+  .user-content-header::-webkit-scrollbar { display: none; }
+  .header-tab { padding: 9px 10px !important; white-space: nowrap; font-size: 13px; }
+  .pagination-controls { flex: 0 0 auto; margin-left: auto; }
+  .user-content-list, .content-body { height: auto !important; max-height: 60vh; }
+
+  .user-item { display: flex; align-items: center; flex-wrap: wrap; padding: 7px 4px; }
+  .user-name { margin-top: 0 !important; max-width: 45vw; }
+  .user-status-text { margin-top: 0 !important; font-size: 12px; max-width: 100%; }
+  .user-action-remove, .user-action-ignore {
+    margin: 0 3px !important; padding: 7px 12px !important; font-size: 13px;
+  }
+}
+
+/* ---------- Maps Browser ---------- */
+@media (max-width: 760px) {
+  .maps-container { margin-top: 8px; }
+  .filter-table { flex-direction: column; padding: 6px 10px; }
+  .filter-select, .filter-input, .refresh-button {
+    width: 100% !important;
+    margin: 4px 0 !important;
+    padding: 10px 4px !important;
+    box-sizing: border-box;
+    font-size: 15px;
+  }
+  .maps-table { height: auto !important; max-height: 62vh; }
+  .maps-table-header-style { padding: 7px 0; font-size: 13px; }
+  .maps-row { margin: 8px 0; font-size: 13px; }
+  .map-name-row { width: 34% !important; }
+  .map-author-row { width: 26% !important; }
+  .map-rating-row { width: 12% !important; }
+  .map-date-row { display: none !important; }
+  .play-button { width: 74px !important; padding: 9px 0 !important; }
+  .pagination-box { width: auto; display: flex; align-items: center; gap: 4px; }
+}
+@media (max-width: 420px) {
+  .map-rating-row { display: none !important; }
+  .map-name-row { width: 44% !important; }
+  .map-author-row { width: 30% !important; }
+}
+
+/* ---------- окно входа и регистрации ---------- */
+@media (max-width: 760px) {
+  .bf-box {
+    width: calc(100vw - 32px) !important;
+    max-width: 360px;
+    padding: 26px 20px 20px !important;
+  }
+  .bf-i, .bf-b { font-size: 16px; padding: 13px 0; }
+}
+
+/* ---------- подвал ---------- */
+@media (max-width: 760px) {
+  .footer { height: auto; padding: 6px 0; }
+  .footer .row1 { flex-wrap: wrap; height: auto; padding: 4px 0; }
+  .footer .row1 .section { padding: 0 8px; }
+  .footer .item { font-size: 12px; }
+}
+
+/* ---------- новости и таблица лидеров ---------- */
+@media (max-width: 760px) {
+  .logsWrap, .lbWrap { padding: 12px 10px 70px; }
+  .logsWrap h1, .lbWrap h1 { font-size: 21px; }
+  .logItem h3 { font-size: 16px; }
+  .logItem p { font-size: 14px; }
+  .logDel { padding: 6px 12px; font-size: 13px; }
+  #editor input, #editor textarea { font-size: 16px; }   /* меньше 16px — iOS зумит страницу */
+  #editor button { width: 100%; padding: 13px; font-size: 15px; }
+  .lbRow { padding: 12px 8px; gap: 9px; }
+  .lbName { font-size: 15px; }
+  .lbCoins { font-size: 14px; }
+}
+
+/* ---------- окно входа и настроек ---------- */
+@media (max-width: 760px) {
+  .bf-box { max-height: 88vh; overflow-y: auto; }
+  .bf-i { font-size: 16px; }
+}
+
+/* =====================================================================
+   v14 — доводка мобильного вида
+   ===================================================================== */
+
+/* ---------- шапка: три зоны, ссылки прокручиваются ---------- */
+@media (max-width: 900px) {
+  .header {
+    display: flex !important;
+    align-items: center;
+    gap: 4px;
+    height: 54px;
+    padding: 0 6px;
+  }
+  .brand-container { padding-left: 2px; flex: 0 0 auto; }
+  .brand-logo { display: none !important; }
+  .brand-icon { width: 26px; }
+
+  .header-link-container {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .header-link-container::-webkit-scrollbar { display: none; }
+  .header-link-item { display: inherit !important; float: none; margin: 0; }
+  .header-link-item-button,
+  .header-link-a { padding: 10px 10px; font-size: 14.5px; }
+
+  .profile-container { flex: 0 0 auto; padding-right: 2px; }
+  .profile-icon { width: 34px; height: 34px; }
+  .auth-buttons { padding: 10px 8px; font-size: 14.5px; }
+
+  /* выпадающее меню профиля не должно уезжать за экран */
+  .profile-menu {
+    position: fixed !important;
+    right: 8px;
+    left: auto;
+    top: 56px;
+    margin: 0 !important;
+    min-width: 172px;
+  }
+  .menu-item { padding: 13px 20px; font-size: 15.5px; text-align: left; }
+
+  /* подменю Editor / Browser */
+  .header-link-item-sub-menu {
+    position: fixed !important;
+    top: 54px;
+    left: 8px;
+    right: 8px;
+    width: auto !important;
+    border-radius: 0 0 10px 10px;
+    box-shadow: 0 8px 18px rgba(0,0,0,.16);
+  }
+  .header-link-item-sub-menu a { padding: 13px 0; font-size: 15.5px; }
+}
+
+/* ---------- список разделов из кнопки Menu ---------- */
+@media (max-width: 900px) {
+  .header-more-links-container {
+    max-width: none !important;
+    width: calc(100vw - 28px) !important;
+    max-height: 78vh !important;
+  }
+  .header-more-link-button { padding: 13px 0 !important; font-size: 15.5px !important; }
+}
+
+/* ---------- Maps Browser: таблица превращается в карточки ---------- */
+@media (max-width: 760px) {
+  .maps-container, .tableContainer { width: 100% !important; padding: 0 8px; box-sizing: border-box; }
+  .filter-table {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  .filter-select, .filter-input {
+    flex: 1 1 46%;
+    min-width: 0;
+    font-size: 15px !important;
+    padding: 10px 8px !important;
+    box-sizing: border-box;
+  }
+  .refresh-button { flex: 1 1 100%; padding: 11px 0 !important; }
+
+  .maps-table-header-style { display: none !important; }
+  .maps-table { height: auto !important; overflow: visible !important; }
+
+  .maps-row {
+    display: grid !important;
+    grid-template-columns: 1fr auto;
+    gap: 2px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 11px 12px;
+    margin-bottom: 10px;
+    width: auto !important;
+    height: auto !important;
+    align-items: center;
+  }
+  .map-name-row {
+    grid-column: 1; font-weight: 700; font-size: 16px;
+    width: auto !important; text-align: left !important;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .map-rating-row {
+    grid-column: 2; grid-row: 1; font-weight: 700; color: #b8860b;
+    width: auto !important; text-align: right !important;
+  }
+  .map-author-row, .map-date-row {
+    grid-row: 2; font-size: 13px; color: #6b7280;
+    width: auto !important; text-align: left !important;
+  }
+  .map-author-row { grid-column: 1; }
+  .map-date-row { grid-column: 2; text-align: right !important; }
+  .maps-row > div:last-child {
+    grid-column: 1 / -1;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    margin-top: 8px;
+  }
+  .play-button {
+    flex: 1 1 auto; min-width: 96px; padding: 10px 0 !important;
+    border-radius: 8px; font-weight: 700;
+  }
+  .disable-map { flex: 0 0 auto; padding: 8px 12px !important; border-radius: 8px; }
+
+  .pagination-box { display: flex !important; justify-content: center; gap: 14px; padding: 10px 0; }
+  .pagination-controls { float: none !important; padding: 8px 16px !important; }
+}
+
+/* ---------- профиль игрока ---------- */
+@media (max-width: 760px) {
+  .users-container, .profile-container-users { padding: 0 10px; box-sizing: border-box; }
+  input[placeholder="Search users"] { font-size: 16px !important; }
+  .tabs, .profile-tabs { overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar, .profile-tabs::-webkit-scrollbar { display: none; }
+}
+
+/* ---------- редактор карт ---------- */
+@media (max-width: 900px) {
+  /* палитра инструментов прокручивается, а не обрезается */
+  .toolbar, .tools, #tools {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap !important;
+  }
+  .toolbar::-webkit-scrollbar, .tools::-webkit-scrollbar, #tools::-webkit-scrollbar { display: none; }
+
+  /* кнопка публикации не должна перекрывать холст и палитру */
+  body > button[style*="position:fixed"],
+  body > button[style*="position: fixed"] {
+    font-size: 13px !important;
+    padding: 9px 14px !important;
+  }
+}
+
+/* ---------- кнопка инструментов владельца ---------- */
+@media (max-width: 900px) {
+  .ow-fab { width: 46px !important; height: 46px !important; font-size: 19px !important; }
+}
+
+/* редактор: поднимаем кнопку выше панели инструментов */
+html[data-page="editor"] .ow-fab { bottom: 96px !important; }
+
+/* ---------- удобные касания ---------- */
+@media (max-width: 900px) {
+  button, .button, a.button, .play-button, .refresh-button,
+  .header-link-item-button, .menu-item { min-height: 40px; }
+  input, select, textarea { font-size: 16px !important; }  /* iOS не зумит поле */
+}
+
+/* =====================================================================
+   v15 — доводка
+   ===================================================================== */
+
+/* подменю открывается по касанию — оно должно быть кликабельным */
+@media (max-width: 900px) {
+  .header-link-item-sub-menu { z-index: 70; }
+  .header-link-item-sub-menu a { min-height: 44px; display: flex !important;
+    align-items: center; justify-content: center; }
+}
+
+/* кнопка инструментов владельца не должна закрывать игровые кнопки */
+html.is-mobile .ow-fab, html.is-tablet .ow-fab { bottom: 92px !important; right: 12px !important; }
+html[data-page="editor"].is-mobile .ow-fab { bottom: 130px !important; }
+
+/* иконка монеты вместо эмодзи */
+.bfCoinIcon { display: inline-block; }
+.bfCoin { display: inline-flex; align-items: center; gap: 4px; }
+
+/* на телефоне карточки скинов не должны становиться слишком мелкими */
+@media (max-width: 420px) {
+  .sbGrid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* =====================================================================
+   v19 — визуальные баги
+   ===================================================================== */
+
+/* Выпадающее меню «Editor» / «Browser».
+   Ссылки внутри объявлены как float:left, а у контейнера не было ни высоты,
+   ни overflow — он схлопывался в полоску, и меню «открывалось», но его
+   не было видно. overflow:hidden создаёт блочный контекст и держит высоту. */
+.header-link-item-sub-menu{
+  overflow: hidden;
+  z-index: 90 !important;
+  min-width: 168px;
+  background: #fff !important;
+  border: 1px solid #e5e7eb;
+  border-radius: 0 0 10px 10px;
+  box-shadow: 0 10px 24px rgba(15,23,42,.18);
+  padding: 4px 0;
+}
+.header-link-item-sub-menu a{
+  float: none !important;
+  display: block !important;
+  width: auto !important;
+  padding: 12px 16px !important;
+  text-align: left !important;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.header-link-item-sub-menu a:hover{ background: #eef2f8 !important; }
+
+/* меню профиля — те же проблемы с тенью и слоем */
+.profile-menu{
+  z-index: 90 !important;
+  background: #fff !important;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(15,23,42,.18);
+  overflow: hidden;
+  padding: 4px 0;
+}
+.menu-item{ white-space: nowrap; }
+
+@media (max-width: 900px){
+  /* на телефоне подменю прижимаем к краю экрана, а не к кнопке:
+     иначе оно уезжает за правую границу и обрезается */
+  .header-link-item-sub-menu{
+    position: fixed !important;
+    top: 54px !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    max-height: 70vh;
+    overflow-y: auto !important;
+  }
+  .header-link-item-sub-menu a{ text-align: center !important; }
+}
+
+/* Кнопки шапки не должны сливаться с фоном на светлых страницах */
+.header-link-item-button, .header-link-a{
+  border-radius: 8px;
+}
+.header-link-item-button:active, .header-link-a:active{ background: #e2e8f0; }
+
+/* Полоса шапки всегда поверх содержимого страницы */
+.header{ position: relative; z-index: 60; }
+
+/* редактор: панели не должны наезжать друг на друга */
+@media (max-width: 900px){
+  #modes{ max-width: calc(100vw - 16px) !important; }
+  /* строка режимов и строка инструментов не перекрывают кнопку публикации */
+  #scene{ padding-right: 4px !important; }
+}
+/* панель владельца не садится на кнопку публикации */
+html[data-page="editor"] .ow-fab{ z-index: 18 !important; }
+
+/* редактор на телефоне: холст не должен «уезжать» вместе со страницей,
+   иначе перетаскивание пальцем прокручивает всю вкладку, а не карту */
+html[data-page="editor"], html[data-page="editor"] body {
+  overscroll-behavior: none;
+  touch-action: none;
+  overflow: hidden;
+  height: 100%;
+}
+html[data-page="editor"] #c { touch-action: none; }
+
+/* подсказка про «Руку» помещается на узком экране */
+@media (max-width: 900px) {
+  .tool[data-tool="hand"] { order: -1; }
+}
+
+/* =====================================================================
+   v23 — телефон в обоих положениях
+   ===================================================================== */
+
+/* ---------- ГОРИЗОНТАЛЬНОЕ ПОЛОЖЕНИЕ ----------
+   Экран становится низким (часто 320–430 px), и панели, рассчитанные
+   на портрет, съедали всю высоту: карту было не видно, до кнопок
+   приходилось скроллить. Здесь всё ужимается по высоте. */
+@media (orientation: landscape) and (max-height: 500px) {
+
+  /* шапка тоньше */
+  .header { height: 44px !important; }
+  .header-link-item-button, .header-link-a { padding: 8px 10px !important; font-size: 13.5px; }
+  .profile-icon { width: 30px !important; height: 30px !important; }
+  .header-link-item-sub-menu { top: 44px !important; max-height: 60vh; }
+  .profile-menu { top: 46px !important; max-height: 60vh; overflow-y: auto; }
+  .menu-item { padding: 9px 18px !important; min-height: 36px; }
+
+  /* меню разделов — в две колонки, иначе не помещается */
+  .header-more-links-container { max-height: 84vh !important; }
+  .header-more-links-subcontainer {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 10px;
+  }
+  .header-more-link-button { padding: 10px 0 !important; font-size: 14px !important; }
+
+  /* редактор: инструменты слева столбиком, а не полосой внизу */
+  body.mob #tools, #tools {
+    left: 0 !important; right: auto !important; bottom: auto !important;
+    top: 50px !important; height: calc(100vh - 58px) !important;
+    width: 44px !important; max-width: 44px !important;
+    flex-direction: column !important;
+    overflow-y: auto !important; overflow-x: hidden !important;
+  }
+  body.mob #modes, #modes { top: 4px !important; left: 50px !important; right: auto !important; }
+  body.mob #scene, #scene { top: 4px !important; bottom: auto !important; }
+  body.mob #insp, #insp {
+    left: auto !important; right: 6px !important;
+    top: 50px !important; bottom: 6px !important;
+    width: 210px !important; max-height: none !important;
+  }
+  #props, #widgets { max-height: calc(100vh - 118px) !important; }
+  #zoomBox { bottom: 6px !important; right: 222px !important; }
+  html[data-page="editor"] .ow-fab, .ow-fab { bottom: 6px !important; right: 6px !important;
+    width: 40px !important; height: 40px !important; font-size: 17px !important; }
+
+  /* игровые кнопки управления ниже и компактнее */
+  #pad { bottom: 6px !important; }
+
+  /* собственные страницы: шапка и отступы тоньше */
+  :root { --hdr: 46px; }
+  .bfWrap { padding: 10px 12px 60px !important; }
+  .bfTitle { font-size: 18px !important; margin-bottom: 0 !important; }
+  .bfSub { margin-bottom: 8px !important; }
+  .seLayout, .avLayout { grid-template-columns: 220px 1fr !important; }
+  .seStage, .avStage { position: sticky !important; top: 54px !important; padding: 8px 0 4px !important; }
+  .seStage svg, .avStage svg { max-height: 40vh; }
+  .bfGrid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important; }
+  .sbGrid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important; }
+}
+
+/* ---------- ОБА ПОЛОЖЕНИЯ ---------- */
+@media (max-width: 900px), (max-height: 500px) {
+  /* Кнопки не должны быть меньше пальца: 44 px — минимум,
+     который стабильно попадается без промахов. */
+  .bfBtn, .bfMini, .bfChip, .bfTab,
+  .header-more-link-button, .menu-item,
+  .play-button, .refresh-button, .filter-select, .filter-input,
+  .sbOwnerRow .bfBtn, .lbRow { min-height: 44px; }
+
+  .bfMini, .bfChip { display: flex; align-items: center; justify-content: center; }
+
+  /* ничего не выходит за экран по ширине */
+  html, body { max-width: 100%; overflow-x: hidden; }
+  .bfWrap, .bfPanel, .sbCard, .bfCard { max-width: 100%; }
+
+  /* нижние панели не залезают под системную полосу жестов.
+     #pad не трогаем: у игрового пада своя safe-area-обвязка (лево/право/низ)
+     прямо в game.html, а правило ниже перебивало её нулём. */
+  #tools, .ow-fab { padding-bottom: env(safe-area-inset-bottom, 0); }
+  .bfWrap { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0)); }
+}
+
+/* панель владельца в Skins Browser на телефоне */
+@media (max-width: 640px) {
+  .sbOwner .sbRow { flex-direction: row; }
+  .sbOwner input { min-height: 40px; }
+  #sbOwnerBar { padding: 10px; }
+}
+
+/* =====================================================================
+   v23 — кнопки на телефоне: книжная и альбомная ориентация
+   ===================================================================== */
+
+/* ---------- общее для сенсорных экранов ---------- */
+@media (pointer: coarse) {
+  /* Apple и Google советуют минимум 44 px на палец.
+     Раньше часть кнопок была 28–34 px — по ним промахивались. */
+  button, .bfBtn, .bfMini, .bfChip, .bfTab, .menu-item,
+  .header-link-item-button, .header-link-a, .header-more-link-button,
+  .play-button, .refresh-button, .pagination-controls,
+  .ow-bar button, .ow-sk button, .ow-tag, .ow-mode {
+    min-height: 44px;
+  }
+  .bfMini, .ow-sk button { padding: 10px 8px; }
+  .ow-tag, .ow-mode { padding: 9px 12px; display: inline-flex; align-items: center; }
+
+  /* кнопки не должны слипаться — между ними нужен зазор под палец */
+  .bfVote { gap: 8px; }
+  .bfPager { gap: 18px; }
+  .bfPager button { width: 48px; height: 48px; }
+
+  /* подсветка нажатия: без hover непонятно, сработало ли */
+  button:active, .bfBtn:active, .bfMini:active, .bfChip:active,
+  .header-link-item-button:active { filter: brightness(.92); }
+
+  /* убираем серую вспышку Android и выделение текста на кнопках */
+  button, .bfBtn, .bfMini, .bfChip, .bfTab, .ow-tag, .ow-mode,
+  .header-link-item-button, .menu-item {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* ---------- книжная ориентация ---------- */
+@media (max-width: 900px) and (orientation: portrait) {
+  .bfWrap { padding-bottom: 96px; }
+
+  /* фильтры в две колонки, кнопка на всю ширину */
+  .sbFilters, .filter-table { grid-template-columns: 1fr 1fr; }
+  .sbFilters .bfBtn { grid-column: 1 / -1; }
+}
+
+/* ---------- альбомная ориентация ---------- */
+@media (max-height: 560px) and (orientation: landscape) {
+  /* Высоты почти нет: ужимаем шапку и отступы, иначе на контент
+     остаётся полоска в два пальца. */
+  :root { --hdr: 44px; }
+  .header { height: 44px !important; }
+  .header-link-item-button, .header-link-a { padding: 7px 10px !important; font-size: 14px; }
+  .profile-icon { width: 30px !important; height: 30px !important; }
+
+  .bfWrap { padding-top: 8px; padding-bottom: 64px; }
+  .bfTitle { font-size: 18px; margin-bottom: 0; }
+  .bfSub { margin-bottom: 8px; font-size: 13px; }
+
+  /* меню и подменю прокручиваются, а не уезжают за экран */
+  .header-link-item-sub-menu,
+  .profile-menu,
+  .header-more-links-container {
+    max-height: calc(100vh - 56px) !important;
+    overflow-y: auto !important;
+  }
+  .header-more-links-container { width: min(560px, calc(100vw - 24px)) !important; }
+  .header-more-link-button { padding: 10px 0 !important; }
+
+  /* в альбомной сетка карточек шире — колонок больше, прокрутки меньше */
+  .sbGrid, .bfGrid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important; }
+
+  /* редактор: панели по краям, чтобы не съедать высоту */
+  #tools { max-height: calc(100vh - 8px) !important; }
+  #insp { max-height: calc(100vh - 90px) !important; }
+  #props, #widgets { max-height: calc(100vh - 150px) !important; }
+}
+
+/* ---------- очень узкие экраны ---------- */
+@media (max-width: 360px) {
+  .bfChip { padding: 9px 11px; font-size: 13px; }
+  .bfBtn { font-size: 15px; }
+  .sbGrid, .bfGrid { grid-template-columns: 1fr !important; }
+}
+
+/* ---------- панель владельца ---------- */
+@media (max-width: 640px) {
+  .ow-bar-row { grid-template-columns: 1fr 1fr; }
+  .ow-bar-row input { grid-column: 1 / -1; }
+  .ow-bar button { width: 100%; }
+  .ow-box { width: calc(100vw - 20px) !important; max-height: 86vh; }
+}
+@media (max-height: 560px) and (orientation: landscape) {
+  .ow-box { max-height: calc(100vh - 20px) !important; }
+  .ow-fab { bottom: 12px !important; right: 12px !important; width: 42px !important; height: 42px !important; }
+}
+
+/* =====================================================================
+   v25 — одна шапка и аватарки нормального размера
+   ===================================================================== */
+
+/* Старая вендорная панель больше не используется: шапку строит shell.js.
+   Прячем и её, и её выпадающий список — иначе на части страниц было
+   две панели сразу, и меню то появлялось, то пропадало. */
+.header,
+.header-more-links-container,
+.header-more-links-overlay { display: none !important; }
+
+/* Скин распирал круглую рамку в профиле. Задаём размеры контейнерам
+   и вписываем фигуру целиком внутрь. */
+/* ---------------------------------------------------------------
+   АВАТАРКА — одно правило на весь сайт.
+   Скин всегда рисуется картинкой `img.bfAva` (или самой <img>),
+   вписывается через object-fit и никогда не выходит за рамку.
+   Размер задаёт только контейнер.
+   --------------------------------------------------------------- */
+img[data-bf-skin], img.bfAva {
+  object-fit: contain !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  background: transparent;
+  border: none;
+}
+
+/* контейнеры: у каждого свой размер, форма — круг */
+.bfAvatar,
+.profile-icon,
+.user-avatar,
+.lbAva,
+.profile-picture-wrapper {
+  overflow: hidden;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  background: #f6f8fa;
+}
+
+.bfAvatar        { width: 38px; height: 38px; }
+.profile-icon    { width: 40px; height: 40px; }
+.user-avatar     { width: 44px; height: 44px; }
+.lbAva           { width: 42px; height: 42px; }
+
+/* сами картинки в этих местах */
+.profile-image { width: 100% !important; height: 100% !important; object-fit: contain !important; }
+.user-avatar img, .lbAva img { width: 100%; height: 100%; object-fit: contain; }
+
+@media (max-width: 640px) {
+  .bfAvatar { width: 34px; height: 34px; }
+}
+
+/* =====================================================================
+   v28 — страница профиля под единой шапкой
+   ===================================================================== */
+
+/* Вендорная разметка профиля построена на float, а строка поиска
+   налезала на шапку. Переводим блоки в обычный поток и убираем
+   горизонтальную прокрутку. */
+.container { max-width: 1024px; padding: 0 12px; box-sizing: border-box; }
+body { overflow-x: hidden; }
+
+.searchUsersContainer {
+  float: none !important;
+  width: 100% !important;
+  margin: 14px 0 0 !important;
+  background: none !important;
+}
+.searchUsersContainer div { float: none !important; display: flex; align-items: stretch; }
+.searchUsersContainer div input { float: none !important; flex: 1 1 auto; min-width: 0; }
+.searchUsersContainer div img { float: none !important; flex: 0 0 auto; }
+
+.full-profile-container { margin-top: 18px !important; float: none !important; }
+
+/* большая аватарка: квадратный контейнер, картинка вписана внутрь */
+.profile-picture-wrapper {
+  width: 136px; height: 136px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  float: none !important;
+  flex: 0 0 auto;
+  background: #f6f8fa;
+}
+.profile-picture {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: contain !important;
+  clip: auto !important;          /* вендорный clip резал картинку */
+  position: static !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+}
+
+@media (max-width: 640px) {
+  .profile-picture-wrapper { width: 104px; height: 104px; }
+}
+
+/* шапка поверх вендорной вёрстки: та тащит float и ломала строку */
+.bfHead, .bfHead * { float: none !important; }
+.bfHead { flex-wrap: nowrap !important; }
+.bfNav { flex-wrap: nowrap !important; }
+.bfRight { flex-wrap: nowrap !important; margin-left: auto; }
+
+/* =====================================================================
+   v32 — свои страницы вместо вендорных
+   ===================================================================== */
+
+/* Maps Browser и профиль переписаны на наш API: вендорная разметка
+   и её загрузочная заглушка больше не участвуют. Заглушку прячем,
+   чтобы она не могла остаться поверх страницы, если её скрипт
+   не дождался своих запросов. */
+.loadingOverlay { display: none !important; }
