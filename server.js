@@ -347,6 +347,7 @@ const gameState = {
   players: new Map(),
   chatMessages: new Map(),
   rooms: new Map(),
+  activeAccounts: new Map(),   // ключ аккаунта -> socket.id, который сейчас им играет
   stats: {
     totalPlayers: 0,
     totalRooms: 0
@@ -556,6 +557,20 @@ io.on('connection', (socket) => {
     let name = cleanName(data.playerName);
     if (account) {
       name = account;                            // сессия сильнее присланного имени
+
+      /* Один аккаунт — один активный игрок. Иначе вторая вкладка или
+         другое устройство под тем же логином заходит в игру отдельным
+         "клоном": оба сокета создают свой player, и оба видны в комнате
+         как два разных персонажа с одним именем. Второй заход, пока
+         первый ещё на связи, просто не пускаем — очередь эмитит клиенту
+         причину, а сама заявка на join отклоняется целиком. */
+      const acctKey = accountsRef.key(account);
+      const ownerId = gameState.activeAccounts.get(acctKey);
+      if (ownerId && ownerId !== socket.id && io.sockets.sockets.has(ownerId)) {
+        socket.emit('joinDenied', { reason: 'duplicateAccount' });
+        return;
+      }
+      gameState.activeAccounts.set(acctKey, socket.id);
     } else if (name && accountsRef.nameIsTaken(name)) {
       name = 'Guest' + Math.floor(100 + Math.random() * 900);   // чужой ник гостю не достанется
     }
@@ -713,6 +728,14 @@ io.on('connection', (socket) => {
       const room = player.room;
       gameState.players.delete(socket.id);
       gameState.stats.totalPlayers--;
+
+      // освобождаем слот аккаунта, только если он всё ещё держится этим сокетом
+      if (account) {
+        const acctKey = accountsRef.key(account);
+        if (gameState.activeAccounts.get(acctKey) === socket.id) {
+          gameState.activeAccounts.delete(acctKey);
+        }
+      }
 
       const roomPlayers = gameState.rooms.get(room);
       if (roomPlayers) {
