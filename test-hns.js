@@ -52,7 +52,11 @@ ok('итог подписывается только тебе', /roulYouSeek/.te
                                  /if \(d\.winnerId === socket\.id\)/.test(src));
 ok('шанс в правом верхнем',     /#gChance\{position:fixed;top:52px/.test(src) &&
                                 /function showChance/.test(src) && /showChance\(\(d\.players\)/.test(src));
-ok('плашка шанса уступает рулетке', /body\.hasRoulette #gChance\{top:100px\}/.test(src));
+ok('плашки в углу считают отступ по факту, не угадывают числом',
+                                 /function relayoutCorner/.test(src) &&
+                                 /y = Math\.ceil\(top\.getBoundingClientRect\(\)\.bottom\) \+ gap;/.test(src));
+ok('рулетка и шанс не наезжают друг на друга', /roul\.offsetHeight \+ gap;/.test(src) &&
+                                 /chance\.offsetHeight \+ gap;/.test(src));
 ok('в охоте видно всех',        /if \(o\.hid && hsWait\) return;/.test(src));
 ok('лента едет одним ходом',    /transition = 'transform ' \+ spin \+ 'ms cubic-bezier/.test(src));
 ok('стоп ровно на победителе',  /var target = seq\.length \+ winIdx;/.test(src) &&
