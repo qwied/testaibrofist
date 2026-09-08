@@ -1368,15 +1368,36 @@ function paint(o, isSel){
     ctx.globalAlpha = 1; ctx.strokeStyle = "#16a34a"; ctx.lineWidth = 2;
     ctx.setLineDash([3,3]); ctx.strokeRect(-2,-2,o.w+4,o.h+4); ctx.setLineDash([]);
   }
-  ctx.restore();
+  /* Рамка выделения рисуется тут же, в системе координат самой фигуры
+     (тот же поворот, что и у неё): иначе при повёрнутом объекте рамка
+     оставалась прямоугольником по нулевому углу и «отклеивалась» от
+     фигуры. У треугольника рамка ещё и повторяет его силуэт, а не
+     bounding box — иначе вокруг наклонного треугольника всегда торчал
+     прямоугольник. */
   if(isSel && o.type !== "spawn"){
     var k = 1/view.s;
-    ctx.save();
+    ctx.globalAlpha = 1;
     ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.6*k; ctx.setLineDash([5*k,4*k]);
-    ctx.strokeRect(o.x-3*k, o.y-3*k, o.w+6*k, o.h+6*k); ctx.setLineDash([]);
-    ctx.fillStyle = "#fff"; ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.6*k;
+    if(o.type === "triangle"){
+      var m = 3*k;
+      ctx.beginPath();
+      ctx.moveTo(o.w/2, -m);
+      ctx.lineTo(o.w+m, o.h+m);
+      ctx.lineTo(-m, o.h+m);
+      ctx.closePath();
+      ctx.stroke();
+    } else {
+      ctx.strokeRect(-3*k, -3*k, o.w+6*k, o.h+6*k);
+    }
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+  if(isSel && o.type !== "spawn"){
+    var k2 = 1/view.s;
+    ctx.save();
+    ctx.fillStyle = "#fff"; ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.6*k2;
     grips(o).forEach(function(h){
-      ctx.beginPath(); ctx.arc(h.x,h.y,4.5*k,0,6.2832); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(h.x,h.y,4.5*k2,0,6.2832); ctx.fill(); ctx.stroke();
     });
     ctx.restore();
   }
