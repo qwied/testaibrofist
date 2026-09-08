@@ -166,8 +166,6 @@
     + 'html.is-mobile #gChance,html.is-tablet #gChance{top:44px;font-size:11.5px;'
     + 'padding:5px 9px;right:calc(8px + env(safe-area-inset-right,0px))}'
     + 'html.is-mobile #gChance b,html.is-tablet #gChance b{font-size:13px}'
-    // плашка шанса занимает угол — карточка карты сдвигается под неё
-    + 'html.is-mobile body.hasChance #gMap,html.is-tablet body.hasChance #gMap{top:80px}'
     + 'html.is-mobile #gBanner h2,html.is-tablet #gBanner h2{font-size:20px}'
     + 'html.is-mobile #gBanner p,html.is-tablet #gBanner p{font-size:14px}'
     /* безопасные зоны iPhone (чёлка/жесты): в альбомной панели прижимаются
@@ -199,12 +197,11 @@
     + '#gRoulRes{margin-top:4px;text-align:center;color:#fff;font:700 12.5px sans-serif;'
     + 'min-height:1.3em;opacity:0;transition:opacity .3s}'
     + '#gRoulRes.on{opacity:1}'
-    // пока крутится рулетка, плашка шанса уступает ей место — сдвигается ниже
-    + 'body.hasRoulette #gChance{top:100px}'
+    // стопка плашек друг под другом и под шапкой считается в JS (relayoutCorner) —
+    // шапка сама может перенестись на вторую строку, фиксированный отступ её не учитывал
     + 'html.is-mobile #gRoul,html.is-tablet #gRoul{top:44px;width:130px;'
     + 'right:calc(8px + env(safe-area-inset-right,0px))}'
     + 'html.is-mobile .rName,html.is-tablet .rName{width:130px;font-size:12.5px}'
-    + 'html.is-mobile body.hasRoulette #gChance,html.is-tablet body.hasRoulette #gChance{top:84px}'
     ;
 
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
@@ -259,6 +256,46 @@
     document.body.appendChild(d);
     setTimeout(function () { d.remove(); }, 2600);
   }
+
+  /* Шапка (#gTop) переносится на вторую строку, когда роль/игроки/пинг/время
+     не влезают в одну — на телефоне так почти всегда, как только появляется
+     «Роль: …». Плашки в углу (рулетка, шанс, карточка карты) раньше стояли
+     на фиксированном отступе, рассчитанном на шапку в одну строку, и
+     наезжали на неё, когда она разъезжалась на две. Теперь отступ каждый
+     раз меряется по факту вместо того, чтобы угадываться числом в CSS. */
+  function relayoutCorner() {
+    var top = $('gTop');
+    if (!top) return;
+    var mobile = document.documentElement.classList.contains('is-mobile') ||
+                 document.documentElement.classList.contains('is-tablet');
+    var gap = mobile ? 6 : 8;
+    var y = Math.ceil(top.getBoundingClientRect().bottom) + gap;
+
+    var roul = $('gRoul');
+    if (roul && roul.classList.contains('on')) {
+      roul.style.top = y + 'px';
+      y += roul.offsetHeight + gap;
+    }
+    var chance = $('gChance');
+    if (chance && chance.style.display === 'block') {
+      chance.style.top = y + 'px';
+      y += chance.offsetHeight + gap;
+    }
+    // на телефоне карточка карты тоже стоит в углу сверху; на десктопе она снизу — не мешает
+    if (mobile) {
+      var map = $('gMap');
+      if (map) map.style.top = y + 'px';
+    }
+  }
+  window.addEventListener('resize', relayoutCorner);
+  window.addEventListener('orientationchange', relayoutCorner);
+  window.addEventListener('bf-lang', relayoutCorner);      // другой язык — другая ширина подписей
+  try {
+    // «Роль: …» появляется/пропадает — это и есть типичный триггер переноса строки
+    new MutationObserver(relayoutCorner)
+      .observe($('gRoleBox'), { attributes: true, attributeFilter: ['style'] });
+  } catch (e) {}
+  relayoutCorner();
 
   // сказанные реплики: 2 секунды плавно уплывают вверх и тают
   // ---------- скины ----------
@@ -447,6 +484,7 @@
     var r = $('gRoul');   if (r)  r.classList.remove('on');
     var s = $('gRoulRes');   if (s) { s.classList.remove('on'); s.textContent = ''; }
     document.body.classList.remove('hasRoulette');
+    relayoutCorner();
   }
 
   function nameOfId(id, list) {
@@ -474,12 +512,12 @@
     $('gChanceL').textContent = TR('chanceLbl', 'Твой шанс');
     $('gChanceV').textContent = mine + '%';
     box.style.display = 'block';
-    document.body.classList.add('hasChance');
+    relayoutCorner();
   }
   function hideChance() {
     var box = $('gChance');
     if (box) box.style.display = 'none';
-    document.body.classList.remove('hasChance');
+    relayoutCorner();
   }
 
   function runRoulette(d) {
@@ -520,6 +558,7 @@
 
     res.classList.remove('on'); res.textContent = '';
     box.classList.add('on');
+    relayoutCorner();
 
     // ширину плашки берём у реально вставленного элемента — синхронизации
     // с шириной в CSS вручную не требуется
