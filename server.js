@@ -426,7 +426,19 @@ function hsSpin(io, room, st) {
   });
 }
 
+/* В прятки нужно хотя бы двое: одному не от кого прятаться и некого искать.
+   Единая точка входа во все лобби (первый вход в комнату, конец раунда,
+   досрочный конец по hsOnCaught) — если сейчас в комнате меньше двух,
+   вместо рулетки уходит пауза, и все таймеры останавливаются до тех пор,
+   пока кто-нибудь не подключится (см. join и hsOnLeave). */
 function hsStartLobby(io, room, st) {
+  if (hsMembers(room).length < 2) {
+    st.phase = 'waiting';
+    clearTimeout(st.timer);
+    st.timer = null;
+    io.to(room).emit('hsPhase', { phase: 'waiting' });
+    return;
+  }
   st.phase = 'lobby';
   st.roundNum++;
   st.caughtSent = false;
@@ -458,7 +470,8 @@ function hsOnCaught(room, socketId) {
   st.timer = setTimeout(() => hsStartLobby(io, room, st), 1400);
 }
 
-/* Ушёл игрок: комната опустела — состояние долой; в лобби ушёл сам
+/* Ушёл игрок: комната опустела — состояние долой; остался один —
+   раунд (даже уже идущий) прерывается паузой ожидания; в лобби ушёл сам
    искатель — крутим рулетку заново на оставшихся. */
 function hsOnLeave(io, room, leftId) {
   const st = hsRooms.get(room);
@@ -467,6 +480,13 @@ function hsOnLeave(io, room, leftId) {
   if (!set || set.size === 0) {
     clearTimeout(st.timer);
     hsRooms.delete(room);
+    return;
+  }
+  if (hsMembers(room).length < 2) {
+    st.phase = 'waiting';
+    clearTimeout(st.timer);
+    st.timer = null;
+    io.to(room).emit('hsPhase', { phase: 'waiting' });
     return;
   }
   if (leftId && leftId === st.seekerId && st.phase === 'lobby') hsSpin(io, room, st);
@@ -588,6 +608,9 @@ io.on('connection', (socket) => {
                lastSeeker: null, prevSeeker: null,
                seekerId: null, seekerName: '', caughtSent: false };
         hsRooms.set(room, st);
+        hsStartLobby(io, room, st);
+      } else if (st.phase === 'waiting') {
+        // ждали второго игрока — вот он, можно крутить рулетку
         hsStartLobby(io, room, st);
       } else {
         // искатель мог переподключиться с новым сокетом — возвращаем ему роль

@@ -180,65 +180,31 @@
     // у мобильной шапки падинг компактнее — безопасные зоны добавляем к нему же
     + 'html.is-mobile #gTop,html.is-tablet #gTop{padding-left:calc(9px + env(safe-area-inset-left,0px));'
     + 'padding-right:calc(9px + env(safe-area-inset-right,0px))}'
-    /* --- рулетка искателя (прятки): полноэкранный оверлей.
-           Лента карточек едет под неподвижной рамкой в центре, плавно
-           тормозит на победителе, и итог подписывается крупно.
-           Оверлей не ловит нажатия — кнопки игры под ним работают. --- */
-    + '#gRoul{position:fixed;left:0;top:0;right:0;bottom:0;z-index:200;display:none;'
-    + 'flex-direction:column;align-items:center;justify-content:center;'
-    + 'background:radial-gradient(120% 85% at 50% 32%,rgba(24,35,58,.95) 0%,rgba(6,9,17,.97) 72%);'
-    + 'pointer-events:none;-webkit-user-select:none;user-select:none;overflow:hidden}'
-    + '#gRoul.on{display:flex}'
-    + '#gRoulT{margin:0;padding:0 16px;color:#fff;text-align:center;letter-spacing:.4px;'
-    + 'font:800 30px/1.15 sans-serif;text-shadow:0 4px 22px rgba(0,0,0,.65)}'
-    + '#gRoulSub{margin:9px 0 0;padding:0 18px;color:#9db2d2;text-align:center;'
-    + 'font:600 15px/1.35 sans-serif;min-height:1.3em}'
-    + '#gRoulView{position:relative;width:100%;margin-top:24px;overflow:hidden;'
-    + '-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 15%,#000 85%,transparent 100%);'
-    + 'mask-image:linear-gradient(90deg,transparent 0,#000 15%,#000 85%,transparent 100%)}'
+    /* --- рулетка искателя (прятки): компактная плашка в правом верхнем
+           углу — там же, где потом встанет «Твой шанс». Лента ников едет
+           под ней и тормозит на победителе; карточек и скинов больше нет.
+           Плашка не ловит нажатия — кнопки игры под ней работают. --- */
+    + '#gRoul{position:fixed;top:52px;z-index:200;display:none;pointer-events:none;'
+    + 'right:calc(12px + env(safe-area-inset-right,0px));'
+    + 'background:rgba(15,23,42,.86);border-radius:9px;padding:8px 0;'
+    + 'box-shadow:0 8px 20px -12px rgba(0,0,0,.7);width:150px;overflow:hidden;'
+    + 'text-align:center;-webkit-user-select:none;user-select:none;'
+    + '-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14%,#000 86%,transparent 100%);'
+    + 'mask-image:linear-gradient(90deg,transparent 0,#000 14%,#000 86%,transparent 100%)}'
+    + '#gRoul.on{display:block}'
     + '#gRoulTrack{display:flex;align-items:center;will-change:transform}'
-    + '#gRoulFrame{position:absolute;left:50%;transform:translateX(-50%);border-radius:18px;'
-    + 'border:3px solid rgba(96,165,250,.55);pointer-events:none;'
-    + 'box-shadow:0 0 0 3px rgba(8,12,22,.55),0 0 30px rgba(59,130,246,.3),'
-    + 'inset 0 0 26px rgba(59,130,246,.12);transition:border-color .25s,box-shadow .25s}'
-    + '#gRoulFrame.rwin{border-color:#38bdf8;'
-    + 'box-shadow:0 0 0 3px rgba(8,12,22,.6),0 0 70px rgba(56,189,248,.75),'
-    + 'inset 0 0 34px rgba(56,189,248,.25);animation:rPulse .5s ease-in-out 3 alternate}'
-    + '@keyframes rPulse{from{transform:translateX(-50%) scale(1)}'
-    + 'to{transform:translateX(-50%) scale(1.045)}}'
-    + '.rCard{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;'
-    + 'justify-content:flex-end;overflow:hidden;border-radius:15px;'
-    + 'background:linear-gradient(180deg,#1f2b41 0%,#131b2b 100%);'
-    + 'border:1px solid rgba(148,163,184,.16);'
-    + 'opacity:.38;transition:opacity .16s linear}'
-    + '.rCard.rOn{opacity:1}'
-    + '.rCard.rWin{opacity:1;border-color:rgba(56,189,248,.85);'
-    + 'background:linear-gradient(180deg,#24405f 0%,#152238 100%)}'
-    /* площадка под фигурой светлая — как фон карты, поэтому цвет игрока
-       на карточке ровно тот же, что и в игре */
-    + '.rSkin{flex:1 1 auto;width:100%;display:flex;align-items:flex-end;'
-    + 'justify-content:center;overflow:hidden;'
-    + 'background:linear-gradient(180deg,#f8fafd 0%,#e3eaf5 100%)}'
-    + '.rSkin svg,.rSkin img{display:block;max-width:86%}'
-    // скин ещё не пришёл — вместо пустоты нейтральный силуэт
-    + '.rSkin:empty::after{content:\'\';display:block;width:34%;height:62%;'
-    + 'background:#c3ccda;border-radius:14px 14px 6px 6px}'
-    + '.rName{width:100%;padding:7px 7px 1px;text-align:center;color:#eaf0fa;'
-    + 'font:700 14px/1.25 sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
-    + 'border-top:1px solid rgba(148,163,184,.14);background:rgba(9,14,26,.6)}'
-    + '.rPct{width:100%;padding:0 6px 7px;text-align:center;color:#8ba3c4;'
-    + 'font:600 11.5px/1.2 sans-serif;background:rgba(9,14,26,.6)}'
-    + '.rCard.rWin .rName{color:#bae6fd}'
-    + '.rCard.rWin .rPct{color:#7dd3fc}'
-    + '#gRoulRes{margin:24px 14px 0;min-height:1.5em;text-align:center;color:#fff;'
-    + 'font:800 24px/1.3 sans-serif;text-shadow:0 4px 22px rgba(0,0,0,.65);'
-    + 'opacity:0;transform:translateY(10px);transition:opacity .3s,transform .3s}'
-    + '#gRoulRes.on{opacity:1;transform:none}'
-    + '#gRoulRes b{color:#7dd3fc}'
-    + 'html.is-mobile #gRoulT,html.is-tablet #gRoulT{font-size:23px}'
-    + 'html.is-mobile #gRoulSub,html.is-tablet #gRoulSub{font-size:13px}'
-    + 'html.is-mobile #gRoulRes,html.is-tablet #gRoulRes{font-size:19px;margin-top:20px}'
-    + 'html.is-mobile .rName,html.is-tablet .rName{font-size:12.5px;padding:7px 6px 8px}'
+    + '.rName{flex:0 0 auto;width:150px;padding:2px 10px;white-space:nowrap;overflow:hidden;'
+    + 'text-overflow:ellipsis;color:#dbe6f7;font:700 14px/1.3 sans-serif}'
+    + '.rName.rWin{color:#60a5fa}'
+    + '#gRoulRes{margin-top:4px;text-align:center;color:#fff;font:700 12.5px sans-serif;'
+    + 'min-height:1.3em;opacity:0;transition:opacity .3s}'
+    + '#gRoulRes.on{opacity:1}'
+    // пока крутится рулетка, плашка шанса уступает ей место — сдвигается ниже
+    + 'body.hasRoulette #gChance{top:100px}'
+    + 'html.is-mobile #gRoul,html.is-tablet #gRoul{top:44px;width:130px;'
+    + 'right:calc(8px + env(safe-area-inset-right,0px))}'
+    + 'html.is-mobile .rName,html.is-tablet .rName{width:130px;font-size:12.5px}'
+    + 'html.is-mobile body.hasRoulette #gChance,html.is-tablet body.hasRoulette #gChance{top:84px}'
     ;
 
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
@@ -254,10 +220,7 @@
     + '<button data-v="1">👍</button><button data-v="-1">👎</button>'
     + '<span id="gRating" style="color:#6b7280"></span></div></div>'
     + '<div id="gBanner"><h2 id="gbT"></h2><p id="gbP"></p></div>'
-    + '<div id="gRoul"><div id="gRoulT">Выбор искателя</div>'
-    + '<div id="gRoulSub"></div>'
-    + '<div id="gRoulView"><div id="gRoulTrack"></div>'
-    + '<div id="gRoulFrame"></div></div>'
+    + '<div id="gRoul"><div id="gRoulView"><div id="gRoulTrack"></div></div>'
     + '<div id="gRoulRes"></div></div>'
     + '<div id="gChance"><span id="gChanceL">Твой шанс</span><b id="gChanceV">—</b></div>'
     + '<div id="gChat"><input id="gMsg" maxlength="90"></div>'
@@ -271,9 +234,6 @@
     $('gLblTime').textContent = TR('gTimeLbl', 'Время');
     $('gLblRole').textContent = TR('roleLbl', 'Роль');
     $('gExit').textContent = TR('menu', 'Меню');
-    var rt = $('gRoulT');                        // заголовок рулетки, если она на экране
-    if (rt && $('gRoul').classList.contains('on'))
-      rt.textContent = TR('roulTitle', 'Выбор искателя');
     var cl = $('gChanceL');                      // подпись плашки шанса
     if (cl) cl.textContent = TR('chanceLbl', 'Твой шанс');
   }
@@ -480,17 +440,13 @@
   var hsEver = false;          // сервер уже присылал события пряток
   var hsWinnerId = null;       // кто искатель в текущем раунде
   var roulTimers = [];
-  var roulRefresh = null;
-  var roulRaf = null;
 
   function roulStop() {
     roulTimers.forEach(clearTimeout);
     roulTimers = [];
-    if (roulRefresh) { clearInterval(roulRefresh); roulRefresh = null; }
-    if (roulRaf) { cancelAnimationFrame(roulRaf); roulRaf = null; }
     var r = $('gRoul');   if (r)  r.classList.remove('on');
-    var f = $('gRoulFrame'); if (f) f.classList.remove('rwin');
-    var s = $('gRoulRes');   if (s) { s.classList.remove('on'); s.innerHTML = ''; }
+    var s = $('gRoulRes');   if (s) { s.classList.remove('on'); s.textContent = ''; }
+    document.body.classList.remove('hasRoulette');
   }
 
   function nameOfId(id, list) {
@@ -504,45 +460,6 @@
   function applySeeker(id) {
     hsWinnerId = id;
     setRole(id === socket.id ? 'seeker' : 'hider');
-  }
-
-  // скин игрока для карточки: свой — из профиля, чужие — из сетевых пакетов
-  function skinForCard(pid, name) {
-    if (socket && pid === socket.id) {
-      if (myImg) return { img: myImg };
-      return GAME.mySkin || null;
-    }
-    var o = others[pid];
-    if (!o) return null;
-    var sk = o.skin;
-    if (sk && !sk.img) {
-      var pic = imgOf(name);
-      if (pic) sk = { head: sk.head, face: sk.face, body: sk.body, back: sk.back, img: pic };
-    }
-    return sk || null;
-  }
-
-  /* Лента длинная и игроки в ней повторяются — рисуем каждый скин один
-     раз за проход и раскладываем готовую разметку по карточкам. */
-  /* Цвет фигуры на карточке — тот же, каким игрока рисует движок.
-     Раньше он был приглушённо-серым, и скин в рулетке выглядел не тем,
-     что в игре. */
-  function colorForCard(pid) {
-    if (socket && pid === socket.id) return GAME.myColor || COLOR_NORMAL;
-    var o = others[pid];
-    return (o && o.color) || COLOR_NORMAL;
-  }
-
-  function paintSkins(cards, h) {
-    if (!window.BFSkin) return;
-    var byId = window.BF_SKIN_ITEMS || {}, made = {};
-    cards.forEach(function (c) {
-      var html = made[c._pid];
-      if (html === undefined)
-        html = made[c._pid] = BFSkin.render(skinForCard(c._pid, c._name), byId,
-                                           { height: h, color: colorForCard(c._pid) });
-      if (c._html !== html) { c._html = html; c._skin.innerHTML = html; }
-    });
   }
 
   /* Твой шанс стать искателем в этом раунде — плашка в правом верхнем углу.
@@ -565,86 +482,50 @@
     document.body.classList.remove('hasChance');
   }
 
-  /* Размер карточки под экран: на телефоне — почти половина ширины,
-     на большом экране упирается в высоту и в потолок 200 px. */
-  function roulSize() {
-    var vw = Math.max(240, window.innerWidth  || 360);
-    var vh = Math.max(320, window.innerHeight || 640);
-    var cw = Math.max(96, Math.round(Math.min(vw * 0.42, vh * 0.24, 200)));
-    return { vw: vw, cw: cw, ch: Math.round(cw * 1.44), gap: Math.round(cw * 0.15),
-             step: cw + Math.round(cw * 0.15) };
-  }
-
   function runRoulette(d) {
     roulStop();
     var list = (d && d.players) || [];
     var box = $('gRoul'), view = $('gRoulView'), track = $('gRoulTrack');
-    var frame = $('gRoulFrame'), res = $('gRoulRes'), sub = $('gRoulSub');
+    var res = $('gRoulRes');
     var winIdx = -1;
     for (var i = 0; i < list.length; i++) if (list[i].id === d.winnerId) { winIdx = i; break; }
-    // рендер скинов может ещё не загрузиться — рулетку это больше не отменяет,
-    // карточки просто появятся с силуэтом и дорисуются, когда он будет готов
     // Если состав рассинхронизирован и победителя вообще нет в списке —
     // анимацию не показать, но роль всё равно нужно назначить: иначе раунд
     // проходит без искателя вообще ни у кого.
     if (!list.length || winIdx < 0) { applySeeker(d.winnerId); return; }
 
     banner('', '', false);            // рулетка вместо плашки ожидания
-
-    var M = roulSize();
-    // по краям от центра должно быть чем заполнить экран
-    var edge = Math.ceil((M.vw / 2) / M.step) + 2;
+    document.body.classList.add('hasRoulette');   // плашка шанса уступает место рулетке
 
     /* Лента — несколько кругов подряд, победитель в дальнем круге.
        Поэтому лента едет только вперёд и плавно тормозит, без прыжков
        туда-сюда, как было раньше. */
-    var seq = [];
+    var seq = [], edge = 3;
     while (seq.length < edge) seq = seq.concat(list);
     var startIdx = seq.length;                        // с неё стартуем
-    var pass = 20 + Math.floor(Math.random() * 7);    // сколько карточек проедет
+    var pass = 20 + Math.floor(Math.random() * 7);    // сколько ников проедет
     while (seq.length < startIdx + pass) seq = seq.concat(list);
     var target = seq.length + winIdx;                 // на ней остановимся
     seq = seq.concat(list);
     while (seq.length < target + edge + 1) seq = seq.concat(list);
 
     track.innerHTML = '';
-    var cards = seq.map(function (p) {
-      var c = document.createElement('div');
-      c.className = 'rCard';
-      c.style.width = M.cw + 'px';
-      c.style.height = M.ch + 'px';
-      c.style.marginRight = M.gap + 'px';
-      var sk = document.createElement('div'); sk.className = 'rSkin';
-      var nm = document.createElement('div'); nm.className = 'rName';
-      nm.textContent = p.name || '';
-      var pc = document.createElement('div'); pc.className = 'rPct';
-      pc.textContent = (p.chance != null) ? p.chance + '%' : '';
-      c.appendChild(sk); c.appendChild(nm); c.appendChild(pc);
-      c._pid = p.id; c._name = p.name; c._skin = sk;
-      track.appendChild(c);
-      return c;
+    var pills = seq.map(function (p) {
+      var el = document.createElement('div');
+      el.className = 'rName';
+      el.textContent = p.name || '';
+      track.appendChild(el);
+      return el;
     });
 
-    var viewH = M.ch + 26;
-    view.style.height   = viewH + 'px';
-    track.style.height  = viewH + 'px';
-    frame.style.width   = (M.cw + 12) + 'px';
-    frame.style.height  = (M.ch + 12) + 'px';
-    frame.style.top     = Math.round((viewH - M.ch - 12) / 2) + 'px';
-
-    var skinH = Math.round(M.ch * 0.58);
-    paintSkins(cards, skinH);
-    // скины докачиваются из сети — пока лента едет, карточки обновляются
-    roulRefresh = setInterval(function () { paintSkins(cards, skinH); }, 400);
-
-    $('gRoulT').textContent = TR('roulTitle', 'Выбор искателя');
-    sub.textContent = TR('roulSpin', 'Кому искать в этом раунде?');
-    res.classList.remove('on'); res.innerHTML = '';
+    res.classList.remove('on'); res.textContent = '';
     box.classList.add('on');
 
-    // ширину берём уже у показанной ленты — так центр совпадает точно
-    var W = view.getBoundingClientRect().width || M.vw;
-    function posOf(k) { return Math.round(W / 2 - (k * M.step + M.cw / 2)); }
+    // ширину плашки берём у реально вставленного элемента — синхронизации
+    // с шириной в CSS вручную не требуется
+    var step = (pills[0] && pills[0].getBoundingClientRect().width) || 150;
+    var W = view.getBoundingClientRect().width || step;
+    function posOf(k) { return Math.round(W / 2 - (k * step + step / 2)); }
 
     // длительность подгоняем под остаток лобби: рулетка не оборвётся
     var dur  = (d && d.duration) || 6800;
@@ -658,33 +539,13 @@
     track.style.transition = 'transform ' + spin + 'ms cubic-bezier(.09,.66,.14,1)';
     track.style.transform  = 'translateX(' + posOf(target) + 'px)';
 
-    // карточка под рамкой светится — видно, кого лента перебирает
-    var lit = -1;
-    (function tick() {
-      var vr = view.getBoundingClientRect(), tr = track.getBoundingClientRect();
-      var k = Math.round((vr.left + vr.width / 2 - tr.left - M.cw / 2) / M.step);
-      if (k !== lit) {
-        if (cards[lit]) cards[lit].classList.remove('rOn');
-        lit = k;
-        if (cards[lit]) cards[lit].classList.add('rOn');
-      }
-      roulRaf = requestAnimationFrame(tick);
-    })();
-
     roulTimers.push(setTimeout(function () {
-      if (roulRaf) { cancelAnimationFrame(roulRaf); roulRaf = null; }
-      if (roulRefresh) { clearInterval(roulRefresh); roulRefresh = null; }
-      cards.forEach(function (c) { c.classList.remove('rOn'); });
-      cards[target].classList.add('rOn');
-      cards[target].classList.add('rWin');
-      frame.classList.add('rwin');
+      pills[target].classList.add('rWin');      // ник искателя становится синим
       applySeeker(d.winnerId);
-      paintSkins(cards, skinH);        // роль известна — искатель уже синий
-      sub.textContent = '';
-      res.innerHTML = (d.winnerId === socket.id)
-        ? esc(TR('roulYouSeek', 'Ты — искатель!'))
-        : esc(TR('roulSeekerIs', 'Искатель: ')) + '<b>' + esc(nameOfId(d.winnerId, list)) + '</b>';
-      res.classList.add('on');
+      if (d.winnerId === socket.id) {
+        res.textContent = TR('roulYouSeek', 'Ты — искатель!');
+        res.classList.add('on');
+      }
       roulTimers.push(setTimeout(roulStop, 2300));
     }, spin + 120));
   }
@@ -696,7 +557,9 @@
     return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
   }
   setInterval(function () {
-    if (phase === 'dev' || phase === 'loading') return;
+    // 'waiting': сервер поставил фазы на паузу, пока в комнате один игрок —
+    // считать до phaseEnds тут нечего, там нет актуального значения
+    if (phase === 'dev' || phase === 'loading' || phase === 'waiting') return;
     var left = phaseEnds - Date.now();
     $('gTime').textContent = fmt(left);
     if (left <= 0) {
@@ -1053,17 +916,33 @@
       showChance((d.players) || []);
     });
 
+    // одному в комнате играть не с кем — сервер поставил фазы на паузу
+    function showWaitingForPlayers() {
+      phase = 'waiting';
+      roulStop();
+      hsWinnerId = null;
+      me.role = 'hider';
+      $('gRoleBox').style.display = 'none';
+      $('gTimeBox').style.display = 'none';   // отсчитывать нечего — время не идёт
+      hideChance();
+      clearCaught();
+      banner(TR('waitTitle', 'Ожидание игроков'),
+             TR('hsWaitText', 'Нужен ещё хотя бы один игрок, чтобы начать раунд.'), true);
+    }
+
     // смена фазы: конец рулетки/прятаний — начало охоты и обратно
     socket.on('hsPhase', function (d) {
       hsSync = true; hsEver = true;
       if (MODE !== 'hideAndSeek' || !d || !d.phase) return;
+      if (d.phase === 'waiting') { showWaitingForPlayers(); return; }
+      banner('', '', false);        // предыдущее состояние (например «ждём игроков») уже не актуально
+      $('gTimeBox').style.display = '';
       if (d.phase === 'round') {
         roulStop();
         phase = 'round';
         phaseEnds = Date.now() + (Number(d.msLeft) || ROUND_MS);
         clearCaught();
         if (d.seekerId) applySeeker(d.seekerId);
-        banner('', '', false);
         log(TR('roundStart', 'Раунд начался! 2 минуты'));
       } else if (d.phase === 'lobby') {
         phase = 'lobby';
@@ -1081,6 +960,8 @@
     socket.on('hsState', function (d) {
       hsSync = true; hsEver = true;
       if (MODE !== 'hideAndSeek' || !d || !d.phase) return;
+      if (d.phase === 'waiting') { showWaitingForPlayers(); return; }
+      $('gTimeBox').style.display = '';
       phase = d.phase;
       phaseEnds = Date.now() + (Number(d.msLeft) || (d.phase === 'round' ? ROUND_MS : LOBBY_MS));
       if (d.phase === 'round') {
@@ -1113,13 +994,6 @@
     if (!socket || !joined || !GAME.playing) return;
     var p = GAME.pl;
     var now = Date.now();
-    /* Один в комнате — канал не тратим: контрольный пакет раз в секунду.
-       Через воркер шлём 20 раз в секунду: каждое сообщение у него
-       считается запросом, а разницу до 30 Гц добирает интерполяция. */
-    var alone = true;
-    for (var k in others) { alone = false; break; }
-    var minGap = alone ? 1000 : sendGap;
-    if (now - lastSent < minGap) return;
 
     var pos = {
       x: Math.round(p.x), y: Math.round(p.y), w: p.w, h: p.h,
@@ -1129,17 +1003,31 @@
     var moved = pos.x !== prev.x || pos.y !== prev.y || pos.w !== prev.w || pos.h !== prev.h
       || pos.color !== prev.c || pos.say !== prev.s || pos.fin !== prev.f || pos.hid !== prev.d;
     var force = now - lastForce > 1000;
-    if (!moved && !force) return;
 
-    lastSent = now;
-    if (force) lastForce = now;
-    prev.x = pos.x; prev.y = pos.y; prev.w = pos.w; prev.h = pos.h;
-    prev.c = pos.color; prev.s = pos.say; prev.f = pos.fin; prev.d = pos.hid;
+    /* Один в комнате — канал не тратим: контрольный пакет раз в секунду.
+       Через воркер шлём 20 раз в секунду: каждое сообщение у него
+       считается запросом, а разницу до 30 Гц добирает интерполяция.
 
-    // скин — строка до 120 символов, менять её незачем каждый пакет
-    if (mySkinStr !== lastSk) { pos.sk = mySkinStr; lastSk = mySkinStr; }
+       Раньше этот троттлинг обрывал функцию целиком — вместе с отправкой
+       пакета внутри него же пропускались проверка «все пойманы»/«все
+       финишировали». Если искатель ловил последнего игрока и в этот же
+       момент останавливался, раунд не заканчивался до секундного
+       контрольного пакета. Теперь отправка на сервер троттлится, а проверки
+       ниже выполняются каждый тик — они чисто локальные, сеть не грузят. */
+    var alone = true;
+    for (var k in others) { alone = false; break; }
+    var minGap = alone ? 1000 : sendGap;
+    if (now - lastSent >= minGap && (moved || force)) {
+      lastSent = now;
+      if (force) lastForce = now;
+      prev.x = pos.x; prev.y = pos.y; prev.w = pos.w; prev.h = pos.h;
+      prev.c = pos.color; prev.s = pos.say; prev.f = pos.fin; prev.d = pos.hid;
 
-    socket.emit('movePlayer', { position: pos });
+      // скин — строка до 120 символов, менять её незачем каждый пакет
+      if (mySkinStr !== lastSk) { pos.sk = mySkinStr; lastSk = mySkinStr; }
+
+      socket.emit('movePlayer', { position: pos });
+    }
 
     checkAllFinished();
 
