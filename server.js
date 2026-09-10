@@ -471,11 +471,6 @@ function hsSpin(io, room, st) {
   });
 }
 
-/* В прятки нужно хотя бы двое: одному не от кого прятаться и некого искать.
-   Единая точка входа во все лобби (первый вход в комнату, конец раунда,
-   досрочный конец по hsOnCaught) — если сейчас в комнате меньше двух,
-   вместо рулетки уходит пауза, и все таймеры останавливаются до тех пор,
-   пока кто-нибудь не подключится (см. join и hsOnLeave). */
 /* Раунд закончился — начисляем прячущимся, которых так и не поймали.
    Считаем только тех, кто был в комнате С НАЧАЛА раунда (st.roundMembers,
    снятый в hsStartRound): иначе можно было бы забежать в комнату за
@@ -497,13 +492,10 @@ function hsAwardRoundEnd(io, room, st) {
 
 function hsStartLobby(io, room, st) {
   if (st.phase === 'round') hsAwardRoundEnd(io, room, st);
-  if (hsMembers(room).length < 2) {
-    st.phase = 'waiting';
-    clearTimeout(st.timer);
-    st.timer = null;
-    io.to(room).emit('hsPhase', { phase: 'waiting' });
-    return;
-  }
+  // Одному тоже можно: hsPick/hsChances сами ставят единственного игрока
+  // искателем без жеребьёвки. Ловить в комнате некого — монеты за поимку
+  // и за «дожил до конца» не начисляются, roundMembers/caughtSet это уже
+  // обеспечивают, так что здесь достаточно просто не блокировать раунд.
   st.phase = 'lobby';
   st.roundNum++;
   st.caughtSent = false;
@@ -538,9 +530,9 @@ function hsOnCaught(room, socketId) {
   st.timer = setTimeout(() => hsStartLobby(io, room, st), 1400);
 }
 
-/* Ушёл игрок: комната опустела — состояние долой; остался один —
-   раунд (даже уже идущий) прерывается паузой ожидания; в лобби ушёл сам
-   искатель — крутим рулетку заново на оставшихся. */
+/* Ушёл игрок: комната опустела — состояние долой; в лобби ушёл сам
+   искатель — крутим рулетку заново на оставшихся (в том числе если
+   остался один — тогда искателем станет он же). */
 function hsOnLeave(io, room, leftId) {
   const st = hsRooms.get(room);
   if (!st) return;
@@ -548,13 +540,6 @@ function hsOnLeave(io, room, leftId) {
   if (!set || set.size === 0) {
     clearTimeout(st.timer);
     hsRooms.delete(room);
-    return;
-  }
-  if (hsMembers(room).length < 2) {
-    st.phase = 'waiting';
-    clearTimeout(st.timer);
-    st.timer = null;
-    io.to(room).emit('hsPhase', { phase: 'waiting' });
     return;
   }
   if (leftId && leftId === st.seekerId && st.phase === 'lobby') hsSpin(io, room, st);
@@ -683,8 +668,9 @@ io.on('connection', (socket) => {
     socket.emit('nameFixed', { name: name });    // игрок показывает себе ровно то, что решил сервер
 
     /* Прятки: фазы и рулетку задаёт сервер. Первому игроку комнаты —
-       сразу новая рулетка (она уйдёт и ему, и всем кто в комнате),
-       остальные получают текущее состояние, чтобы не остаться без роли. */
+       сразу новая рулетка (она уйдёт и ему, и всем кто в комнате;
+       одному играть можно — см. hsStartLobby), остальные получают
+       текущее состояние, чтобы не остаться без роли. */
     if (mode === 'hideAndSeek') {
       let st = hsRooms.get(room);
       if (!st) {
@@ -692,9 +678,6 @@ io.on('connection', (socket) => {
                lastSeeker: null, prevSeeker: null,
                seekerId: null, seekerName: '', caughtSent: false };
         hsRooms.set(room, st);
-        hsStartLobby(io, room, st);
-      } else if (st.phase === 'waiting') {
-        // ждали второго игрока — вот он, можно крутить рулетку
         hsStartLobby(io, room, st);
       } else {
         // искатель мог переподключиться с новым сокетом — возвращаем ему роль
