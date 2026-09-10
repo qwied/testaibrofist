@@ -270,7 +270,7 @@
     raceRule1: "Spikes and poison send you back to the last checkpoint, not the start.",
     raceRule2: "Trampolines throw you higher than a regular jump reaches.",
     raceRule3: "Platforms and rotators move — sometimes it pays to wait.",
-    raceRule4: "Coins are scattered off the fast route: decide whether they are worth the time.",
+    raceRule4: "Reaching the finish pays 1-5 coins at random, every time.",
     raceRule5: "Your lap time is on screen — beat your own record on the same map.",
     mdBack: "Back to main",
 
