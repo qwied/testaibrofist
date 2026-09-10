@@ -301,6 +301,11 @@ function resize(){
   cv.width = Math.round(innerWidth * DPR); cv.height = Math.round(innerHeight * DPR);
   cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px";
   bgGrad = null;                              // фон пересоздаётся под новый размер
+  /* Смена cv.width/height выше уже очистила холст (так устроен canvas) —
+     без немедленной перерисовки на экране на один кадр мелькала бы
+     пустота: заметно при входе в режим на телефоне, где надзор за FPS
+     часто снижает качество прямо на старте. */
+  paintFrame();
 }
 addEventListener("resize", resize);
 var VW = function(){ return cv.width / DPR; }, VH = function(){ return cv.height / DPR; };
@@ -1510,7 +1515,13 @@ function paint(o, isSel){
   }
 }
 var bgGrad = null, bgH = 0;
-function render(){
+/* Сама отрисовка сцены — отдельно от планирования следующего кадра,
+   чтобы resize() мог перерисовать немедленно после смены разрешения
+   холста: смена cv.width/height обнуляет содержимое холста тут же, и
+   без немедленной перерисовки один кадр показывался бы пустым (мигание
+   при входе в режим на слабых телефонах, когда надзор за FPS снижает
+   качество). */
+function paintFrame(){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   /* Холст всегда светлый, независимо от темы сайта: карта — это
      содержимое игры, и она должна выглядеть у всех одинаково.
@@ -1551,6 +1562,9 @@ function render(){
   if(BRIDGE && BRIDGE.onDraw) BRIDGE.onDraw(ctx);
   drawParts();
   if(!playing) anim++;
+}
+function render(){
+  paintFrame();
   requestAnimationFrame(render);
 }
 /* Надзор за FPS: если кадр в среднем дороже 30 мс (ниже 33 FPS), снижаем
