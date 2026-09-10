@@ -166,7 +166,7 @@ const G = {
   // socket.io на сервере подключается отдельным файлом — заглушаем
   io: () => ({ on() {}, emit() {}, connected: false }),
   URLSearchParams: global.URLSearchParams,
-  BFSkinCanvas: undefined, BFSkin: undefined, BFImport: undefined, BFLZMA: undefined
+  BFSkinCanvas: undefined, BFSkin: undefined
 };
 for (const k of Object.keys(G)) {
   try { Object.defineProperty(global, k, { value: G[k], writable: true, configurable: true }); }
