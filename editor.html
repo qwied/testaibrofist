@@ -207,7 +207,7 @@ body.mob #msg h1{font-size:38px}
         <script src="device.js?v=100"></script>
         <script src="lzma.js?v=100"></script>
         <script src="bfImport.js?v=100"></script>
-        <script src="skinRender.js?v=100"></script>
+        <script src="skinRender.js?v=101"></script>
         <script src="skinCanvas.js?v=100"></script>
         <script src="coin.js?v=101"></script>
         <link rel="stylesheet" type="text/css" href="mobile.css?v=85">
@@ -392,7 +392,7 @@ var PAINT = {
     ctx.textBaseline = "top";
     ctx.fillText(o.text || "Text", 0, 0);
   },
-  spawn: function(o){ figure(o.w,o.h, o.fill || C.ink, true, (window.GAME && window.GAME.mySkin) || null); },
+  spawn: function(o){ figure(o.w,o.h, o.fill || C.ink, true, (BRIDGE && BRIDGE.mySkin) || null); },
   seeker: function(o){
     figure(o.w,o.h, o.fill || "#b91c1c", true);
     ctx.fillStyle = "#fff";                      // seeker gets eyes so he reads as the hunter
@@ -890,7 +890,7 @@ var opened = function(o){ return o.type !== "button" && o.type !== "lever" && !!
    поэтому условие выполняется сразу. В сетевой игре список приходит
    из game.js через GAME.others. */
 function allAtDoor(o){
-  var others = (window.GAME && window.GAME.others) ? window.GAME.others() : null;
+  var others = (BRIDGE && BRIDGE.others) ? BRIDGE.others() : null;
   if(!others || !others.length) return true;
   for(var i = 0; i < others.length; i++){
     var p = others[i];
@@ -1547,11 +1547,11 @@ function render(){
     ctx.save(); ctx.translate(pl.x, pl.y);
     // себя в укрытии видно бледным — чужие не видят вообще
     if(pl.hidden) ctx.globalAlpha = 0.35;
-    figure(pl.w, pl.h, (window.GAME && window.GAME.myColor) || "#111827", true,
-           (window.GAME && window.GAME.mySkin) || null);
+    figure(pl.w, pl.h, (BRIDGE && BRIDGE.myColor) || "#111827", true,
+           (BRIDGE && BRIDGE.mySkin) || null);
     ctx.restore();
   }
-  if(window.GAME && window.GAME.onDraw) window.GAME.onDraw(ctx);
+  if(BRIDGE && BRIDGE.onDraw) BRIDGE.onDraw(ctx);
   drawParts();
   if(!playing) anim++;
   requestAnimationFrame(render);
@@ -2420,8 +2420,24 @@ document.getElementById("zOut").addEventListener("click", function(){ zoomAt(VW(
 document.getElementById("zLabel").addEventListener("click", resetView);
 
 
-/* ===== мост наружу: игровые страницы управляют движком через window.GAME ===== */
-window.GAME = {
+/* ===== мост наружу: игровые страницы управляют движком через BRIDGE ===== */
+/* Мост наружу больше не остаётся в window: раньше через window.GAME из
+   консоли браузера можно было менять объекты карты, телепортировать игрока
+   и досрочно заканчивать забег. Страницы забирают мост при загрузке (game.js
+   и блок публикации делают это сразу), а глобальную ссылку убираем, как
+   только страница загрузилась. На локальной машине ссылку оставляем —
+   по ней ходят автотесты. */
+function hideBridge(){
+  var host = (window.location && window.location.hostname) || '';
+  if(/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(host)) return;
+  window.addEventListener("load", function(){
+    try { delete window.GAME; } catch(e){ try { window.GAME = undefined; } catch(e2){} }
+  });
+}
+hideBridge();
+
+var BRIDGE;
+window.GAME = BRIDGE = {
   figure: figure,
   mySkin: null,
   allowedIn: allowedIn,
@@ -2534,12 +2550,12 @@ requestAnimationFrame(loop);
     .then(function(r){ return r.json(); })
     .then(function(data){
       if(!data){ dialog("Карта не найдена", "Не удалось загрузить «" + em + "».", null); return; }
-      GAME.loadMap(data);
+      BRIDGE.loadMap(data);
       document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
       syncTools();
       if(!toolOK(tool)) setTool("select");
       sel = null; inspect();
-      GAME.editingMapName = em;
+      BRIDGE.editingMapName = em;
       document.title = "AIBrofist Editor — " + em;
     })
     .catch(function(){ dialog("Сервер недоступен", "Не удалось загрузить карту для редактирования.", null); });
@@ -2551,7 +2567,7 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=106"></script>
+<script src="i18n.js?v=107"></script>
 <script src="abuseShow.js?v=101" defer></script>
 <script src="editorHelp.js?v=100"></script>
 <script src="editorAI.js?v=100" defer></script>
@@ -2561,16 +2577,19 @@ requestAnimationFrame(loop);
 <script>
 /* Публикация карты в Maps Browser */
 (function(){
+  // мост движка забираем сразу при загрузке: из window его убирают,
+  // чтобы объекты карты нельзя было править из консоли браузера
+  var BRIDGE = window.GAME || {};
   // свой диалог вместо системного: на телефоне пользователь может нажать
   // «Блокировать диалоговые окна», и тогда alert/prompt перестают работать совсем
   function say(title, text, onOk){
-    var G = window.GAME;
+    var G = BRIDGE;
     if (G && G.dialog) G.dialog(title, text, onOk || null);
     else if (onOk) { if (confirm(title + '\n\n' + text)) onOk(); }
     else alert(title + '\n\n' + text);
   }
   function ask(title, text, def, onOk){
-    var G = window.GAME;
+    var G = BRIDGE;
     if (G && G.dialog) G.dialog(title, text, function(v){ onOk(String(v == null ? '' : v)); }, def || '');
     else { var v = prompt(text, def || ''); if (v !== null) onOk(v); }
   }
@@ -2613,7 +2632,7 @@ requestAnimationFrame(loop);
       data = m.data; window.__mode = m.mode;
       var parsed = JSON.parse(data);
       var objs = parsed.objects || [];
-      var G = window.GAME || {};
+      var G = BRIDGE;
       var LIM = G.OBJ_LIMIT || 2000, CL = G.COIN_LIMIT || 3;
       var ok = G.allowedIn || function(){ return true; };
 
@@ -2634,7 +2653,7 @@ requestAnimationFrame(loop);
         return;
       }
       // старт вплотную к финишу — то же правило, что и при запуске
-      var nearFin = (window.GAME && GAME.spawnTooClose) ? GAME.spawnTooClose() : null;
+      var nearFin = BRIDGE.spawnTooClose ? BRIDGE.spawnTooClose() : null;
       if (nearFin !== null) {
         say('Старт слишком близко к финишу',
             'Между ними ' + nearFin + ' точек. Отодвинь старт или финиш и попробуй снова.');
@@ -2670,7 +2689,7 @@ requestAnimationFrame(loop);
   btn.onclick = function(){
     // редактируем свою уже опубликованную карту — подставляем её имя,
     // чтобы публикация по умолчанию перезаписала именно её
-    var defName = (window.GAME && window.GAME.editingMapName) || '';
+    var defName = BRIDGE.editingMapName || '';
     ask('Публикация карты', 'Название карты (2–30 символов):', defName, function(name){
       name = String(name || '').trim();
       if (name.length < 2) { say('Слишком короткое название', 'Нужно хотя бы 2 символа.'); return; }

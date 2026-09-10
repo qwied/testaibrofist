@@ -4,6 +4,12 @@
 (function () {
   'use strict';
 
+  /* Мост движка забираем один раз при загрузке. Из window его убирают
+     сразу после load, чтобы объекты карты нельзя было менять из консоли
+     браузера — сюда ссылка уже попала и работает как раньше. */
+  var GAME = window.GAME;
+  if (!GAME) return;
+
   var q      = new URLSearchParams(location.search);
   var MODE   = q.get('mode') || 'hideAndSeek';
   var ROOM   = q.get('room') || null;
@@ -378,9 +384,9 @@
   loadMySkin();
 
   // Дверь засчитывается, когда в ней все игроки — движок спрашивает список здесь
-  if (window.GAME) {
-    window.GAME.netSample = sample;     // тесты гоняют ту же функцию, что и игра
-    window.GAME.others = function () {
+  {
+    GAME.netSample = sample;            // тесты гоняют ту же функцию, что и игра
+    GAME.others = function () {
       var out = [];
       for (var k in others) {
         var o = others[k];
