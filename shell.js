@@ -20,6 +20,8 @@
     { key: 'race',        href: 'race.html',           txt: 'Race' },
     { sep: true },
     { key: 'avatar',      href: 'avatar.html',         txt: 'Avatar' },
+    { key: 'skinEditor',  href: 'skinEditor.html',     txt: 'Skin Editor' },
+    { key: 'skinsBrowser',href: 'skinsBrowser.html',   txt: 'Skins Browser' },
     { key: 'themes',      href: 'themes.html',         txt: 'Темы' },
     { key: 'logs',        href: 'logs.html',           txt: 'Logs' },
     { txt: 'Telegram', href: 'https://t.me/aibrofist', ext: true }

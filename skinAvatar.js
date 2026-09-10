@@ -6,28 +6,17 @@
 
   var cache = {};        // ник -> скин
   var pending = {};      // ник -> [элементы, ждущие скин]
-  var byId = null;       // каталог деталей
   var meName = null;
   var timer = null;
 
-  function catalog() {
-    if (byId) return Promise.resolve(byId);
-    return fetch('/skin/catalog', { credentials: 'same-origin' })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        byId = {};
-        (d.items || []).forEach(function (i) { byId[i.id] = i; });
-        return byId;
-      });
-  }
-
   /* Везде показываем ФИГУРУ ЦЕЛИКОМ, просто разного размера.
      Портретная обрезка показывала одну голову — по ней было не понять,
-     что за скин. Вписывание делает object-fit: contain. */
+     что за скин. Вписывание делает object-fit: contain. Своей картинки
+     нет — рисуем обычную пустую фигуру (её же рисует и сама игра). */
   function dataUri(skin) {
-    if (skin && skin.img) return skin.img;   // скин-картинка от владельца
+    if (skin && skin.img) return skin.img;
     if (!window.BFSkin) return null;
-    var svg = window.BFSkin.svg(skin, byId, { height: 300 });
+    var svg = window.BFSkin.svg({}, {}, { height: 300 });
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
 
@@ -72,20 +61,19 @@
   function flush() {
     var names = Object.keys(pending).filter(function (n) { return !cache[n]; });
     if (!names.length) return;
-    catalog().then(function () {
-      return fetch('/skins/many?names=' + encodeURIComponent(names.join(',')),
-                   { credentials: 'same-origin' })
-        .then(function (r) { return r.json(); });
-    }).then(function (d) {
-      var got = (d && d.skins) || {};
-      names.forEach(function (n) {
-        if (got[n]) cache[n] = got[n];
-        (pending[n] || []).forEach(function (el) {
-          if (cache[n]) paint(el, cache[n]);
+    fetch('/skins/many?names=' + encodeURIComponent(names.join(',')),
+         { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var got = (d && d.skins) || {};
+        names.forEach(function (n) {
+          if (got[n]) cache[n] = got[n];
+          (pending[n] || []).forEach(function (el) {
+            if (cache[n]) paint(el, cache[n]);
+          });
+          delete pending[n];
         });
-        delete pending[n];
-      });
-    }).catch(function () { pending = {}; });
+      }).catch(function () { pending = {}; });
   }
 
   function txt(el) { return el ? (el.textContent || '').trim() : ''; }
