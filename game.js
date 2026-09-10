@@ -449,9 +449,17 @@
       applyColor();
       /* Сервер должен знать, что забег начался, ДО того как придёт
          raceFinish — иначе финиш без старта ничем не подтверждён и
-         монет не будет (см. server.js). */
-      if (MODE === 'race' && socket && !VIEW)
-        socket.emit('raceStart', { author: m.author, mapName: m.mapName });
+         монет не будет (см. server.js). Но join() ещё может быть не
+         подтверждён сервером: он идёт через Promise.all с двумя fetch,
+         а getRandomMap — одиночный fetch и почти всегда успевает первым.
+         Раньше raceStart уходил сразу и до подтверждения join не долетал
+         до gameState.players — сервер тихо его игнорировал, а потом так
+         же тихо отклонял честный raceFinish. Теперь запрос откладывается
+         до joined и досылается, как только вход подтверждён. */
+      if (MODE === 'race' && !VIEW) {
+        pendingRaceStart = { author: m.author, mapName: m.mapName };
+        flushPendingRaceStart();
+      }
     } catch (e) {
       $('gMapAuthor').textContent = TR('brokenMap', 'карта повреждена');
     }
@@ -701,6 +709,12 @@
      пряток — см. raceStart/raceFinish/hsCatch и конец раунда в server.js)
      и просто уведомляет об этом клиента для тоста в лог. */
   var finSent = false;   // раз за забег: чтобы не слать raceFinish на каждый кадр, пока GAME.done держится
+  var pendingRaceStart = null;   // {author, mapName} карты, ждущей отправки raceStart, пока не подтверждён join
+  function flushPendingRaceStart() {
+    if (!joined || !pendingRaceStart || !socket) return;
+    socket.emit('raceStart', pendingRaceStart);
+    pendingRaceStart = null;
+  }
   function checkRaceFinish() {
     if (VIEW || MODE !== 'race' || !socket || !GAME.playing || !GAME.done || finSent) return;
     finSent = true;
@@ -851,6 +865,7 @@
     socket.on('nameFixed', function (d) {
       if (d && d.name) me.name = d.name;
       joined = true;                        // вход подтверждён — можно слать движение
+      flushPendingRaceStart();
     });
 
     /* Один аккаунт уже играет в другой вкладке или на другом устройстве:
@@ -904,6 +919,7 @@
 
     socket.on('playersList', function (list) {
       joined = true;                        // запасное подтверждение входа
+      flushPendingRaceStart();
       var seen = {};
       byNid = {};
       list.forEach(function (p) {
