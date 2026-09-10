@@ -87,9 +87,9 @@
 
 <link rel="stylesheet" href="mobile.css?v=85">
 <script src="i18n.js?v=108"></script>
-<script src="skinRender.js?v=101"></script>
+<script src="skinRender.js?v=103"></script>
 <script src="coin.js?v=101"></script>
-<script src="shell.js?v=101"></script>
+<script src="shell.js?v=102"></script>
 <script src="abuseShow.js?v=101" defer></script>
 <script src="account.js?v=100" defer></script>
 <script src="owner.js?v=102" defer></script>
@@ -97,8 +97,8 @@
 (function () {
   'use strict';
   var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : (f || k); };
-  var SLOT_LABEL = { head:'slotHead', face:'slotFace', body:'slotBody', back:'slotBack' };
-  var DEFAULT = { head:'h_none', face:'f_none', body:'b_none', back:'k_none' };
+  var SLOT_LABEL = { head:'slotHead', body:'slotBody' };
+  var DEFAULT = { head:'h_none', body:'b_none' };
   var $ = function (id) { return document.getElementById(id); };
 
   var st = { slots:[], items:[], byId:{}, skin:{}, img:'', slot:'head',
@@ -195,7 +195,7 @@
   function partsLine(rec) {
     if (rec.img) return '<div class="bfCardMeta">' + T('skinImage', 'Скин-картинка') + '</div>';
     var sk = rec.skin || {};
-    var names = (st.slots.length ? st.slots : ['head','face','body','back']).map(function (sl) {
+    var names = (st.slots.length ? st.slots : ['head','body']).map(function (sl) {
       var it = st.byId[sk[sl]];
       return (it && sk[sl] !== DEFAULT[sl]) ? it.name : '';
     }).filter(Boolean);
@@ -351,7 +351,7 @@
   };
 
   $('seReset').onclick = function () {
-    st.skin = { head:'h_none', face:'f_none', body:'b_none', back:'k_none' };
+    st.skin = { head:'h_none', body:'b_none' };
     st.img = '';
     drawStage(); drawList();
   };
