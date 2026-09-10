@@ -238,6 +238,17 @@ app.get('/favicon.ico', (req, res) => {
   res.sendFile(path.join(__dirname, 'favicon.ico'));
 });
 
+/* Страницы и скрипты приложения (.html/.js в корне) без явного
+   Cache-Control браузер вправе показывать из кэша часами без единого
+   обращения к серверу (эвристическое кэширование по Last-Modified) —
+   после каждого деплоя часть игроков продолжает видеть старую версию,
+   пока не очистят кэш сами. no-cache не запрещает хранить копию —
+   только требует сперва спросить сервер, не устарела ли она (дешёвая
+   проверка по ETag, без повторной скачки, если файл не менялся). */
+app.use((req, res, next) => {
+  if (req.path === '/' || /\.(html|js|css)$/i.test(req.path)) res.set('Cache-Control', 'no-cache');
+  next();
+});
 app.use(express.static(__dirname));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
