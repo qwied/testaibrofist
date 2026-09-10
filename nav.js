@@ -34,6 +34,12 @@
 
   var MENU_LABELS = ['menu', 'меню', 'menü', 'menú', '菜单'];
 
+  /* Карточки режимов маршрутизируются по data-mode, а не по надписи —
+     раньше клик искал ROUTES[переведённый текст], и на любом языке,
+     кроме русского и английского, карточка переставала вести куда-либо:
+     ни одного перевода не было в ROUTES. */
+  var MODE_ROUTES = { hideAndSeek: 'hide-and-seek.html', race: 'race.html' };
+
   function go(target) {
     if (typeof target === 'string') { location.href = target; return; }
     if (target && target.play) location.href = 'game.html?mode=' + target.play;
@@ -61,7 +67,7 @@
   function wireCards() {
     Array.prototype.forEach.call(document.querySelectorAll('.card'), function (card) {
       var title = card.querySelector('div');
-      var dest = ROUTES[label(title || card)];
+      var dest = MODE_ROUTES[card.dataset.mode] || ROUTES[label(title || card)];
       card.style.cursor = 'pointer';
       card.addEventListener('click', function (e) {
         e.preventDefault();

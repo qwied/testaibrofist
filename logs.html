@@ -118,7 +118,7 @@
                 <button id="lCancel" style="display:none" data-i18n="cancel">Отмена</button>
         </div>
 
-        <div id="list"><div class="empty">Загрузка…</div></div>
+        <div id="list"><div class="empty" data-i18n="loading">Загрузка…</div></div>
 </div>
 
 <div id="lbox"><button id="lboxX" type="button">&times;</button><img alt=""></div>
@@ -174,18 +174,31 @@
                 }).join('') + '</div>';
         }
 
+        /* Новость хранит перевод на все языки сайта (сервер переводит её
+           сразу после публикации). Показываем версию текущего языка;
+           пока перевод ещё не подоспел или его не удалось получить —
+           английскую, а если и её нет — то, что владелец ввёл сам. */
+        function pickText(l) {
+                var lang = (window.I18N && I18N.current) || 'en';
+                var m = l.i18n;
+                if (m && m[lang] && (m[lang].title || m[lang].text)) return m[lang];
+                if (m && m.en && (m.en.title || m.en.text)) return m.en;
+                return { title: l.title, text: l.text };
+        }
+
         function render(items) {
                 if (!items.length) {
                         list.innerHTML = '<div class="empty">' + T('noNewsYet', 'Пока нет ни одной новости') + '</div>';
                         return;
                 }
                 list.innerHTML = items.map(function (l) {
+                        var v = pickText(l);
                         return '<div class="logItem" data-id="' + l.id + '">'
                                 + (isOwner ? '<button class="logDel" data-id="' + l.id + '">' + T('removeTxt', 'Удалить') + '</button>'
                                         + '<button class="logEdit" data-id="' + l.id + '">' + T('editTxt', 'Изменить') + '</button>' : '')
-                                + '<h3>' + esc(l.title) + '</h3>'
+                                + '<h3>' + esc(v.title) + '</h3>'
                                 + '<div class="date">' + when(l.date) + '</div>'
-                                + (l.text ? '<p>' + esc(l.text) + '</p>' : '')
+                                + (v.text ? '<p>' + esc(v.text) + '</p>' : '')
                                 + imgsHtml(l)
                                 + '</div>';
                 }).join('');
@@ -459,9 +472,11 @@
         load();
         // пока владелец пишет новость, обновление ленты не сбрасывает поля
         setInterval(function () { if (!editing && !addBtn.disabled) load(); }, 60000);
+        // сменили язык — перерисовываем той же лентой, без похода на сервер
+        window.addEventListener('bf-lang', function () { render(cache); });
 })();
 </script>
-        <script src="i18n.js?v=108"></script>
+        <script src="i18n.js?v=109"></script>
         <script src="owner.js?v=102" defer></script>
         <script src="coin.js?v=101"></script>
         <script src="skinRender.js?v=103"></script>

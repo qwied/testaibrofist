@@ -125,6 +125,90 @@ function load() {
       .slice(0, IMG_PER_LOG);
   });
 }
+/* Перевод новостей на все языки сайта. Владелец обычно пишет по-русски,
+   но иногда и по-английски — проверяем кириллицу и переводим с того
+   языка, которым реально написан текст.
+   Сервис бесплатный и без ключа (MyMemory Translated), поэтому запрос
+   режем на короткие куски — так надёжнее укладываемся в его лимит на
+   один запрос и меньше шансов получить обрезанный ответ. */
+const LOGS_LANGS = ['ru', 'en', 'uk', 'de', 'fr', 'es', 'pt', 'pl', 'tr', 'zh'];
+const MM_CHUNK = 450;
+
+function detectLang(text) { return /[Ѐ-ӿ]/.test(text) ? 'ru' : 'en'; }
+
+function splitChunks(text) {
+  if (text.length <= MM_CHUNK) return [text];
+  const sentences = text.match(/[^.!?\n]+[.!?]*\s*/g) || [text];
+  const chunks = [];
+  let cur = '';
+  sentences.forEach(sent => {
+    if (sent.length > MM_CHUNK) {
+      if (cur) { chunks.push(cur); cur = ''; }
+      let piece = '';
+      sent.split(' ').forEach(w => {
+        if ((piece + ' ' + w).length > MM_CHUNK && piece) { chunks.push(piece); piece = ''; }
+        piece += (piece ? ' ' : '') + w;
+      });
+      if (piece) chunks.push(piece);
+    } else if ((cur + sent).length > MM_CHUNK) {
+      if (cur) chunks.push(cur);
+      cur = sent;
+    } else cur += sent;
+  });
+  if (cur) chunks.push(cur);
+  return chunks;
+}
+
+async function mmTranslate(text, sourceLang, targetLang) {
+  if (!text || !text.trim()) return text;
+  const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) +
+              '&langpair=' + sourceLang + '|' + targetLang;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const r = await fetch(url, { signal: ctl.signal });
+    const j = await r.json();
+    const out = String((j && j.responseData && j.responseData.translatedText) || '').trim();
+    if (!out || /MYMEMORY WARNING/i.test(out)) return null;
+    return out;
+  } catch (e) { return null; }
+  finally { clearTimeout(timer); }
+}
+
+// длинный текст — по абзацам, каждый абзац при необходимости ещё режем на части
+async function translateLong(text, sourceLang, targetLang) {
+  if (!text) return '';
+  const paragraphs = text.split('\n');
+  const outParas = [];
+  for (const para of paragraphs) {
+    if (!para.trim()) { outParas.push(para); continue; }
+    const pieces = [];
+    for (const chunk of splitChunks(para)) {
+      const out = await mmTranslate(chunk, sourceLang, targetLang);
+      pieces.push(out === null ? chunk : out);   // не перевелось — оставляем оригинал куска
+    }
+    outParas.push(pieces.join(' '));
+  }
+  return outParas.join('\n');
+}
+
+/* Заголовок и текст новости -> объект со всеми языками сайта.
+   Исходный язык (тот, которым реально написано) копируется без перевода;
+   остальные девять переводятся параллельно. Одна упавшая или недоступная
+   вызовка не рушит всё: для неё остаётся исходный текст, а не пустота. */
+async function translateLogAll(title, text) {
+  const source = detectLang(title + ' ' + text);
+  const i18n = {}; i18n[source] = { title, text };
+  await Promise.all(LOGS_LANGS.filter(l => l !== source).map(async lang => {
+    const [tTitle, tText] = await Promise.all([
+      translateLong(title, source, lang),
+      translateLong(text, source, lang)
+    ]);
+    i18n[lang] = { title: tTitle || title, text: tText || text };
+  }));
+  return i18n;
+}
+
 let t = null;
 function save() {
   clearTimeout(t);
@@ -198,9 +282,14 @@ function register(app, acc) {
     const images = takeImages(req.body.images);
     if (!title && !text && !images.length)
       return res.json({ status: 'error', message: 'Пустая запись' });
-    logs.push({ id: nextId(), title, text, images, date: Date.now() });
+    const source = detectLang(title + ' ' + text);
+    const entry = { id: nextId(), title, text, images, date: Date.now(),
+                     i18n: { [source]: { title, text } } };
+    logs.push(entry);
     save();
     res.json({ status: 'success', images: images.length });
+    // перевод на остальные языки — уже после ответа, чтобы публикация не ждала сеть
+    translateLogAll(title, text).then(i18n => { entry.i18n = i18n; save(); }).catch(() => {});
   });
 
   /* Правка уже выложенной новости: можно дописать текст и добавить или
@@ -215,10 +304,13 @@ function register(app, acc) {
     if (!title && !text && !images.length)
       return res.json({ status: 'error', message: 'Пустая запись' });
     const was = l.images || [];
+    const source = detectLang(title + ' ' + text);
     l.title = title; l.text = text; l.images = images;
+    l.i18n = { [source]: { title, text } };   // старые переводы правкой сбиваются — переведём заново
     save();
     dropImages(was.filter(i => !images.some(n => n.u === i.u)));   // отцепленные файлы убираем
     res.json({ status: 'success' });
+    translateLogAll(title, text).then(i18n => { l.i18n = i18n; save(); }).catch(() => {});
   });
 
   app.post('/deleteLog', (req, res) => {

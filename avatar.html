@@ -86,7 +86,7 @@
 </div>
 
 <link rel="stylesheet" href="mobile.css?v=85">
-<script src="i18n.js?v=108"></script>
+<script src="i18n.js?v=109"></script>
 <script src="skinRender.js?v=103"></script>
 <script src="coin.js?v=101"></script>
 <script src="shell.js?v=102"></script>
@@ -97,6 +97,9 @@
 (function () {
   'use strict';
   var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : (f || k); };
+  // название вещи каталога — переведённое; T сам вернёт русское имя,
+  // если ключа для конкретной вещи ещё нет (свежедобавленная вещь без перевода)
+  var itemName = function (it) { return it ? T('skin_' + it.id, it.name) : ''; };
   var SLOT_LABEL = { head:'slotHead', body:'slotBody' };
   var DEFAULT = { head:'h_none', body:'b_none' };
   var $ = function (id) { return document.getElementById(id); };
@@ -181,7 +184,7 @@
         act = '<button class="bfMini own" data-pick="' + it.id + '">' + T('equip') + '</button>';
       else act = '<button class="bfMini" data-get="' + it.id + '">' + T('buy') + ' · ' + it.price + '</button>';
       html += '<div class="bfCard' + (on ? ' on' : '') + '">' + art
-            + '<div class="bfCardName">' + esc(it.name) + '</div>'
+            + '<div class="bfCardName">' + esc(itemName(it)) + '</div>'
             + price + act + '</div>';
     });
     host.innerHTML = html + '</div>';
@@ -197,7 +200,7 @@
     var sk = rec.skin || {};
     var names = (st.slots.length ? st.slots : ['head','body']).map(function (sl) {
       var it = st.byId[sk[sl]];
-      return (it && sk[sl] !== DEFAULT[sl]) ? it.name : '';
+      return (it && sk[sl] !== DEFAULT[sl]) ? itemName(it) : '';
     }).filter(Boolean);
     return '<div class="bfCardMeta">'
       + (names.length ? esc(names.join(' · '))
