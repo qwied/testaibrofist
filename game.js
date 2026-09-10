@@ -437,9 +437,7 @@
       banner(TR('emptyTitle', 'Здесь пока пусто'), TR('emptyText', 'Никто ещё не опубликовал карту для этого режима. Открой Map Editor и выложи свою.'), true);
       return;
     }
-    // карта фоном грузится и во время ожидания игроков — баннер тогда трогать не надо,
-    // иначе фоновая подгрузка молча гасит «Ожидание игроков» посреди ожидания
-    if (phase !== 'waiting') banner('', '', false);
+    banner('', '', false);
     $('gMapName').textContent = m.mapName;
     $('gMapAuthor').textContent = TR('mapBy', 'автор: ') + m.author;
     try {
@@ -626,9 +624,7 @@
     return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
   }
   setInterval(function () {
-    // 'waiting': сервер поставил фазы на паузу, пока в комнате один игрок —
-    // считать до phaseEnds тут нечего, там нет актуального значения
-    if (phase === 'dev' || phase === 'loading' || phase === 'waiting') return;
+    if (phase === 'dev' || phase === 'loading') return;
     var left = phaseEnds - Date.now();
     $('gTime').textContent = fmt(left);
     if (left <= 0) {
@@ -692,9 +688,8 @@
     if (MODE === 'hideAndSeek') {
       /* Раньше тут висел свой баннер «роли распределятся через 30 секунд» —
          неверный, если в итоге играть не с кем, и всё равно почти сразу
-         гас от nextMap() ниже. Реальное состояние (лобби/раунд/ожидание
-         игроков) сервер пришлёт через hsPhase/hsState через мгновение
-         после join — тем баннером и живём, см. showWaitingForPlayers(). */
+         гас от nextMap() ниже. Реальное состояние (лобби/раунд) сервер
+         пришлёт через hsPhase/hsState через мгновение после join. */
       phase = 'lobby'; phaseEnds = Date.now() + LOBBY_MS;
     } else {
       phase = 'round'; phaseEnds = Date.now() + ROUND_MS;
@@ -1006,26 +1001,11 @@
       showChance((d.players) || []);
     });
 
-    // одному в комнате играть не с кем — сервер поставил фазы на паузу
-    function showWaitingForPlayers() {
-      phase = 'waiting';
-      roulStop();
-      hsWinnerId = null;
-      me.role = 'hider';
-      $('gRoleBox').style.display = 'none';
-      $('gTimeBox').style.display = 'none';   // отсчитывать нечего — время не идёт
-      hideChance();
-      clearCaught();
-      banner(TR('waitTitle', 'Ожидание игроков'),
-             TR('hsWaitText', 'Нужен ещё хотя бы один игрок, чтобы начать раунд.'), true);
-    }
-
     // смена фазы: конец рулетки/прятаний — начало охоты и обратно
     socket.on('hsPhase', function (d) {
       hsSync = true; hsEver = true;
       if (MODE !== 'hideAndSeek' || !d || !d.phase) return;
-      if (d.phase === 'waiting') { showWaitingForPlayers(); return; }
-      banner('', '', false);        // предыдущее состояние (например «ждём игроков») уже не актуально
+      banner('', '', false);        // предыдущее состояние уже не актуально
       $('gTimeBox').style.display = '';
       if (d.phase === 'round') {
         roulStop();
@@ -1050,7 +1030,6 @@
     socket.on('hsState', function (d) {
       hsSync = true; hsEver = true;
       if (MODE !== 'hideAndSeek' || !d || !d.phase) return;
-      if (d.phase === 'waiting') { showWaitingForPlayers(); return; }
       $('gTimeBox').style.display = '';
       phase = d.phase;
       phaseEnds = Date.now() + (Number(d.msLeft) || (d.phase === 'round' ? ROUND_MS : LOBBY_MS));

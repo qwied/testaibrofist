@@ -65,12 +65,11 @@ ok('укладывается в лобби',      /var spin = Math\.min\(dur - 1
 ok('роль после остановки',      /applySeeker\(d\.winnerId\)/.test(src));
 ok('обрыв связи — свой таймер', /socket\.on\('disconnect', function \(\) \{ hsSync = false; joined = false; \}\)/.test(src));
 
-console.log('\nодин игрок в комнате — пауза:');
-ok('клиент понимает фазу waiting', /d\.phase === 'waiting'/.test(src) &&
-                                 /function showWaitingForPlayers/.test(src));
-ok('плашка «жду игроков»',      /TR\('waitTitle', 'Ожидание игроков'\)/.test(src) &&
-                                 /TR\('hsWaitText',/.test(src));
-ok('таймер не считает во время паузы', /phase === 'dev' \|\| phase === 'loading' \|\| phase === 'waiting'/.test(src));
+console.log('\nодин игрок в комнате — играть можно, паузы нет:');
+ok('фазы waiting в клиенте больше нет', !/d\.phase === 'waiting'/.test(src) &&
+                                 !/function showWaitingForPlayers/.test(src));
+ok('плашки «жду игроков» нет',  !/waitTitle/.test(src) && !/hsWaitText/.test(src));
+ok('таймер не завязан на паузу', !/phase === 'waiting'/.test(src));
 
 console.log('\nпроверка поимки не зависит от отправки позиции:');
 ok('checkAllFinished вне троттлинга', /checkAllFinished\(\);\s*\n\s*\/\/ искатель ловит/.test(src));
