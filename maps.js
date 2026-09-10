@@ -173,7 +173,7 @@ function register(app, getUser, acc) {
     if (textCount > 0 && textCount > Math.floor(list.length * TEXT_MAX_RATIO) && !isOwnerName(u.name))
       return res.json({
         status: 'error',
-        message: 'Текстовых объектов ' + textCount + ' из ' + list.length + ' — не больше ' +
+        message: 'Текстовых объектов ' + textCount + ' из ' + list.length + ' — больше ' +
                  Math.round(TEXT_MAX_RATIO * 100) + '% карты. Добавьте больше настоящей геометрии.'
       });
 
