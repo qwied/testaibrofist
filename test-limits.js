@@ -37,8 +37,10 @@ function harness(mod, extra, userName) {
 (async () => {
   console.log('карты:');
   const M = harness('./maps.js');
+  const objs100 = [{ type: 'spawn', x: 0, y: 0, w: 20, h: 60 }];
+  for (let i = 1; i < 100; i++) objs100.push({ type: 'rect', x: i * 25, y: 0, w: 20, h: 20 });
   const map = n => ({ mapName: n, mapType: 'hideAndSeek',
-                      mapData: JSON.stringify({ objects: [{ type: 'spawn', x: 0, y: 0, w: 20, h: 60 }] }) });
+                      mapData: JSON.stringify({ objects: objs100 }) });
 
   let r = await M.call('POST /uploadMap', map('one'));
   ok('первая карта публикуется', r.status === 'success', r.message);
@@ -85,6 +87,29 @@ function harness(mod, extra, userName) {
   };
   r = await L.call('POST /uploadMap', many(2500, 0));
   ok('лимит обычных объектов держится', r.status === 'error', r.message);
+
+  console.log('\nминимум объектов и доля текста:');
+  const O = harness('./maps.js');
+  const withText = (total, textFrac, name) => {
+    const objs = [{ type: 'spawn', x: 0, y: 0, w: 20, h: 60 }];
+    const textCount = Math.round(total * textFrac);
+    for (let i = 1; i < total; i++)
+      objs.push({ type: i <= textCount ? 'text' : 'rect', x: i * 25, y: 0, w: 20, h: 20 });
+    return { mapName: name, mapType: 'hideAndSeek', mapData: JSON.stringify({ objects: objs }) };
+  };
+  r = await O.call('POST /uploadMap', withText(42, 0, 'tooSmall'));
+  ok('меньше 100 объектов отклоняется', r.status === 'error', r.message);
+  r = await O.call('POST /uploadMap', withText(100, 0, 'exactlyMin'));
+  ok('ровно 100 объектов проходит', r.status === 'success', r.message);
+  r = await O.call('POST /uploadMap', withText(120, 0.35, 'tooMuchText'));
+  ok('больше 30% текста отклоняется', r.status === 'error', r.message);
+  r = await O.call('POST /uploadMap', withText(120, 0.25, 'okText'));
+  ok('меньше 30% текста проходит', r.status === 'success', r.message);
+  // maps.js считает владельцем по имени аккаунта (System по умолчанию),
+  // а не по флагу из acc — берём ровно то имя, что isOwnerName примет
+  const Owner = harness('./maps.js', {}, 'System');
+  r = await Owner.call('POST /uploadMap', withText(5, 0, 'ownerTiny'));
+  ok('владельцу минимум объектов не мешает', r.status === 'success', r.message);
 
   console.log(fails ? '\nПРОВАЛЕНО проверок: ' + fails : '\nвсе проверки пройдены ✓');
   process.exit(fails ? 1 : 0);

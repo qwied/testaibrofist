@@ -18,6 +18,8 @@ const DAILY_LIMIT = 3;                 // сколько новых карт м�
 const REWARD      = 10;                // монет за каждую новую опубликованную карту
 const COIN_LIMIT  = 3;                 // максимум монет в одной карте — защита от накрутки
 const OBJ_LIMIT   = 2000;              // максимум объектов в карте, одинаково во всех режимах
+const OBJ_MIN     = 100;               // минимум объектов для публикации — иначе награду накрутить проще, чем карту построить
+const TEXT_MAX_RATIO = 0.3;            // не больше 30% карты — текстовые объекты, остальное геометрия
 
 // у каждого режима свой набор объектов; общие доступны везде
 /* Платформа, ротатор, батут, яд и шипы стали свойствами обычных объектов,
@@ -152,6 +154,27 @@ function register(app, getUser, acc) {
       return res.json({
         status: 'error',
         message: 'В карте ' + list.length + ' объектов. Разрешено не больше ' + OBJ_LIMIT + '.'
+      });
+
+    // за новую карту платим монетами — иначе публиковали бы карту из
+    // одного объекта ради награды. Владельцу порог не мешает: его карты
+    // для показов, не для заработка.
+    if (list.length < OBJ_MIN && !isOwnerName(u.name))
+      return res.json({
+        status: 'error',
+        message: 'В карте ' + list.length + ' объектов. Нужно не меньше ' + OBJ_MIN +
+                 ' для публикации.'
+      });
+
+    // текстом легче всего накрутить число объектов, не строя саму карту —
+    // ограничиваем его долю, а не количество, чтобы большие карты могли
+    // позволить себе больше подписей
+    const textCount = list.filter(o => o.type === 'text').length;
+    if (textCount > 0 && textCount > Math.floor(list.length * TEXT_MAX_RATIO) && !isOwnerName(u.name))
+      return res.json({
+        status: 'error',
+        message: 'Текстовых объектов ' + textCount + ' из ' + list.length + ' — не больше ' +
+                 Math.round(TEXT_MAX_RATIO * 100) + '% карты. Добавьте больше настоящей геометрии.'
       });
 
     const coins = list.filter(o => o.type === 'coin').length;
@@ -424,4 +447,4 @@ function inGameList() {
                           mapType: m.mapType, modes: m.inGameModes.slice() }));
 }
 
-module.exports = { register, reload: load, MODES, OWNER, COIN_LIMIT, OBJ_LIMIT, REWARD, TOOL_MODES, find, setBoost, setInGame, inGameList, tally };
+module.exports = { register, reload: load, MODES, OWNER, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, setBoost, setInGame, inGameList, tally };
