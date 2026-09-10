@@ -205,8 +205,6 @@ body.mob #zoomBox{bottom:68px;right:8px}
 body.mob #msg h1{font-size:38px}
 </style>
         <script src="device.js?v=100"></script>
-        <script src="lzma.js?v=100"></script>
-        <script src="bfImport.js?v=101"></script>
         <script src="skinRender.js?v=101"></script>
         <script src="skinCanvas.js?v=100"></script>
         <script src="coin.js?v=101"></script>
@@ -2303,79 +2301,12 @@ document.getElementById("bSave").addEventListener("click", async function(){
   a.download = "map_"+mode+".txt"; a.click();
 });
 document.getElementById("bOpen").addEventListener("click", function(){ document.getElementById("file").click(); });
-/* ── Импорт карт из оригинального brofist.io ───────────────────────
-   Файл оттуда — список байтов со знаком, внутри LZMA, внутри JSON сцены.
-   Распаковка и перевод в наши объекты: lzma.js + bfImport.js.        */
-function importOriginal(raw){
-  if(!window.BFImport){ dialog("Импорт недоступен","Не загружен bfImport.js.",null); return false; }
-  var scene, want;
-  try{
-    scene = BFImport.parseScene(raw);
-    want = BFImport.suggestMode(scene);
-  }catch(err0){
-    dialog("Не получилось прочитать карту", String(err0.message || err0), null);
-    return false;
-  }
-
-  var switched = "";
-  if(want && want !== mode && allowedIn("rect", want)){
-    switched = mode + " → " + want;
-    mode = want;
-    document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
-    syncTools();
-    if(!toolOK(tool)) setTool("select");
-  }
-
-  var r;
-  try{
-    r = BFImport.convert(scene, {
-      mode: mode,
-      objLimit: OBJ_LIMIT,
-      coinLimit: COIN_LIMIT,
-      allowed: allowedIn
-    });
-  }catch(err){
-    dialog("Не получилось прочитать карту", String(err.message || err), null);
-    return false;
-  }
-  if(!r.objects.length){
-    dialog("Пусто","В файле не нашлось ни одного объекта.",null);
-    return false;
-  }
-
-  commit();
-  objects = r.objects;
-  uid = objects.reduce(function(m2,o){ return Math.max(m2,(o.id||0)+1); },1);
-  sel = null; markDirty(); indexMovers(); inspect(); resetView();
-
-  var st = r.stats, notes = [];
-  notes.push("Перенесено объектов: " + objects.length + " из " + st.total + " фигур.");
-  if(switched) notes.push("Режим переключён: " + switched + " — в карте есть его объекты.");
-  if(st.ghosts)    notes.push("Без столкновений (декорации): " + st.ghosts + ".");
-  if(st.wrongMode) notes.push("Не подходят режиму «" + mode + "»: " + st.wrongMode + ".");
-  if(st.coinsCut)  notes.push("Монет убрано сверх лимита " + COIN_LIMIT + ": " + st.coinsCut + ".");
-  if(st.overLimit) notes.push("Не влезло в лимит " + OBJ_LIMIT + ": " + st.overLimit + ".");
-  if(!st.spawn)    notes.push("Точки старта в файле не было — поставил сам, проверьте её.");
-  notes.push("Размер приведён к нашему игроку (масштаб 0.73).");
-  dialog("Карта из brofist.io загружена", notes.join(" "), null);
-  return true;
-}
-
-// файл из оригинала: только цифры и запятые, без нашей подписи
-function looksOriginal(raw){
-  var s = String(raw).trim();
-  if(s.indexOf("|") !== -1) return false;
-  return s[0] === "[" || /^-?\d+\s*,\s*-?\d+/.test(s);
-}
-
 document.getElementById("file").addEventListener("change", function(e){
   var f = e.target.files[0]; if(!f) return;
   var rd = new FileReader();
   rd.onload = async function(){
     try{
       var raw = String(rd.result).trim(), p = raw.indexOf("|");
-      // карта из оригинального brofist.io — уводим в импорт
-      if(looksOriginal(raw)){ importOriginal(raw); return; }
       if(p === -1){ dialog("Доступ запрещён","Файл не подписан этим редактором.",null); return; }
       var sig = raw.slice(0,p), nums = raw.slice(p+1).split(",").map(function(s){ return parseInt(s,10); });
       var json = await unzip(new Uint8Array(nums.slice(1)), nums[0]);
