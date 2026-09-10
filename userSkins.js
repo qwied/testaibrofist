@@ -1,7 +1,11 @@
-// ============ СКИНЫ ИГРОКОВ: свои образы, оценки, витрина Avatar ============
-/* Публикация в Skins Browser убрана. Готовый образ, собранный из купленных
-   вещей, игрок сохраняет к себе — во вкладку «Мои скины». Такие образы
-   личные: в общий обзор скинов они не попадают. */
+// ============ СКИНЫ ИГРОКОВ: рисунки из Skin Editor, оценки, витрина Avatar ============
+/* Скин — это картинка, которую игрок рисует сам в бесплатном Skin Editor
+   (см. /skin/drawing — примерить, /skins/publish — выложить в Skins
+   Browser на оценку всем). Владелец решает, какие из выложенных рисунков
+   попадают в Avatar за монеты (/owner/skinToAvatar) и может подкрутить их
+   оценки (/owner/skinVotes) или добавить свой скин из любой картинки
+   напрямую (/owner/publishImageSkin). Старый каталог покупных деталей
+   (голова+тело из готовых картинок) убран — см. skins.js. */
 const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
@@ -57,17 +61,17 @@ function tally(s) {
 }
 function retally(s) { const t = tally(s); s.rating = t.rating; return t; }
 
-// личные образы игрока не попадают в общий обзор скинов
-const isPublic = s => !s.personal;
+// без картинки скин ничем не отличим от пустышки — такие (из старого
+// каталога деталей, которого больше нет) в списках не показываем
+const isPublic = s => !!s.img;
 function mineOf(name) { return list.filter(s => low(s.author) === low(name)); }
 
 function pub(s, me) {
   const t = tally(s);
   return {
-    id: s.id, skinName: s.skinName, author: s.author, skin: s.skin,
+    id: s.id, skinName: s.skinName, author: s.author,
     date: s.date, likes: t.likes, dislikes: t.dislikes, rating: t.rating,
     inAvatar: !!s.inAvatar, price: s.price || 0,
-    personal: !!s.personal,
     img: s.img || '',
     myVote: me ? (s.votes || {})[low(me)] || 0 : 0
   };
@@ -76,19 +80,6 @@ function pub(s, me) {
 // отпечаток картинки скина — по нему ловим повторные публикации рисунка
 function imgSig(buf) {
   return 'img:' + crypto.createHash('md5').update(buf).digest('hex');
-}
-
-// отрисовка скина на сервере — нужна, чтобы отдавать картинку по ссылке
-let RENDER = null;
-function renderer() {
-  if (RENDER) return RENDER;
-  try {
-    const host = {};
-    const code = fs.readFileSync(path.join(__dirname, 'skinRender.js'), 'utf8');
-    new Function('window', code)(host);
-    RENDER = host.BFSkin;
-  } catch (e) { RENDER = null; }
-  return RENDER;
 }
 
 // ---------- картинки для скинов владельца ----------
@@ -200,7 +191,7 @@ async function readLimited(stream, max) {
   return Buffer.concat(chunks);
 }
 
-function register(app, acc, skinsApi) {
+function register(app, acc) {
   const { currentUser, isOwner, save: saveUsers, getDb, key } = acc;
   const ownerOnly = (req, res) => {
     const u = currentUser(req);
@@ -208,7 +199,28 @@ function register(app, acc, skinsApi) {
     return u;
   };
 
+  // ---------- текущий образ игрока (шапка, профиль, списки друзей) ----------
+  app.get('/skin/of', (req, res) => {
+    const db = getDb();
+    const u = db.users[key(req.query.name)];
+    res.json({ img: (u && u.skinImg) || '', name: u ? u.name : '' });
+  });
+
+  // скины сразу нескольких игроков — для списков друзей и таблиц
+  app.get('/skins/many', (req, res) => {
+    const db = getDb();
+    const names = String(req.query.names || '')
+      .split(',').map(n => n.trim()).filter(Boolean).slice(0, 60);
+    const out = {};
+    names.forEach(n => {
+      const u = db.users[key(n)];
+      if (u && u.skinImg) out[n] = { img: u.skinImg };
+    });
+    res.json({ skins: out });
+  });
+
   // ---------- скин, нарисованный в редакторе: сразу надеваем на игрока ----------
+  // Бесплатно и без публикации — только «примерить» свежий рисунок себе.
   app.post('/skin/drawing', (req, res) => {
     const u = currentUser(req);
     if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
@@ -226,7 +238,7 @@ function register(app, acc, skinsApi) {
     catch (e) { return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message }); }
 
     const oldImg = u.skinImg;
-    u.skin = skinsApi.normalize(null);
+    delete u.skin;
     u.skinImg = img;
     u.wearing = '';
     saveUsers();
@@ -234,11 +246,22 @@ function register(app, acc, skinsApi) {
     res.json({ status: 'success', img, message: 'Скин сохранён' });
   });
 
-  // ---------- сохранить образ в «Мои скины» ----------
-  /* Раньше здесь была публикация в Skins Browser. Теперь собранный образ
-     просто ложится в личную коллекцию игрока: чужим он не показывается,
-     монет за него не дают, надеть его можно в любой момент. */
-  app.post('/skins/save', (req, res) => {
+  // ---------- снять надетый скин — вернуться к обычной фигуре ----------
+  app.post('/skins/reset', (req, res) => {
+    const u = currentUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
+    delete u.skin;
+    delete u.skinImg;
+    u.wearing = '';
+    saveUsers();
+    res.json({ status: 'success' });
+  });
+
+  // ---------- выложить нарисованный скин в Skins Browser ----------
+  /* Публикация снова открыта: любой рисунок из бесплатного Skin Editor
+     виден всем в Skins Browser и его можно оценивать. Владелец решает,
+     что достойно попасть в Avatar за монеты (см. /owner/skinToAvatar). */
+  app.post('/skins/publish', (req, res) => {
     const u = currentUser(req);
     if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
 
@@ -246,52 +269,54 @@ function register(app, acc, skinsApi) {
     if (skinName.length < 2 || skinName.length > 30)
       return res.json({ status: 'error', message: 'Название скина: от 2 до 30 символов' });
 
-    let raw = null;
-    try { raw = JSON.parse(String(req.body.skin || 'null')); } catch (e) {}
-    const skin = skinsApi.normalize(raw || skinsApi.skinOf(u));
-
-    // в образ идут только бесплатные и уже купленные вещи
-    const notMine = skinsApi.SLOTS.filter(sl => !skinsApi.isOwned(u, skin[sl]));
-    if (notMine.length)
-      return res.json({ status: 'error',
-                        message: 'В образе есть вещи, которые вы ещё не купили' });
+    const raw = String(req.body.img || '').trim();
+    if (!raw) return res.json({ status: 'error', message: 'Картинка не передана' });
+    const got = fromDataUrl(raw);
+    if (!got) return res.json({ status: 'error', message: 'Картинка не распознана' });
+    if (got.bad) return res.json({ status: 'error', message: got.bad });
 
     const mine = mineOf(u.name);
     if (mine.some(s => low(s.skinName) === low(skinName)))
       return res.json({ status: 'error', message: 'У вас уже есть скин с таким названием' });
     if (mine.length >= MINE_LIMIT)
       return res.json({ status: 'error',
-                        message: 'В «Мои скины» помещается ' + MINE_LIMIT +
-                                 ' образов. Удалите лишние.' });
+                        message: 'В Skins Browser помещается ' + MINE_LIMIT +
+                                 ' ваших скинов. Удалите лишние.' });
 
-    const sig = skinsApi.signature(skin);
-    const twin = mine.find(s => !s.img && skinsApi.signature(s.skin) === sig);
+    const sig = imgSig(got.buf);
+    const twin = mine.find(s => s.sig === sig);
     if (twin)
       return res.json({ status: 'error',
-                        message: 'Такой же образ уже сохранён — «' + twin.skinName + '»' });
+                        message: 'Такой же рисунок уже опубликован — «' + twin.skinName + '»' });
+
+    const id = 's' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+    let img;
+    try { img = saveImage(got.buf, got.ext, id); }
+    catch (e) { return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message }); }
 
     const item = {
-      id: 's' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
-      skinName, author: u.name, skin,
+      id, skinName, author: u.name, img, sig,
       date: Date.now(), created: Date.now(),
       votes: {}, boostLikes: 0, boostDislikes: 0, rating: 0,
-      inAvatar: false, price: 0, personal: true
+      inAvatar: false, price: 0
     };
     list.push(item);
     save();
 
+    const oldImg = u.skinImg;
+    delete u.skin;
+    u.skinImg = img;
+    u.wearing = id;
+    saveUsers();
+    if (oldImg && oldImg !== img) unlinkSkinImg(oldImg);
+
     const left = Math.max(0, MINE_LIMIT - mineOf(u.name).length);
     res.json({
-      status: 'success', id: item.id, left, limit: MINE_LIMIT,
-      message: 'Образ «' + skinName + '» сохранён в «Мои скины»  ·  осталось мест: ' +
+      status: 'success', id, left, limit: MINE_LIMIT,
+      message: 'Скин «' + skinName + '» опубликован в Skins Browser  ·  осталось мест: ' +
                left + ' из ' + MINE_LIMIT
     });
   });
-
-  // старый адрес публикации больше не работает
-  app.post('/skins/publish', (req, res) =>
-    res.json({ status: 'error',
-               message: 'Публикация в Skins Browser отключена. Образ можно сохранить в «Мои скины».' }));
 
   // ---------- скин из картинки (только владелец) ----------
   app.post('/owner/publishImageSkin', async (req, res) => {
@@ -324,7 +349,6 @@ function register(app, acc, skinsApi) {
     const item = {
       id: id,
       skinName, author: u.name,
-      skin: skinsApi.normalize(null),
       img: img,
       date: Date.now(), created: Date.now(),
       votes: {}, boostLikes: 0, boostDislikes: 0, rating: 0,
@@ -402,7 +426,7 @@ function register(app, acc, skinsApi) {
     const u = currentUser(req);
     if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
     const s = list.find(x => x.id === String(req.body.id || ''));
-    if (!s || s.personal) return res.json({ status: 'error', message: 'Скин не найден' });
+    if (!s) return res.json({ status: 'error', message: 'Скин не найден' });
     if (low(s.author) === low(u.name))
       return res.json({ status: 'error', message: 'Свой скин оценивать нельзя' });
 
@@ -451,11 +475,11 @@ function register(app, acc, skinsApi) {
       return res.json({ status: 'error', code: 'buy', price: s.price,
                         message: 'Сначала купите этот скин за ' + s.price + ' монет' });
 
-    u.skin = skinsApi.normalize(s.skin);
+    delete u.skin;
     u.wearing = s.id;
     if (s.img) u.skinImg = s.img; else delete u.skinImg;
     saveUsers();
-    res.json({ status: 'success', skin: u.skin, img: s.img || '',
+    res.json({ status: 'success', img: s.img || '',
                author: s.author, skinName: s.skinName });
   });
 
@@ -502,7 +526,6 @@ function register(app, acc, skinsApi) {
     if (!ownerOnly(req, res)) return;
     const s = list.find(x => x.id === String(req.body.id || ''));
     if (!s) return res.json({ status: 'error', message: 'Скин не найден' });
-    if (s.personal) return res.json({ status: 'error', message: 'Это личный образ игрока' });
 
     const on = String(req.body.on || 'true') === 'true';
     s.inAvatar = on;
@@ -564,13 +587,7 @@ function register(app, acc, skinsApi) {
   app.get('/usersSkins/:id.png', (req, res) => {
     const s = list.find(x => x.id === String(req.params.id || ''));
     if (s && s.img) return res.redirect(s.img);
-    const R = renderer();
-    if (!s || !R) return res.status(404).send('not found');
-    const byId = {};
-    skinsApi.CATALOG.forEach(i => { byId[i.id] = i; });
-    res.set('Content-Type', 'image/svg+xml; charset=utf-8');
-    res.set('Cache-Control', 'no-cache');
-    res.send(R.svg(s.skin, byId, { height: 420 }));
+    res.status(404).send('not found');
   });
 
   // вендорные кнопки удаления и оценки

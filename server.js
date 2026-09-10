@@ -222,8 +222,8 @@ app.get('/robots.txt', (req, res) => {
 app.get('/sitemap.xml', (req, res) => {
   const base = siteOrigin(req);
   const pages = ['/', '/hide-and-seek.html', '/race.html', '/mapsBrowser.html',
-                 '/avatar.html', '/editor.html', '/leaderboard.html',
-                 '/logs.html', '/themes.html', '/users.html'];
+                 '/avatar.html', '/skinEditor.html', '/skinsBrowser.html', '/editor.html',
+                 '/leaderboard.html', '/logs.html', '/themes.html', '/users.html'];
   res.set('Content-Type', 'application/xml; charset=utf-8');
   res.set('Cache-Control', 'public, max-age=3600');
   res.send('<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -251,11 +251,6 @@ app.use((req, res, next) => {
 });
 app.use(express.static(__dirname));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-
-/* Старые разделы переехали: Skin Editor и Skins Browser теперь вместе
-   на странице Avatar. Редиректы спасают закладки и старые ссылки. */
-app.get('/skinEditor.html', (req, res) => res.redirect(301, '/avatar.html'));
-app.get('/skinsBrowser.html', (req, res) => res.redirect(301, '/avatar.html'));
 
 /* Режимов Two Player Adventure и Sandbox в игре нет: страницы удалены,
    остались только Hide and Seek и Race. Старые ссылки и закладки уводим
@@ -297,9 +292,7 @@ const accounts = require('./accounts.js');
 accountsRef = accounts;
 accounts.register(app);
 require('./maps.js').register(app, accounts.currentUser, accounts);
-const skinsApi = require('./skins.js');
-skinsApi.register(app, accounts);
-require('./userSkins.js').register(app, accounts, skinsApi);
+require('./userSkins.js').register(app, accounts);
 require('./themes.js').register(app, accounts);
 require('./updateTimer.js').register(app, accounts);
 require('./abuse.js').register(app, accounts);
@@ -368,8 +361,8 @@ app.get('/api/online', (req, res) => {
 });
 
 app.get('/editor/index.html', (req, res) => res.redirect('/editor.html'));
-app.get('/skinEditor/index.html', (req, res) => res.redirect('/avatar.html'));
-app.get('/skinsBrowser/index.html', (req, res) => res.redirect('/avatar.html'));
+app.get('/skinEditor/index.html', (req, res) => res.redirect('/skinEditor.html'));
+app.get('/skinsBrowser/index.html', (req, res) => res.redirect('/skinsBrowser.html'));
 app.get('/shop/index.html', (req, res) => res.redirect('/avatar.html'));
 app.get('/avatar/index.html', (req, res) => res.redirect('/avatar.html'));
 app.get('/settings/index.html', (req, res) => res.redirect('/avatar.html'));

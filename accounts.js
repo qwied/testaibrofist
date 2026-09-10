@@ -501,6 +501,9 @@ function register(app) {
   // ---------- кто я (для клиентских инструментов владельца) ----------
   app.get('/whoAmI', (req, res) => {
     const u = currentUser(req);
+    // разовый возврат монет за убранный каталог деталей костюма — whoAmI
+    // дёргает shell.js на каждой странице, так что доходит до всех быстро
+    if (u) { const refunded = !u.catalogRefunded; require('./skins.js').refundCatalog(u); if (refunded) save(); }
     const owner = isOwner(u);
     const out = { guest: !u, name: u ? u.name : '', owner: owner, coins: u ? (u.coins || 0) : 0 };
     if (owner) out.ownerName = OWNER;   // посторонним ник владельца не раскрываем
@@ -509,39 +512,16 @@ function register(app) {
 
   // ---------- заглушки вендорных страниц ----------
   // /getSkins и /getSkinsForList теперь отдаёт userSkins.js — настоящими скинами
+  /* Каталог покупных деталей убран (см. skins.js) — вещей для вендорного
+     магазина больше нет, поэтому эти три отдают пустой, но ожидаемой
+     формы ответ, а не 404: вендорный SDK всё равно их дёргает. */
   app.get('/getStoreCosmetics', (req, res) => {
-    // старый магазин вендора: отдаём наш каталог в его формате
-    const skins = require('./skins.js');
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const per = 12;
-    const all = skins.CATALOG.filter(i => i.price > 0);
-    res.json({ page: page, cosmetics: all.slice((page - 1) * per, page * per)
-      .map(i => ({ name: i.name, id: i.id, price: i.price, slot: i.slot })) });
+    res.json({ page: Math.max(1, parseInt(req.query.page) || 1), cosmetics: [] });
   });
   app.get('/getMyAssets', (req, res) => {
-    const skins = require('./skins.js');
-    const u = currentUser(req);
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const per = 12;
-    const mine = skins.ownedList(u);
-    res.json({ page: page, skins: mine.slice((page - 1) * per, page * per)
-      .map(id => ({ assetName: id, name: (skins.BY_ID[id] || {}).name || id })) });
+    res.json({ page: Math.max(1, parseInt(req.query.page) || 1), skins: [] });
   });
-  app.post('/buyStoreItem', (req, res) => {
-    // вендорная кнопка покупки — переиспользуем нашу логику
-    const u = currentUser(req);
-    if (!u) return res.json({ code: 0 });
-    const skins = require('./skins.js');
-    const item = skins.BY_ID[String(req.body.id || '')];
-    if (!item) return res.json({ code: 1 });
-    u.items = Array.isArray(u.items) ? u.items : [];
-    if (item.price === 0 || u.items.indexOf(item.id) !== -1) return res.json({ code: 3 });
-    if ((u.coins || 0) < item.price) return res.json({ code: 2 });
-    u.coins = (u.coins || 0) - item.price;
-    u.items.push(item.id);
-    save();
-    res.json({ code: 4, coins: u.coins });
-  });
+  app.post('/buyStoreItem', (req, res) => res.json({ code: 1 }));
   app.get('/getAllSupporters', (req, res) => res.json([]));
   app.get('/getGamingServersInfo', (req, res) => res.json([]));
   app.post('/reportUser', (req, res) => res.json({ code: 2 }));

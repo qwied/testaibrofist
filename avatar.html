@@ -10,27 +10,22 @@
 .avLayout{display:grid;grid-template-columns:300px 1fr;gap:22px;align-items:start}
 .avStage{border:1px solid var(--line);border-radius:16px;background:var(--soft);
   padding:16px 0 10px;text-align:center}
-.avStage svg{max-width:100%;height:auto}
+.avStage img,.avStage svg{max-width:100%;height:auto}
 .avNick{width:100%;text-align:center;font-size:17px;padding:10px 0;border:1px solid var(--line);
   border-radius:10px;background:var(--soft);color:var(--muted);margin:12px 0 6px}
 .avBy{text-align:center;font-size:13px;color:var(--muted);margin-bottom:10px;min-height:18px}
 .avBy a{color:var(--blue);text-decoration:none}
 .avCoins{text-align:center;font-weight:700;color:var(--gold);font-size:15px;margin-bottom:10px}
 .avCoins.none{display:none}
+.avLinks{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
 .avArt{background:var(--soft);border-radius:10px;padding:8px 0;margin-bottom:8px}
+.avArt img{max-height:148px}
 .avPrice{font-weight:700;color:var(--gold);font-size:14px;margin-bottom:6px}
 .avPrice.free{color:var(--green)}
 .avRate{font-weight:700;font-size:15px;margin-bottom:6px}
 .avRate.pos{color:var(--green)} .avRate.neg{color:var(--red)} .avRate.zero{color:var(--muted)}
-.avTag{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:20px;
-  background:#eef7ff;color:var(--blue);margin-bottom:6px}
-.sbFilters{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:9px;margin-bottom:6px}
-.sbFilters .bfInput,.sbFilters .bfSelect{margin-bottom:0}
-.sbFilters .bfBtn{margin-bottom:0;width:auto;padding:11px 20px}
 @media (max-width:820px){
   .avLayout{grid-template-columns:1fr;gap:16px}
-  .sbFilters{grid-template-columns:1fr 1fr;gap:8px}
-  .sbFilters .bfBtn{grid-column:1/-1;width:100%}
 }
 </style>
         <script src="theme.js?v=100"></script>
@@ -40,11 +35,11 @@
         <link rel="manifest" href="/site.webmanifest">
         <meta name="theme-color" content="#111827">
         <link rel="canonical" href="https://aibrofist.online/avatar.html">
-        <meta name="description" content="Skin editor and ready-made looks from players.">
+        <meta name="description" content="Buy skins picked by the owner from Skins Browser, or draw your own for free in Skin Editor.">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="AIBrofist">
         <meta property="og:title" content="AIBrofist — Avatar">
-        <meta property="og:description" content="Skin editor and ready-made looks from players.">
+        <meta property="og:description" content="Buy skins picked by the owner from Skins Browser, or draw your own for free in Skin Editor.">
         <meta property="og:url" content="https://aibrofist.online/avatar.html">
         <meta property="og:image" content="https://aibrofist.online/preview.png">
         <meta name="twitter:card" content="summary_large_image">
@@ -53,34 +48,25 @@
 <body>
 
 <div class="bfWrap">
-  <div class="bfTitle" data-i18n="avatar">Аватар</div>
-  <div class="bfSub" data-i18n="avatarSub">Одевай персонажа, покупай вещи за монеты и сохраняй готовые образы.</div>
+  <div class="bfTitle" data-i18n="avatar">Avatar</div>
+  <div class="bfSub" data-i18n="avatarSub">Buy skins picked by the owner from Skins Browser. Want to make your own? Skin Editor is free.</div>
 
   <div class="avLayout">
     <div>
-      <div class="avStage" id="seStage"></div>
+      <div class="avStage" id="avStage"></div>
       <input class="avNick" id="avNick" readonly>
       <div class="avBy" id="avBy"></div>
       <div class="avCoins none" id="avCoins"></div>
-      <div class="bfTabs" style="margin-bottom:10px">
-        <div class="bfTab on" id="avTabWear" data-i18n="tabWear">Одежда</div>
-        <div class="bfTab" id="avTabMine" data-i18n="tabMine">Мои скины</div>
+      <div class="avLinks">
+        <a class="bfBtn go" href="skinEditor.html" data-i18n="openSkinEditor">Open Skin Editor (free)</a>
+        <a class="bfBtn" href="skinsBrowser.html" data-i18n="openSkinsBrowser2">Open Skins Browser</a>
+        <button class="bfBtn ghost" id="avReset" data-i18n="skinResetToDefault">Reset to default look</button>
       </div>
-      <button class="bfBtn go" id="seSave" data-i18n="save">Сохранить</button>
-      <button class="bfBtn" id="avSaveSkin" data-i18n="saveToMine">Сохранить в «Мои скины»</button>
-      <div class="avBy" id="seLimit" style="min-height:16px"></div>
-      <button class="bfBtn ghost" id="seReset" data-i18n="resetAll">Сбросить</button>
       <div class="bfMsg" id="avMsg"></div>
     </div>
 
     <div>
-      <div id="avWearBox">
-        <div class="bfChips" id="seSlots"></div>
-        <div id="seList"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
-      </div>
-      <div id="avMineBox" style="display:none">
-        <div id="avMine"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
-      </div>
+      <div id="avList"><div class="bfHint" data-i18n="loading">Loading…</div></div>
     </div>
   </div>
 </div>
@@ -97,16 +83,10 @@
 (function () {
   'use strict';
   var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : (f || k); };
-  // название вещи каталога — переведённое; T сам вернёт русское имя,
-  // если ключа для конкретной вещи ещё нет (свежедобавленная вещь без перевода)
-  var itemName = function (it) { return it ? T('skin_' + it.id, it.name) : ''; };
-  var SLOT_LABEL = { head:'slotHead', body:'slotBody' };
-  var DEFAULT = { head:'h_none', body:'b_none' };
   var $ = function (id) { return document.getElementById(id); };
 
-  var st = { slots:[], items:[], byId:{}, skin:{}, img:'', slot:'head',
-             guest:true, coins:0, owned:{}, wearing:'' };
-  var mine = null, myName = '';      // мои опубликованные образы
+  var st = { guest: true, coins: 0, wearing: '', skins: [] };
+  var myName = '';
 
   function msg(text, ok) {
     var m = $('avMsg');
@@ -120,8 +100,8 @@
     var body = Object.keys(data).map(function (k) {
       return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
     }).join('&');
-    return fetch(url, { method:'POST', credentials:'same-origin',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:body })
+    return fetch(url, { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
       .then(function (r) { return r.json(); });
   }
 
@@ -131,288 +111,128 @@
     });
   }
 
-  // у скина-картинки рисуем саму картинку, а не фигуру
-  function withImg(rec) {
-    var sk = Object.assign({}, rec.skin || {});
-    if (rec.img) sk.img = rec.img;
-    return sk;
-  }
-
   function coins(n) { return n + ' ' + (window.BFCoin ? BFCoin.svg(15) : ''); }
 
   function drawCoins() {
     var el = $('avCoins');
     if (st.guest) { el.className = 'avCoins none'; return; }
     el.className = 'avCoins';
-    el.innerHTML = T('coins', 'Монеты') + ': ' + coins(st.coins);
+    el.innerHTML = T('coins', 'Coins') + ': ' + coins(st.coins);
   }
 
+  var wornImg = '';
   function drawStage() {
-    // если надет скин-картинка, показываем её вместо фигуры
-    var what = st.img ? { img: st.img } : st.skin;
-    $('seStage').innerHTML = BFSkin.svg(what, st.byId, { height: 300 });
+    $('avStage').innerHTML = wornImg
+      ? BFSkin.render({ img: wornImg }, {}, { height: 300 })
+      : BFSkin.svg({}, {}, { height: 300 });
   }
 
   function refreshShell() {
     if (window.BFShell && !st.guest) BFShell.refreshCoins(st.coins);
   }
 
-  /* ---------------- вкладка «Одежда» ---------------- */
-  function drawSlots() {
-    var box = $('seSlots'); box.innerHTML = '';
-    st.slots.forEach(function (s) {
-      var b = document.createElement('div');
-      b.className = 'bfChip' + (s === st.slot ? ' on' : '');
-      b.textContent = T(SLOT_LABEL[s] || s);
-      b.onclick = function () { st.slot = s; drawSlots(); drawList(); };
-      box.appendChild(b);
-    });
+  function whoMadeIt() {
+    if (st.guest || !myName) { $('avBy').innerHTML = ''; return; }
+    fetch('/skins/wornBy?name=' + encodeURIComponent(myName), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        $('avBy').innerHTML = d.author
+          ? T('skinBy', 'Skin') + ': «' + esc(d.skinName) + '» — '
+            + '<a href="users.html?name=' + encodeURIComponent(d.author) + '">' + esc(d.author) + '</a>'
+          : '';
+      }).catch(function () {});
   }
 
   function drawList() {
-    var host = $('seList');
-    var list = st.items.filter(function (i) { return i.slot === st.slot; });
+    var host = $('avList');
+    if (!st.skins.length) {
+      host.innerHTML = '<div class="bfHint" data-i18n="avatarEmpty">'
+        + T('avatarEmpty', 'The owner hasn’t added any skins for sale yet — check Skins Browser.') + '</div>';
+      return;
+    }
     var html = '<div class="bfGrid">';
-    list.forEach(function (it) {
-      var on = st.skin[it.slot] === it.id;
-      var art = BFSkin.preview(it, st.byId, st.skin, 96);
-      var price = it.price > 0 ? '<div class="avPrice">' + coins(it.price) + '</div>'
-                               : '<div class="avPrice free">' + T('free', 'Бесплатно') + '</div>';
+    st.skins.forEach(function (s) {
+      var on = st.wearing === s.id;
+      var art = BFSkin.render({ img: s.img }, {}, { height: 148 });
+      var price = s.price > 0 ? '<div class="avPrice">' + coins(s.price) + '</div>'
+                               : '<div class="avPrice free">' + T('free', 'Free') + '</div>';
       var act;
-      if (on) act = '<button class="bfMini own" disabled>' + T('equipped') + '</button>';
-      else if (st.owned[it.id] || it.price === 0)
-        act = '<button class="bfMini own" data-pick="' + it.id + '">' + T('equip') + '</button>';
-      else act = '<button class="bfMini" data-get="' + it.id + '">' + T('buy') + ' · ' + it.price + '</button>';
-      html += '<div class="bfCard' + (on ? ' on' : '') + '">' + art
-            + '<div class="bfCardName">' + esc(itemName(it)) + '</div>'
+      if (on) act = '<button class="bfMini own" disabled>' + T('equipped', 'Worn') + '</button>';
+      else if (s.owned || s.price === 0)
+        act = '<button class="bfMini own" data-wear="' + s.id + '">' + T('equip', 'Wear') + '</button>';
+      else act = '<button class="bfMini" data-buy="' + s.id + '">' + T('buy', 'Buy') + ' · ' + s.price + '</button>';
+      html += '<div class="bfCard' + (on ? ' on' : '') + '">'
+            + '<div class="avArt">' + art + '</div>'
+            + '<div class="bfCardName">' + esc(s.skinName) + '</div>'
+            + '<div class="avRate ' + (s.rating > 0 ? 'pos' : (s.rating < 0 ? 'neg' : 'zero')) + '">' + s.rating + '</div>'
             + price + act + '</div>';
     });
     host.innerHTML = html + '</div>';
   }
 
-  /* ---------------- вкладка «Мои скины» ---------------- */
-
-  /* В «Мои скины» уезжает весь комплект целиком — все четыре слота.
-     Раньше по карточке этого было не видно, и казалось, что сохраняется
-     одна вещь: теперь под картинкой перечислен состав образа. */
-  function partsLine(rec) {
-    if (rec.img) return '<div class="bfCardMeta">' + T('skinImage', 'Скин-картинка') + '</div>';
-    var sk = rec.skin || {};
-    var names = (st.slots.length ? st.slots : ['head','body']).map(function (sl) {
-      var it = st.byId[sk[sl]];
-      return (it && sk[sl] !== DEFAULT[sl]) ? itemName(it) : '';
-    }).filter(Boolean);
-    return '<div class="bfCardMeta">'
-      + (names.length ? esc(names.join(' · '))
-                      : T('skinPlain', 'Без аксессуаров'))
-      + '</div>';
-  }
-
-  function loadMine() {
-    if (st.guest) {
-      $('avMine').innerHTML = '<div class="bfHint">' + T('mineGuest',
-        'Войдите в аккаунт, чтобы сохранять свои образы.') + '</div>';
-      return;
-    }
-    fetch('/userSkins?name=' + encodeURIComponent(myName), { credentials:'same-origin' })
+  function load() {
+    fetch('/skins/avatar', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        mine = d.skins || [];
-        if (!mine.length) {
-          $('avMine').innerHTML = '<div class="bfHint">' + T('mineEmpty',
-            'Здесь пока пусто. Одень персонажа и нажми «Сохранить в «Мои скины»».') + '</div>';
-          return;
-        }
-        $('avMine').innerHTML = '<div class="bfGrid">' + mine.map(function (s) {
-          var art = BFSkin.render(withImg(s), st.byId, { height: 148 });
-          return '<div class="sbCard bfCard" data-id="' + s.id + '">'
-            + '<div class="avArt">' + art + '</div>'
-            + '<div class="bfCardName">' + esc(s.skinName) + '</div>'
-            + partsLine(s)
-            + (s.personal ? ''
-                : '<div class="avRate ' + (s.rating > 0 ? 'pos' : (s.rating < 0 ? 'neg' : 'zero')) + '">'
-                  + s.rating + '</div>')
-            + '<button class="bfMini own" data-wear="' + s.id + '">' + T('equip') + '</button>'
-            + '<button class="bfMini" data-del="' + s.id + '" style="margin-top:6px;'
-            +   'border-color:var(--red);color:var(--red)">' + T('removeTxt', 'Удалить') + '</button>'
-            + '</div>';
-        }).join('') + '</div>';
+        st.coins = d.coins || 0;
+        st.wearing = d.wearing || '';
+        st.skins = d.skins || [];
+        wornImg = (st.skins.find(function (s) { return s.id === st.wearing; }) || {}).img || wornImg;
+        drawCoins(); drawList(); drawStage();
       })
-      .catch(function () { $('avMine').innerHTML = '<div class="bfHint">' + T('serverDown') + '</div>'; });
+      .catch(function () { $('avList').innerHTML = '<div class="bfHint">' + T('serverDown') + '</div>'; });
   }
 
-  /* ---------------- вкладки ---------------- */
-  var TABS = ['avWearBox', 'avMineBox'];
-  function showTab(which) {
-    TABS.forEach(function (id) { $(id).style.display = (id === which) ? '' : 'none'; });
-    [['avTabWear','avWearBox'], ['avTabMine','avMineBox']]
-      .forEach(function (p) { $(p[0]).className = 'bfTab' + (p[1] === which ? ' on' : ''); });
-    if (which === 'avMineBox') loadMine();
-  }
-  $('avTabWear').onclick = function () { showTab('avWearBox'); };
-  $('avTabMine').onclick = function () { showTab('avMineBox'); };
-
-  /* ---------------- надетый образ: кто автор ---------------- */
-  function whoMadeIt() {
-    if (st.guest || !myName) { $('avBy').innerHTML = ''; return; }
-    fetch('/skins/wornBy?name=' + encodeURIComponent(myName), { credentials:'same-origin' })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        $('avBy').innerHTML = d.author
-          ? T('skinBy', 'Скин') + ': «' + esc(d.skinName) + '» — '
-            + '<a href="users.html?name=' + encodeURIComponent(d.author) + '">' + esc(d.author) + '</a>'
-          : '<span style="color:#9aa3ad">' + T('ownSkin', 'Собственный образ') + '</span>';
-      }).catch(function () {});
-  }
-
-  /* ---------------- сколько мест осталось в «Мои скины» ---------------- */
-  function limitLine() {
-    if (st.guest) { $('seLimit').textContent = ''; return; }
-    fetch('/skins/limit', { credentials:'same-origin' })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d || d.guest) { $('seLimit').textContent = ''; return; }
-        $('seLimit').textContent = T('minePlaces', 'Свободно мест в «Мои скины»') + ': '
-          + d.left + ' / ' + d.limit;
-      }).catch(function () {});
-  }
-
-  /* ---------------- клики по карточкам ---------------- */
   document.addEventListener('click', function (e) {
     var root = e.target;
     var c = function (sel) { return root.closest ? root.closest(sel) : null; };
 
-    // надеть бесплатную/купленную деталь
-    var p = c('[data-pick]');
-    if (p) {
-      var it = st.byId[p.dataset.pick];
-      if (!it) return;
-      st.skin[it.slot] = it.id;
-      st.img = '';
-      drawStage(); drawList();
-      if (!st.guest) post('/skin/equip', { slot: it.slot, id: it.id })
-        .then(function (r) {
-          if (r.status === 'success') whoMadeIt();
-          else if (r.code === 'buy') { st.owned[it.id] = false; drawList(); msg(r.message); }
-        }).catch(function () {});
-      return;
-    }
-
-    // купить деталь за монеты
-    var g = c('[data-get]');
-    if (g) {
-      var item = st.byId[g.dataset.get];
-      if (!item) return;
-      if (st.guest) { msg(T('loginFirst', 'Сначала войдите в аккаунт')); return; }
-      post('/skin/buy', { id: item.id }).then(function (r) {
+    var b = c('[data-buy]');
+    if (b) {
+      if (st.guest) { msg(T('loginFirst', 'Sign in first')); return; }
+      post('/skins/buy', { id: b.dataset.buy }).then(function (r) {
         if (r.status !== 'success') { msg(r.message || T('errorTxt')); return; }
         st.coins = r.coins;
-        (r.owned || []).forEach(function (id) { st.owned[id] = true; });
-        st.skin = r.skin; st.img = '';
-        drawCoins(); refreshShell(); drawStage(); drawList(); whoMadeIt();
-        msg(T('bought', 'Куплено'), true);
+        drawCoins(); refreshShell(); msg(T('bought', 'Bought'), true); load();
       }).catch(function () { msg(T('serverDown')); });
       return;
     }
 
-    // надеть готовый скин (свой или купленный)
     var w = c('[data-wear]');
     if (w) {
-      if (st.guest) { msg(T('loginFirst', 'Сначала войдите в аккаунт')); return; }
+      if (st.guest) { msg(T('loginFirst', 'Sign in first')); return; }
       post('/skins/wear', { id: w.dataset.wear }).then(function (r) {
         if (r.status !== 'success') { msg(r.message || T('errorTxt')); return; }
-        st.skin = r.skin;
-        st.img = r.img || '';
+        wornImg = r.img || '';
         st.wearing = w.dataset.wear;
-        drawStage(); drawList(); whoMadeIt(); loadMine(); limitLine();
-        msg(T('wornOk', 'Скин надет'), true);
-      }).catch(function () { msg(T('serverDown')); });
-      return;
-    }
-
-    // удалить свой опубликованный образ
-    var d = c('[data-del]');
-    if (d) {
-      post('/skins/remove', { id: d.dataset.del }).then(function (r) {
-        if (r.status !== 'success') { msg(r.message || T('errorTxt')); return; }
-        loadMine();
+        drawStage(); drawList(); whoMadeIt();
+        msg(T('wornOk', 'Skin equipped'), true);
       }).catch(function () { msg(T('serverDown')); });
     }
   });
 
-  /* ---------------- сохранить / сбросить / опубликовать ---------------- */
-  $('seSave').onclick = function () {
-    if (st.guest) { msg(T('loginFirst', 'Сначала войдите в аккаунт')); return; }
-    post('/skin/save', { skin: JSON.stringify(st.skin) })
-      .then(function (r) {
-        if (r.status !== 'success') { msg(T('loginFirst', 'Сначала войдите в аккаунт')); return; }
-        st.skin = r.skin; st.img = '';
-        drawStage(); drawList(); whoMadeIt();
-        msg(T('saved', 'Сохранено'), true);
-      })
-      .catch(function () { msg(T('serverDown')); });
+  $('avReset').onclick = function () {
+    if (st.guest) { msg(T('loginFirst', 'Sign in first')); return; }
+    post('/skins/reset', {}).then(function (r) {
+      if (r.status !== 'success') { msg(r.message || T('errorTxt')); return; }
+      wornImg = ''; st.wearing = '';
+      drawStage(); drawList(); whoMadeIt();
+      msg(T('saved', 'Saved'), true);
+    }).catch(function () { msg(T('serverDown')); });
   };
 
-  $('seReset').onclick = function () {
-    st.skin = { head:'h_none', body:'b_none' };
-    st.img = '';
-    drawStage(); drawList();
-  };
-
-  $('avSaveSkin').onclick = function () {
-    if (st.guest) { msg(T('loginFirst', 'Сначала войдите в аккаунт')); return; }
-    var name = prompt(T('skinNameAsk', 'Название скина (2–30 символов):'), '');
-    if (name === null) return;
-    name = name.trim();
-    if (name.length < 2) { msg(T('skinNameShort', 'Слишком короткое название')); return; }
-
-    post('/skins/save', { skinName: name, skin: JSON.stringify(st.skin) })
-      .then(function (r) {
-        if (r.status !== 'success') { msg(r.message || T('errorTxt')); return; }
-        msg(r.message, true);
-        limitLine();
-        loadMine();
-        showTab('avMineBox');
-      })
-      .catch(function () { msg(T('serverDown')); });
-  };
-
-  /* ---------------- старт ---------------- */
-  fetch('/skin/catalog', { credentials:'same-origin' })
+  fetch('/whoAmI', { credentials: 'same-origin' })
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      st.slots = d.slots; st.items = d.items; st.skin = d.skin;
-      st.img = d.img || '';
-      st.guest = d.guest; st.coins = d.coins; st.slot = d.slots[0];
-      (d.owned || []).forEach(function (id) { st.owned[id] = true; });
-      d.items.forEach(function (i) { st.byId[i.id] = i; });
-      drawStage(); drawSlots(); drawList(); drawCoins(); limitLine();
-      if (!st.guest) fetch('/getMyName', { credentials:'same-origin' })
-        .then(function (r) { return r.json(); })
-        .then(function (name) {
-          myName = name || '';
-          $('avNick').value = myName || T('guest', 'Гость');
-          whoMadeIt();
-        }).catch(function () { $('avNick').value = T('guest', 'Гость'); });
-      else $('avNick').value = T('guest', 'Гость');
+      st.guest = !!d.guest;
+      myName = d.name || '';
+      $('avNick').value = st.guest ? T('guest', 'Guest') : myName;
+      load();
+      if (!st.guest) whoMadeIt();
     })
-    .catch(function () { $('seList').innerHTML = '<div class="bfHint">' + T('serverDown') + '</div>'; });
+    .catch(function () { $('avNick').value = T('guest', 'Guest'); load(); });
 
-  window.addEventListener('bf-lang', function () {
-    drawSlots(); drawList(); drawCoins(); limitLine(); whoMadeIt();
-  });
-
-  /* Мостик для owner.js: панель загрузки картинки живёт там,
-     потому что этот файл сервер отдаёт только владельцу. */
-  window.BFSkinEditor = {
-    setImage: function (url) { st.img = url || ''; drawStage(); },
-    getImage: function () { return st.img; },
-    msg: msg,
-    refreshLimit: limitLine,
-    t: T
-  };
-  window.dispatchEvent(new CustomEvent('bf-skineditor-ready'));
-
+  window.addEventListener('bf-lang', function () { drawCoins(); drawList(); whoMadeIt(); });
 })();
 </script>
         <script src="skinAvatar.js?v=100" defer></script>

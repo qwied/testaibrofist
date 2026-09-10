@@ -546,118 +546,10 @@
     }
   }
 
-  /* ══════════════════════════════════════════════
-     SKIN EDITOR — загрузка картинки прямо в редакторе.
-     Панель приходит только владельцу: сервер отдаёт owner.js
-     остальным пустым файлом, поэтому у игроков её нет вовсе.
-     ══════════════════════════════════════════════ */
-  function buildEditorPanel() {
-    if (document.getElementById('owImgPanel')) return;
-    var stage = document.getElementById('seStage');
-    if (!stage || !window.BFSkinEditor) return;
-
-    if (!document.getElementById('owSkinsCss')) {
-      var st = document.createElement('style');
-      st.id = 'owSkinsCss';
-      st.textContent = skinsCss;
-      document.head.appendChild(st);
-    }
-
-    var box = document.createElement('div');
-    box.className = 'ow-bar';
-    box.id = 'owImgPanel';
-    box.innerHTML =
-        '<h4>' + T('ownerTools', 'Инструменты владельца') + ' — скин из картинки</h4>'
-      + '<input id="owEdName" placeholder="' + T('colName', 'Название скина') + '" style="margin-bottom:8px">'
-      + '<input id="owEdUrl" placeholder="https://… ссылка на картинку" style="margin-bottom:8px">'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
-      +   '<button id="owEdFile">' + T('addFromFile', 'Выбрать файл') + '</button>'
-      +   '<button id="owEdUrlGo">' + T('addFromUrl', 'Взять по ссылке') + '</button>'
-      + '</div>'
-      + '<button class="go" id="owEdPublish" style="width:100%">'
-      +   T('publishSkin', 'Опубликовать') + '</button>'
-      + '<div id="owEdHint" class="ow-note">'
-      +   'Выберите файл или вставьте ссылку — картинка сразу встанет на превью.'
-      + '</div>'
-      + '<input type="file" id="owEdFileInput" accept="image/*" style="display:none">';
-
-    // панель прямо под превью, чтобы результат был виден сразу
-    stage.parentNode.insertBefore(box, stage.nextSibling);
-
-    var $ = function (id) { return document.getElementById(id); };
-    var E = window.BFSkinEditor;
-
-    // подсветка выбранного источника: раньше по кнопкам было не понять,
-    // нажались они или нет
-    function pick(which) {
-      $('owEdFile').classList.toggle('picked', which === 'file');
-      $('owEdUrlGo').classList.toggle('picked', which === 'url');
-    }
-    function note(text, ok) {
-      var n = $('owEdHint');
-      n.textContent = text;
-      n.className = 'ow-note' + (ok ? ' ok' : '');
-    }
-
-    $('owEdFile').onclick = function () {
-      pick('file');
-      $('owEdFileInput').click();
-    };
-    $('owEdFileInput').onchange = function (e) {
-      var f = e.target.files[0];
-      e.target.value = '';
-      if (!f) { pick(''); return; }
-      note('Читаю файл…');
-      shrink(f, function (src) {
-        E.setImage(src);                       // видно на превью немедленно
-        note('Файл загружен: ' + f.name + '. Дайте название и нажмите «Выложить».', true);
-        E.msg('Картинка на превью', true);
-      });
-    };
-
-    $('owEdUrlGo').onclick = function () {
-      var u = $('owEdUrl').value.trim();
-      if (!u) { E.msg('Вставьте ссылку на картинку'); note('Поле ссылки пустое'); return; }
-      pick('url');
-      E.setImage(u);
-      note('Ссылка принята. Картинку скачаю при публикации.', true);
-      E.msg('Картинка на превью', true);
-    };
-
-    $('owEdPublish').onclick = function () {
-      var name = $('owEdName').value.trim();
-      var src = E.getImage();
-      if (!src) { E.msg('Сначала выберите файл или укажите ссылку'); return; }
-      if (name.length < 2) { E.msg('Название: хотя бы 2 символа'); return; }
-
-      var btn = this;
-      btn.disabled = true;
-      var was = btn.textContent;
-      btn.textContent = '…';
-      post('/owner/publishImageSkin', { skinName: name, img: src })
-        .then(function (r) {
-          btn.disabled = false; btn.textContent = was;
-          if (r.status !== 'success') { E.msg(r.message || 'Ошибка'); return; }
-          E.msg(r.message, true);
-          if (r.img) E.setImage(r.img);        // дальше показываем сохранённый файл
-          note('Готово — скин добавлен в Avatar.', true);
-          pick('');
-          $('owEdName').value = ''; $('owEdUrl').value = '';
-          E.refreshLimit();
-        })
-        .catch(function () {
-          btn.disabled = false; btn.textContent = was;
-          E.msg(T('serverDown', 'Сервер недоступен'));
-        });
-    };
-  }
-
-  function watchEditor() {
-    if (window.BFSkinEditor) buildEditorPanel();
-    else window.addEventListener('bf-skineditor-ready', buildEditorPanel);
-    // страница могла успеть инициализироваться раньше owner.js
-    setTimeout(buildEditorPanel, 400);
-  }
+  /* Скин из произвольной картинки владелец теперь загружает прямо в
+     Skins Browser — там же, где остальные его инструменты (см.
+     buildBar/decorateSkins ниже): отдельная панель на Skin Editor была
+     не нужна, раз Skin Editor у всех один и тот же — рисовать пиксели. */
 
   function watchSkins() {
     window.addEventListener('bf-skins-drawn', function (e) {
@@ -675,8 +567,7 @@
     injectCss();
     buildPanel();
     if (/mapsBrowser/i.test(location.pathname)) watchBrowser();
-    // Skin Editor и Skins Browser объединены в страницу Avatar
-    if (/avatar/i.test(location.pathname)) { watchSkins(); watchEditor(); }
+    if (/skinsBrowser/i.test(location.pathname)) watchSkins();
   }).catch(function () {});
 
   /* Панель Admin Abuse подключаем отсюда. В разметке страниц её тега нет
