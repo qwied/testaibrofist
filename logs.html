@@ -148,10 +148,9 @@
 
         function when(ms) {
                 var d = new Date(ms);
-                // локаль браузера: чужому языку — чужой формат даты
-                var loc = (window.I18N && I18N.current === 'ru') ? 'ru-RU' : undefined;
-                return d.toLocaleDateString(loc, { day: 'numeric', month: 'long', year: 'numeric' })
-                        + ', ' + d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
+                // сайт всегда на английском — формат даты не зависит от локали браузера
+                return d.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
+                        + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
         }
 
         /* ---------- лента ---------- */

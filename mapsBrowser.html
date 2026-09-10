@@ -171,7 +171,8 @@
   }
   function when(ms) {
     var d = new Date(ms);
-    return isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined,
+    // сайт всегда на английском — формат даты не зависит от локали браузера
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US',
       { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
