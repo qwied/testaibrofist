@@ -328,6 +328,34 @@ app.get('/getBestRoom', (req, res) => {
   res.json({ room: best, players: Math.max(0, bestCount) });
 });
 
+/* Публичный список того, кто сейчас в игре: те же имя/режим/комната,
+   что и так видны любому зрителю прямо в самой игре — просто в одном
+   JSON, а не по одному сокету на комнату. Используется, например,
+   Discord-ботом для команды /online. Список режимов ограничен явно:
+   join() принимает gameMode от клиента почти без проверки, и без
+   фильтра сюда попадал бы любой мусорный "режим", которым кто-то
+   решил бы подключиться. */
+const PUBLIC_MODES = ['hideAndSeek', 'race'];
+app.get('/api/online', (req, res) => {
+  const modes = {};
+  let total = 0;
+  gameState.rooms.forEach((set, key) => {
+    const i = key.indexOf(':');
+    if (i === -1) return;
+    const mode = key.slice(0, i), roomName = key.slice(i + 1);
+    if (PUBLIC_MODES.indexOf(mode) === -1) return;
+    const names = Array.from(set)
+      .map(id => gameState.players.get(id))
+      .filter(Boolean)
+      .map(p => p.name);
+    if (!names.length) return;
+    if (!modes[mode]) modes[mode] = {};
+    modes[mode][roomName] = names;
+    total += names.length;
+  });
+  res.json({ modes, total });
+});
+
 app.get('/editor/index.html', (req, res) => res.redirect('/editor.html'));
 app.get('/skinEditor/index.html', (req, res) => res.redirect('/avatar.html'));
 app.get('/skinsBrowser/index.html', (req, res) => res.redirect('/avatar.html'));
