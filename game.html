@@ -203,7 +203,7 @@ body.mob #msg h1{font-size:38px}
 body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="device.js?v=100"></script>
-        <script src="skinRender.js?v=100"></script>
+        <script src="skinRender.js?v=101"></script>
         <script src="skinCanvas.js?v=100"></script>
         <script src="coin.js?v=101"></script>
         <link rel="stylesheet" type="text/css" href="mobile.css?v=85">
@@ -385,7 +385,7 @@ var PAINT = {
     ctx.textBaseline = "top";
     ctx.fillText(o.text || "Text", 0, 0);
   },
-  spawn: function(o){ figure(o.w,o.h, o.fill || C.ink, true, (window.GAME && window.GAME.mySkin) || null); },
+  spawn: function(o){ figure(o.w,o.h, o.fill || C.ink, true, (BRIDGE && BRIDGE.mySkin) || null); },
   seeker: function(o){
     figure(o.w,o.h, o.fill || "#b91c1c", true);
     ctx.fillStyle = "#fff";                      // seeker gets eyes so he reads as the hunter
@@ -867,7 +867,7 @@ var opened = function(o){ return o.type !== "button" && o.type !== "lever" && !!
    поэтому условие выполняется сразу. В сетевой игре список приходит
    из game.js через GAME.others. */
 function allAtDoor(o){
-  var others = (window.GAME && window.GAME.others) ? window.GAME.others() : null;
+  var others = (BRIDGE && BRIDGE.others) ? BRIDGE.others() : null;
   if(!others || !others.length) return true;
   for(var i = 0; i < others.length; i++){
     var p = others[i];
@@ -1526,11 +1526,11 @@ function render(){
     ctx.save(); ctx.translate(pl.x, pl.y);
     // себя в укрытии видно бледным — чужие не видят вообще
     if(pl.hidden) ctx.globalAlpha = 0.35;
-    figure(pl.w, pl.h, (window.GAME && window.GAME.myColor) || "#111827", true,
-           (window.GAME && window.GAME.mySkin) || null);
+    figure(pl.w, pl.h, (BRIDGE && BRIDGE.myColor) || "#111827", true,
+           (BRIDGE && BRIDGE.mySkin) || null);
     ctx.restore();
   }
-  if(window.GAME && window.GAME.onDraw){ window.GAME.viewScale = view.s; window.GAME.onDraw(ctx); }
+  if(BRIDGE && BRIDGE.onDraw){ BRIDGE.viewScale = view.s; BRIDGE.onDraw(ctx); }
   drawParts();
   if(!playing) anim++;
   requestAnimationFrame(render);
@@ -2205,8 +2205,24 @@ document.getElementById("zOut").addEventListener("click", function(){ zoomAt(VW(
 document.getElementById("zLabel").addEventListener("click", resetView);
 
 
-/* ===== мост наружу: игровые страницы управляют движком через window.GAME ===== */
-window.GAME = {
+/* ===== мост наружу: игровые страницы управляют движком через BRIDGE ===== */
+/* Мост наружу больше не остаётся в window: раньше через window.GAME из
+   консоли браузера можно было менять объекты карты, телепортировать игрока
+   и досрочно заканчивать забег. Страницы забирают мост при загрузке (game.js
+   и блок публикации делают это сразу), а глобальную ссылку убираем, как
+   только страница загрузилась. На локальной машине ссылку оставляем —
+   по ней ходят автотесты. */
+function hideBridge(){
+  var host = (window.location && window.location.hostname) || '';
+  if(/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(host)) return;
+  window.addEventListener("load", function(){
+    try { delete window.GAME; } catch(e){ try { window.GAME = undefined; } catch(e2){} }
+  });
+}
+hideBridge();
+
+var BRIDGE;
+window.GAME = BRIDGE = {
   figure: figure,
   mySkin: null,
   play: play, stop: stop, respawn: respawn,
@@ -2299,8 +2315,8 @@ requestAnimationFrame(loop);
 <script src="abuseShow.js?v=101" defer></script>
 
 
-<script src="game.js?v=108"></script>
-        <script src="i18n.js?v=106"></script>
+<script src="game.js?v=109"></script>
+        <script src="i18n.js?v=107"></script>
         <script src="owner.js?v=102" defer></script>
         <script src="skinAvatar.js?v=100" defer></script>
 </body>

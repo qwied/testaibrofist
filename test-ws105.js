@@ -9,7 +9,8 @@
    4) пинг показывается в интерфейсе (pingCheck/pongCheck);
    5) Fallback: если воркер недоступен, игра сама возвращается на старый
       socket.io-сервер и играет дальше;
-   6) game.html грузит game.js?v=105. */
+   6) game.html грузит game.js с меткой версии (номер меняется при
+      каждой правке — проверяем сам факт метки, а не конкретное число). */
 const { chromium } = require('/home/z/node_modules/playwright');
 const http = require('http');
 const { spawn } = require('child_process');
@@ -212,7 +213,7 @@ function get(path) {
 
   // 7) версия статики
   const gh = await get('/game.html');
-  ok('game.html грузит game.js?v=105', gh.body.indexOf('game.js?v=105') !== -1);
+  ok('game.html грузит game.js с меткой версии', /game\.js\?v=\d+/.test(gh.body));
 
   await browser.close();
   game.kill();
