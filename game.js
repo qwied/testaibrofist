@@ -445,8 +445,13 @@
     try {
       GAME.loadMap(m.mapData);
       GAME.startPlay();
-      coinsSent = 0;
+      finSent = false;
       applyColor();
+      /* Сервер должен знать, что забег начался, ДО того как придёт
+         raceFinish — иначе финиш без старта ничем не подтверждён и
+         монет не будет (см. server.js). */
+      if (MODE === 'race' && socket && !VIEW)
+        socket.emit('raceStart', { author: m.author, mapName: m.mapName });
     } catch (e) {
       $('gMapAuthor').textContent = TR('brokenMap', 'карта повреждена');
     }
@@ -689,23 +694,18 @@
     nextMap();
   }
 
-  // ---------- монеты на аккаунт ----------
-  var coinsSent = 0;
-  setInterval(function () {
-    if (VIEW || !GAME.playing) return;
-    var have = GAME.coins || 0;
-    if (have <= coinsSent) return;
-    var delta = have - coinsSent;
-    coinsSent = have;
-    fetch('/addCoins', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'coins=' + delta
-    }).then(function (r) { return r.json(); }).then(function (r) {
-      if (r && r.status === 'success')
-        log(TR('coinsGain', '+{n} монет (всего {t})').replace('{n}', delta).replace('{t}', r.coins));
-    }).catch(function () {});
-  }, 2500);
+  /* ---------- монеты на аккаунт ----------
+     Раньше клиент сам считал собранные на карте монеты и присылал их
+     число серверу — значит, мог прислать любое. Теперь сервер сам решает,
+     сколько начислить (за финиш забега, за поимку, за победу в раунде
+     пряток — см. raceStart/raceFinish/hsCatch и конец раунда в server.js)
+     и просто уведомляет об этом клиента для тоста в лог. */
+  var finSent = false;   // раз за забег: чтобы не слать raceFinish на каждый кадр, пока GAME.done держится
+  function checkRaceFinish() {
+    if (VIEW || MODE !== 'race' || !socket || !GAME.playing || !GAME.done || finSent) return;
+    finSent = true;
+    socket.emit('raceFinish', currentMap ? { author: currentMap.author, mapName: currentMap.mapName } : {});
+  }
 
   // ---------- сеть ----------
   /* БЫСТРЫЙ СЕРВЕР: адрес игрового воркера на Cloudflare Workers —
@@ -1049,6 +1049,13 @@
         }
       }
     });
+
+    /* Сервер сам решает, сколько начислить (см. accounts.creditCoins) —
+       этот пакет только уведомляет, что и сколько упало на счёт. */
+    socket.on('coinsAwarded', function (d) {
+      if (!d || !(d.amount > 0)) return;
+      log(TR('coinsGain', '+{n} coins ({t} in total)').replace('{n}', d.amount).replace('{t}', d.coins));
+    });
   }
 
   // ---------- отправка позиции и ловля ----------
@@ -1105,6 +1112,7 @@
     }
 
     checkAllFinished();
+    checkRaceFinish();
 
     // искатель ловит прячущихся касанием
     if (MODE === 'hideAndSeek' && me.role === 'seeker' && phase === 'round') {
@@ -1116,6 +1124,9 @@
           o.caught = true;
           caughtNames[o.name] = 1;
           socket.emit('sendChat', { text: o.name + ' пойман!' });
+          // монету за поимку начисляет сервер сам, проверив дистанцию
+          // по своим же координатам — этому emit он не верит на слово
+          socket.emit('hsCatch', { targetId: id });
         }
       });
       checkAllCaught();

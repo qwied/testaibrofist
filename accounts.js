@@ -200,6 +200,29 @@ function newSession(res, name, req) {
   save();
 }
 
+/* Единая точка начисления монет за игру (забег в Race, поимка/победа
+   в Hide and Seek — см. server.js). Раньше клиент сам присылал число
+   монет через /addCoins, и это можно было просто подделать. Теперь
+   сумму всегда считает сервер и передаёт сюда — но лимит в час общий
+   для ВСЕХ источников заработка, а не отдельный на каждый: иначе можно
+   было бы накрутить кап Race, кап поимок и кап побед по отдельности. */
+const COIN_WINDOW = 60 * 60 * 1000;   // час
+const COIN_MAX = 120;                 // максимум монет из игры за час
+function creditCoins(name, amount) {
+  const u = db.users[key(name)];
+  if (!u || !(amount > 0)) return 0;
+  if (!u.coinWin || Date.now() - u.coinWin > COIN_WINDOW) {
+    u.coinWin = Date.now();
+    u.coinSum = 0;
+  }
+  if ((u.coinSum || 0) >= COIN_MAX) return 0;
+  let n = Math.min(amount, COIN_MAX - (u.coinSum || 0));
+  u.coinSum = (u.coinSum || 0) + n;
+  u.coins = (u.coins || 0) + n;
+  save();
+  return n;
+}
+
 function publicUser(u) {
   return { name: u.name, avatar: u.avatar, lastSeen: u.lastSeen };
 }
@@ -525,4 +548,4 @@ function register(app) {
   app.get('/captcha/getCaptcha', (req, res) => res.json({}));
 }
 
-module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, clientIp };
+module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, clientIp, creditCoins };

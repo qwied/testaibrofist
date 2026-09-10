@@ -248,7 +248,6 @@ body{background:#eef2f8;overflow:hidden}
 <div id="hud" class="panel">
   <div id="exitBtn" data-i18n="edExit">Выйти</div>
   <div class="stat"><i>⏱</i><span id="sTime">0.0</span></div>
-  <div class="stat" data-i18n-title="gameCoinTip" title="монет в карте (максимум 3)"><i data-i18n="hudCoinLabel">Монеты</i><span id="sCoin">0</span></div>
   <div class="stat" data-i18n-title="edDeathTip" title="смертей"><i data-i18n="hudDeathLabel">Смерти</i><span id="sDeath">0</span></div>
 </div>
 <div id="msg"><h1 id="msgT"></h1><p id="msgS"></p></div>
@@ -342,9 +341,6 @@ function rr(x,y,w,h,r){
     ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
   }
 }
-var COIN_IMG = new Image();
-COIN_IMG.src = "coin.png";
-
 /* the player figure — clean silhouette from the reference art */
 var FIG_GAP = 0.049;
 var SKIN_IMGS = {};
@@ -522,19 +518,6 @@ var PAINT = {
     }
     ctx.strokeStyle = C.stone3; ctx.lineWidth = 1.6; ctx.strokeRect(.8,.8,o.w-1.6,o.h-1.6);
   },
-  coin: function(o){
-    // та же монета, что в профиле игрока (coin.png), с вращением
-    var sq = Math.abs(Math.cos(anim*0.045));
-    var w = Math.max(2, o.w*sq);
-    ctx.save(); ctx.translate(o.w/2, 0);
-    if(COIN_IMG.complete && COIN_IMG.naturalWidth){
-      ctx.drawImage(COIN_IMG, -w/2, 0, w, o.h);
-    } else {
-      ctx.fillStyle = grad(-w/2,0,w/2,o.h,C.gold1,C.gold2);
-      ctx.beginPath(); ctx.ellipse(0,o.h/2,w/2,o.h/2,0,0,6.2832); ctx.fill();
-    }
-    ctx.restore();
-  },
 };
 
 /* ══════════════════════════════════════════════════
@@ -551,7 +534,6 @@ var TOOLS = [
   {t:"circle",     n:"Круг",        k:"toolCircle",     m:ALL},
   {t:"triangle",   n:"Треугольник", k:"toolTriangle",   m:ALL},
   {t:"text",       n:"Текст",       k:"toolText",       m:ALL},
-  {t:"coin",       n:"Монета",      k:"toolCoin",       m:ALL},
   {t:"spawn",      n:"Точка старта",k:"toolSpawn",      m:ALL},
   {t:"button",     n:"Кнопка",      k:"toolButton",     m:ALL},
   {t:"lever",      n:"Рычаг",       k:"toolLever",      m:ALL},
@@ -561,6 +543,12 @@ var TOOLS = [
 ];
 var MODE_OF = {};
 TOOLS.forEach(function(T){ MODE_OF[T.t] = T.m; });
+/* Монеты убраны из редактора совсем: награда в Race теперь фиксированная
+   случайная выдача за прохождение карты, а не сбор с неё (см. game.js).
+   "none" не совпадает ни с одним режимом — allowedIn() отбраковывает
+   монету и при смене режима в редакторе, и при публикации старой карты,
+   где она осталась в JSON. */
+MODE_OF.coin = "none";
 function allowedIn(type, m){
   var s = MODE_OF[type];
   return !s || s.split(" ").indexOf(m) !== -1;
@@ -572,13 +560,13 @@ var OBJ_LIMIT = 2000;   // максимум объектов в карте, од
 var INK = "#111827";
 var COLORS = {
   rect:INK, circle:INK, triangle:INK, text:INK,
-  coin:"", button:INK, lever:INK,
+  button:INK, lever:INK,
   checkpoint:"", finishline:"", spawn:INK
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
    Игрок 20x60, ровно три клетки в высоту. */
 var SIZES = {
-  rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24], coin:[22,22],
+  rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24],
   button:[34,18], lever:[22,42],
   checkpoint:[30,64], finishline:[42,86], spawn:[20,60]
 };
@@ -693,13 +681,10 @@ function demo(){
   a.push(mk("rect",280,452,28,70));         // back wall
   a.push(Object.assign(mk("rect",560,568,120,22), {deadly:true, fill:"#16a34a"}));
   a.push(Object.assign(mk("rect",590,542,60,18), {bouncy:true, fill:"#a855f7"}));
-  a.push(mk("coin",620,428,22,22));         // reward for jumping the gap
   a.push(mk("rect",680,520,280,44));        // ground B
   a.push(mk("checkpoint",700,456,30,64));
   a.push(Object.assign(mk("rect",840,498,60,22), {deadly:true, fill:"#94a3b8"}));
-  a.push(mk("coin",870,426,22,22));
   a.push(mk("rect",880,408,90,20));         // bonus ledge, over ground B
-  a.push(mk("coin",915,364,22,22));
   a.push(mk("rect",1050,520,220,44));       // ground C
   a.push(mk("finishline",1180,360,50,160)); // tall gate — can't be jumped over
   a.push(mk("rect",1250,360,24,160));       // end wall
@@ -804,7 +789,7 @@ var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,self
 };
 var keys = {l:false,r:false,u:false};
 var coy = 0, buf = 0, hold = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
-var deaths = 0, coins = 0, coinsTotal = 0, timeMs = 0, shake = 0, acc = 0, last = 0;
+var deaths = 0, timeMs = 0, shake = 0, acc = 0, last = 0;
 
 /* Где игрок относительно воды: верхняя кромка, под водой ли голова
    и не кислота ли это. Считается по тем же объектам, что и коллизии. */
@@ -812,15 +797,14 @@ function findSpawn(){ for(var i=0;i<objects.length;i++) if(objects[i].type === "
 function play(){
   var sp = findSpawn();
   if(!sp){ dialog(TR("noSpawnTitle","Нет точки старта"), TR("noSpawnBody","Поставь инструмент «Точка старта», потом жми ▶."), null); return; }
-  playing = true; done = false; deaths = 0; coins = 0; timeMs = 0; parts.length = 0;
+  playing = true; done = false; deaths = 0; timeMs = 0; parts.length = 0;
   indexMovers(); markDirty();
   // размер игрока задан движком и не редактируется
   pl.w = SIZES.spawn[0]; pl.h = SIZES.spawn[1];
   spawnPt = {x:sp.x, y:sp.y};
-  coinsTotal = objects.filter(function(o){ return o.type === "coin"; }).length;
   objects.forEach(function(o){
     o._hx = o.x; o._hy = o.y; o._t = 0; o._act = !!o.startsOpen;
-    o._got = false; o._reached = false; o._spin = 0; o._squash = 0;
+    o._reached = false; o._spin = 0; o._squash = 0;
   });
   respawn();
   document.body.classList.add("play");
@@ -838,9 +822,9 @@ function stop(){
    финиша пройти карту заново можно было только с клавиатуры. */
 function restartRun(){
   done = false; hideMsg();
-  coins = 0; timeMs = 0; deaths = 0;
+  timeMs = 0; deaths = 0;
   objects.forEach(function(o){
-    o._got = false; o._reached = false;
+    o._reached = false;
     o._act = !!o.startsOpen; o._latch = false;
   });
   var sp = findSpawn();
@@ -853,6 +837,8 @@ function respawn(){
   pl.rideOn = null;
 }
 function die(){
+  // в прятках умереть нельзя вообще — единая точка входа для любой смерти
+  if(mode === "hideAndSeek") return;
   if(pl.dead || done) return;
   pl.dead = true; deaths++; shake = 13; stat();
   burst(pl.x+pl.w/2, pl.y+pl.h/2, 22, "#ef4444", 4.4, 34);
@@ -860,7 +846,6 @@ function die(){
 }
 function stat(){
   document.getElementById("sDeath").textContent = deaths;
-  document.getElementById("sCoin").textContent = coins + "/" + coinsTotal;
 }
 function showMsg(t,s){
   document.getElementById("msgT").textContent = t;
@@ -1392,10 +1377,6 @@ function step(){
       return;
     }
     if(hazard(o)){ die(); return; }
-    if(o.type === "coin" && !o._got){
-      o._got = true; coins++; stat();
-      burst(o.x+o.w/2, o.y+o.h/2, 12, "#fbbf24", 3, 26);
-    }
     if(o.type === "checkpoint" && !o._reached){
       o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h};
       burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
@@ -1405,8 +1386,8 @@ function step(){
       done = true; shake = 6;
       burst(o.x+o.w/2, o.y+o.h/2, 40, "#fbbf24", 5, 60);
       showMsg(TR("finishTitle","ФИНИШ!"),
-              TR("finishBody","Время {t}с · монет {c}/{ct} · смертей {d}   —   новый забег через мгновение")
-                .replace("{t}", (timeMs/1000).toFixed(1)).replace("{c}", coins).replace("{ct}", coinsTotal).replace("{d}", deaths));
+              TR("finishBody","Время {t}с · смертей {d}   —   новый забег через мгновение")
+                .replace("{t}", (timeMs/1000).toFixed(1)).replace("{d}", deaths));
       /* Карта запускается заново сама: ни кнопок, ни перезагрузки. Пара
          секунд — чтобы успеть увидеть время и салют, дальше снова старт. */
       clearTimeout(finishTimer);
@@ -1449,7 +1430,6 @@ function drawGrid(){
   ctx.stroke();
 }
 function paint(o, isSel){
-  if(o.type === "coin" && o._got) return;
   var open = opened(o);
   ctx.save();
   ctx.translate(o.x+o.w/2, o.y+o.h/2);
@@ -1745,7 +1725,6 @@ function down(x,y,shift){
     else sel = null;
     inspect(); return;
   }
-  if(tool === "coin" && coinCapped() && countCoins() >= COIN_LIMIT){ coinWarn(); return; }
   if(!allowedIn(tool, mode)){ setTool("select"); return; }
   if(overLimit(1)) return;
   commit();
@@ -1940,7 +1919,6 @@ pad("pJump",  function(v){ keys.u = v; if(v) buf = BUFFER; });
 
 function duplicate(){
   if(!sel) return;
-  if(sel.type === "coin" && coinCapped() && countCoins() >= COIN_LIMIT){ coinWarn(); return; }
   if(overLimit(1)) return;
   commit();
   var c = JSON.parse(JSON.stringify(sel));
@@ -2048,7 +2026,9 @@ function inspect(){
   if(sel.type === "text") txt(TR("toolText","Текст"), sel.text, function(v){ sel.text = v; });
 
   grp(TR("grpGameProps","Игровые свойства"));
-  if(["spawn","checkpoint","finishline","coin"].indexOf(sel.type) === -1)
+  /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Яд»
+     там бы включала свойство, которое физика всё равно игнорирует. */
+  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline"].indexOf(sel.type) === -1)
     chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
   if(SOLID.indexOf(sel.type) !== -1)
     chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; });
@@ -2281,8 +2261,6 @@ window.GAME = BRIDGE = {
   get objects(){ return objects; },
   get mode(){ return mode; },
   get done(){ return done; },
-  get coins(){ return coins; },
-  get coinsTotal(){ return coinsTotal; },
   loadMap: function(json){
     var d = (typeof json === "string") ? JSON.parse(json) : json;
     if(playing) stop();

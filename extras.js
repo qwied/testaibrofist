@@ -348,29 +348,11 @@ function register(app, acc) {
     res.json({ status: 'success' });
   });
 
-  // ---------- монеты ----------
-  /* Монеты за игру капают маленькими порциями, поэтому окно жёсткое:
-   * спам запросами больше не поднимет баланс — за час максимум 120. */
-  const COIN_WINDOW = 60 * 60 * 1000;   // час
-  const COIN_MAX = 120;                 // максимум монет из игры за час
-  app.post('/addCoins', (req, res) => {
-    const u = currentUser(req);
-    if (!u) return res.json({ status: 'guest', coins: 0 });
-    let n = parseInt(req.body.coins) || 0;
-    if (n <= 0) return res.json({ status: 'success', coins: u.coins || 0 });
-    if (n > 50) n = 50;                       // защита от накрутки за один заход
-    if (!u.coinWin || Date.now() - u.coinWin > COIN_WINDOW) {
-      u.coinWin = Date.now();
-      u.coinSum = 0;
-    }
-    if ((u.coinSum || 0) >= COIN_MAX)
-      return res.json({ status: 'success', coins: u.coins || 0 });
-    if ((u.coinSum || 0) + n > COIN_MAX) n = COIN_MAX - (u.coinSum || 0);
-    u.coinSum = (u.coinSum || 0) + n;
-    u.coins = (u.coins || 0) + n;
-    saveUsers();
-    res.json({ status: 'success', coins: u.coins });
-  });
+  /* /addCoins убран: клиент сам присылал число монет за игру, и это можно
+     было просто подделать (нет проверки, что забег или поимка вообще
+     были). Монеты за Race и Hide and Seek теперь считает и начисляет
+     сам сервер — см. accounts.creditCoins() и обработчики raceFinish /
+     hsCatch / конец раунда в server.js. */
 
   // ---------- таблица лидеров ----------
   app.get('/getLeaderboard', (req, res) => {

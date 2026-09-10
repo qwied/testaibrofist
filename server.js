@@ -372,6 +372,17 @@ const HS_ROUND_MS    = Number(process.env.HS_ROUND_MS) || 120000;  // охота
 const HS_ROULETTE_MS = 6800;    // клиентская анимация укладывается в 10 секунд
 const hsRooms = new Map();      // 'hideAndSeek:roomN' -> состояние раунда
 
+/* Начислить монеты игроку (по аккаунту) и уведомить его сокет, если он
+   ещё на связи. accountsRef.creditCoins сам держит общий часовой лимит —
+   тут только считаем сумму до нуля, если лимит уже выбран, и не шлём
+   пустое уведомление. */
+function hsCreditAndNotify(socket, name, amount, reason) {
+  const credited = accountsRef.creditCoins(name, amount);
+  if (credited <= 0) return;
+  const u = accountsRef.getDb().users[accountsRef.key(name)];
+  socket.emit('coinsAwarded', { amount: credited, coins: u ? (u.coins || 0) : 0, reason: reason });
+}
+
 function hsMembers(room) {
   const set = gameState.rooms.get(room);
   if (!set) return [];
@@ -437,7 +448,27 @@ function hsSpin(io, room, st) {
    досрочный конец по hsOnCaught) — если сейчас в комнате меньше двух,
    вместо рулетки уходит пауза, и все таймеры останавливаются до тех пор,
    пока кто-нибудь не подключится (см. join и hsOnLeave). */
+/* Раунд закончился — начисляем прячущимся, которых так и не поймали.
+   Считаем только тех, кто был в комнате С НАЧАЛА раунда (st.roundMembers,
+   снятый в hsStartRound): иначе можно было бы забежать в комнату за
+   секунду до конца и получить монеты ни за что. Досрочный конец через
+   hsOnCaught сюда тоже заходит, но там пойманы все — наградивших не
+   найдётся, и цикл просто ничего не сделает. */
+function hsAwardRoundEnd(io, room, st) {
+  const members = st.roundMembers || [];
+  const caught = st.caughtSet || new Set();
+  members.forEach((m) => {
+    if (caught.has(m.id)) return;
+    const sock = io.sockets.sockets.get(m.id);
+    if (!sock) return;                    // отключился — эту сессию уже не найти
+    const acct = sessionName(sock.handshake.headers.cookie);
+    if (!acct) return;                    // гость
+    hsCreditAndNotify(sock, acct, 1 + Math.floor(Math.random() * 5), 'hsWin');
+  });
+}
+
 function hsStartLobby(io, room, st) {
+  if (st.phase === 'round') hsAwardRoundEnd(io, room, st);
   if (hsMembers(room).length < 2) {
     st.phase = 'waiting';
     clearTimeout(st.timer);
@@ -458,6 +489,9 @@ function hsStartLobby(io, room, st) {
 function hsStartRound(io, room, st) {
   st.phase = 'round';
   st.endsAt = Date.now() + HS_ROUND_MS;
+  // снимок пряток на момент старта — только они и только если не пойманы, получат награду в конце
+  st.roundMembers = hsMembers(room).filter((m) => m.id !== st.seekerId);
+  st.caughtSet = new Set();
   io.to(room).emit('hsPhase', { phase: 'round', msLeft: HS_ROUND_MS,
     seekerId: st.seekerId, seekerName: st.seekerName });
   clearTimeout(st.timer);
@@ -541,6 +575,8 @@ io.on('connection', (socket) => {
   const limChat = socketLimiter(4, 8);       // чат: не чаще 4 в секунду и 8 в 10 сек
   const limCaught = socketLimiter(1, 2);     // «все пойманы» — не чаще раза в раунд
   const limPing = socketLimiter(2, 12);      // замер задержки — раз в пару секунд
+  const limHsCatch = socketLimiter(8, 30);   // индивидуальных поимок в комнате в раунде немного, но с запасом
+  const limRace = socketLimiter(3, 10);      // старт/финиш забега — не гоночный протокол сам по себе
   let joinedAt = 0;
 
   /* Замер задержки: клиент присылает свою метку времени, сервер возвращает
@@ -725,6 +761,62 @@ io.on('connection', (socket) => {
     const player = gameState.players.get(socket.id);
     if (!player || String(player.room).indexOf('hideAndSeek:') !== 0) return;
     hsOnCaught(player.room, socket.id);
+  });
+
+  /* Прятки: искатель поймал конкретного игрока — монету за это начисляем
+     только раз на цель за раунд и только если сервер сам видит их рядом
+     по своим же последним координатам (см. movePlayer). Клиентский
+     hsCatch — заявка, а не факт: подделать «поймал», не подойдя к цели
+     или переиграв в уже пойманного, не выйдет. */
+  socket.on('hsCatch', (data) => {
+    if (limHsCatch()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('hideAndSeek:') !== 0) return;
+    const room = player.room;
+    const st = hsRooms.get(room);
+    if (!st || st.phase !== 'round' || st.seekerId !== socket.id) return;
+    const targetId = String((data && data.targetId) || '');
+    if (!targetId || targetId === socket.id) return;
+    if (!st.caughtSet) st.caughtSet = new Set();
+    if (st.caughtSet.has(targetId)) return;
+    const target = gameState.players.get(targetId);
+    if (!target || target.room !== room) return;
+    const sp = player.position, tp = target.position;
+    if (!sp || !tp) return;
+    // запас сверх клиентского порога (34x60) — под сетевую задержку между кадрами
+    if (Math.abs(sp.x - tp.x) > 80 || Math.abs(sp.y - tp.y) > 120) return;
+    st.caughtSet.add(targetId);
+    if (!account) return;   // гостю монеты не копим — как и раньше в addCoins
+    hsCreditAndNotify(socket, account, 1, 'hsCatch');
+  });
+
+  /* Race: старт запоминаем, финиш проверяем на его существование, ту же
+     карту и минимальное правдоподобное время — иначе можно было бы слать
+     raceFinish без единого движения и получать монеты по кругу. Сумму
+     (1–5) решает сервер, а не клиент. */
+  const RACE_MIN_MS = 1500;
+  socket.on('raceStart', (data) => {
+    if (limRace()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('race:') !== 0) return;
+    const author = cleanText(data && data.author, 40);
+    const mapName = cleanText(data && data.mapName, 40);
+    if (!author || !mapName) return;
+    player.raceStart = { key: author + '|' + mapName, at: Date.now() };
+  });
+  socket.on('raceFinish', (data) => {
+    if (limRace()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('race:') !== 0) return;
+    const rs = player.raceStart;
+    player.raceStart = null;   // разово: тот же старт дважды не засчитать
+    if (!rs) return;
+    const author = cleanText(data && data.author, 40);
+    const mapName = cleanText(data && data.mapName, 40);
+    if (rs.key !== author + '|' + mapName) return;
+    if (Date.now() - rs.at < RACE_MIN_MS) return;
+    if (!account) return;
+    hsCreditAndNotify(socket, account, 1 + Math.floor(Math.random() * 5), 'raceFinish');
   });
 
   socket.on('disconnect', () => {
