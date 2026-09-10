@@ -133,21 +133,12 @@
     var T = function (k, f) {
       return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : (f || k);
     };
-    var langOpts = '<option value="auto">' + T('langAuto', 'Автоматически (по стране)') + '</option>';
-    if (window.I18N) {
-      I18N.langs.forEach(function (l) {
-        langOpts += '<option value="' + l + '">' + I18N.names[l] + '</option>';
-      });
-    }
 
     open('<div class="bf-x">X</div>'
        + '<div class="bf-t">' + T('settings', 'Настройки') + '</div>'
        + '<div style="text-align:center;font-size:13px;color:#6b7280;margin-bottom:4px">' + name + '</div>'
        + '<div class="bf-b" id="bfProfile">' + T('viewProfile', 'Мой профиль') + '</div>'
        + '<div class="bf-b" id="bfSkin">' + T('avatar', 'Аватар') + '</div>'
-       + '<div class="bf-t" style="font-size:14px;margin-top:12px">' + T('language', 'Язык') + '</div>'
-       + '<select class="bf-i" id="bfLang" style="text-align-last:center">' + langOpts + '</select>'
-       + '<div class="bf-h">' + T('langHint', 'Интерфейс переводится сам по стране игрока.') + '</div>'
        + '<div class="bf-b" id="bfPassBtn">' + T('changePass', 'Сменить пароль') + '</div>'
        + '<div id="bfPassBox" style="display:none">'
        +   '<input class="bf-i" id="bfOldPass" type="password" placeholder="' + T('curPass', 'Текущий пароль') + '">'
@@ -192,14 +183,6 @@
       post('/logOutAll', {}, function () { location.reload(); });
     };
 
-    var langSel = box.querySelector('#bfLang');
-    get('/i18n/detect', function (d) {
-      if (!d) return;
-      langSel.value = d.saved ? d.lang : 'auto';
-    });
-    langSel.onchange = function () {
-      if (window.I18N) I18N.set(this.value);
-    };
     box.querySelector('#bfGoogle').onclick = function () {
       box.querySelector('#bfGoogleNote').innerHTML =
         'Привязка пока недоступна: для неё нужен ключ приложения Google ' +
