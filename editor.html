@@ -237,8 +237,8 @@ body.mob #msg h1{font-size:38px}
 
 <div id="insp" class="panel">
   <div id="inspHead">
-    <div class="tab on" data-tab="props">Свойства</div>
-    <div class="tab" id="inspClose" title="Закрыть">Закрыть</div>
+    <div class="tab on" data-tab="props" data-i18n="edProps">Свойства</div>
+    <div class="tab" id="inspClose" data-i18n="close" data-i18n-title="close" title="Закрыть">Закрыть</div>
   </div>
   <div id="props"></div>
   <div id="widgets" style="display:none"></div>
@@ -251,11 +251,11 @@ body.mob #msg h1{font-size:38px}
 </div>
 
 <div id="hud" class="panel">
-  <div class="stat" title="время забега"><i>⏱</i><span id="sTime">0.0</span></div>
-  <div class="stat" title="собрано монет"><i>🪙</i><span id="sCoin">0</span></div>
-  <div class="stat" title="объектов в карте (максимум 2000)"><i>▦</i><span id="sObj">0</span></div>
-  <div class="stat" title="смертей"><i>✖</i><span id="sDeath">0</span></div>
-  <div id="exitBtn" title="выйти из игры (Esc)">Выйти</div>
+  <div class="stat" data-i18n-title="edTimeTip" title="время забега"><i>⏱</i><span id="sTime">0.0</span></div>
+  <div class="stat" data-i18n-title="edCoinTip" title="собрано монет"><i>🪙</i><span id="sCoin">0</span></div>
+  <div class="stat" data-i18n-title="edObjTip" title="объектов в карте (максимум 2000)"><i>▦</i><span id="sObj">0</span></div>
+  <div class="stat" data-i18n-title="edDeathTip" title="смертей"><i>✖</i><span id="sDeath">0</span></div>
+  <div id="exitBtn" data-i18n="edExit" data-i18n-title="edExitTip" title="выйти из игры (Esc)">Выйти</div>
 </div>
 <div id="msg"><h1 id="msgT"></h1><p id="msgS"></p></div>
 
@@ -268,7 +268,7 @@ body.mob #msg h1{font-size:38px}
   <div class="bd"></div>
   <div class="card"><h3 id="dT"></h3><p id="dM"></p>
     <input id="dIn" type="text" style="display:none">
-    <div class="acts"><button id="dNo">Отмена</button><button class="ok" id="dOk">OK</button></div></div>
+    <div class="acts"><button id="dNo" data-i18n="cancel">Отмена</button><button class="ok" id="dOk" data-i18n="ok">OK</button></div></div>
 </div>
 
 <input type="file" id="file" accept=".txt,.json">
@@ -278,6 +278,12 @@ body.mob #msg h1{font-size:38px}
 <script>
 (function(){
 "use strict";
+
+/* T — локальная переменная под инструмент в inspect(), поэтому у перевода
+   здесь отдельное имя (как в game.js). */
+var TR = function (k, f) {
+  return (window.I18N && window.I18N.t(k) !== k) ? window.I18N.t(k) : (f || k);
+};
 
 /* ══════════════════════════════════════════════════
    ENVIRONMENT
@@ -544,19 +550,19 @@ var ALL = "hideAndSeek race";
    к одному режиму и в другом просто не существуют — ни в палитре,
    ни при загрузке карты, ни при публикации (это проверяет сервер). */
 var TOOLS = [
-  {t:"select",     n:"Выделение",   m:ALL},
-  {t:"hand",       n:"Рука (двигать карту)", m:ALL},
-  {t:"rect",       n:"Блок",        m:ALL},
-  {t:"circle",     n:"Круг",        m:ALL},
-  {t:"triangle",   n:"Треугольник", m:ALL},
-  {t:"text",       n:"Текст",       m:ALL},
-  {t:"coin",       n:"Монета",      m:ALL},
-  {t:"spawn",      n:"Точка старта",m:ALL},
-  {t:"button",     n:"Кнопка",      m:ALL},
-  {t:"lever",      n:"Рычаг",       m:ALL},
+  {t:"select",     n:"Выделение",   k:"toolSelect",     m:ALL},
+  {t:"hand",       n:"Рука (двигать карту)", k:"toolHand", m:ALL},
+  {t:"rect",       n:"Блок",        k:"toolBlock",      m:ALL},
+  {t:"circle",     n:"Круг",        k:"toolCircle",     m:ALL},
+  {t:"triangle",   n:"Треугольник", k:"toolTriangle",   m:ALL},
+  {t:"text",       n:"Текст",       k:"toolText",       m:ALL},
+  {t:"coin",       n:"Монета",      k:"toolCoin",       m:ALL},
+  {t:"spawn",      n:"Точка старта",k:"toolSpawn",      m:ALL},
+  {t:"button",     n:"Кнопка",      k:"toolButton",     m:ALL},
+  {t:"lever",      n:"Рычаг",       k:"toolLever",      m:ALL},
   // только гонка
-  {t:"checkpoint", n:"Чекпоинт",    m:"race"},
-  {t:"finishline", n:"Финиш",       m:"race"}
+  {t:"checkpoint", n:"Чекпоинт",    k:"toolCheckpoint", m:"race"},
+  {t:"finishline", n:"Финиш",       k:"toolFinish",     m:"race"}
 ];
 var MODE_OF = {};
 TOOLS.forEach(function(T){ MODE_OF[T.t] = T.m; });
@@ -601,7 +607,8 @@ var COIN_LIMIT = 3;   // больше трёх монет в карту не п�
 function coinCapped(){ return !window.BFAdminAbuse; }
 function countCoins(){ return objects.filter(function(o){ return o.type === "coin"; }).length; }
 function coinWarn(){
-  showMsg("Максимум " + COIN_LIMIT + " монеты", "Больше монет в карту положить нельзя.");
+  showMsg(TR("coinLimitTitle","Максимум " + COIN_LIMIT + " монеты").replace("{n}", COIN_LIMIT),
+          TR("coinLimitBody","Больше монет в карту положить нельзя."));
   setTimeout(hideMsg, 1800);
 }
 var mode = "hideAndSeek", tool = "select", objects = [], sel = null, uid = 1;
@@ -676,8 +683,8 @@ function indexMovers(){
 }
 function overLimit(extra){
   if(objects.length + (extra||1) <= OBJ_LIMIT) return false;
-  showMsg("Предел " + OBJ_LIMIT + " объектов",
-          "В карте уже " + objects.length + ". Удалите лишнее, чтобы добавить новое.");
+  showMsg(TR("objLimitTitle","Предел " + OBJ_LIMIT + " объектов").replace("{n}", OBJ_LIMIT),
+          TR("objLimitBody","В карте уже " + objects.length + ". Удалите лишнее, чтобы добавить новое.").replace("{n}", objects.length));
   setTimeout(hideMsg, 2200);
   return true;
 }
@@ -817,12 +824,12 @@ function spawnTooClose(){
 
 function play(){
   var sp = findSpawn();
-  if(!sp){ dialog("Нет точки старта","Поставь инструмент «Точка старта», потом жми ▶.",null); return; }
+  if(!sp){ dialog(TR("noSpawnTitle","Нет точки старта"), TR("noSpawnBody","Поставь инструмент «Точка старта», потом жми ▶."), null); return; }
   var near = spawnTooClose();
   if(near !== null){
-    dialog("Старт слишком близко к финишу",
-           "Между ними " + near + " точек, нужно хотя бы " + SPAWN_GAP +
-           ". Отодвинь старт или финиш.", null);
+    dialog(TR("spawnCloseTitle","Старт слишком близко к финишу"),
+           TR("spawnCloseBody", "Между ними " + near + " точек, нужно хотя бы " + SPAWN_GAP +
+              ". Отодвинь старт или финиш.").replace("{n}", near).replace("{m}", SPAWN_GAP), null);
     return;
   }
   playing = true; done = false; deaths = 0; coins = 0; timeMs = 0; parts.length = 0;
@@ -1417,9 +1424,9 @@ function step(){
     if(o.type === "finishline" && !done){
       done = true; shake = 6;
       burst(o.x+o.w/2, o.y+o.h/2, 40, "#fbbf24", 5, 60);
-      showMsg("ФИНИШ!",
-              "Время " + (timeMs/1000).toFixed(1) + "с · монет " + coins + "/" + coinsTotal +
-              " · смертей " + deaths + "   —   новый забег через мгновение");
+      showMsg(TR("finishTitle","ФИНИШ!"),
+              TR("finishBody","Время {t}с · монет {c}/{ct} · смертей {d}   —   новый забег через мгновение")
+                .replace("{t}", (timeMs/1000).toFixed(1)).replace("{c}", coins).replace("{ct}", coinsTotal).replace("{d}", deaths));
       /* Карта запускается заново сама: ни кнопок, ни перезагрузки. Пара
          секунд — чтобы успеть увидеть время и салют, дальше снова старт. */
       clearTimeout(finishTimer);
@@ -1613,26 +1620,28 @@ var SVG = {
   json:'<path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 17v3h16v-3"/>',
   imp:'<path d="M12 20V7"/><path d="M7 12l5-5 5 5"/><path d="M4 4h16"/>'
 };
-function sBtn(id,icon,tip,cls){
+function sBtn(id,icon,key,fallback,cls){
   var d = document.createElement("div");
-  d.className = "sBtn" + (cls ? " "+cls : ""); d.id = id; d.setAttribute("data-tip", tip);
+  d.className = "sBtn" + (cls ? " "+cls : ""); d.id = id;
+  d.dataset.tipKey = key; d.dataset.tipFallback = fallback;
+  d.setAttribute("data-tip", TR(key, fallback));
   d.innerHTML = '<svg viewBox="0 0 24 24">'+icon+'</svg>';
   return d;
 }
 var sceneEl = document.getElementById("scene");
-[["bSave",SVG.save,"Сохранить .txt"],["bOpen",SVG.open,"Открыть"],["bJson",SVG.json,"Экспорт JSON"]]
-  .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2])); });
+[["bSave",SVG.save,"btnSaveTip","Сохранить .txt"],["bOpen",SVG.open,"btnOpenTip","Открыть"],["bJson",SVG.json,"btnJsonTip","Экспорт JSON"]]
+  .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2],a[3])); });
 sceneEl.appendChild(Object.assign(document.createElement("div"),{className:"sep"}));
-[["bUndo",SVG.undo,"Отменить (Ctrl+Z)"],["bRedo",SVG.redo,"Вернуть (Ctrl+Y)"],
- ["bCopy",SVG.copy,"Дубликат (Ctrl+D)"],["bDel",SVG.trash,"Удалить (Del)"],["bGrid",SVG.grid,"Сетка (G)"]]
-  .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2])); });
+[["bUndo",SVG.undo,"btnUndoTip","Отменить (Ctrl+Z)"],["bRedo",SVG.redo,"btnRedoTip","Вернуть (Ctrl+Y)"],
+ ["bCopy",SVG.copy,"btnCopyTip","Дубликат (Ctrl+D)"],["bDel",SVG.trash,"btnDelTip","Удалить (Del)"],["bGrid",SVG.grid,"btnGridTip","Сетка (G)"]]
+  .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2],a[3])); });
 sceneEl.appendChild(Object.assign(document.createElement("div"),{className:"sep"}));
-sceneEl.appendChild(sBtn("bPlay",SVG.play,"Играть","play"));
+sceneEl.appendChild(sBtn("bPlay",SVG.play,"btnPlayTip","Играть","play"));
 document.getElementById("bGrid").classList.add("on");
 
 ["hideAndSeek","race"].forEach(function(m,i){
   var d = document.createElement("div");
-  d.className = "modeBtn" + (i===0?" on":""); d.textContent = m; d.dataset.mode = m;
+  d.className = "modeBtn" + (i===0?" on":""); d.textContent = TR(m, m); d.dataset.mode = m;
   document.getElementById("modes").appendChild(d);
 });
 
@@ -1641,11 +1650,28 @@ var toolsEl = document.getElementById("tools");
 TOOLS.forEach(function(T){
   var d = document.createElement("div");
   d.className = "tool" + (T.t==="select"?" on":"");
-  d.dataset.tool = T.t; d.dataset.modes = T.m; d.setAttribute("data-tip", T.n);
+  d.dataset.tool = T.t; d.dataset.modes = T.m;
+  d.dataset.tipKey = T.k; d.dataset.tipFallback = T.n;
+  d.setAttribute("data-tip", TR(T.k, T.n));
   var ic = document.createElement("canvas"); ic.width = 48; ic.height = 48;
   d.appendChild(ic); toolsEl.appendChild(d);
   drawIcon(ic, T.t);
 });
+
+/* i18n.js подключается ПОСЛЕ этого скрипта и переводит статичную разметку
+   сама по data-i18n, но подсказки (data-tip) и подписи режимов рисует этот
+   код — обновляем их вручную при каждой смене языка. */
+function retip(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-tip-key]"), function(el){
+    el.setAttribute("data-tip", TR(el.dataset.tipKey, el.dataset.tipFallback || el.dataset.tipKey));
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".modeBtn"), function(b){
+    b.textContent = TR(b.dataset.mode, b.dataset.mode);
+  });
+  if(typeof inspect === "function") inspect();
+}
+addEventListener("bf-lang", retip);
+
 function drawIcon(cvs, type){
   var g = cvs.getContext("2d"), old = ctx;
   ctx = g; g.clearRect(0,0,48,48); g.save(); g.translate(4,4);
@@ -1726,8 +1752,8 @@ document.getElementById("modes").addEventListener("click", function(e){
     });
     objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid"; });
     sel = null; markDirty(); indexMovers();
-    showMsg("Убрано объектов: " + drop.length,
-            "В режиме «" + mode + "» они не работают. Ctrl+Z вернёт их обратно.");
+    showMsg(TR("droppedObjsTitle","Убрано объектов: {n}").replace("{n}", drop.length),
+            TR("droppedObjsBody","В режиме «{mode}» они не работают. Ctrl+Z вернёт их обратно.").replace("{mode}", TR(mode, mode)));
     setTimeout(hideMsg, 2600);
   }
   syncTools();
@@ -1778,7 +1804,7 @@ var mouseW = {x:0, y:0};
 function copySel(){
   if(!sel) return false;
   clipboard = Object.assign({}, sel);
-  showMsg("Скопировано", "Ctrl+V поставит копию под курсором");
+  showMsg(TR("copiedTitle","Скопировано"), TR("copiedBody","Ctrl+V поставит копию под курсором"));
   setTimeout(hideMsg, 1200);
   return true;
 }
@@ -2105,19 +2131,19 @@ function linkHelp(){
   d.className = "pHelp";
   var h = document.createElement("div");
   h.className = "pHelpHead";
-  h.textContent = "Как связать? ▾";
+  h.textContent = TR("linkHelpClosed","Как связать? ▾");
   var b = document.createElement("div");
   b.className = "pHelpBody";
-  b.innerHTML =
-      "1. У <b>Ворот</b> задай <b>ID</b> — например <code>g1</code>.<br>"
+  b.innerHTML = TR("linkHelpBody",
+      "1. У <b>блока-цели</b> задай <b>ID</b> — например <code>g1</code>.<br>"
     + "2. У <b>Кнопки</b> или <b>Рычага</b> впиши тот же <code>g1</code> в поле <b>Цели</b>.<br>"
     + "3. Нажми ▶ — блок откроется от кнопки.<br><br>"
     + "Целей можно указать несколько через запятую: <code>g1,g2</code>.<br>"
-    + "Кнопка держит, пока на ней стоят. Рычаг переключает насовсем.";
+    + "Кнопка держит, пока на ней стоят. Рычаг переключает насовсем.");
   h.onclick = function(){
     var open = b.style.display === "block";
     b.style.display = open ? "none" : "block";
-    h.textContent = open ? "Как связать? ▾" : "Как связать? ▴";
+    h.textContent = open ? TR("linkHelpClosed","Как связать? ▾") : TR("linkHelpOpen","Как связать? ▴");
   };
   d.appendChild(h); d.appendChild(b);
   props.appendChild(d);
@@ -2129,7 +2155,7 @@ function inspect(){
   props.innerHTML = "";
   var T = TOOLS.filter(function(x){ return x.t === sel.type; })[0];
   var head = document.createElement("div"); head.id = "objTitle";
-  head.innerHTML = (T ? T.n : sel.type) + "<span>#" + sel.id + "</span>";
+  head.innerHTML = (T ? TR(T.k, T.n) : sel.type) + "<span>#" + sel.id + "</span>";
   props.appendChild(head);
 
   num("X", sel.x, function(v){ sel.x = v; });
@@ -2137,53 +2163,53 @@ function inspect(){
   /* Размер игрока задан движком (20x60) и не редактируется, иначе одна
      и та же карта проходится по-разному у разных авторов. */
   if(sel.type !== "spawn"){
-    num("Ширина", sel.w, function(v){ sel.w = Math.max(1,v); });
-    num("Высота", sel.h, function(v){ sel.h = Math.max(1,v); });
-    num("Поворот", sel.rot||0, function(v){ sel.rot = v; });
+    num(TR("lblWidth","Ширина"), sel.w, function(v){ sel.w = Math.max(1,v); });
+    num(TR("lblHeight","Высота"), sel.h, function(v){ sel.h = Math.max(1,v); });
+    num(TR("lblRotation","Поворот"), sel.rot||0, function(v){ sel.rot = v; });
   } else {
     var sr = pr();
-    sr.innerHTML = "<label>Размер</label><b style='font-size:12px'>20 x 60</b>";
+    sr.innerHTML = "<label>" + TR("lblSize","Размер") + "</label><b style='font-size:12px'>20 x 60</b>";
   }
 
   {
     var r = pr();
-    r.innerHTML = "<label>Цвет</label>";
+    r.innerHTML = "<label>" + TR("lblColor","Цвет") + "</label>";
     var ci = document.createElement("input"); ci.type = "color";
     ci.value = (sel.fill && sel.fill[0] === "#" && sel.fill.length === 7) ? sel.fill : "#4b5563";
     ci.addEventListener("focus", commit);
     ci.addEventListener("input", function(){ sel.fill = ci.value; });
     r.appendChild(ci);
   }
-  if(sel.type === "text") txt("Текст", sel.text, function(v){ sel.text = v; });
+  if(sel.type === "text") txt(TR("toolText","Текст"), sel.text, function(v){ sel.text = v; });
 
-  grp("Игровые свойства");
+  grp(TR("grpGameProps","Игровые свойства"));
   if(["spawn","checkpoint","finishline","coin"].indexOf(sel.type) === -1)
-    chk("Яд (убивает)", sel.deadly, function(v){ sel.deadly = v; });
+    chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
   if(SOLID.indexOf(sel.type) !== -1)
-    chk("Проходимый (декорация)", !!sel.ghost, function(v){ sel.ghost = v; });
+    chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; });
   /* Прятки: за таким объектом игрок исчезает для искателя вместе с ником.
      Коллизии у него нет — иначе внутрь не зайти. */
   if(SOLID.indexOf(sel.type) !== -1 && mode === "hideAndSeek")
-    chk("Укрытие для пряток", !!sel.hideSpot, function(v){ sel.hideSpot = v; });
+    chk(TR("chkHideSpot","Укрытие для пряток"), !!sel.hideSpot, function(v){ sel.hideSpot = v; });
   /* Рикошет, толкаемость, движение и вращение — свойства, а не отдельные
      объекты. Любой блок, круг или треугольник можно сделать отражающим,
      толкаемым, подвижным или крутящимся. */
   if(SOLID.indexOf(sel.type) !== -1){
     /* Рикошет вместо батута: удар отражается от той грани, в которую
        попал игрок, а не подбрасывает его всегда вверх. */
-    chk("Рикошет", !!sel.ricochet, function(v){ sel.ricochet = v; inspect(); });
+    chk(TR("chkRicochet","Рикошет"), !!sel.ricochet, function(v){ sel.ricochet = v; inspect(); });
     /* Сила отскока: 1 — вернуть с той же скоростью, больше — подбросить
        сильнее. Направление берётся от той грани, в которую попал игрок,
        поэтому наклонный батут отправляет по диагонали. */
     if(sel.ricochet)
-      rng("Сила отскока", sel.power === undefined ? 1 : sel.power, 0.2, 3, 0.1,
+      rng(TR("lblBouncePower","Сила отскока"), sel.power === undefined ? 1 : sel.power, 0.2, 3, 0.1,
           function(v){ sel.power = v; });
 
     /* Толкается — своя физика (см. stepPushables): падает и стоит на
        земле сама, а не по синусоиде и не вращается, поэтому с
        «Двигается»/«Вращается» несовместима — включение одного гасит
        другое, а не остаётся висеть противоречивой галочкой. */
-    chk("Толкается", !!sel.pushable, function(v){
+    chk(TR("chkPushable","Толкается"), !!sel.pushable, function(v){
       sel.pushable = v;
       if(v){
         if(sel.mass === undefined) sel.mass = 1;
@@ -2192,11 +2218,11 @@ function inspect(){
       inspect();
     });
     if(sel.pushable)
-      rng("Масса", sel.mass === undefined ? 1 : sel.mass, 0.2, 5, 0.1,
+      rng(TR("lblMass","Масса"), sel.mass === undefined ? 1 : sel.mass, 0.2, 5, 0.1,
           function(v){ sel.mass = v; });
 
     if(!sel.pushable){
-      chk("Двигается", !!sel.moves, function(v){
+      chk(TR("chkMoves","Двигается"), !!sel.moves, function(v){
         sel.moves = v;
         if(v){
           if(!sel.moveX && !sel.moveY){ sel.moveX = 130; sel.moveY = 0; sel.speed = 1.1; }
@@ -2205,31 +2231,31 @@ function inspect(){
         inspect();
       });
       if(sel.moves){
-        num("Ход по X", sel.moveX||0, function(v){ sel.moveX = v; });
-        num("Ход по Y", sel.moveY||0, function(v){ sel.moveY = v; });
-        num("Скорость", sel.speed||1, function(v){ sel.speed = v; });
+        num(TR("lblMoveX","Ход по X"), sel.moveX||0, function(v){ sel.moveX = v; });
+        num(TR("lblMoveY","Ход по Y"), sel.moveY||0, function(v){ sel.moveY = v; });
+        num(TR("lblSpeed","Скорость"), sel.speed||1, function(v){ sel.speed = v; });
       }
 
-      chk("Вращается", !!sel.spins, function(v){
+      chk(TR("chkSpins","Вращается"), !!sel.spins, function(v){
         sel.spins = v;
         if(v){ if(!sel.spin) sel.spin = 2; sel.pushable = false; }
         inspect();
       });
-      if(sel.spins) num("Скорость вращения", sel.spin||2, function(v){ sel.spin = v; });
+      if(sel.spins) num(TR("lblSpinSpeed","Скорость вращения"), sel.spin||2, function(v){ sel.spin = v; });
     }
   }
   if(LINKED.indexOf(sel.type) !== -1){
-    grp("Связи");
+    grp(TR("grpLinks","Связи"));
     txt("ID", sel.customId, function(v){ sel.customId = v; });
-    if(sel.type === "button" || sel.type === "lever") txt("Цели", sel.targetIds, function(v){ sel.targetIds = v; });
+    if(sel.type === "button" || sel.type === "lever") txt(TR("lblTargets","Цели"), sel.targetIds, function(v){ sel.targetIds = v; });
     if(SOLID.indexOf(sel.type) !== -1)
-      chk("Открыт сначала (проходим)", sel.startsOpen, function(v){ sel.startsOpen = v; });
+      chk(TR("chkStartsOpen","Открыт сначала (проходим)"), sel.startsOpen, function(v){ sel.startsOpen = v; });
     linkHelp();
   }
 
-  grp("Порядок");
+  grp(TR("grpOrder","Порядок"));
   var z = document.createElement("div"); z.className = "zBtns";
-  z.innerHTML = "<div data-z='b'>На зад</div><div data-z='f'>Вперёд</div>";
+  z.innerHTML = "<div data-z='b'>" + TR("zBack","На зад") + "</div><div data-z='f'>" + TR("zFront","Вперёд") + "</div>";
   z.addEventListener("click", function(e){
     var b = e.target.closest("[data-z]"); if(!b) return;
     commit();
@@ -2321,10 +2347,10 @@ document.getElementById("file").addEventListener("change", function(e){
   rd.onload = async function(){
     try{
       var raw = String(rd.result).trim(), p = raw.indexOf("|");
-      if(p === -1){ dialog("Доступ запрещён","Файл не подписан этим редактором.",null); return; }
+      if(p === -1){ dialog(TR("accessDeniedTitle","Доступ запрещён"), TR("accessDeniedFileBody","Файл не подписан этим редактором."),null); return; }
       var sig = raw.slice(0,p), nums = raw.slice(p+1).split(",").map(function(s){ return parseInt(s,10); });
       var json = await unzip(new Uint8Array(nums.slice(1)), nums[0]);
-      if(fnv(DEV_KEY+json) !== sig){ dialog("Доступ запрещён","Ключ карты не совпадает. Только разработчик.",null); return; }
+      if(fnv(DEV_KEY+json) !== sig){ dialog(TR("accessDeniedTitle","Доступ запрещён"), TR("accessDeniedKeyBody","Ключ карты не совпадает. Только разработчик."),null); return; }
       var d = JSON.parse(json);
       commit();
       objects = d.objects || [];
@@ -2336,7 +2362,7 @@ document.getElementById("file").addEventListener("change", function(e){
       document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
       objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid"; });
       syncTools(); sel = null; inspect();
-    }catch(err){ dialog("Ошибка","Не удалось прочитать файл карты.",null); }
+    }catch(err){ dialog(TR("errorTxt","Ошибка"), TR("readErrorBody","Не удалось прочитать файл карты."),null); }
   };
   rd.readAsText(f); e.target.value = "";
 });
@@ -2493,7 +2519,7 @@ requestAnimationFrame(loop);
         {credentials:"same-origin"})
     .then(function(r){ return r.json(); })
     .then(function(data){
-      if(!data){ dialog("Карта не найдена", "Не удалось загрузить «" + em + "».", null); return; }
+      if(!data){ dialog(TR("mapNotFoundTitle","Карта не найдена"), TR("mapNotFoundBody","Не удалось загрузить «{name}».").replace("{name}", em), null); return; }
       BRIDGE.loadMap(data);
       document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
       syncTools();
@@ -2502,7 +2528,7 @@ requestAnimationFrame(loop);
       BRIDGE.editingMapName = em;
       document.title = "AIBrofist Editor — " + em;
     })
-    .catch(function(){ dialog("Сервер недоступен", "Не удалось загрузить карту для редактирования.", null); });
+    .catch(function(){ dialog(TR("serverDown","Сервер недоступен"), TR("editLoadServerDownBody","Не удалось загрузить карту для редактирования."), null); });
 })();
 })();
 
@@ -2511,7 +2537,7 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=108"></script>
+<script src="i18n.js?v=109"></script>
 <script src="abuseShow.js?v=101" defer></script>
 <script src="editorHelp.js?v=100"></script>
 <script src="editorAI.js?v=100" defer></script>
@@ -2521,6 +2547,11 @@ requestAnimationFrame(loop);
 <script>
 /* Публикация карты в Maps Browser */
 (function(){
+  // отдельный <script> от основного движка (i18n.js между ними уже
+  // подключён) — свой локальный TR, а не общий с движком
+  var TR = function (k, f) {
+    return (window.I18N && window.I18N.t(k) !== k) ? window.I18N.t(k) : (f || k);
+  };
   // мост движка забираем сразу при загрузке: из window его убирают,
   // чтобы объекты карты нельзя было править из консоли браузера
   var BRIDGE = window.GAME || {};
@@ -2563,10 +2594,11 @@ requestAnimationFrame(loop);
   btn.id = 'bfPublish';
   btn.type = 'button';
   btn.title = 'Опубликовать в Maps Browser';
+  btn.setAttribute('data-i18n-title', 'publishBtnTip');
   btn.innerHTML =
       '<svg viewBox="0 0 24 24"><path d="M12 16V5"/><path d="M8 9l4-4 4 4"/>'
     + '<path d="M4 15a4 4 0 0 1 1.4-7.7A6 6 0 0 1 17 8.3 3.6 3.6 0 0 1 20 15"/></svg>'
-    + '<span>Опубликовать</span>';
+    + '<span data-i18n="publishBtnLabel">' + TR('publishBtnLabel','Опубликовать') + '</span>';
   document.body.appendChild(btn);
 
   function send(name, overwrite){
@@ -2581,31 +2613,35 @@ requestAnimationFrame(loop);
       var ok = G.allowedIn || function(){ return true; };
 
       if (objs.length > LIM) {
-        say('Слишком много объектов', 'В карте ' + objs.length + '. Разрешено не больше ' + LIM + '.');
+        say(TR('tooManyObjectsTitle','Слишком много объектов'),
+            TR('tooManyObjectsBody','В карте {n}. Разрешено не больше {lim}.').replace('{n}', objs.length).replace('{lim}', LIM));
         return;
       }
       var coins = objs.filter(function(o){ return o.type === 'coin'; }).length;
       if (coins > CL) {
-        say('Слишком много монет', 'В карте ' + coins + '. Разрешено не больше ' + CL + ' — уберите лишние.');
+        say(TR('tooManyCoinsTitle','Слишком много монет'),
+            TR('tooManyCoinsBody','В карте {n}. Разрешено не больше {lim} — уберите лишние.').replace('{n}', coins).replace('{lim}', CL));
         return;
       }
       var bad = objs.filter(function(o){ return !ok(o.type, m.mode); })
                     .map(function(o){ return o.type; });
       if (bad.length) {
-        say('Объекты не для этого режима', 'В режиме «' + m.mode + '» не работают: ' +
-            bad.filter(function(v,i,a){ return a.indexOf(v) === i; }).join(', '));
+        say(TR('wrongModeObjTitle','Объекты не для этого режима'),
+            TR('wrongModeObjBody','В режиме «{mode}» не работают: {list}')
+              .replace('{mode}', TR(m.mode, m.mode))
+              .replace('{list}', bad.filter(function(v,i,a){ return a.indexOf(v) === i; }).join(', ')));
         return;
       }
       // старт вплотную к финишу — то же правило, что и при запуске
       var nearFin = BRIDGE.spawnTooClose ? BRIDGE.spawnTooClose() : null;
       if (nearFin !== null) {
-        say('Старт слишком близко к финишу',
-            'Между ними ' + nearFin + ' точек. Отодвинь старт или финиш и попробуй снова.');
+        say(TR('spawnCloseTitle','Старт слишком близко к финишу'),
+            TR('spawnClosePublishBody','Между ними {n} точек. Отодвинь старт или финиш и попробуй снова.').replace('{n}', nearFin));
         return;
       }
     } catch(e){
       console.error('Публикация карты:', e);
-      say('Не удалось собрать карту', String(e && e.message ? e.message : e));
+      say(TR('publishCollectFailTitle','Не удалось собрать карту'), String(e && e.message ? e.message : e));
       return;
     }
 
@@ -2619,24 +2655,24 @@ requestAnimationFrame(loop);
       .then(function(r){ return r.json(); })
       .then(function(r){
         if (r.status === 'success') {
-          say('Карта опубликована', r.message + ' Открыть Maps Browser?',
+          say(TR('publishSuccessTitle','Карта опубликована'), r.message + ' Открыть Maps Browser?',
               function(){ location.href = '/mapsBrowser.html'; });
         } else if (r.status === 'exists') {
-          say('Карта уже есть', r.message, function(){ send(name, true); });
+          say(TR('publishExistsTitle','Карта уже есть'), r.message, function(){ send(name, true); });
         } else {
-          say('Не получилось', r.message || 'Ошибка');
+          say(TR('publishFailedTitle','Не получилось'), r.message || TR('errorTxt','Ошибка'));
         }
       })
-      .catch(function(){ say('Сервер недоступен', 'Не удалось связаться с сервером.'); });
+      .catch(function(){ say(TR('serverDown','Сервер недоступен'), TR('publishServerDownBody','Не удалось связаться с сервером.')); });
   }
 
   btn.onclick = function(){
     // редактируем свою уже опубликованную карту — подставляем её имя,
     // чтобы публикация по умолчанию перезаписала именно её
     var defName = BRIDGE.editingMapName || '';
-    ask('Публикация карты', 'Название карты (2–30 символов):', defName, function(name){
+    ask(TR('publishAskTitle','Публикация карты'), TR('publishNamePrompt','Название карты (2–30 символов):'), defName, function(name){
       name = String(name || '').trim();
-      if (name.length < 2) { say('Слишком короткое название', 'Нужно хотя бы 2 символа.'); return; }
+      if (name.length < 2) { say(TR('nameTooShortTitle','Слишком короткое название'), TR('nameTooShortBody','Нужно хотя бы 2 символа.')); return; }
       send(name, false);
     });
   };
@@ -2648,7 +2684,7 @@ requestAnimationFrame(loop);
    не помещается, но уйти со страницы должно быть чем. */
 (function(){
   var a = document.createElement('a');
-  a.id = 'bfHome'; a.href = '/'; a.title = 'На главную';
+  a.id = 'bfHome'; a.href = '/'; a.title = 'На главную'; a.setAttribute('data-i18n-title', 'edHomeTitle');
   a.textContent = 'AIBROFIST';
   a.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:12;padding:8px 12px;'
     + 'border-radius:9px;background:#fff;border:1px solid #e2e8f0;color:#111827;'
