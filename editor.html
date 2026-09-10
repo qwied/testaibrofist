@@ -252,7 +252,6 @@ body.mob #msg h1{font-size:38px}
 
 <div id="hud" class="panel">
   <div class="stat" data-i18n-title="edTimeTip" title="время забега"><i>⏱</i><span id="sTime">0.0</span></div>
-  <div class="stat" data-i18n-title="edCoinTip" title="собрано монет"><i>🪙</i><span id="sCoin">0</span></div>
   <div class="stat" data-i18n-title="edObjTip" title="объектов в карте (максимум 2000)"><i>▦</i><span id="sObj">0</span></div>
   <div class="stat" data-i18n-title="edDeathTip" title="смертей"><i>✖</i><span id="sDeath">0</span></div>
   <div id="exitBtn" data-i18n="edExit" data-i18n-title="edExitTip" title="выйти из игры (Esc)">Выйти</div>
@@ -344,9 +343,6 @@ function rr(x,y,w,h,r){
     ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
   }
 }
-var COIN_IMG = new Image();
-COIN_IMG.src = "coin.png";
-
 /* the player figure — clean silhouette from the reference art */
 var FIG_GAP = 0.049;
 var SKIN_IMGS = {};
@@ -527,19 +523,6 @@ var PAINT = {
     }
     ctx.strokeStyle = C.stone3; ctx.lineWidth = 1.6; ctx.strokeRect(.8,.8,o.w-1.6,o.h-1.6);
   },
-  coin: function(o){
-    // та же монета, что в профиле игрока (coin.png), с вращением
-    var sq = Math.abs(Math.cos(anim*0.045));
-    var w = Math.max(2, o.w*sq);
-    ctx.save(); ctx.translate(o.w/2, 0);
-    if(COIN_IMG.complete && COIN_IMG.naturalWidth){
-      ctx.drawImage(COIN_IMG, -w/2, 0, w, o.h);
-    } else {
-      ctx.fillStyle = grad(-w/2,0,w/2,o.h,C.gold1,C.gold2);
-      ctx.beginPath(); ctx.ellipse(0,o.h/2,w/2,o.h/2,0,0,6.2832); ctx.fill();
-    }
-    ctx.restore();
-  },
 };
 
 /* ══════════════════════════════════════════════════
@@ -556,7 +539,6 @@ var TOOLS = [
   {t:"circle",     n:"Круг",        k:"toolCircle",     m:ALL},
   {t:"triangle",   n:"Треугольник", k:"toolTriangle",   m:ALL},
   {t:"text",       n:"Текст",       k:"toolText",       m:ALL},
-  {t:"coin",       n:"Монета",      k:"toolCoin",       m:ALL},
   {t:"spawn",      n:"Точка старта",k:"toolSpawn",      m:ALL},
   {t:"button",     n:"Кнопка",      k:"toolButton",     m:ALL},
   {t:"lever",      n:"Рычаг",       k:"toolLever",      m:ALL},
@@ -566,6 +548,12 @@ var TOOLS = [
 ];
 var MODE_OF = {};
 TOOLS.forEach(function(T){ MODE_OF[T.t] = T.m; });
+/* Монеты убраны из редактора совсем: награда в Race теперь фиксированная
+   случайная выдача за прохождение карты, а не сбор с неё (см. game.js).
+   "none" не совпадает ни с одним режимом — allowedIn() отбраковывает
+   монету и при смене режима в редакторе, и при публикации старой карты,
+   где она осталась в JSON. */
+MODE_OF.coin = "none";
 function allowedIn(type, m){
   if (!Object.prototype.hasOwnProperty.call(MODE_OF, type)) return true;
   var s = MODE_OF[type];
@@ -578,13 +566,13 @@ var OBJ_LIMIT = 2000;   // максимум объектов в карте, од
 var INK = "#111827";
 var COLORS = {
   rect:INK, circle:INK, triangle:INK, text:INK,
-  coin:"", button:INK, lever:INK,
+  button:INK, lever:INK,
   checkpoint:"", finishline:"", spawn:INK
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
    Игрок 20x60, ровно три клетки в высоту. */
 var SIZES = {
-  rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24], coin:[22,22],
+  rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24],
   button:[34,18], lever:[22,42],
   checkpoint:[30,64], finishline:[42,86], spawn:[20,60]
 };
@@ -601,16 +589,6 @@ var LINKED = ["rect","circle","triangle","button","lever"];
 /* ══════════════════════════════════════════════════
    STATE
    ══════════════════════════════════════════════════ */
-var COIN_LIMIT = 3;   // больше трёх монет в карту не положить — защита от накрутки
-/* Владельцу лимит не мешает: его карты для показов, а не для набивания
-   монет. Флаг приходит из инструментов владельца. */
-function coinCapped(){ return !window.BFAdminAbuse; }
-function countCoins(){ return objects.filter(function(o){ return o.type === "coin"; }).length; }
-function coinWarn(){
-  showMsg(TR("coinLimitTitle","Максимум " + COIN_LIMIT + " монеты").replace("{n}", COIN_LIMIT),
-          TR("coinLimitBody","Больше монет в карту положить нельзя."));
-  setTimeout(hideMsg, 1800);
-}
 var mode = "hideAndSeek", tool = "select", objects = [], sel = null, uid = 1;
 
 /* ══════════════════════════════════════════════════
@@ -800,7 +778,7 @@ var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,self
 };
 var keys = {l:false,r:false,u:false};
 var coy = 0, buf = 0, hold = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
-var deaths = 0, coins = 0, coinsTotal = 0, timeMs = 0, shake = 0, acc = 0, last = 0;
+var deaths = 0, timeMs = 0, shake = 0, acc = 0, last = 0;
 
 /* Где игрок относительно воды: верхняя кромка, под водой ли голова
    и не кислота ли это. Считается по тем же объектам, что и коллизии. */
@@ -832,15 +810,14 @@ function play(){
               ". Отодвинь старт или финиш.").replace("{n}", near).replace("{m}", SPAWN_GAP), null);
     return;
   }
-  playing = true; done = false; deaths = 0; coins = 0; timeMs = 0; parts.length = 0;
+  playing = true; done = false; deaths = 0; timeMs = 0; parts.length = 0;
   indexMovers(); markDirty();
   // размер игрока задан движком и не редактируется
   pl.w = SIZES.spawn[0]; pl.h = SIZES.spawn[1];
   spawnPt = {x:sp.x, y:sp.y};
-  coinsTotal = objects.filter(function(o){ return o.type === "coin"; }).length;
   objects.forEach(function(o){
     o._hx = o.x; o._hy = o.y; o._t = 0; o._act = !!o.startsOpen;
-    o._got = false; o._reached = false; o._spin = 0; o._squash = 0;
+    o._reached = false; o._spin = 0; o._squash = 0;
   });
   respawn();
   document.body.classList.add("play");
@@ -858,9 +835,9 @@ function stop(){
    финиша пройти карту заново можно было только с клавиатуры. */
 function restartRun(){
   done = false; hideMsg();
-  coins = 0; timeMs = 0; deaths = 0;
+  timeMs = 0; deaths = 0;
   objects.forEach(function(o){
-    o._got = false; o._reached = false;
+    o._reached = false;
     o._act = !!o.startsOpen; o._latch = false;
   });
   var sp = findSpawn();
@@ -873,6 +850,8 @@ function respawn(){
   pl.rideOn = null;
 }
 function die(){
+  // в прятках умереть нельзя вообще — единая точка входа для любой смерти
+  if(mode === "hideAndSeek") return;
   if(pl.dead || done) return;
   pl.dead = true; deaths++; shake = 13; stat();
   burst(pl.x+pl.w/2, pl.y+pl.h/2, 22, "#ef4444", 4.4, 34);
@@ -880,7 +859,6 @@ function die(){
 }
 function stat(){
   document.getElementById("sDeath").textContent = deaths;
-  document.getElementById("sCoin").textContent = coins + "/" + coinsTotal;
   var so = document.getElementById("sObj");
   if(so) so.textContent = objects.length + "/" + OBJ_LIMIT;
 }
@@ -1412,10 +1390,6 @@ function step(){
       return;
     }
     if(hazard(o)){ die(); return; }
-    if(o.type === "coin" && !o._got){
-      o._got = true; coins++; stat();
-      burst(o.x+o.w/2, o.y+o.h/2, 12, "#fbbf24", 3, 26);
-    }
     if(o.type === "checkpoint" && !o._reached){
       o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h};
       burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
@@ -1425,8 +1399,8 @@ function step(){
       done = true; shake = 6;
       burst(o.x+o.w/2, o.y+o.h/2, 40, "#fbbf24", 5, 60);
       showMsg(TR("finishTitle","ФИНИШ!"),
-              TR("finishBody","Время {t}с · монет {c}/{ct} · смертей {d}   —   новый забег через мгновение")
-                .replace("{t}", (timeMs/1000).toFixed(1)).replace("{c}", coins).replace("{ct}", coinsTotal).replace("{d}", deaths));
+              TR("finishBody","Время {t}с · смертей {d}   —   новый забег через мгновение")
+                .replace("{t}", (timeMs/1000).toFixed(1)).replace("{d}", deaths));
       /* Карта запускается заново сама: ни кнопок, ни перезагрузки. Пара
          секунд — чтобы успеть увидеть время и салют, дальше снова старт. */
       clearTimeout(finishTimer);
@@ -1469,7 +1443,6 @@ function drawGrid(){
   ctx.stroke();
 }
 function paint(o, isSel){
-  if(o.type === "coin" && o._got) return;
   var open = opened(o);
   ctx.save();
   ctx.translate(o.x+o.w/2, o.y+o.h/2);
@@ -1750,7 +1723,7 @@ document.getElementById("modes").addEventListener("click", function(e){
       // чтобы геометрия уровня не разъехалась
       if(o.type === "door" || o.type === "gate" || o.type === "cover"){ o.type = "rect"; }
     });
-    objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid"; });
+    objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid" && o.type !== "coin"; });
     sel = null; markDirty(); indexMovers();
     showMsg(TR("droppedObjsTitle","Убрано объектов: {n}").replace("{n}", drop.length),
             TR("droppedObjsBody","В режиме «{mode}» они не работают. Ctrl+Z вернёт их обратно.").replace("{mode}", TR(mode, mode)));
@@ -1811,7 +1784,6 @@ function copySel(){
 function pasteAt(x, y){
   if(!clipboard || playing) return false;
   if(overLimit(1)) return false;
-  if(clipboard.type === "coin" && coinCapped() && countCoins() >= COIN_LIMIT){ coinWarn(); return false; }
   if(!allowedIn(clipboard.type, mode)) return false;
   commit();
   var c = Object.assign({}, clipboard);
@@ -1853,7 +1825,6 @@ function down(x,y,alt,shift){
     else sel = null;
     inspect(); return;
   }
-  if(tool === "coin" && coinCapped() && countCoins() >= COIN_LIMIT){ coinWarn(); return; }
   if(!allowedIn(tool, mode)){ setTool("select"); return; }
   if(overLimit(1)) return;
   commit();
@@ -2055,7 +2026,6 @@ pad("pJump",  function(v){ keys.u = v; if(v) buf = BUFFER; });
 
 function duplicate(){
   if(!sel) return;
-  if(sel.type === "coin" && coinCapped() && countCoins() >= COIN_LIMIT){ coinWarn(); return; }
   if(overLimit(1)) return;
   commit();
   var c = JSON.parse(JSON.stringify(sel));
@@ -2183,7 +2153,9 @@ function inspect(){
   if(sel.type === "text") txt(TR("toolText","Текст"), sel.text, function(v){ sel.text = v; });
 
   grp(TR("grpGameProps","Игровые свойства"));
-  if(["spawn","checkpoint","finishline","coin"].indexOf(sel.type) === -1)
+  /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Яд»
+     там бы включала свойство, которое физика всё равно игнорирует. */
+  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline"].indexOf(sel.type) === -1)
     chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
   if(SOLID.indexOf(sel.type) !== -1)
     chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; });
@@ -2360,7 +2332,7 @@ document.getElementById("file").addEventListener("change", function(e){
         // гравитация из старой карты игнорируется: она всегда 9
       }
       document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
-      objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid"; });
+      objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid" && o.type !== "coin"; });
       syncTools(); sel = null; inspect();
     }catch(err){ dialog(TR("errorTxt","Ошибка"), TR("readErrorBody","Не удалось прочитать файл карты."),null); }
   };
@@ -2413,7 +2385,6 @@ window.GAME = BRIDGE = {
   allowedIn: allowedIn,
   dialog: dialog,
   OBJ_LIMIT: OBJ_LIMIT,
-  COIN_LIMIT: COIN_LIMIT,
   MODE_OF: MODE_OF,
   play: play, stop: stop, respawn: respawn,
   step: step,                     // один шаг физики — нужен автотестам
@@ -2436,8 +2407,6 @@ window.GAME = BRIDGE = {
   get objects(){ return objects; },
   get mode(){ return mode; },
   get done(){ return done; },
-  get coins(){ return coins; },
-  get coinsTotal(){ return coinsTotal; },
   loadMap: function(json){
     var d = (typeof json === "string") ? JSON.parse(json) : json;
     if(playing) stop();
@@ -2487,7 +2456,7 @@ window.GAME = BRIDGE = {
       // чтобы геометрия уровня не разъехалась
       if(o.type === "door" || o.type === "gate" || o.type === "cover"){ o.type = "rect"; }
     });
-    objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid"; });
+    objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid" && o.type !== "coin"; });
     if(objects.length > OBJ_LIMIT) objects.length = OBJ_LIMIT;
     objects.forEach(function(o){ if(o.id >= uid) uid = o.id + 1; });
     indexMovers(); markDirty();
@@ -2609,18 +2578,12 @@ requestAnimationFrame(loop);
       var parsed = JSON.parse(data);
       var objs = parsed.objects || [];
       var G = BRIDGE;
-      var LIM = G.OBJ_LIMIT || 2000, CL = G.COIN_LIMIT || 3;
+      var LIM = G.OBJ_LIMIT || 2000;
       var ok = G.allowedIn || function(){ return true; };
 
       if (objs.length > LIM) {
         say(TR('tooManyObjectsTitle','Слишком много объектов'),
             TR('tooManyObjectsBody','В карте {n}. Разрешено не больше {lim}.').replace('{n}', objs.length).replace('{lim}', LIM));
-        return;
-      }
-      var coins = objs.filter(function(o){ return o.type === 'coin'; }).length;
-      if (coins > CL) {
-        say(TR('tooManyCoinsTitle','Слишком много монет'),
-            TR('tooManyCoinsBody','В карте {n}. Разрешено не больше {lim} — уберите лишние.').replace('{n}', coins).replace('{lim}', CL));
         return;
       }
       var bad = objs.filter(function(o){ return !ok(o.type, m.mode); })
