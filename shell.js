@@ -32,7 +32,7 @@
   function defaultFace() {
     if (!window.BFSkin) return 'data:image/svg+xml;charset=utf-8,' +
       encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>');
-    var svg = window.BFSkin.svg({ head: 'h_none', face: 'f_none', body: 'b_none', back: 'k_none' },
+    var svg = window.BFSkin.svg({ head: 'h_none', body: 'b_none' },
                          {}, { height: 300 });
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }

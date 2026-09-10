@@ -35,7 +35,7 @@ const src=fs.readFileSync(__dirname+'/skinAvatar.js','utf8');
 new Function(src)();
 const A=global.window.BFAvatar;
 
-const skin={head:'h_crown',face:'f_none',body:'b_suit',back:'k_cape'};
+const skin={head:'h_king',body:'b_king'};
 
 console.log('--- <img> (профиль, лидеры, друзья) ---');
 const im=mk('img'); im.classList.add('profile-picture');
