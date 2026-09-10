@@ -138,8 +138,9 @@
     + '#gTop{position:fixed;top:0;left:0;right:0;z-index:60;display:flex;gap:12px;align-items:center;'
     + 'padding:7px 12px;background:rgba(255,255,255,.9);font:13px sans-serif;flex-wrap:wrap}'
     + '#gTop b{color:#2196F3}'
-    + '#gExit{margin-left:auto;background:#e74c3c;color:#fff;border:none;padding:7px 13px;'
-    + 'border-radius:6px;cursor:pointer;font-weight:bold}'
+    + '#gExit{margin-left:auto;background:#fff;color:#111827;border:1px solid #d7dee7;padding:7px 13px;'
+    + 'border-radius:8px;cursor:pointer;font-weight:bold;box-shadow:0 8px 20px -12px rgba(15,23,42,.35)}'
+    + '#gExit:active{background:#f2f7fd}'
     + '#gMap{position:fixed;right:12px;bottom:12px;z-index:60;background:rgba(255,255,255,.92);'
     + 'border:1px solid #d7dee7;border-radius:9px;padding:8px 13px;font:12.5px sans-serif;max-width:46vw}'
     + '#gMap .n{font-weight:bold;color:#111827;word-break:break-word}'
@@ -1115,7 +1116,16 @@
         var o = others[id];
         // в охоте укрытие уже не спасает — иначе поймать было бы некого
         if (o.caught) return;
-        if (Math.abs(o.x - p.x) < 34 && Math.abs(o.y - p.y) < 60) {
+        /* Сверяем по o.tx/o.ty — последней РЕАЛЬНОЙ полученной позиции,
+           а не по o.x/o.y: те нарочно отрисовываются с задержкой (interp,
+           32-150мс — см. sample()), чтобы чужие двигались плавно. Пока
+           прячущийся не стоит на месте, эта задержка сама по себе даёт
+           разрыв в десятки юнитов (при 150мс — почти 47 при максимальной
+           скорости), и искатель, вплотную подойдя к тому, что видит на
+           экране, на самом деле всё ещё гонится за точкой, где жертва
+           была мгновение назад — поймать так нельзя было в принципе,
+           сколько бы игрок ни старался. */
+        if (Math.abs(o.tx - p.x) < 34 && Math.abs(o.ty - p.y) < 60) {
           o.caught = true;
           caughtNames[o.name] = 1;
           socket.emit('sendChat', { text: o.name + ' пойман!' });
