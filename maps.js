@@ -275,7 +275,7 @@ function register(app, getUser, acc) {
     res.json(m ? m.mapData : '');
   });
 
-  // ---------- случайная карта режима (для Sandbox и игр) ----------
+  // ---------- случайная карта режима ----------
   app.get('/getRandomMap', (req, res) => {
     const t = req.query.mapType;
     // без указания режима берём любую карту, иначе — карты владельца

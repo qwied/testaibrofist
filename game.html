@@ -1389,8 +1389,7 @@ function step(){
       o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h};
       burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
     }
-    // Дверь — это выход. В игре на двоих уровень засчитывается, когда
-    // в неё вошли ВСЕ игроки; одному достаточно дойти самому.
+    // Дверь — это выход: игроку достаточно дойти до неё самому.
     if(o.type === "finishline" && !done){
       done = true; shake = 6;
       burst(o.x+o.w/2, o.y+o.h/2, 40, "#fbbf24", 5, 60);
@@ -2316,7 +2315,7 @@ requestAnimationFrame(loop);
 
 
 <script src="game.js?v=109"></script>
-        <script src="i18n.js?v=107"></script>
+        <script src="i18n.js?v=108"></script>
         <script src="owner.js?v=102" defer></script>
         <script src="skinAvatar.js?v=100" defer></script>
 </body>

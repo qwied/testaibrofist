@@ -6,7 +6,7 @@
 
   var me = { owner: false, name: '', ownerName: 'AIBrofist' };
   var inGame = {};          // "автор::карта" -> [режимы]
-  // режимы twoPlayer и sandbox удалены из игры — кнопок для них больше нет
+  // режимов, кроме этих двух, в игре нет
   var MODES = ['hideAndSeek', 'race'];
   var MODE_RU = { hideAndSeek: 'Прятки', race: 'Гонка' };
   var T = function (k, fallback) {
