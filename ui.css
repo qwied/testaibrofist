@@ -133,10 +133,3 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
   .bfDrop{left:8px;right:8px;min-width:0}
   .bfMenuBtn{padding:9px 9px;font-size:14px}
 }
-
-/* выбор языка в меню */
-.bfLangs{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;padding:4px 10px 8px}
-.bfLangItem{padding:9px 10px;border:1px solid var(--line);border-radius:8px;
-  font-size:13.5px;text-align:center;cursor:pointer;white-space:nowrap}
-.bfLangItem:hover{background:#eef2f8}
-.bfLangItem.on{background:var(--blue);border-color:var(--blue);color:#fff}

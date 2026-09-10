@@ -60,7 +60,7 @@ app.use((req, res, next) => {
    репозитория: новый тест или свежий readme оказывались доступны по
    прямой ссылке. Теперь закрыты и целые семейства по префиксу. */
 const PRIVATE = ['/server.js','/accounts.js','/maps.js','/skins.js','/userskins.js','/updatetimer.js','/abuse.js',
-                 '/lang.js','/themes.js','/extras.js','/check-domain.js','/backup.js',
+                 '/themes.js','/extras.js','/check-domain.js','/backup.js',
                  '/package.json','/package-lock.json'];
 const PRIVATE_PREFIX = ['/test-', '/audit-', '/readme', '/domain', '/patch_', '/data', '/node_modules'];
 app.use((req, res, next) => {
@@ -289,7 +289,6 @@ require('./maps.js').register(app, accounts.currentUser, accounts);
 const skinsApi = require('./skins.js');
 skinsApi.register(app, accounts);
 require('./userSkins.js').register(app, accounts, skinsApi);
-require('./lang.js').register(app, accounts);
 require('./themes.js').register(app, accounts);
 require('./updateTimer.js').register(app, accounts);
 require('./abuse.js').register(app, accounts);

@@ -125,13 +125,11 @@ function load() {
       .slice(0, IMG_PER_LOG);
   });
 }
-/* Перевод новостей на все языки сайта. Владелец обычно пишет по-русски,
-   но иногда и по-английски — проверяем кириллицу и переводим с того
-   языка, которым реально написан текст.
+/* Сайт теперь только на английском: перевод новостей — не на все языки,
+   а всегда в английский, каким бы языком владелец ни написал текст.
    Сервис бесплатный и без ключа (MyMemory Translated), поэтому запрос
    режем на короткие куски — так надёжнее укладываемся в его лимит на
    один запрос и меньше шансов получить обрезанный ответ. */
-const LOGS_LANGS = ['ru', 'en', 'uk', 'de', 'fr', 'es', 'pt', 'pl', 'tr', 'zh'];
 const MM_CHUNK = 450;
 
 function detectLang(text) { return /[Ѐ-ӿ]/.test(text) ? 'ru' : 'en'; }
@@ -192,21 +190,48 @@ async function translateLong(text, sourceLang, targetLang) {
   return outParas.join('\n');
 }
 
-/* Заголовок и текст новости -> объект со всеми языками сайта.
-   Исходный язык (тот, которым реально написано) копируется без перевода;
-   остальные девять переводятся параллельно. Одна упавшая или недоступная
-   вызовка не рушит всё: для неё остаётся исходный текст, а не пустота. */
-async function translateLogAll(title, text) {
+/* Заголовок и текст новости -> тот же текст, но по-английски. Если уже
+   написано по-английски, перевод не запускаем вовсе. Сеть недоступна или
+   сервис не ответил — отдаём исходный текст, а не пустоту: запись всё
+   равно останется читаемой, просто на языке автора. */
+async function translateToEnglish(title, text) {
   const source = detectLang(title + ' ' + text);
-  const i18n = {}; i18n[source] = { title, text };
-  await Promise.all(LOGS_LANGS.filter(l => l !== source).map(async lang => {
-    const [tTitle, tText] = await Promise.all([
-      translateLong(title, source, lang),
-      translateLong(text, source, lang)
-    ]);
-    i18n[lang] = { title: tTitle || title, text: tText || text };
-  }));
-  return i18n;
+  if (source === 'en') return { title, text };
+  const [tTitle, tText] = await Promise.all([
+    translateLong(title, source, 'en'),
+    translateLong(text, source, 'en')
+  ]);
+  return { title: tTitle || title, text: tText || text };
+}
+
+/* Одноразовая миграция: раньше новость хранила перевод на все 10 языков
+   в l.i18n и показывалась на языке читателя. Теперь сайт только
+   английский — оставляем от каждой записи один текст. Уже посчитанный
+   английский перевод (l.i18n.en) используем как есть, без повторного
+   обращения к переводчику; если его почему-то нет — переводим заново. */
+async function migrateLogsToEnglish() {
+  let changed = false;
+  for (const l of logs) {
+    if (l.i18n) {
+      const cached = l.i18n.en;
+      if (cached && (cached.title || cached.text)) {
+        l.title = cached.title || l.title;
+        l.text = cached.text || l.text;
+      } else {
+        const r = await translateToEnglish(l.title, l.text);
+        l.title = r.title; l.text = r.text;
+      }
+      delete l.i18n;
+      changed = true;
+      continue;
+    }
+    if (detectLang(l.title + ' ' + l.text) !== 'en') {
+      const r = await translateToEnglish(l.title, l.text);
+      l.title = r.title; l.text = r.text;
+      changed = true;
+    }
+  }
+  if (changed) save();
 }
 
 let t = null;
@@ -220,6 +245,7 @@ function save() {
   }, 300);
 }
 load();
+migrateLogsToEnglish().catch(() => {});
 sweepImages();
 setInterval(sweepImages, 30 * 60 * 1000).unref();
 
@@ -282,14 +308,12 @@ function register(app, acc) {
     const images = takeImages(req.body.images);
     if (!title && !text && !images.length)
       return res.json({ status: 'error', message: 'Пустая запись' });
-    const source = detectLang(title + ' ' + text);
-    const entry = { id: nextId(), title, text, images, date: Date.now(),
-                     i18n: { [source]: { title, text } } };
+    const entry = { id: nextId(), title, text, images, date: Date.now() };
     logs.push(entry);
     save();
     res.json({ status: 'success', images: images.length });
-    // перевод на остальные языки — уже после ответа, чтобы публикация не ждала сеть
-    translateLogAll(title, text).then(i18n => { entry.i18n = i18n; save(); }).catch(() => {});
+    // перевод на английский — уже после ответа, чтобы публикация не ждала сеть
+    translateToEnglish(title, text).then(r => { entry.title = r.title; entry.text = r.text; save(); }).catch(() => {});
   });
 
   /* Правка уже выложенной новости: можно дописать текст и добавить или
@@ -304,13 +328,11 @@ function register(app, acc) {
     if (!title && !text && !images.length)
       return res.json({ status: 'error', message: 'Пустая запись' });
     const was = l.images || [];
-    const source = detectLang(title + ' ' + text);
     l.title = title; l.text = text; l.images = images;
-    l.i18n = { [source]: { title, text } };   // старые переводы правкой сбиваются — переведём заново
     save();
     dropImages(was.filter(i => !images.some(n => n.u === i.u)));   // отцепленные файлы убираем
     res.json({ status: 'success' });
-    translateLogAll(title, text).then(i18n => { l.i18n = i18n; save(); }).catch(() => {});
+    translateToEnglish(title, text).then(r => { l.title = r.title; l.text = r.text; save(); }).catch(() => {});
   });
 
   app.post('/deleteLog', (req, res) => {
