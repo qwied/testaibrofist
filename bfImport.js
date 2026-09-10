@@ -92,7 +92,7 @@
    */
   function convert(scene, opt) {
     opt = opt || {};
-    var mode = opt.mode || 'sandbox';
+    var mode = opt.mode || 'hideAndSeek';
     var objLimit = opt.objLimit || 2000;
     var coinLimit = opt.coinLimit || 3;
     var allowed = opt.allowed || function () { return true; };
@@ -225,9 +225,11 @@
         if (k) has[k] = true;
       });
     });
-    if (has.lever || has.button || has.door) return 'twoPlayer';
     if (has.finishline || has.checkpoint) return 'race';
     if (has.seeker || has.cover) return 'hideAndSeek';
+    // Рычаги, кнопки и двери раньше означали режим twoPlayer. Его в игре
+    // нет, а сами объекты работают в любом режиме — карту оставляем в том,
+    // который открыт в редакторе.
     return '';
   }
 

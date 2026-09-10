@@ -35,9 +35,7 @@
     signin:       ['Войти','Sign in','Увійти','Anmelden','Connexion','Entrar','Entrar','Zaloguj','Giriş','登录'],
 
     /* ---------- режимы ---------- */
-    twoPlayer:    ['Игра на двоих','Two Player Adventure','Гра на двох','Zwei Spieler','Deux joueurs','Dos jugadores','Dois jogadores','Dla dwojga','İki oyuncu','双人冒险'],
     hideAndSeek:  ['Прятки','Hide and Seek','Хованки','Verstecken','Cache-cache','Escondite','Esconde-esconde','Chowany','Saklambaç','捉迷藏'],
-    sandbox:      ['Песочница','Sandbox','Пісочниця','Sandkasten','Bac à sable','Sandbox','Sandbox','Piaskownica','Serbest mod','沙盒'],
     race:         ['Гонка','Race','Перегони','Rennen','Course','Carrera','Corrida','Wyścig','Yarış','竞速'],
 
     /* ---------- вход ---------- */
@@ -318,7 +316,7 @@
     'Play': 'play', 'Mode: All': 'modeAll', 'Sort by rating': 'sortRating',
     'Sort by date': 'sortDate', 'Refresh': 'refresh', 'Author': 'colAuthor',
     'Name': 'colName', 'Rating': 'colRating', 'Date': 'colDate',
-    'Two Player Adventure': 'twoPlayer', 'Hide And Seek': 'hideAndSeek',
+    'Hide And Seek': 'hideAndSeek',
     'Join Date': 'joinDate', 'Add friend': 'addFriend', 'Remove': 'removeTxt',
     'Accept': 'accept', 'Decline': 'decline', 'Cancel': 'cancel',
     'Equip': 'equip', 'Equipped': 'equipped', 'Free': 'free', 'Buy': 'buy',
@@ -331,9 +329,8 @@
     'Search users': 'searchUsers', 'Add friend': 'addFriend', 'Report': 'report',
     'Edit': 'editTxt', 'Remove': 'removeTxt', 'Friends': 'friendsTxt',
     'Requests': 'requestsTxt', 'Pending': 'pendingTxt', 'Maps': 'mapsTxt', 'Skins': 'skinsTxt',
-    'Mode: Two Player Adventure': 'twoPlayer', 'Mode: Hide And Seek': 'hideAndSeek',
-    'Mode: Race': 'race', 'Two Player Adventure': 'twoPlayer',
-    'Hide and Seek': 'hideAndSeek', 'Sandbox': 'sandbox', 'Race': 'race',
+    'Mode: Hide And Seek': 'hideAndSeek', 'Mode: Race': 'race',
+    'Hide and Seek': 'hideAndSeek', 'Race': 'race',
     'Таблица лидеров': 'leaderboard', 'Новости': 'logs', 'Настройки': 'settings',
     'Мой профиль': 'viewProfile', 'Выйти': 'logout', 'Войти': 'signin',
     'Вход или регистрация': 'signInOrUp', 'Войти в аккаунт': 'loginAcc',

@@ -246,6 +246,12 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/skinEditor.html', (req, res) => res.redirect(301, '/avatar.html'));
 app.get('/skinsBrowser.html', (req, res) => res.redirect(301, '/avatar.html'));
 
+/* Режимов Two Player Adventure и Sandbox в игре нет: страницы удалены,
+   остались только Hide and Seek и Race. Старые ссылки и закладки уводим
+   на главную, чтобы вместо них не выпадала 404. */
+app.get('/two-player.html', (req, res) => res.redirect(301, '/'));
+app.get('/sandbox.html', (req, res) => res.redirect(301, '/'));
+
 /* Резервные копии: бэкап приходит одним большим POST-запросом, поэтому
    маршрут надо зарегистрировать ДО скромных глобальных лимитов тела
    (тот же приём, что у /abuse/upload ниже). Права перепроверяются на
@@ -304,7 +310,7 @@ app.get(/^\/avatar\//, (req, res) => {
 
 app.get('/getBestRoom', (req, res) => {
   // чистим как имя комнаты в join: мусор в mode не заводит лишние ключи
-  const mode = cleanName(req.query.mode) || 'sandbox';
+  const mode = cleanName(req.query.mode) || 'hideAndSeek';
   const LIMIT = 40;                      // больше — заводим новую комнату
   let best = null, bestCount = -1;
   gameState.rooms.forEach((set, key) => {
@@ -858,7 +864,7 @@ server.listen(PORT, () => {
   ║   AIBROFIST MULTIPLAYER SERVER                        ║
   ║   Запущен на http://localhost:${PORT}                   ║
   ║   До 2000+ игроков одновременно                         ║
-  ║   Map Editor + Two Player + Hide and Seek + Sandbox     ║
+  ║   Map Editor + Hide and Seek + Race                     ║
   ║   Оптимизирован для экстремальных нагрузок              ║
   ╚════════════════════════════════════════════════════════════╝
   `);
