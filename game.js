@@ -151,7 +151,9 @@
     + 'border-radius:8px;cursor:pointer;font-weight:bold;box-shadow:0 8px 20px -12px rgba(15,23,42,.35)}'
     + '#gExit:active{background:#f2f7fd}'
     + '#gSound{background:#fff;color:#111827;border:1px solid #d7dee7;width:32px;height:32px;'
-    + 'border-radius:8px;cursor:pointer;font-size:15px;line-height:1;padding:0}'
+    + 'border-radius:8px;cursor:pointer;font-size:15px;line-height:1;padding:0;'
+    + 'display:flex;align-items:center;justify-content:center}'
+    + '#gSound svg{width:17px;height:17px;display:block;pointer-events:none}'
     + '#gSound:active{background:#f2f7fd}'
     + '#gMap{position:fixed;right:12px;bottom:12px;z-index:60;background:rgba(255,255,255,.92);'
     + 'border:1px solid #d7dee7;border-radius:9px;padding:8px 13px;font:12.5px sans-serif;max-width:46vw}'
@@ -234,9 +236,9 @@
     + 'line-height:38px;white-space:nowrap;'
     + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.35)}'
     + '#gScoresBtn:active{background:#f2f7fd}'
-    + '#gScoresPanel{display:none;position:fixed;top:96px;left:12px;z-index:61;min-width:170px;'
-    + 'max-width:240px;max-height:44vh;overflow-y:auto;background:rgba(255,255,255,.96);'
-    + 'border:1px solid #d7dee7;border-radius:9px;padding:9px 11px;font:12.5px sans-serif;'
+    + '#gScoresPanel{display:none;position:fixed;top:96px;left:12px;z-index:61;min-width:150px;'
+    + 'max-width:200px;max-height:27vh;overflow-y:auto;background:rgba(255,255,255,.96);'
+    + 'border:1px solid #d7dee7;border-radius:9px;padding:8px 10px;font:12px sans-serif;'
     + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.45)}'
     + '#gScoresPanel.on{display:block}'
     + '#gScoresPanel h4{margin:0 0 6px;font-size:11px;color:#8b93a1;text-transform:uppercase;letter-spacing:.03em}'
@@ -251,9 +253,11 @@
            та же переписка, что и на messages.html, чтобы не выходить
            из матча ради ответа. Во всех режимах, не только в Race. --- */
     + '#gMsgsBtn{display:none;position:fixed;bottom:14px;left:12px;z-index:61;'
-    + 'width:44px;height:44px;padding:0;background:rgba(255,255,255,.92);color:#111827;'
-    + 'border:1px solid #d7dee7;border-radius:50%;cursor:pointer;font-size:19px;line-height:1;'
+    + 'width:44px;height:44px;padding:0;background:rgba(255,255,255,.92);color:#2196F3;'
+    + 'border:1px solid #d7dee7;border-radius:50%;cursor:pointer;line-height:1;'
+    + 'align-items:center;justify-content:center;'
     + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.4)}'
+    + '#gMsgsBtn svg{width:20px;height:20px;display:block;pointer-events:none}'
     + '#gMsgsBtn:active{background:#f2f7fd}'
     + '#gMsgsBadge{display:none;position:fixed;bottom:41px;left:39px;z-index:62;min-width:16px;'
     + 'height:16px;padding:0 3px;border-radius:9px;background:#ef4444;color:#fff;'
@@ -323,7 +327,12 @@
     + '<button id="gExit">Меню</button></div>'
     + '<div id="gMap"><div class="n" id="gMapName">Loading map…</div>'
     + '<div class="a" id="gMapAuthor"></div><div class="rate" id="gRate" style="display:none">'
-    + '<button data-v="1">👍</button><button data-v="-1">👎</button>'
+    + '<button data-v="1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+    + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">'
+    + '<path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>'
+    + '<button data-v="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+    + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">'
+    + '<path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg></button>'
     + '<span id="gRating" style="color:#6b7280"></span></div></div>'
     + '<div id="gBanner"><h2 id="gbT"></h2><p id="gbP"></p></div>'
     + '<div id="gRoul"><div id="gRoulView"><div id="gRoulTrack"></div></div>'
@@ -336,7 +345,9 @@
     + '8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>'
     + '<button id="gScoresBtn" aria-label="Scores">Scores</button>'
     + '<div id="gScoresPanel"><h4 id="gScoresTitle">Scores</h4><div id="gScoresList"></div></div>'
-    + '<button id="gMsgsBtn" aria-label="Messages">✉️</button>'
+    + '<button id="gMsgsBtn" aria-label="Messages"><svg viewBox="0 0 24 24" fill="none" '
+    + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+    + '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 6l10 7 10-7"/></svg></button>'
     + '<span id="gMsgsBadge"></span>'
     + '<div id="gMsgsPanel">'
     +   '<div id="gMsgsHead"><button id="gMsgsBack">&larr;</button>'
@@ -390,10 +401,16 @@
   $('gExit').onclick = function () { location.href = 'index.html'; };
 
   // ---------- звук: включён по умолчанию, состояние живёт в localStorage ----------
+  var SOUND_ON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>'
+    + '<path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+  var SOUND_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>'
+    + '<line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
   function paintSoundBtn() {
     var b = $('gSound');
     if (!b || !window.BFSound) return;
-    b.textContent = BFSound.isOn() ? '🔊' : '🔇';
+    b.innerHTML = BFSound.isOn() ? SOUND_ON_SVG : SOUND_OFF_SVG;
     b.setAttribute('aria-label', TR('soundBtn', 'Sound'));
   }
   if (window.BFSound) {
@@ -997,7 +1014,8 @@
 
     connect();
 
-    if (MODE === 'race' && scoresBtn) scoresBtn.style.display = 'flex';
+    // сразу видна, кликать незачем — кнопка теперь только сворачивает её
+    if (MODE === 'race' && scoresBtn) { scoresBtn.style.display = 'flex'; if (scoresPanel) scoresPanel.classList.add('on'); }
     msgsSetup();
 
     if (MODE === 'hideAndSeek') {
