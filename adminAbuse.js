@@ -49,7 +49,7 @@
 
   var CSS = ''
     + '#aaFab{position:fixed;right:14px;bottom:14px;z-index:10000;display:flex;align-items:center;gap:7px;'
-    + 'padding:11px 16px;border-radius:999px;border:none;'
+    + 'padding:11px 16px;border-radius:999px;border:none;white-space:nowrap;'
     + 'background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;font:700 12.5px system-ui,sans-serif;'
     + 'letter-spacing:.3px;cursor:pointer;box-shadow:0 8px 22px rgba(185,28,28,.38);user-select:none;'
     + 'transition:transform .15s,box-shadow .15s}'
@@ -99,6 +99,24 @@
       + 'stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v6c0 5 4 8.5 9 9 5-.5 9-4 9-9V7z"/>'
       + '<path d="M9 12l2 2 4-4"/></svg><span>Admin Abuse</span>';
     document.body.appendChild(fab);
+
+    /* Кнопка владельца (.ow-fab из owner.js) сидит в том же нижнем правом
+       углу и на телефоне/странице игры поднимается через отдельный набор
+       правил в mobile.css, чтобы не залезать на джойстик — повторять тот
+       же набор здесь смысла нет (разойдутся при следующей правке любого
+       из файлов). Подстраиваемся под то, где она РЕАЛЬНО оказалась после
+       применения всех стилей, а не гадаем цифрой. */
+    function clearOwnerFab() {
+      var ow = document.querySelector('.ow-fab');
+      if (!ow) return;
+      var r = ow.getBoundingClientRect();
+      if (!r.height) return;                       // ещё не отрисовалась
+      fab.style.bottom = (window.innerHeight - r.bottom + r.height + 10) + 'px';
+    }
+    clearOwnerFab();
+    [100, 400, 1200].forEach(function (t) { setTimeout(clearOwnerFab, t); });
+    window.addEventListener('resize', clearOwnerFab);
+    window.addEventListener('orientationchange', function () { setTimeout(clearOwnerFab, 200); });
 
     panel = document.createElement('div');
     panel.id = 'aaPanel';
