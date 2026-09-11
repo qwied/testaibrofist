@@ -272,6 +272,16 @@
     }
   };
 
+  /* Тихие звуки нажатий и т.п. нужны на любой странице, а не только в
+     игре — sound.js сам решает, играть звук или нет (настройка в
+     localStorage), здесь только подгружаем его, если ещё не подключён
+     явно (как на game.html/editor.html). */
+  if (!document.querySelector('script[src*="sound.js"]')) {
+    var snd = document.createElement('script');
+    snd.src = 'sound.js?v=101';
+    document.head.appendChild(snd);
+  }
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();
