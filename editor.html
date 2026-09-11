@@ -205,7 +205,7 @@ body.mob #zoomBox{bottom:68px;right:8px}
 body.mob #msg h1{font-size:38px}
 </style>
         <script src="device.js?v=100"></script>
-        <script src="sound.js?v=100"></script>
+        <script src="sound.js?v=101"></script>
         <script src="skinRender.js?v=103"></script>
         <script src="skinCanvas.js?v=101"></script>
         <script src="coin.js?v=101"></script>
@@ -780,7 +780,7 @@ var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,self
 };
 var keys = {l:false,r:false,u:false};
 var coy = 0, buf = 0, hold = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
-var deaths = 0, timeMs = 0, shake = 0, acc = 0, last = 0;
+var deaths = 0, timeMs = 0, shake = 0, acc = 0, last = 0, lastStepAt = -9999;
 
 /* Где игрок относительно воды: верхняя кромка, под водой ли голова
    и не кислота ли это. Считается по тем же объектам, что и коллизии. */
@@ -1199,6 +1199,12 @@ function step(){
     if(Math.abs(pl.vx) < .05) pl.vx = 0;
   }
 
+  // шаги — только по земле и только пока реально двигается
+  if(window.BFSound && pl.ground && !pl.dead && Math.abs(pl.vx) > 30 && timeMs - lastStepAt > 250){
+    lastStepAt = timeMs;
+    BFSound.step();
+  }
+
   if(coy > 0) coy--;
   if(buf > 0) buf--;
 
@@ -1413,6 +1419,7 @@ function step(){
     // Дверь — это выход: игроку достаточно дойти до неё самому.
     if(o.type === "finishline" && !done){
       done = true; shake = 6;
+      if(window.BFSound) BFSound.finish();
       burst(o.x+o.w/2, o.y+o.h/2, 40, "#fbbf24", 5, 60);
       showMsg(TR("finishTitle","ФИНИШ!"),
               TR("finishBody","Время {t}с · смертей {d}   —   новый забег через мгновение")
@@ -1850,6 +1857,7 @@ function down(x,y,alt,shift){
   var d = SIZES[tool] || [50,50];
   var o = mk(tool, x, y, 1, 1);
   objects.push(o); sel = o;
+  if(window.BFSound) BFSound.place();
   drag = {m:"new", ox:x, oy:y, moved:false, w:d[0], h:d[1]};
   inspect();
 }
