@@ -23,9 +23,24 @@
                         color:#191919;cursor:pointer}
                 .lbName:hover{text-decoration:underline}
                 .lbCoins{font-weight:bold;color:#e2a600;flex:0 0 auto}
+                .lbCoins.score{color:#2196F3}
                 .mine{margin-top:22px;padding:13px;border:1px dashed #cfd6de;border-radius:8px;
                         color:#5b6570;font-size:14px;text-align:center}
                 .empty{color:#8b93a1;text-align:center;padding:50px 10px}
+
+                .lbTabs{display:flex;gap:7px;margin-bottom:10px;flex-wrap:wrap}
+                .lbTab{padding:7px 15px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;
+                        color:#5b6570;background:#f0f3f7;border:1px solid transparent;user-select:none}
+                .lbTab.on{color:#fff;background:#2196F3;border-color:#2196F3}
+                .lbPeriodTabs{margin-bottom:20px}
+
+                .lbPager{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px}
+                .lbArrow{width:38px;height:38px;border-radius:50%;border:1px solid #d7dee7;background:#fff;
+                        color:#191919;font-size:18px;cursor:pointer;display:flex;align-items:center;
+                        justify-content:center;box-shadow:0 6px 16px -10px rgba(15,23,42,.35)}
+                .lbArrow:hover:not(:disabled){background:#eaf4ff;border-color:#2196F3;color:#2196F3}
+                .lbArrow:disabled{opacity:.35;cursor:default}
+                .lbPageLabel{color:#8b93a1;font-size:13px;min-width:40px;text-align:center}
         </style>
         <link rel="stylesheet" href="ui.css?v=85">
         <script src="theme.js?v=100"></script>
@@ -35,11 +50,11 @@
         <link rel="manifest" href="/site.webmanifest">
         <meta name="theme-color" content="#111827">
         <link rel="canonical" href="https://aibrofist.online/leaderboard.html">
-        <meta name="description" content="Top players by coins.">
+        <meta name="description" content="Top players by coins and race scores.">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="AIBrofist">
         <meta property="og:title" content="AIBrofist — Leaderboard">
-        <meta property="og:description" content="Top players by coins.">
+        <meta property="og:description" content="Top players by coins and race scores.">
         <meta property="og:url" content="https://aibrofist.online/leaderboard.html">
         <meta property="og:image" content="https://aibrofist.online/preview.png">
         <meta name="twitter:card" content="summary_large_image">
@@ -50,8 +65,26 @@
 
 <div class="lbWrap">
         <h1 data-i18n="leaderboard">Таблица лидеров</h1>
-        <div class="sub" data-i18n="lbSub">Топ 10 по собранным монетам · обновляется автоматически</div>
+        <div class="sub" id="lbSub" data-i18n="lbSub">Обновляется автоматически</div>
+
+        <div class="lbTabs" id="lbMetricTabs">
+                <div class="lbTab on" data-metric="coins" data-i18n="lbTabCoins">Монеты</div>
+                <div class="lbTab" data-metric="score" data-i18n="lbTabScore">Очки</div>
+        </div>
+        <div class="lbTabs lbPeriodTabs" id="lbPeriodTabs">
+                <div class="lbTab" data-period="day" data-i18n="lbPeriodDay">Сегодня</div>
+                <div class="lbTab" data-period="week" data-i18n="lbPeriodWeek">За неделю</div>
+                <div class="lbTab on" data-period="all" data-i18n="lbPeriodAll">За всё время</div>
+        </div>
+
         <div id="lbList"><div class="empty" data-i18n="loading">Загрузка…</div></div>
+
+        <div class="lbPager" id="lbPager" style="display:none">
+                <button class="lbArrow" id="lbPrev" aria-label="Previous page">‹</button>
+                <span class="lbPageLabel" id="lbPageLabel"></span>
+                <button class="lbArrow" id="lbNext" aria-label="Next page">›</button>
+        </div>
+
         <div id="lbMine" class="mine" style="display:none"></div>
 </div>
 
@@ -60,6 +93,12 @@
 (function () {
         var listEl = document.getElementById('lbList');
         var mineEl = document.getElementById('lbMine');
+        var pagerEl = document.getElementById('lbPager');
+        var pageLabelEl = document.getElementById('lbPageLabel');
+        var prevBtn = document.getElementById('lbPrev');
+        var nextBtn = document.getElementById('lbNext');
+
+        var state = { metric: 'coins', period: 'all', page: 1 };
 
         /* переводы строк этого скрипта; i18n.js грузится позже — без него русский запасной вариант */
         function T(k, f) {
@@ -69,37 +108,83 @@
         function esc(s) { return String(s).replace(/[&<>"]/g, function (c) {
                 return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
+        function unit() {
+                return state.metric === 'score' ? T('lbScoreUnit', 'очков') : T('lbCoinsUnit', 'монет');
+        }
+        function amountHtml(n) {
+                return state.metric === 'score'
+                        ? '<div class="lbCoins score">' + n + ' ⭐</div>'
+                        : '<div class="lbCoins">' + n + ' ' + (window.BFCoin ? BFCoin.svg(15) : '') + '</div>';
+        }
+
         function load() {
-                fetch('/getLeaderboard', { credentials: 'same-origin' })
+                listEl.innerHTML = '<div class="empty">' + T('loading', 'Загрузка…') + '</div>';
+                pagerEl.style.display = 'none';
+                var u = '/getLeaderboard?metric=' + encodeURIComponent(state.metric)
+                        + '&period=' + encodeURIComponent(state.period)
+                        + '&page=' + state.page;
+                fetch(u, { credentials: 'same-origin' })
                         .then(function (r) { return r.json(); })
                         .then(function (d) {
                                 var top = d.top || [];
-                                if (!top.length) {
-                                        listEl.innerHTML = '<div class="empty">' + T('lbEmpty', 'Пока никто не собрал ни одной монеты') + '</div>';
+                                var per = d.page || '1/1';
+                                var parts = String(per).split('/');
+                                var cur = parseInt(parts[0], 10) || 1;
+                                var total = parseInt(parts[1], 10) || 1;
+                                state.page = cur;
+
+                                if (!top.length && cur === 1) {
+                                        listEl.innerHTML = '<div class="empty">' + T('lbEmpty', 'Тут пока никого нет') + '</div>';
                                 } else {
-                                        listEl.innerHTML = top.map(function (u, i) {
-                                                var mine = d.me && d.me.name === u.name;
+                                        listEl.innerHTML = top.map(function (u2, i) {
+                                                var mine = d.me && d.me.name === u2.name;
+                                                var place = (cur - 1) * 10 + i + 1;
                                                 return '<div class="lbRow' + (mine ? ' me' : '') + '">'
-                                                        + '<div class="lbPlace">' + (i + 1) + '</div>'
-                                                        + '<div class="lbAva"><img src="/avatar/0.png" alt="" data-bf-name="' + esc(u.name) + '"></div>'
-                                                        + '<div class="lbName" data-n="' + esc(u.name) + '">' + esc(u.name) + '</div>'
-                                                        + '<div class="lbCoins">' + u.coins + ' ' +
-                                                          (window.BFCoin ? BFCoin.svg(15) : '') + '</div></div>';
+                                                        + '<div class="lbPlace">' + place + '</div>'
+                                                        + '<div class="lbAva"><img src="/avatar/0.png" alt="" data-bf-name="' + esc(u2.name) + '"></div>'
+                                                        + '<div class="lbName" data-n="' + esc(u2.name) + '">' + esc(u2.name) + '</div>'
+                                                        + amountHtml(u2.amount) + '</div>';
                                         }).join('');
                                 }
 
+                                pagerEl.style.display = total > 1 ? 'flex' : 'none';
+                                pageLabelEl.textContent = cur + ' / ' + total;
+                                prevBtn.disabled = cur <= 1;
+                                nextBtn.disabled = cur >= total;
+
                                 if (d.me) {
                                         mineEl.style.display = 'block';
-                                        mineEl.textContent = d.me.place > 10
-                                                ? T('lbPlaceN', 'Ты на {n} месте · {t} монет').replace('{n}', d.me.place).replace('{t}', d.me.coins)
-                                                : T('lbYouHave', 'У тебя {t} монет').replace('{t}', d.me.coins);
+                                        mineEl.textContent = d.me.place > 0
+                                                ? T('lbPlaceN', 'Ты на {n} месте · {t}').replace('{n}', d.me.place).replace('{t}', d.me.amount + ' ' + unit())
+                                                : T('lbYouHave', 'У тебя {t}').replace('{t}', d.me.amount + ' ' + unit());
                                 } else {
                                         mineEl.style.display = 'block';
-                                        mineEl.textContent = T('signForCoins', 'Войди в аккаунт, чтобы монеты сохранялись');
+                                        mineEl.textContent = T('signForCoins', 'Войди в аккаунт, чтобы монеты и очки сохранялись');
                                 }
                         })
                         .catch(function () { listEl.innerHTML = '<div class="empty">' + T('loadFailed', 'Не удалось загрузить') + '</div>'; });
         }
+
+        document.getElementById('lbMetricTabs').addEventListener('click', function (e) {
+                var t = e.target.closest && e.target.closest('.lbTab');
+                if (!t || !t.dataset.metric) return;
+                if (state.metric === t.dataset.metric) return;
+                Array.prototype.forEach.call(this.querySelectorAll('.lbTab'), function (x) { x.classList.toggle('on', x === t); });
+                state.metric = t.dataset.metric;
+                state.page = 1;
+                load();
+        });
+        document.getElementById('lbPeriodTabs').addEventListener('click', function (e) {
+                var t = e.target.closest && e.target.closest('.lbTab');
+                if (!t || !t.dataset.period) return;
+                if (state.period === t.dataset.period) return;
+                Array.prototype.forEach.call(this.querySelectorAll('.lbTab'), function (x) { x.classList.toggle('on', x === t); });
+                state.period = t.dataset.period;
+                state.page = 1;
+                load();
+        });
+        prevBtn.addEventListener('click', function () { if (state.page > 1) { state.page--; load(); } });
+        nextBtn.addEventListener('click', function () { state.page++; load(); });
 
         listEl.addEventListener('click', function (e) {
                 var n = e.target.closest('.lbName');

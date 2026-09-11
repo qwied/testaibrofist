@@ -26,6 +26,14 @@
 .upMeta{color:var(--muted);font-size:14px;margin-bottom:8px}
 .upCoins{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--gold);
   font-size:16px;margin-bottom:10px}
+.upStats{margin-bottom:10px}
+.upStatTabs{display:flex;gap:6px;margin-bottom:8px}
+.upStatTab{padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;
+  color:var(--muted);background:var(--soft);border:1px solid transparent;user-select:none}
+.upStatTab.on{color:#fff;background:var(--blue);border-color:var(--blue)}
+.upStatRow{display:flex;gap:18px;flex-wrap:wrap}
+.upStatRow .upCoins{margin-bottom:0}
+.upScore{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--blue);font-size:16px}
 .upActs{display:flex;gap:8px;flex-wrap:wrap}
 .upActs button,.upActs a{padding:10px 18px;border-radius:9px;cursor:pointer;font-size:14px;
   border:1px solid var(--blue);background:#fff;color:var(--blue);text-decoration:none;
@@ -174,12 +182,24 @@
       acts += '<a href="messages.html?with=' + encodeURIComponent(who) + '">' + T('msgBtn', 'Message') + '</a>';
     }
 
+    var s = d.stats || {};
     return '<div class="upTop">'
       + '<div class="upAva"><img class="profile-picture" data-bf-name="' + esc(who) + '" alt=""></div>'
       + '<div class="upInfo">'
       +   '<div class="upName">' + esc(who) + '</div>'
       +   '<div class="upMeta">' + T('joinDate', 'Дата регистрации') + ': ' + when(d.joined) + '</div>'
-      +   '<div class="upCoins">' + (window.BFCoin ? BFCoin.svg(18) : '') + ' ' + d.coins + '</div>'
+      +   '<div class="upStats" id="upStats" data-coins-day="' + (s.coinsDay || 0) + '" data-coins-week="' + (s.coinsWeek || 0) + '" data-coins-all="' + (s.coins || 0) + '"'
+      +     ' data-score-day="' + (s.scoreDay || 0) + '" data-score-week="' + (s.scoreWeek || 0) + '" data-score-all="' + (s.score || 0) + '">'
+      +     '<div class="upStatTabs" id="upStatTabs">'
+      +       '<span class="upStatTab" data-period="day">' + T('lbPeriodDay', 'Today') + '</span>'
+      +       '<span class="upStatTab" data-period="week">' + T('lbPeriodWeek', 'This Week') + '</span>'
+      +       '<span class="upStatTab on" data-period="all">' + T('lbPeriodAll', 'All Time') + '</span>'
+      +     '</div>'
+      +     '<div class="upStatRow">'
+      +       '<span class="upCoins">' + (window.BFCoin ? BFCoin.svg(18) : '') + ' <span id="upCoinsV">' + (s.coins || 0) + '</span></span>'
+      +       '<span class="upScore">⭐ <span id="upScoreV">' + (s.score || 0) + '</span></span>'
+      +     '</div>'
+      +   '</div>'
       +   '<div class="upActs">' + acts + '</div>'
       + '</div></div>'
 
@@ -284,6 +304,19 @@
     var tb = e.target.closest && e.target.closest('#upTabs .bfTab');
     if (tb) { showTab(tb.dataset.tab); return; }
 
+    var pt = e.target.closest && e.target.closest('#upStatTabs .upStatTab');
+    if (pt) {
+      var stats = $('upStats');
+      if (!stats) return;
+      Array.prototype.forEach.call(stats.querySelectorAll('.upStatTab'), function (x) {
+        x.classList.toggle('on', x === pt);
+      });
+      var p = pt.dataset.period;
+      $('upCoinsV').textContent = stats.dataset['coins' + p.charAt(0).toUpperCase() + p.slice(1)] || 0;
+      $('upScoreV').textContent = stats.dataset['score' + p.charAt(0).toUpperCase() + p.slice(1)] || 0;
+      return;
+    }
+
     var rel = e.target.closest && e.target.closest('[data-rel]');
     if (rel) {
       var map = { add: '/friendRequest', accept: '/acceptFriendRequest',
@@ -356,10 +389,10 @@
     ]).then(function (r) {
       me = r[0];
 
-      var coins = typeof r[2] === 'object' ? (r[2].coins || 0) : r[2];
+      var stats = (r[2] && typeof r[2] === 'object') ? r[2] : { coins: r[2] || 0 };
       $('upBody').innerHTML = drawHead({
         joined: typeof r[1] === 'object' ? r[1].date : r[1],
-        coins: coins,
+        stats: stats,
         about: typeof r[3] === 'object' ? (r[3].about || '') : r[3],
         relation: r[4]
       });

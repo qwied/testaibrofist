@@ -250,7 +250,8 @@ sweepImages();
 setInterval(sweepImages, 30 * 60 * 1000).unref();
 
 function register(app, acc) {
-  const { currentUser, isOwner, getDb, save: saveUsers, newSession, verifyPassword, key, checkName } = acc;
+  const { currentUser, isOwner, getDb, save: saveUsers, newSession, verifyPassword, key, checkName,
+          sumLog, getCoinLog, getScoreLog, paginate } = acc;
 
   const ownerOnly = (req, res) => {
     const u = currentUser(req);
@@ -355,19 +356,34 @@ function register(app, acc) {
      hsCatch / конец раунда в server.js. */
 
   // ---------- таблица лидеров ----------
+  // metric: coins | score. period: day | week | all (по умолчанию).
+  // day/week — скользящее окно по журналу (coinLog/scoreLog), как и раньше
+  // у «лучшие сегодня/за неделю»; all — постоянный счёт на аккаунте
+  // (u.coins/u.score), он никогда не обрезается журналом.
   app.get('/getLeaderboard', (req, res) => {
     const db = getDb();
-    const top = Object.values(db.users)
-      .map(u => ({ name: u.name, coins: u.coins || 0 }))
-      .sort((a, b) => b.coins - a.coins || a.name.localeCompare(b.name))
-      .slice(0, 10);
+    const metric = req.query.metric === 'score' ? 'score' : 'coins';
+    const period = req.query.period === 'day' ? 'day' : req.query.period === 'week' ? 'week' : 'all';
+    const windowMs = period === 'day' ? 24 * 60 * 60 * 1000 : period === 'week' ? 7 * 24 * 60 * 60 * 1000 : 0;
+
+    const list = windowMs
+      ? sumLog(metric === 'score' ? getScoreLog() : getCoinLog(), windowMs)
+      : Object.values(db.users)
+          .map(u => ({ name: u.name, amount: (metric === 'score' ? u.score : u.coins) || 0 }))
+          .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
+
+    const page = paginate(list, req.query.page);
     const me = currentUser(req);
-    let myPlace = 0;
+    let myPlace = 0, myAmount = 0;
     if (me) {
-      const all = Object.values(db.users).sort((a, b) => (b.coins || 0) - (a.coins || 0));
-      myPlace = all.findIndex(u => key(u.name) === key(me.name)) + 1;
+      const idx = list.findIndex(u => key(u.name) === key(me.name));
+      myPlace = idx + 1;
+      myAmount = idx !== -1 ? list[idx].amount : 0;
     }
-    res.json({ top, me: me ? { name: me.name, coins: me.coins || 0, place: myPlace } : null });
+    res.json({
+      top: page.slice, page: page.label, metric: metric, period: period,
+      me: me ? { name: me.name, amount: myAmount, place: myPlace } : null
+    });
   });
 
   // ---------- смена ника: только владелец ----------
