@@ -8,23 +8,28 @@
 
   var LINKS = [
     { key: 'leaderboard',  href: 'leaderboard.html',  txt: 'Leaderboard' },
-    { key: 'mapEditor',    href: 'editor.html',       txt: 'Map Editor' },
+    { key: 'mapEditor',    href: 'editor.html',       txt: 'Map Editor', sub: [
+        { key: 'mapEditor',  href: 'editor.html',     txt: 'Map Editor' },
+        { key: 'skinEditor', href: 'skinEditor.html', txt: 'Skin Editor' }
+      ] },
     { key: 'avatar',       href: 'avatar.html',       txt: 'Avatar' },
-    { key: 'mapsBrowser',  href: 'mapsBrowser.html',  txt: 'Maps Browser' },
+    { key: 'mapsBrowser',  href: 'mapsBrowser.html',  txt: 'Maps Browser', sub: [
+        { key: 'mapsBrowser',  href: 'mapsBrowser.html',  txt: 'Maps Browser' },
+        { key: 'skinsBrowser', href: 'skinsBrowser.html', txt: 'Skins Browser' }
+      ] },
     { key: 'logs',         href: 'logs.html',         txt: 'Logs' }
   ];
 
-  // то, что не помещается в строку, уходит в «Меню»
+  // то, что не помещается в строку, уходит в «More» (пункты, уже видные
+  // в верхней панели или доступные через выпадающий выбор Map Editor /
+  // Maps Browser, сюда не дублируются)
   var MENU = [
     { key: 'hideAndSeek', href: 'hide-and-seek.html',  txt: 'Hide and Seek' },
     { key: 'race',        href: 'race.html',           txt: 'Race' },
     { sep: true },
-    { key: 'avatar',      href: 'avatar.html',         txt: 'Avatar' },
-    { key: 'skinEditor',  href: 'skinEditor.html',     txt: 'Skin Editor' },
-    { key: 'skinsBrowser',href: 'skinsBrowser.html',   txt: 'Skins Browser' },
     { key: 'themes',      href: 'themes.html',         txt: 'Темы' },
-    { key: 'logs',        href: 'logs.html',           txt: 'Logs' },
-    { txt: 'Telegram', href: 'https://t.me/aibrofist', ext: true }
+    { txt: 'Telegram', href: 'https://t.me/aibrofist', ext: true },
+    { txt: 'Discord', href: 'https://discord.gg/Rah4FvcXDw', ext: true }
   ];
 
   var MARK = '<span class="bfBrandMark"><i></i><i></i></span>';
@@ -55,6 +60,43 @@
     return a;
   }
 
+  // пункт верхней панели: обычная ссылка, либо — если есть l.sub —
+  // кнопка, раскрывающая под собой маленький выбор (напр. Map Editor
+  // показывает Map Editor + Skin Editor)
+  function navItem(l, here) {
+    if (!l.sub) {
+      var a = link(l);
+      if (l.href.toLowerCase() === here) a.className = 'on';
+      return a;
+    }
+    var trig = el('button');
+    trig.type = 'button';
+    trig.textContent = l.txt;
+    if (l.key) trig.setAttribute('data-i18n', l.key);
+    var active = l.href.toLowerCase() === here ||
+      l.sub.some(function (s) { return s.href.toLowerCase() === here; });
+    if (active) trig.className = 'on';
+
+    var drop = el('div', 'bfDrop bfNavDrop');
+    l.sub.forEach(function (s) {
+      var sa = link(s, 'bfDropItem');
+      if (s.href.toLowerCase() === here) sa.classList.add('on');
+      drop.appendChild(sa);
+    });
+    document.body.appendChild(drop);
+
+    trig.onclick = function (e) {
+      e.stopPropagation();
+      var r = trig.getBoundingClientRect();
+      var w = Math.min(220, window.innerWidth - 16);
+      drop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+      closeAll(drop);
+      drop.classList.toggle('open');
+    };
+    drop.addEventListener('click', function (e) { e.stopPropagation(); });
+    return trig;
+  }
+
   function build() {
     // прячем вендорную шапку, чтобы не было двух панелей сразу
     var old = document.querySelector('.header');
@@ -71,15 +113,13 @@
 
     var nav = el('nav', 'bfNav');
     LINKS.forEach(function (l) {
-      var a = link(l);
-      if (l.href.toLowerCase() === here) a.className = 'on';
-      nav.appendChild(a);
+      nav.appendChild(navItem(l, here));
     });
 
     var menuBtn = el('button', 'bfMenuBtn');
     menuBtn.type = 'button';
-    menuBtn.textContent = 'Menu';
-    menuBtn.setAttribute('data-i18n', 'menu');
+    menuBtn.textContent = 'More';
+    menuBtn.setAttribute('data-i18n', 'moreOptions');
     nav.appendChild(menuBtn);
     head.appendChild(nav);
 
@@ -135,10 +175,10 @@
   }
 
   function closeAll(except) {
-    ['bfDrop', 'bfProf'].forEach(function (id) {
-      var d = document.getElementById(id);
-      if (d && d !== except) d.classList.remove('open');
-    });
+    var open = document.querySelectorAll('.bfDrop.open');
+    for (var i = 0; i < open.length; i++) {
+      if (open[i] !== except) open[i].classList.remove('open');
+    }
   }
 
   function T(k, f) {

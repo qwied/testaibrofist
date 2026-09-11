@@ -22,6 +22,7 @@
     shop: "Shop",
     logs: "Logs",
     menu: "Menu",
+    moreOptions: "More",
     supporters: "Supporters",
     tutorial: "Editor Tutorial",
     privacy: "Privacy Policy",
