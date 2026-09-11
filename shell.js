@@ -278,7 +278,7 @@
      явно (как на game.html/editor.html). */
   if (!document.querySelector('script[src*="sound.js"]')) {
     var snd = document.createElement('script');
-    snd.src = 'sound.js?v=101';
+    snd.src = 'sound.js?v=102';
     document.head.appendChild(snd);
   }
 
