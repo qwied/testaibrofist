@@ -5,6 +5,10 @@
   --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --soft:#f6f8fa;
   --blue:#2196F3; --green:#22a45d; --red:#e04141; --gold:#b8860b;
   --hdr:56px;
+  /* лёгкая подсветка под курсором для обычных (не залитых цветом) кнопок:
+     тёмный полупрозрачный слой поверх светлой темы, светлый — поверх тёмной.
+     Кнопке не нужно знать, какая сейчас тема — цвет меняет сама переменная. */
+  --hover: rgba(17,24,39,.07);
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -31,7 +35,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 .bfNav::-webkit-scrollbar{display:none}
 .bfNav a,.bfNav button{background:none;border:none;font:inherit;color:var(--ink);
   padding:9px 11px;border-radius:8px;cursor:pointer;text-decoration:none;white-space:nowrap;font-size:15px}
-.bfNav a:hover,.bfNav button:hover{background:#e7ebf0}
+.bfNav a:hover,.bfNav button:hover{background:var(--hover)}
 .bfNav a.on,.bfNav button.on{background:var(--blue);color:#fff}
 .bfRight{flex:0 0 auto;display:flex !important;flex-wrap:nowrap !important;
   align-items:center;gap:8px;margin-left:auto}
@@ -49,7 +53,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
   border:1px solid var(--blue);background:#fff;color:var(--blue);cursor:pointer;margin-bottom:9px}
 .bfBtn:hover{background:var(--blue);color:#fff}
 .bfBtn.ghost{border-color:#cfd6de;color:var(--muted)}
-.bfBtn.ghost:hover{background:#eef2f6;color:var(--ink)}
+.bfBtn.ghost:hover{background:var(--hover);color:var(--ink)}
 .bfBtn.go{background:var(--blue);color:#fff}
 .bfBtn.go:hover{background:#0d7fd4}
 .bfInput,.bfSelect{width:100%;font-size:15px;padding:11px 12px;border:1px solid #cfd6de;
@@ -115,7 +119,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 /* ---------- единая шапка: кнопка «Меню» и выпадающие списки ---------- */
 .bfMenuBtn{background:none;border:none;font:inherit;color:var(--ink);padding:9px 11px;
   border-radius:8px;cursor:pointer;white-space:nowrap;font-size:15px}
-.bfMenuBtn:hover{background:#e7ebf0}
+.bfMenuBtn:hover{background:var(--hover)}
 
 .bfDrop{position:fixed;top:calc(var(--hdr) + 4px);right:10px;min-width:210px;background:#fff;
   border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 28px rgba(15,23,42,.18);
@@ -123,8 +127,8 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 .bfDrop.open{display:block}
 .bfDropItem{display:block;padding:12px 18px;color:var(--ink);text-decoration:none;
   cursor:pointer;font-size:15px;white-space:nowrap}
-.bfDropItem:hover{background:#eef2f8}
-.bfDropItem.on{background:#eef2f8;font-weight:700}
+.bfDropItem:hover{background:var(--hover)}
+.bfDropItem.on{background:var(--hover);font-weight:700}
 .bfDropSep{height:1px;background:var(--line);margin:5px 0}
 .bfDropName{padding:10px 18px 6px;font-weight:700;font-size:13px;color:var(--muted)}
 .bfDropOut{color:#dc2626}

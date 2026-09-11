@@ -294,11 +294,15 @@ function register(app, acc) {
                         message: 'The Skins Browser holds up to ' + MINE_LIMIT +
                                  ' of your skins. Delete some to make room.' });
 
+    // проверяем совпадение у ВСЕХ опубликованных скинов, не только своих —
+    // иначе один и тот же рисунок можно раздать по кругу под разными именами
     const sig = imgSig(got.buf);
-    const twin = mine.find(s => s.sig === sig);
+    const twin = list.find(s => s.sig === sig);
     if (twin)
       return res.json({ status: 'error',
-                        message: 'This exact drawing is already published — «' + twin.skinName + '»' });
+                        message: low(twin.author) === low(u.name)
+                          ? 'This exact drawing is already published — «' + twin.skinName + '»'
+                          : 'This exact drawing is already published by «' + twin.author + '» — «' + twin.skinName + '»' });
 
     const id = 's' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
     let img;
