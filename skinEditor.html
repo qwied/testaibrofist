@@ -214,6 +214,17 @@
     return ((x + y) % 2 === 0) ? '#e5e7eb' : '#f3f4f6';
   }
 
+  /* Каждый нарисованный пиксель — квадрат CELLxCELL, слегка скруглённый по
+     углам: сплошные острые квадраты на крупном зуме смотрятся жёстче, чем
+     сам холст в игре. На итоговую картинку это не влияет — экспорт всё
+     равно кладёт ровно один настоящий пиксель на клетку (см. export ниже),
+     скругление только в самом редакторе, для удобства рисования. */
+  function fillCell(x, y) {
+    var px = x * CELL, py = y * CELL, r = Math.min(4, CELL * 0.22);
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(px, py, CELL, CELL, r); ctx.fill(); }
+    else ctx.fillRect(px, py, CELL, CELL);
+  }
+
   // незафиксированная линия/прямоугольник — «призрак» поверх сетки,
   // пока ведёшь мышь/палец; фиксируется в grid только на отпускании
   var previewCells = [];
@@ -226,13 +237,13 @@
         var c = grid[idx(x, y)];
         if (!c) continue;
         ctx.fillStyle = c;
-        ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+        fillCell(x, y);
       }
     }
     if (previewCells.length) {
       ctx.fillStyle = color;
       previewCells.forEach(function (c) {
-        if (c.x >= 0 && c.x < GW && c.y >= 0 && c.y < GH) ctx.fillRect(c.x * CELL, c.y * CELL, CELL, CELL);
+        if (c.x >= 0 && c.x < GW && c.y >= 0 && c.y < GH) fillCell(c.x, c.y);
       });
     }
     // тонкая сетка — только пока рисуем в разумном зуме

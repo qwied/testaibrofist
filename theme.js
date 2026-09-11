@@ -212,6 +212,10 @@
       '--soft:', dark ? mix(DARK.raised, C, 0.06) : mix('#ffffff', C, 0.07), ';',
       '--panel:', raised, ';--hdr-bg:', headBg, ';',
       '--bf-grad:', grad, ';',
+      /* обычные (не залитые цветом) кнопки на тёмном фоне светлеют
+         полупрозрачным слоем вместо плашки — так они не выглядят чужеродным
+         светлым пятном поверх тёмной темы */
+      '--hover:', dark ? 'rgba(255,255,255,.09)' : 'rgba(17,24,39,.07)', ';',
       '}',
 
       /* --- вся страница --- */
@@ -226,7 +230,9 @@
       /* --- шапка: первый цвет --- */
       '.bfHead{background:', headBg, ';border-bottom:3px solid transparent;',
       'border-image:', stripe, ' 1}',
-      '.bfNav a:hover,.bfMenuBtn:hover{background:', dark ? DARK.raised : mix('#ffffff', A, 0.18), '}',
+      /* фон при наведении задаёт переменная --hover (см. :root выше) —
+         так текст остаётся читаемым независимо от того, какая именно
+         кнопка это и какая тема сейчас активна */
       '.bfNav a,.bfMenuBtn{color:', ink, '}',
       '.bfNav a.on{background:', grad, ';color:', onA, '}',
       '.bfBrand b{color:', dark ? ink : p.dark, ';background:none}',
@@ -274,7 +280,7 @@
       '.bfDrop{border-color:', line, ';background:', raised, ';color:', ink, '}',
       '.bfDropName{color:', muted, '}',
       '.bfLangItem{border-color:', line, ';color:', ink, '}',
-      '.bfDropItem:hover,.bfLangItem:hover{background:', mix('#ffffff', B, 0.14), '}',
+      '.bfLangItem:hover{background:', mix('#ffffff', B, 0.14), '}',
 
       /* --- редактор и панель владельца --- */
       '.tool.on,.modeBtn.on,.sBtn.on{background:', grad, ' !important;color:', onA, ' !important}',
