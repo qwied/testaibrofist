@@ -8,9 +8,9 @@
 <script src="theme.js?v=100"></script>
 <script src="device.js?v=100"></script>
 <style>
-.upSearch{display:flex;gap:8px;margin-bottom:18px}
-.upSearch .bfInput{margin-bottom:0}
-.upSearch .bfBtn{margin-bottom:0;width:auto;padding:11px 20px}
+.upSearch{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.upSearch .bfInput{margin-bottom:0;flex:1 1 180px}
+.upSearch .bfBtn{margin-bottom:0;width:auto;padding:11px 20px;flex:0 0 auto}
 .upFound{border:1px solid var(--line);border-radius:12px;margin-bottom:18px;overflow:hidden}
 .upFound a{display:block;padding:11px 14px;text-decoration:none;color:var(--ink);border-bottom:1px solid var(--line)}
 .upFound a:last-child{border-bottom:none}
@@ -94,6 +94,7 @@
   <div class="upSearch">
     <input class="bfInput" id="upQ" data-i18n-ph="searchUsers" placeholder="Поиск игроков">
     <button class="bfBtn go" id="upGo" data-i18n="find">Найти</button>
+    <button class="bfBtn ghost" id="upGoExact" data-i18n="exactSearch">Exact search</button>
   </div>
   <div id="upFound"></div>
 
@@ -325,10 +326,12 @@
   });
 
   /* ---------- поиск ---------- */
-  function search() {
+  // точный поиск ищет только полное совпадение ника — удобно, когда
+  // похожих аккаунтов много и обычный поиск по подстроке их все мешает
+  function search(exact) {
     var q = $('upQ').value.trim();
     if (!q) { $('upFound').innerHTML = ''; return; }
-    get('/searchUser?name=' + encodeURIComponent(q)).then(function (list) {
+    get('/searchUser?name=' + encodeURIComponent(q) + (exact ? '&exact=1' : '')).then(function (list) {
       $('upFound').innerHTML = (list && list.length)
         ? '<div class="upFound">' + list.map(function (u) {
             return '<a href="users.html?name=' + encodeURIComponent(u.name) + '">' + esc(u.name) + '</a>';
@@ -336,7 +339,8 @@
         : '<div class="bfHint">' + T('nobodyFound', 'Никого не нашлось') + '</div>';
     }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
   }
-  $('upGo').onclick = search;
+  $('upGo').onclick = function () { search(false); };
+  $('upGoExact').onclick = function () { search(true); };
   $('upQ').addEventListener('keydown', function (e) { if (e.key === 'Enter') search(); });
 
   /* ---------- загрузка ---------- */
