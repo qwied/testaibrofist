@@ -16,13 +16,15 @@
   function dataUri(skin) {
     // готовая картинка от владельца (kind !== 'accessory') можно отдать
     // прямой ссылкой. Рисунок из Skin Editor (kind === 'accessory') —
-    // это аксессуары поверх фигуры, а не сама картинка целиком: во
-    // избежание пустой/съехавшей иконки такие маленькие значки просто
-    // показывают обычную фигуру (сам рисунок виден на полной карточке
-    // скина — там он идёт через BFSkin.render(), а не через data-URI).
+    // это аксессуары поверх фигуры, а не сама картинка целиком, но
+    // BFSkin.svg() их и так вкладывает в тот же SVG слоем поверх силуэта
+    // (см. skinRender.js) — передаём ему реальный skin, а не пустой,
+    // иначе аксессуары нигде, кроме карточки в Skins Browser, не видны.
+    // Нет скина вовсе (undefined/{}) — svg() сам рисует стандартную
+    // фигуру: чёрный прямоугольник и круг.
     if (skin && skin.img && skin.kind !== 'accessory') return skin.img;
     if (!window.BFSkin) return null;
-    var svg = window.BFSkin.svg({}, {}, { height: 300 });
+    var svg = window.BFSkin.svg(skin || {}, {}, { height: 300 });
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
 
@@ -73,10 +75,12 @@
       .then(function (d) {
         var got = (d && d.skins) || {};
         names.forEach(function (n) {
-          if (got[n]) cache[n] = got[n];
-          (pending[n] || []).forEach(function (el) {
-            if (cache[n]) paint(el, cache[n]);
-          });
+          /* Нет скина у игрока — это не «ещё не пришло», а стабильный
+             факт: раньше cache[n] в этом случае никогда не выставлялся,
+             paint() не вызывался, и вместо стандартной фигуры (силуэт
+             без деталей — см. dataUri()) оставалась пустая картинка. */
+          cache[n] = got[n] || {};
+          (pending[n] || []).forEach(function (el) { paint(el, cache[n]); });
           delete pending[n];
         });
       }).catch(function () { pending = {}; });
