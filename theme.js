@@ -313,6 +313,15 @@
         '.bfVote button{background:', raised, ';color:', ink, ';border-color:', line, '}',
         '.mbPlay,.bfMini{background:', raised, '}',
         '.bfHint{color:', muted, '}',
+        /* страница Messages: список тредов и окно переписки — свои
+           панели с фоном белым по умолчанию, тема их не задевала */
+        '.msThreads,.msPane{background:', raised, ';border-color:', line, '}',
+        '.msRow{border-color:', line, '}',
+        '.msRow.on{background:', mix(DARK.panel, A, 0.14), '}',
+        '.msHead{border-color:', line, '}',
+        '.msSend{border-color:', line, '}',
+        '.msSend input{background:', DARK.bg, ';color:', ink, ';border-color:', line, '}',
+        '.msAddBtn{background:', raised, '}',
         'input,select,textarea{color-scheme:dark}',
         /* редактор: панели и холст */
         ':root{--panel:', DARK.panel, ';--ink:', ink, ';--line:', line, ';--muted:', muted, '}',
