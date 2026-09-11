@@ -199,6 +199,7 @@
     accept: "Accept",
     decline: "Decline",
     find: "Find",
+    exactSearch: "Exact search",
     searchUsers: "Search users",
     addFriend: "Add friend",
     report: "Report",

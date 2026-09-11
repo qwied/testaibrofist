@@ -402,8 +402,11 @@ function register(app) {
   app.get('/searchUser', (req, res) => {
     const q = key(req.query.name);
     if (!q) return res.json([]);
+    // точный поиск — только совпадающий ник целиком, без похожих аккаунтов
+    const exact = String(req.query.exact || '') === '1';
+    const match = exact ? (n => key(n) === q) : (n => key(n).indexOf(q) !== -1);
     res.json(Object.values(db.users)
-      .filter(u => key(u.name).indexOf(q) !== -1)
+      .filter(u => match(u.name))
       .slice(0, 20)
       .map(u => ({ name: u.name })));
   });
