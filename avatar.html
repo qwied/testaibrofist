@@ -118,10 +118,10 @@
     el.innerHTML = T('coins', 'Coins') + ': ' + coins(st.coins);
   }
 
-  var wornImg = '';
+  var wornImg = '', wornKind = 'full';
   function drawStage() {
     $('avStage').innerHTML = wornImg
-      ? BFSkin.render({ img: wornImg }, {}, { height: 300 })
+      ? BFSkin.render({ img: wornImg, kind: wornKind }, {}, { height: 300 })
       : BFSkin.svg({}, {}, { height: 300 });
   }
 
@@ -151,7 +151,7 @@
     var html = '<div class="bfGrid">';
     st.skins.forEach(function (s) {
       var on = st.wearing === s.id;
-      var art = BFSkin.render({ img: s.img }, {}, { height: 148 });
+      var art = BFSkin.render({ img: s.img, kind: s.kind }, {}, { height: 148 });
       var price = s.price > 0 ? '<div class="avPrice">' + coins(s.price) + '</div>'
                                : '<div class="avPrice free">' + T('free', 'Free') + '</div>';
       var act;
@@ -175,7 +175,9 @@
         st.coins = d.coins || 0;
         st.wearing = d.wearing || '';
         st.skins = d.skins || [];
-        wornImg = (st.skins.find(function (s) { return s.id === st.wearing; }) || {}).img || wornImg;
+        var worn = st.skins.find(function (s) { return s.id === st.wearing; });
+        wornImg = (worn && worn.img) || wornImg;
+        wornKind = (worn && worn.kind) || wornKind;
         drawCoins(); drawList(); drawStage();
       })
       .catch(function () { $('avList').innerHTML = '<div class="bfHint">' + T('serverDown') + '</div>'; });
@@ -202,6 +204,7 @@
       post('/skins/wear', { id: w.dataset.wear }).then(function (r) {
         if (r.status !== 'success') { msg(r.message || T('errorTxt')); return; }
         wornImg = r.img || '';
+        wornKind = r.kind || 'full';
         st.wearing = w.dataset.wear;
         drawStage(); drawList(); whoMadeIt();
         msg(T('wornOk', 'Skin equipped'), true);
@@ -213,7 +216,7 @@
     if (st.guest) { msg(T('loginFirst', 'Sign in first')); return; }
     post('/skins/reset', {}).then(function (r) {
       if (r.status !== 'success') { msg(r.message || T('errorTxt')); return; }
-      wornImg = ''; st.wearing = '';
+      wornImg = ''; wornKind = 'full'; st.wearing = '';
       drawStage(); drawList(); whoMadeIt();
       msg(T('saved', 'Saved'), true);
     }).catch(function () { msg(T('serverDown')); });

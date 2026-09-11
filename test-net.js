@@ -138,7 +138,8 @@ ok('движение не уходит до подтверждения вход�
 ok('палочки в чате больше нет', !/'▏'/.test(game));
 ok('websocket первый, polling запасной', /transports: \['websocket', 'polling'\], tryAllTransports: true/.test(game));
 ok('пик задержки забывается быстрее', /gapPeak \* 0\.9/.test(game));
-ok('потерянная картинка скина донавешивается', /imgCache\[o\.name\]\) o\.skin\.img = imgCache\[o\.name\];/.test(game));
+ok('потерянная картинка скина донавешивается', /imgCache\[o\.name\]\) \{[\s\S]{0,80}o\.skin\.img = imgCache\[o\.name\];/.test(game));
+ok('и её вид (kind) донавешивается вместе с ней', /o\.skin\.kind = kindCache\[o\.name\];/.test(game));
 
 const i18n = fs.readFileSync(__dirname + '/i18n.js', 'utf8');
 ok('подпись пинга переводится', /gPing:\s+\[/.test(i18n) && /gPingMs:\s+\[/.test(i18n));

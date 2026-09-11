@@ -54,6 +54,15 @@
 
   function bindNid(o) { if (o && o.nid !== undefined) byNid[o.nid] = o; }
 
+  // картинка скина весит сотни килобайт, по сети её не гоняем — берём
+  // адрес и вид (kind) из кеша по нику (см. imgOf/askImgs выше)
+  function patchSkinFromCache(o) {
+    if (!o || !o.skin) return;
+    var pic = imgOf(o.name);
+    if (pic) o.skin.img = pic;
+    o.skin.kind = kindCache[o.name] || o.skin.kind || 'full';
+  }
+
   /* Что сервер уже знает об игроке — берём сразу из списка комнаты, не
      дожидаясь кадра: и позицию (иначе новичок увидел бы всех в левом
      верхнем углу), и скин, и размер с цветом. */
@@ -69,7 +78,7 @@
     if (pos.hid !== undefined) o.hid = !!pos.hid;
     if (pos.sk) {
       o.skin = strToSkin(pos.sk);
-      if (o.skin) { var pic = imgOf(o.name); if (pic) o.skin.img = pic; }
+      patchSkinFromCache(o);
     }
   }
 
@@ -316,13 +325,16 @@
   // сказанные реплики: 2 секунды плавно уплывают вверх и тают
   // ---------- скины ----------
   var mySkinStr = '';                 // компактная запись для передачи по сети
-  var myImg = '';                     // скин-картинка, если она надета
 
   /* Кеш скинов-картинок по нику. Запрашиваем пачкой и только один раз
-     на игрока: сама картинка может быть на сотни килобайт. */
+     на игрока: сама картинка может быть на сотни килобайт. kindCache
+     хранит, как её рисовать: 'accessory' — рисунок из Skin Editor,
+     аксессуары поверх обычной фигуры; 'full' (или ничего) — готовая
+     картинка от владельца, заменяет фигуру целиком. */
   // Object.create(null) — без прototype: ник "__proto__"/"constructor" не
   // должен резолвиться в унаследованный объект вместо реального значения
-  var imgCache = Object.create(null);  // ник -> url ('' если картинки нет)
+  var imgCache = Object.create(null);   // ник -> url ('' если картинки нет)
+  var kindCache = Object.create(null);  // ник -> 'accessory' | 'full'
   var imgWanted = Object.create(null);
   var imgTimer = null;
   function imgOf(name) {
@@ -343,42 +355,39 @@
       .then(function (r) { return r.json(); })
       .then(function (d) {
         var got = (d && d.skins) || {};
-        names.forEach(function (n) { imgCache[n] = (got[n] && got[n].img) || ''; });
+        names.forEach(function (n) {
+          imgCache[n] = (got[n] && got[n].img) || '';
+          kindCache[n] = (got[n] && got[n].kind) || 'full';
+        });
         /* Картинка приехала позже скина — донавешиваем её тем, кто уже
            на экране. Раньше адрес доставался только в момент разбора
            сетевого пакета, и скин-картинка так и оставалась голой фигурой. */
         Object.keys(others).forEach(function (id) {
           var o = others[id];
-          if (o && o.skin && !o.skin.img && imgCache[o.name]) o.skin.img = imgCache[o.name];
+          if (o && o.skin && !o.skin.img && imgCache[o.name]) {
+            o.skin.img = imgCache[o.name];
+            o.skin.kind = kindCache[o.name];
+          }
         });
       })
       .catch(function () { names.forEach(function (n) { imgCache[n] = ''; }); });
   }
-  function skinToStr(sk) {
-    if (!sk) return '';
-    // скин-картинка передаётся адресом, обычный — четырьмя id
-    if (sk.img) return 'i:' + sk.img;
-    return [sk.head, sk.face, sk.body, sk.back].join('|');
-  }
+  // компактная запись для сети — несёт только «есть картинка / нет»,
+  // сама картинка и её вид (kind) едут отдельно через /skins/many
+  function skinToStr(sk) { return (sk && sk.img) ? 'i:' + sk.img : ''; }
   function strToSkin(v) {
     if (!v) return null;
     var str = String(v);
     if (str.indexOf('i:') === 0) return { img: str.slice(2) };
-    var a = str.split('|');
-    if (a.length !== 4) return null;
-    return { head: a[0], face: a[1], body: a[2], back: a[3] };
+    return null;
   }
   function loadMySkin() {
-    fetch('/skin/catalog', { credentials: 'same-origin' })
+    fetch('/skin/my', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        window.BF_SKIN_ITEMS = {};
-        (d.items || []).forEach(function (i) { window.BF_SKIN_ITEMS[i.id] = i; });
-        GAME.mySkin = d.skin || null;
-        if (GAME.mySkin && d.img) GAME.mySkin.img = d.img;
+        GAME.mySkin = d.img ? { img: d.img, kind: d.kind || 'full' } : null;
         mySkinStr = skinToStr(GAME.mySkin);
-        myImg = d.img || '';
-        if (GAME.myName) imgCache[GAME.myName] = myImg;
+        if (GAME.myName) { imgCache[GAME.myName] = d.img || ''; kindCache[GAME.myName] = d.kind || 'full'; }
       })
       .catch(function () {});
   }
@@ -894,9 +903,7 @@
         if (e.d !== undefined) o.hid = !!e.d;
         if (e.k !== undefined) {
           o.skin = strToSkin(e.k);
-          // картинка скина весит сотни килобайт, по сети её не гоняем:
-          // берём из кеша по нику
-          if (o.skin) { var pic = imgOf(o.name); if (pic) o.skin.img = pic; }
+          patchSkinFromCache(o);
         }
       }
     });
@@ -970,12 +977,7 @@
       if (d.position.w) { o.w = d.position.w; o.h = d.position.h; }
       o.color = d.position.color || COLOR_NORMAL;
       if (d.position.sk !== undefined) o.skin = strToSkin(d.position.sk);
-      // скин-картинка весит сотни килобайт, гонять её в каждом пакете нельзя —
-      // запрашиваем один раз по нику и держим в кеше
-      if (o.skin) {
-        var pic = imgOf(o.name);
-        if (pic) o.skin.img = pic;
-      }
+      patchSkinFromCache(o);
       o.say = d.position.say || '';
       o.fin = !!d.position.fin;
       o.hid = !!d.position.hid;

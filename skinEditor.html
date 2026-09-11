@@ -5,11 +5,11 @@
 <title>AIBrofist — Skin Editor</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="canonical" href="https://aibrofist.online/skinEditor.html">
-<meta name="description" content="Draw your own pixel-art character skin, free for everyone.">
+<meta name="description" content="Draw your own accessories for your character — the body stays the game's color.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="AIBrofist">
 <meta property="og:title" content="AIBrofist — Skin Editor">
-<meta property="og:description" content="Draw your own pixel-art character skin, free for everyone.">
+<meta property="og:description" content="Draw your own accessories for your character — the body stays the game's color.">
 <meta property="og:url" content="https://aibrofist.online/skinEditor.html">
 <meta property="og:image" content="https://aibrofist.online/preview.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -37,13 +37,10 @@
 .seSide{display:flex;flex-direction:column;gap:6px}
 .seNick{width:100%;text-align:center;font-size:15px;padding:9px 0;border:1px solid var(--line);
   border-radius:10px;background:var(--soft);color:var(--muted);margin-bottom:6px}
-.seFreeTag{display:inline-block;font-size:12px;font-weight:700;color:var(--green);
-  background:#eafaf0;border-radius:20px;padding:3px 10px;margin:0 auto 8px;text-align:center}
 .seLimit{font-size:12.5px;color:var(--muted);text-align:center;margin-top:2px}
 .seHint{font-size:12.5px;color:var(--muted);text-align:center;margin:6px 0}
 @media (max-width:820px){
   .seLayout{grid-template-columns:1fr;gap:16px}
-  .seSide{order:-1}
 }
 </style>
         <script src="theme.js?v=100"></script>
@@ -57,18 +54,18 @@
 
 <div class="bfWrap">
   <div class="bfTitle" data-i18n="skinTitle">Skin Editor</div>
-  <div class="bfSub" data-i18n="skinSub">Draw your character pixel by pixel. Free for everyone.</div>
+  <div class="bfSub" data-i18n="skinSub">Draw accessories for your character — the body color is set by the game.</div>
 
   <div class="seLayout">
     <div>
       <div class="seCanvasWrap"><canvas id="seCanvas"></canvas></div>
       <div class="seTools" id="seTools"></div>
+      <div class="seHint" data-i18n="skinBodyHint">The greyed-out silhouette is fixed — draw hats, masks and other extras around it.</div>
       <div class="seHint" data-i18n="skinMirrorHint">Left/right mirror is on by default — turn it off with the ⇋ button.</div>
     </div>
 
     <div class="seSide">
       <input class="seNick" id="seNick" readonly>
-      <div class="seFreeTag" data-i18n="skinFreeTag">✓ Free for everyone</div>
       <div class="sePalette" id="sePalette"></div>
       <div class="seCustom">
         <input type="color" id="seCustom" value="#2196f3">
@@ -125,21 +122,54 @@
     '#10b981', '#14b8a6', '#06b6d4', '#3b82f6', '#2196f3', '#6366f1', '#8b5cf6', '#d946ef'
   ];
 
-  /* лёгкий силуэт фигуры под сеткой — просто ориентир, где голова и тело,
-     рисовать поверх него можно где угодно */
-  function drawGuide() {
-    if (!window.BFSkin) return;
+  /* Силуэт фигуры под сеткой — не просто ориентир: тело в игре красит
+     сама игра (роль в прятках), поэтому рисовать здесь нельзя — можно
+     только вокруг него (аксессуары: шляпы, маски и т.п.). guideGeom()
+     считает форму один раз, ей пользуются и отрисовка, и проверка
+     «можно ли красить эту клетку». */
+  var guide = null;
+  function guideGeom() {
+    if (guide || !window.BFSkin) return guide;
     var S = window.BFSkin;
     var kx = cv.width / S.W, ky = cv.height / S.H;
+    guide = {
+      hcx: S.HEAD_R * kx, hcy: S.HEAD_R * ky, hr: S.HEAD_R * Math.min(kx, ky),
+      bx0: 0, by0: S.BODY_TOP * ky, bw: S.W * kx, bh: S.BODY_H * ky, br: S.BODY_RX * kx
+    };
+    return guide;
+  }
+
+  function inCircle(px, py, cx, cy, r) {
+    var dx = px - cx, dy = py - cy;
+    return dx * dx + dy * dy <= r * r;
+  }
+  function inRoundRect(px, py, x0, y0, w, h, r) {
+    if (px < x0 || px > x0 + w || py < y0 || py > y0 + h) return false;
+    var cx = Math.min(Math.max(px, x0 + r), x0 + w - r);
+    var cy = Math.min(Math.max(py, y0 + r), y0 + h - r);
+    var dx = px - cx, dy = py - cy;
+    return dx * dx + dy * dy <= r * r;
+  }
+  // клетка внутри силуэта — тело/голова, там рисовать запрещено
+  function locked(x, y) {
+    var g = guideGeom();
+    if (!g) return false;
+    var px = (x + .5) * CELL, py = (y + .5) * CELL;
+    return inCircle(px, py, g.hcx, g.hcy, g.hr) ||
+           inRoundRect(px, py, g.bx0, g.by0, g.bw, g.bh, g.br);
+  }
+
+  function drawGuide() {
+    var g = guideGeom();
+    if (!g) return;
     ctx.save();
     ctx.globalAlpha = .16;
     ctx.fillStyle = '#111827';
     ctx.beginPath();
-    ctx.arc(S.HEAD_R * kx, S.HEAD_R * ky, S.HEAD_R * Math.min(kx, ky), 0, Math.PI * 2);
+    ctx.arc(g.hcx, g.hcy, g.hr, 0, Math.PI * 2);
     ctx.fill();
-    var rx = S.BODY_RX * kx, x0 = 0, y0 = S.BODY_TOP * ky, w = S.W * kx, h = S.BODY_H * ky;
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x0, y0, w, h, rx); else ctx.rect(x0, y0, w, h);
+    if (ctx.roundRect) ctx.roundRect(g.bx0, g.by0, g.bw, g.bh, g.br); else ctx.rect(g.bx0, g.by0, g.bw, g.bh);
     ctx.fill();
     ctx.restore();
   }
@@ -182,8 +212,11 @@
 
   function setPixel(x, y, val) {
     if (x < 0 || x >= GW || y < 0 || y >= GH) return;
-    grid[idx(x, y)] = val;
-    if (mirror) { var mx = GW - 1 - x; if (mx !== x) grid[idx(mx, y)] = val; }
+    if (!locked(x, y)) grid[idx(x, y)] = val;
+    if (mirror) {
+      var mx = GW - 1 - x;
+      if (mx !== x && !locked(mx, y)) grid[idx(mx, y)] = val;
+    }
   }
 
   function floodFill(x, y, val) {

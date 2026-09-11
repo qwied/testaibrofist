@@ -72,7 +72,7 @@ function pub(s, me) {
     id: s.id, skinName: s.skinName, author: s.author,
     date: s.date, likes: t.likes, dislikes: t.dislikes, rating: t.rating,
     inAvatar: !!s.inAvatar, price: s.price || 0,
-    img: s.img || '',
+    img: s.img || '', kind: s.kind || 'full',
     myVote: me ? (s.votes || {})[low(me)] || 0 : 0
   };
 }
@@ -203,7 +203,7 @@ function register(app, acc) {
   app.get('/skin/of', (req, res) => {
     const db = getDb();
     const u = db.users[key(req.query.name)];
-    res.json({ img: (u && u.skinImg) || '', name: u ? u.name : '' });
+    res.json({ img: (u && u.skinImg) || '', kind: (u && u.skinKind) || 'full', name: u ? u.name : '' });
   });
 
   // скины сразу нескольких игроков — для списков друзей и таблиц
@@ -214,9 +214,15 @@ function register(app, acc) {
     const out = {};
     names.forEach(n => {
       const u = db.users[key(n)];
-      if (u && u.skinImg) out[n] = { img: u.skinImg };
+      if (u && u.skinImg) out[n] = { img: u.skinImg, kind: u.skinKind || 'full' };
     });
     res.json({ skins: out });
+  });
+
+  // свой собственный надетый образ — использует сама игра (см. game.js)
+  app.get('/skin/my', (req, res) => {
+    const u = currentUser(req);
+    res.json({ img: (u && u.skinImg) || '', kind: (u && u.skinKind) || 'full' });
   });
 
   // ---------- скин, нарисованный в редакторе: сразу надеваем на игрока ----------
@@ -240,6 +246,7 @@ function register(app, acc) {
     const oldImg = u.skinImg;
     delete u.skin;
     u.skinImg = img;
+    u.skinKind = 'accessory';
     u.wearing = '';
     saveUsers();
     if (oldImg && oldImg !== img) unlinkSkinImg(oldImg);
@@ -252,6 +259,7 @@ function register(app, acc) {
     if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
     delete u.skin;
     delete u.skinImg;
+    delete u.skinKind;
     u.wearing = '';
     saveUsers();
     res.json({ status: 'success' });
@@ -295,7 +303,7 @@ function register(app, acc) {
     catch (e) { return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message }); }
 
     const item = {
-      id, skinName, author: u.name, img, sig,
+      id, skinName, author: u.name, img, sig, kind: 'accessory',
       date: Date.now(), created: Date.now(),
       votes: {}, boostLikes: 0, boostDislikes: 0, rating: 0,
       inAvatar: false, price: 0
@@ -306,6 +314,7 @@ function register(app, acc) {
     const oldImg = u.skinImg;
     delete u.skin;
     u.skinImg = img;
+    u.skinKind = 'accessory';
     u.wearing = id;
     saveUsers();
     if (oldImg && oldImg !== img) unlinkSkinImg(oldImg);
@@ -381,6 +390,9 @@ function register(app, acc) {
     const oldImg = s.img;
     try { s.img = saveImage(got.buf, got.ext, s.id); }
     catch (e) { return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message }); }
+    // владелец подставляет произвольную картинку — она снова заменяет
+    // фигуру целиком, а не ложится аксессуаром поверх тела
+    delete s.kind;
     save();
     if (oldImg && oldImg !== s.img) unlinkSkinImg(oldImg);
     res.json({ status: 'success', img: s.img || '' });
@@ -477,9 +489,10 @@ function register(app, acc) {
 
     delete u.skin;
     u.wearing = s.id;
-    if (s.img) u.skinImg = s.img; else delete u.skinImg;
+    if (s.img) { u.skinImg = s.img; u.skinKind = s.kind || 'full'; }
+    else { delete u.skinImg; delete u.skinKind; }
     saveUsers();
-    res.json({ status: 'success', img: s.img || '',
+    res.json({ status: 'success', img: s.img || '', kind: s.kind || 'full',
                author: s.author, skinName: s.skinName });
   });
 

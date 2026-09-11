@@ -46,20 +46,5 @@
   // всё поверх силуэта
   function front(ctx, w, h, skin, byId) { overlay(ctx, w, h, skin, byId); }
 
-  // если у скина есть картинка — она заменяет фигуру целиком
-  function picture(ctx, w, h, skin) {
-    if (!skin || !skin.img) return false;
-    var im = image(skin.img);
-    if (!im) return false;
-    ctx.save();
-    // вписываем по ширине игрока, низом на землю
-    var k = w / im.naturalWidth;
-    var ih = im.naturalHeight * k;
-    ctx.drawImage(im, 0, h - ih, w, ih);
-    ctx.restore();
-    return true;
-  }
-
-  window.BFSkinCanvas = { overlay: overlay, behind: behind, front: front,
-                          picture: picture, image: image };
+  window.BFSkinCanvas = { overlay: overlay, behind: behind, front: front, image: image };
 })();
