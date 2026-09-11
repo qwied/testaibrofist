@@ -150,6 +150,9 @@
     + '#gExit{margin-left:auto;background:#fff;color:#111827;border:1px solid #d7dee7;padding:7px 13px;'
     + 'border-radius:8px;cursor:pointer;font-weight:bold;box-shadow:0 8px 20px -12px rgba(15,23,42,.35)}'
     + '#gExit:active{background:#f2f7fd}'
+    + '#gSound{background:#fff;color:#111827;border:1px solid #d7dee7;width:32px;height:32px;'
+    + 'border-radius:8px;cursor:pointer;font-size:15px;line-height:1;padding:0}'
+    + '#gSound:active{background:#f2f7fd}'
     + '#gMap{position:fixed;right:12px;bottom:12px;z-index:60;background:rgba(255,255,255,.92);'
     + 'border:1px solid #d7dee7;border-radius:9px;padding:8px 13px;font:12.5px sans-serif;max-width:46vw}'
     + '#gMap .n{font-weight:bold;color:#111827;word-break:break-word}'
@@ -231,6 +234,7 @@
     + '<span><span id="gLblPlayers">Игроков</span>: <b id="gCount">1</b></span>'
     + '<span><span id="gLblPing">Пинг</span>: <b id="gPing">—</b></span>'
     + '<span id="gTimeBox"><span id="gLblTime">Время</span>: <b id="gTime">—</b></span>'
+    + '<button id="gSound" aria-label="Звук"></button>'
     + '<button id="gExit">Меню</button></div>'
     + '<div id="gMap"><div class="n" id="gMapName">Загрузка карты…</div>'
     + '<div class="a" id="gMapAuthor"></div><div class="rate" id="gRate" style="display:none">'
@@ -258,6 +262,7 @@
     if (cl) cl.textContent = TR('chanceLbl', 'Твой шанс');
     var tk = $('gTalk');                          // кнопка чата — теперь иконка, подпись только для скринридера
     if (tk) tk.setAttribute('aria-label', TR('chatBtn', 'Чат'));
+    paintSoundBtn();
   }
   window.addEventListener('bf-lang', refreshGameLabels);
 
@@ -267,6 +272,20 @@
     return (window.I18N && window.I18N.t(k) !== k) ? window.I18N.t(k) : (f || k);
   };
   $('gExit').onclick = function () { location.href = 'index.html'; };
+
+  // ---------- звук: включён по умолчанию, состояние живёт в localStorage ----------
+  function paintSoundBtn() {
+    var b = $('gSound');
+    if (!b || !window.BFSound) return;
+    b.textContent = BFSound.isOn() ? '🔊' : '🔇';
+    b.setAttribute('aria-label', TR('soundBtn', 'Sound'));
+  }
+  if (window.BFSound) {
+    paintSoundBtn();
+    $('gSound').onclick = function () { BFSound.setOn(!BFSound.isOn()); paintSoundBtn(); };
+  } else {
+    var sb = $('gSound'); if (sb) sb.style.display = 'none';
+  }
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -633,10 +652,18 @@
     var s = Math.ceil(ms / 1000);
     return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
   }
+  var lastTickSec = -1;   // последняя озвученная секунда обратного отсчёта
   setInterval(function () {
     if (phase === 'dev' || phase === 'loading') return;
     var left = phaseEnds - Date.now();
     $('gTime').textContent = fmt(left);
+    if (window.BFSound) {
+      var secLeft = Math.ceil(left / 1000);
+      if (secLeft !== lastTickSec) {
+        lastTickSec = secLeft;
+        if (secLeft > 0 && secLeft <= 3) BFSound.tick();
+      }
+    }
     if (left <= 0) {
       // фазами пряток управляет сервер: ждём его событие, а не переключаемся сами
       if (hsSync && MODE === 'hideAndSeek' && socket && socket.connected) {
@@ -659,7 +686,12 @@
         clearCaught();               // новый раунд — все снова не пойманы
         banner('', '', false);
         log(TR('roundStart', 'Раунд начался! 2 минуты'));
+        if (window.BFSound) BFSound.go();
       } else {
+        // дожил до конца раунда прячущимся — свой личный успех, даже
+        // если искатель кого-то и поймал. Пойманного искатель уже
+        // озвучил через checkAllCaught() выше
+        if (window.BFSound && me.role === 'hider' && !me.caught) BFSound.win();
         phase = 'lobby'; phaseEnds = Date.now() + LOBBY_MS;
         clearCaught();
         nextMap();
@@ -723,6 +755,7 @@
   function checkRaceFinish() {
     if (VIEW || MODE !== 'race' || !socket || !GAME.playing || !GAME.done || finSent) return;
     finSent = true;
+    if (window.BFSound) BFSound.win();
     socket.emit('raceFinish', currentMap ? { author: currentMap.author, mapName: currentMap.mapName } : {});
   }
 
@@ -984,7 +1017,10 @@
     });
 
     socket.on('chatMessage', function (m) {
-      if (m.playerName !== me.name) speak(m.playerName, m.text);
+      if (m.playerName !== me.name) {
+        speak(m.playerName, m.text);
+        if (window.BFSound) BFSound.chat();
+      }
       watchCaught(m.playerId, m.text);
     });
 
@@ -1017,7 +1053,12 @@
         clearCaught();
         if (d.seekerId) applySeeker(d.seekerId);
         log(TR('roundStart', 'Раунд начался! 2 минуты'));
+        if (window.BFSound) BFSound.go();
       } else if (d.phase === 'lobby') {
+        // дожил до конца раунда прячущимся — личный успех (значения ещё
+        // не сброшены нижеидущими строками). Пойманного искатель уже
+        // озвучил через checkAllCaught() выше
+        if (window.BFSound && phase === 'round' && me.role === 'hider' && !me.caught) BFSound.win();
         phase = 'lobby';
         phaseEnds = Date.now() + (Number(d.msLeft) || LOBBY_MS);
         hsWinnerId = null;
@@ -1150,6 +1191,7 @@
 
     switching = true;
     log(TR('allCaughtT', 'Все пойманы — раунд окончен!'));
+    if (window.BFSound) BFSound.win();
     if (socket) {
       // при серверных фазах досрочно завершает раунд сервер —
       // сообщение принимается только от текущего искателя
@@ -1174,7 +1216,7 @@
     var m = /^(.+?) пойман/.exec(text);
     if (!m) return;
     var who = m[1];
-    if (who === me.name) { me.caught = true; applyColor(); }
+    if (who === me.name) { me.caught = true; applyColor(); if (window.BFSound) BFSound.death(); }
     // чужие поимки тоже слышны: у прячущихся фигуры красятся синхронно
     Object.keys(others).forEach(function (id) {
       if (others[id].name === who) others[id].caught = true;

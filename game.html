@@ -203,6 +203,7 @@ body.mob #msg h1{font-size:38px}
 body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="device.js?v=100"></script>
+        <script src="sound.js?v=100"></script>
         <script src="skinRender.js?v=103"></script>
         <script src="skinCanvas.js?v=101"></script>
         <script src="coin.js?v=101"></script>
@@ -844,6 +845,7 @@ function die(){
   if(mode === "hideAndSeek") return;
   if(pl.dead || done) return;
   pl.dead = true; deaths++; shake = 13; stat();
+  if(window.BFSound) BFSound.death();
   burst(pl.x+pl.w/2, pl.y+pl.h/2, 22, "#ef4444", 4.4, 34);
   setTimeout(function(){ if(playing) respawn(); }, 300);
 }
@@ -1192,6 +1194,7 @@ function step(){
       if(coy > 0 || pl.ground){
         pl.vy = jumpV(); buf = 0; coy = 0; hold = 0; pl.ground = false; pl.selfJump = true;
         puff(pl.x+pl.w/2, pl.y+pl.h, 5);
+        if(window.BFSound) BFSound.jump();
       }
     }
     if(hold < 1000) hold++;

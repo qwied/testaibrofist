@@ -237,6 +237,7 @@
     roulYouSeek: "You are the seeker!",
     chanceLbl: "Your chance",
     chatBtn: "Chat",
+    soundBtn: "Sound",
     allCaughtC: "Everyone caught",
     allFinished: "Everyone finished — new map!",
     finishSolo: "Finish! New map",
