@@ -292,12 +292,17 @@
     + '#gMsgsInput{flex:1;font-size:13px;padding:7px 9px;border:1px solid #d7dee7;border-radius:8px;min-width:0}'
     + '#gMsgsSendBtn{padding:7px 12px;border-radius:8px;border:1px solid #2196F3;background:#2196F3;'
     + 'color:#fff;cursor:pointer;font-weight:700;font-size:12.5px}'
+    /* На телефоне (тач-пад для движения снизу, #pad в game.html) прежний
+       отступ 100px оказался МЕНЬШЕ реальной высоты пэда (74px кнопки +
+       нижний паддинг с учётом safe-area — проверено на живом мобильном
+       вьюпорте: пэд был больше 100px, и конверт частично перекрывал
+       кнопку ◀). 150px даёт запас даже на телефонах с домашней чертой. */
     + 'html.is-mobile #gMsgsBtn,html.is-tablet #gMsgsBtn{'
-    + 'bottom:calc(100px + env(safe-area-inset-bottom,0px));left:calc(12px + env(safe-area-inset-left,0px))}'
+    + 'bottom:calc(150px + env(safe-area-inset-bottom,0px));left:calc(12px + env(safe-area-inset-left,0px))}'
     + 'html.is-mobile #gMsgsBadge,html.is-tablet #gMsgsBadge{'
-    + 'bottom:calc(127px + env(safe-area-inset-bottom,0px));left:calc(39px + env(safe-area-inset-left,0px))}'
+    + 'bottom:calc(177px + env(safe-area-inset-bottom,0px));left:calc(39px + env(safe-area-inset-left,0px))}'
     + 'html.is-mobile #gMsgsPanel,html.is-tablet #gMsgsPanel{'
-    + 'bottom:calc(150px + env(safe-area-inset-bottom,0px));left:calc(12px + env(safe-area-inset-left,0px));'
+    + 'bottom:calc(200px + env(safe-area-inset-bottom,0px));left:calc(12px + env(safe-area-inset-left,0px));'
     + 'width:calc(100vw - 24px)}'
     ;
 
