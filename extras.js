@@ -33,15 +33,15 @@ function sniff(buf) {
 // "data:image/png;base64,...." -> буфер
 function decodeImage(raw) {
   const m = /^data:([\w/+.-]+);base64,([\s\S]+)$/.exec(String(raw || '').trim());
-  if (!m) return { bad: 'Файл не читается' };
+  if (!m) return { bad: 'File cannot be read' };
   let buf;
   try { buf = Buffer.from(m[2], 'base64'); }
-  catch (e) { return { bad: 'Файл не читается' }; }
-  if (!buf.length) return { bad: 'Пустой файл' };
+  catch (e) { return { bad: 'File cannot be read' }; }
+  if (!buf.length) return { bad: 'File is empty' };
   if (buf.length > IMG_MAX_BYTES)
-    return { bad: 'Картинка больше ' + Math.round(IMG_MAX_BYTES / 1048576) + ' МБ' };
+    return { bad: 'Image is larger than ' + Math.round(IMG_MAX_BYTES / 1048576) + ' MB' };
   const s = sniff(buf);
-  if (!s) return { bad: 'Это не картинка' };
+  if (!s) return { bad: 'This is not an image' };
   return { buf, ext: s.ext, mime: s.mime };
 }
 
@@ -255,7 +255,7 @@ function register(app, acc) {
 
   const ownerOnly = (req, res) => {
     const u = currentUser(req);
-    if (!isOwner(u)) { res.json({ status: 'error', message: 'Недоступно' }); return null; }
+    if (!isOwner(u)) { res.json({ status: 'error', message: 'Not available' }); return null; }
     return u;
   };
 
@@ -274,7 +274,7 @@ function register(app, acc) {
     if (d.bad) return res.json({ status: 'error', message: d.bad });
     let url;
     try { url = saveImage(d.buf, d.ext); }
-    catch (e) { return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message }); }
+    catch (e) { return res.json({ status: 'error', message: 'Failed to save: ' + e.message }); }
     res.json({
       status: 'success', url, mime: d.mime,
       w: Math.max(0, Math.min(20000, parseInt(req.body.w, 10) || 0)),
@@ -308,7 +308,7 @@ function register(app, acc) {
     const text = String(req.body.text || '').trim().slice(0, 4000);
     const images = takeImages(req.body.images);
     if (!title && !text && !images.length)
-      return res.json({ status: 'error', message: 'Пустая запись' });
+      return res.json({ status: 'error', message: 'Entry is empty' });
     const entry = { id: nextId(), title, text, images, date: Date.now() };
     logs.push(entry);
     save();
@@ -322,12 +322,12 @@ function register(app, acc) {
   app.post('/editLog', (req, res) => {
     if (!ownerOnly(req, res)) return;
     const l = logs.find(x => x.id === parseInt(req.body.id, 10));
-    if (!l) return res.json({ status: 'error', message: 'Новость не найдена' });
+    if (!l) return res.json({ status: 'error', message: 'News entry not found' });
     const title = String(req.body.title || '').trim().slice(0, 120);
     const text = String(req.body.text || '').trim().slice(0, 4000);
     const images = takeImages(req.body.images);
     if (!title && !text && !images.length)
-      return res.json({ status: 'error', message: 'Пустая запись' });
+      return res.json({ status: 'error', message: 'Entry is empty' });
     const was = l.images || [];
     l.title = title; l.text = text; l.images = images;
     save();
@@ -395,9 +395,9 @@ function register(app, acc) {
     const err = checkName(to);
     if (err) return res.json({ status: 'error', message: err });
     const u = db.users[key(from)];
-    if (!u) return res.json({ status: 'error', message: 'Игрок «' + from + '» не найден' });
+    if (!u) return res.json({ status: 'error', message: 'Player «' + from + '» not found' });
     if (db.users[key(to)] && key(to) !== key(from))
-      return res.json({ status: 'error', message: 'Логин «' + to + '» уже занят' });
+      return res.json({ status: 'error', message: 'Username «' + to + '» is already taken' });
 
     const old = u.name;
     u.name = to;
@@ -411,10 +411,14 @@ function register(app, acc) {
       x.friends = fix(x.friends); x.incoming = fix(x.incoming); x.outgoing = fix(x.outgoing);
     });
     Object.keys(db.sessions).forEach(sid => {
-      if (key(db.sessions[sid]) === key(old)) db.sessions[sid] = to;
+      const s = db.sessions[sid];
+      const n = typeof s === 'string' ? s : (s && s.name);
+      if (key(n) !== key(old)) return;
+      if (typeof s === 'string') db.sessions[sid] = to;
+      else s.name = to;
     });
     saveUsers();
-    res.json({ status: 'success', message: '«' + old + '» теперь «' + to + '»' });
+    res.json({ status: 'success', message: '«' + old + '» is now «' + to + '»' });
   });
 
   // ---------- монеты в любой профиль (только владелец) ----------
@@ -423,12 +427,12 @@ function register(app, acc) {
     const db = getDb();
     const name = String(req.body.name || '').trim();
     const target = db.users[key(name)];
-    if (!target) return res.json({ status: 'error', message: 'Игрок «' + name + '» не найден' });
+    if (!target) return res.json({ status: 'error', message: 'Player «' + name + '» not found' });
 
     const raw = String(req.body.coins || '').trim();
     const n = parseInt(raw, 10);
     if (!isFinite(n) || isNaN(n))
-      return res.json({ status: 'error', message: 'Введите число' });
+      return res.json({ status: 'error', message: 'Enter a number' });
 
     const mode = String(req.body.mode || 'add');   // add | set
     if (mode === 'set') target.coins = Math.max(0, n);
@@ -438,7 +442,7 @@ function register(app, acc) {
     res.json({
       status: 'success',
       coins: target.coins,
-      message: '«' + target.name + '» — теперь ' + target.coins + ' монет'
+      message: '«' + target.name + '» now has ' + target.coins + ' coins'
     });
   });
 
@@ -453,7 +457,7 @@ function register(app, acc) {
     const dislikes = req.body.dislikes === undefined || req.body.dislikes === '' ? null : req.body.dislikes;
 
     const t = mapsApi.setBoost(author, mapName, likes, dislikes);
-    if (!t) return res.json({ status: 'error', message: 'Карта не найдена' });
+    if (!t) return res.json({ status: 'error', message: 'Map not found' });
     res.json({ status: 'success', likes: t.likes, dislikes: t.dislikes, rating: t.rating });
   });
 
@@ -466,14 +470,14 @@ function register(app, acc) {
     const on = String(req.body.on || 'true') === 'true';
 
     const r = mapsApi.setInGame(author, mapName, mode, on);
-    if (!r) return res.json({ status: 'error', message: 'Карта не найдена' });
-    if (r.bad) return res.json({ status: 'error', message: 'Неизвестный режим: ' + mode });
+    if (!r) return res.json({ status: 'error', message: 'Map not found' });
+    if (r.bad) return res.json({ status: 'error', message: 'Unknown mode: ' + mode });
 
     res.json({
       status: 'success', modes: r.modes,
       message: r.on
-        ? '«' + r.mapName + '» добавлена в режим ' + mode
-        : '«' + r.mapName + '» убрана из режима ' + mode
+        ? '«' + r.mapName + '» added to ' + mode + ' mode'
+        : '«' + r.mapName + '» removed from ' + mode + ' mode'
     });
   });
 
@@ -501,13 +505,13 @@ function register(app, acc) {
     const name = String(req.body.name || '').trim();
     const pass = String(req.body.password || '');
     const target = db.users[key(name)];
-    if (!target) return res.json({ status: 'error', message: 'Аккаунт не найден' });
+    if (!target) return res.json({ status: 'error', message: 'Account not found' });
     if (!verifyPassword(pass, target.salt, target.hash))
-      return res.json({ status: 'error', message: 'Неверный пароль от этого аккаунта' });
+      return res.json({ status: 'error', message: 'Wrong password for this account' });
     u.linked = u.linked || [];
     if (!u.linked.some(n => key(n) === key(target.name))) u.linked.push(target.name);
     saveUsers();
-    res.json({ status: 'success', message: '«' + target.name + '» привязан' });
+    res.json({ status: 'success', message: '«' + target.name + '» linked' });
   });
 
   app.post('/owner/unlink', (req, res) => {
@@ -522,11 +526,11 @@ function register(app, acc) {
     const db = getDb();
     const name = String(req.body.name || '').trim();
     if (!(u.linked || []).some(n => key(n) === key(name)))
-      return res.json({ status: 'error', message: 'Этот аккаунт не привязан' });
+      return res.json({ status: 'error', message: 'This account is not linked' });
     const target = db.users[key(name)];
-    if (!target) return res.json({ status: 'error', message: 'Аккаунт не найден' });
-    newSession(res, target.name);
-    res.json({ status: 'success', message: 'Вошли как ' + target.name });
+    if (!target) return res.json({ status: 'error', message: 'Account not found' });
+    newSession(res, target.name, req);
+    res.json({ status: 'success', message: 'Signed in as ' + target.name });
   });
 }
 

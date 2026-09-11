@@ -8,7 +8,7 @@
   var inGame = {};          // "автор::карта" -> [режимы]
   // режимов, кроме этих двух, в игре нет
   var MODES = ['hideAndSeek', 'race'];
-  var MODE_RU = { hideAndSeek: 'Прятки', race: 'Гонка' };
+  var MODE_RU = { hideAndSeek: 'Hide and Seek', race: 'Race' };
   var T = function (k, fallback) {
     return (window.I18N && window.I18N.t(k) !== k) ? I18N.t(k) : (fallback || k);
   };
@@ -104,7 +104,7 @@
       + '<div class="ow-row2">'
       +   '<input class="ow-i" id="owCAmt" type="number" placeholder="' + T('amount', 'Количество') + '">'
       +   '<select class="ow-i" id="owCMode">'
-      +     '<option value="add">+ добавить</option><option value="set">= установить</option>'
+      +     '<option value="add">+ add</option><option value="set">= set</option>'
       +   '</select>'
       + '</div>'
       + '<div class="ow-b" id="owCGo">' + T('apply', 'Применить') + '</div>'
@@ -112,7 +112,7 @@
 
       + '<div class="ow-sub">' + T('boostVotes', 'Оценка карты') + '</div>'
       + '<div class="ow-m" style="text-align:left;color:#6b7280;margin-bottom:4px">'
-      +   'Числа задают итог на карточке, а не прибавку.</div>'
+      +   'These numbers set the final total on the card, not an increment.</div>'
       + '<input class="ow-i" id="owVAuthor" placeholder="' + T('colAuthor', 'Автор') + '">'
       + '<input class="ow-i" id="owVMap" placeholder="' + T('colName', 'Название карты') + '">'
       + '<div class="ow-row2">'
@@ -125,22 +125,22 @@
       + '<div class="ow-sub">' + T('addToGame', 'Добавить в игру') + '</div>'
       + '<div class="ow-m" style="text-align:left;color:#6b7280" id="owGList">…</div>'
 
-      + '<div class="ow-sub">Резервная копия</div>'
+      + '<div class="ow-sub">Backup</div>'
       + '<div class="ow-m" style="text-align:left;color:#6b7280;margin-bottom:4px">'
-      +   'Один файл со всем: аккаунты, монеты, скины, карты, новости. '
-      +   'Скачайте перед переездом на другой сервер — и восстановите там же в этой панели. '
-      +   'Медиа шоу тяжелее 25 МБ в файл не входят.'
+      +   'One file with everything: accounts, coins, skins, maps, news. '
+      +   'Download it before moving to another server — and restore it there in this same panel. '
+      +   'Show media larger than 25 MB is not included in the file.'
       + '</div>'
       + '<div class="ow-row2">'
-      +   '<div class="ow-b" id="owBkDl" style="margin:0">Скачать</div>'
-      +   '<div class="ow-b" id="owBkRs" style="margin:0">Восстановить</div>'
+      +   '<div class="ow-b" id="owBkDl" style="margin:0">Download</div>'
+      +   '<div class="ow-b" id="owBkRs" style="margin:0">Restore</div>'
       + '</div>'
       + '<div class="ow-m" id="owBkMsg"></div>'
       + '<input type="file" id="owBkFile" accept=".json,application/json" style="display:none">'
 
       + '<div class="ow-sub">' + T('avatar', 'Avatar') + '</div>'
       + '<div class="ow-m" style="text-align:left;color:#6b7280">'
-      +   'Накрутка оценок, цена и загрузка скина из картинки — на странице Avatar.'
+      +   'Boosting votes, setting a price, and uploading a skin from an image — on the Avatar page.'
       + '</div>'
       + '<div class="ow-b" id="owGoSkins">' + T('openAvatar', 'Открыть Avatar') + '</div>';
 
@@ -180,7 +180,7 @@
     /* ---------- резервная копия: скачать / восстановить ---------- */
     box.querySelector('#owBkDl').onclick = function () {
       var m = box.querySelector('#owBkMsg');
-      m.style.color = '#6b7280'; m.textContent = 'Готовлю файл…';
+      m.style.color = '#6b7280'; m.textContent = 'Preparing file…';
       fetch('/owner/backup', { credentials: 'same-origin' }).then(function (r) {
         if (!r.ok) throw new Error('bad status');
         var mm = /filename="?([^";]+)"?/.exec(r.headers.get('Content-Disposition') || '');
@@ -193,9 +193,9 @@
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
         m.style.color = '#2e9b2e';
-        m.textContent = 'Скачано. Храните файл, пока не проверите новый сервер.';
+        m.textContent = 'Downloaded. Keep the file until you\'ve verified the new server.';
       }).catch(function () {
-        m.style.color = 'red'; m.textContent = 'Не удалось скачать бэкап';
+        m.style.color = 'red'; m.textContent = 'Failed to download the backup';
       });
     };
 
@@ -206,25 +206,25 @@
       var f = e.target.files[0];
       e.target.value = '';
       if (!f) return;
-      if (!confirm('Восстановить «' + f.name + '»? Аккаунты, карты, скины и новости ' +
-                   'будут заменены данными из файла. Входите потом под аккаунтом из бэкапа.'))
+      if (!confirm('Restore «' + f.name + '»? Accounts, maps, skins and news ' +
+                   'will be replaced with the data from this file. Sign in afterward with an account from the backup.'))
         return;
       var m = box.querySelector('#owBkMsg');
-      m.style.color = '#6b7280'; m.textContent = 'Читаю файл…';
+      m.style.color = '#6b7280'; m.textContent = 'Reading file…';
       var rd = new FileReader();
       rd.onload = function () {
-        m.textContent = 'Загружаю и восстанавливаю — не закрывайте страницу…';
+        m.textContent = 'Uploading and restoring — don\'t close this page…';
         post('/owner/restore', { data: rd.result }).then(function (r) {
           m.style.color = r.status === 'success' ? '#2e9b2e' : 'red';
-          m.textContent = r.message || (r.status === 'success' ? 'Готово' : 'Ошибка');
+          m.textContent = r.message || (r.status === 'success' ? 'Done' : 'Error');
           if (r.status === 'success') setTimeout(function () { location.reload(); }, 1500);
         }).catch(function () {
           m.style.color = 'red';
-          m.textContent = 'Не вышло — возможно, файл тяжелее лимита сервера';
+          m.textContent = 'Failed — the file may be larger than the server\'s limit';
         });
       };
       rd.onerror = function () {
-        m.style.color = 'red'; m.textContent = 'Не удалось прочитать файл';
+        m.style.color = 'red'; m.textContent = 'Failed to read the file';
       };
       rd.readAsText(f);
     };
@@ -237,7 +237,7 @@
             var m = (x.modes || []).map(function (k) { return MODE_RU[k] || k; }).join(', ');
             return '· ' + x.mapName + ' <span style="color:#9aa3ad">(' + x.author + ')</span> → ' + m;
           }).join('<br>')
-        : '<span style="color:#9aa3ad">пока ничего не добавлено</span>';
+        : '<span style="color:#9aa3ad">nothing added yet</span>';
     }).catch(function () {});
 
     ov.style.display = 'block';
@@ -405,7 +405,7 @@
         '<h4>' + T('ownerTools', 'Инструменты владельца') + '</h4>'
       + '<div class="ow-bar-row">'
       +   '<input id="owSkName" placeholder="' + T('colName', 'Название скина') + '">'
-      +   '<input id="owSkUrl" placeholder="https://… ссылка на картинку">'
+      +   '<input id="owSkUrl" placeholder="https://… image URL">'
       +   '<button class="go" id="owSkUrlGo">' + T('addFromUrl', 'Из ссылки') + '</button>'
       +   '<button id="owSkFileGo">' + T('addFromFile', 'Из файла') + '</button>'
       + '</div>'

@@ -26,7 +26,7 @@ const io = socketIo(server, {
       /* Первый аргумент cb — СТРОКА ошибки (не объект Error!): движок
          вставляет её прямо в заголовок ответа, и объект Error роняет
          abort соединения — блокировка превращалась в тыкву. */
-      cb(ok ? null : 'чужой источник', ok);
+      cb(ok ? null : 'foreign origin', ok);
     } catch (e) { cb(null, true); }                  // разобрать не смогли — не баним
   },
   maxHttpBufferSize: 1e6,
@@ -122,18 +122,32 @@ function clientKey(req) {
   }
   return (req.socket && req.socket.remoteAddress) || 'unknown';
 }
+/* Статику (весь каталог сайта отдаётся через express.static ниже —
+   html/js/css/картинки) лимитер раньше тоже считал, наравне с «живыми»
+   запросами. Один переход по страницам — это уже десяток-другой файлов
+   разом, а за последние сессии на сайте прибавилось поллинга (Messages
+   каждые 5-8 сек, Leaderboard каждые 15 сек) — в сумме лимит стал
+   реально ловить обычных игроков, а не только скрипты-бомбардировщики.
+   Хуже того: получив 429 на sound.js, браузер получал JSON вместо
+   скрипта и ронял его с ошибкой MIME — сайт частично ломался.
+   Статика ничего не считает и не пишет на диск, лимитировать её незачем —
+   и так есть Cache-Control на этих файлах (см. ниже). */
+const STATIC_EXT = /\.(js|css|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|map|xml|txt|webmanifest|mp3|mp4)$/i;
 function rateLimit(limit, windowMs) {
   return (req, res, next) => {
+    if (req.method === 'GET' && STATIC_EXT.test(req.path)) return next();
     const k = clientKey(req);
     const now = Date.now();
     let b = RL_BUCKETS.get(k);
     if (!b || now - b.start > windowMs) { b = { start: now, n: 0 }; RL_BUCKETS.set(k, b); }
     b.n++;
-    if (b.n > limit) return res.status(429).json({ status: 'error', message: 'Слишком много запросов, попробуйте позже' });
+    if (b.n > limit) return res.status(429).json({ status: 'error', message: 'Too many requests, try again later' });
     next();
   };
 }
-app.use(rateLimit(240, 60000));   // 240 запросов в минуту с одного адреса
+// было 240 — с ростом поллинга (Messages/Leaderboard) стало тесно и для
+// динамических запросов настоящего активного игрока в нескольких вкладках
+app.use(rateLimit(500, 60000));   // 500 запросов в минуту с одного адреса
 
 /* CSRF: POST-запросы принимаем только со своего сайта.
    Кука и так SameSite=Lax, это вторая линия обороны. */
@@ -143,9 +157,9 @@ app.use((req, res, next) => {
   const src = String(req.headers.origin || req.headers.referer || '').toLowerCase();
   if (!src) return next();            // старые клиенты без заголовков — пропускаем
   let hostOrigin = '';
-  try { hostOrigin = new URL(src).host || ''; } catch (e) { return res.status(403).json({ status: 'error', message: 'Запрещено' }); }
+  try { hostOrigin = new URL(src).host || ''; } catch (e) { return res.status(403).json({ status: 'error', message: 'Forbidden' }); }
   if (hostOrigin && hostOrigin !== host)
-    return res.status(403).json({ status: 'error', message: 'Запрещено' });
+    return res.status(403).json({ status: 'error', message: 'Forbidden' });
   next();
 });
 
@@ -654,6 +668,28 @@ io.on('connection', (socket) => {
     }
     if (!name) name = 'Guest' + Math.floor(100 + Math.random() * 900);
 
+    /* Повторный join на том же сокете (другой режим/комната) иначе
+       оставляет сокет висеть в старой комнате навсегда: старый Set
+       никогда не пустеет, таймеры hsRooms для неё не гаснут, а игрок
+       продолжает получать кадры и получать HS-награды за раунд, из
+       которого он фактически ушёл. */
+    const prevPlayer = gameState.players.get(socket.id);
+    if (prevPlayer && prevPlayer.room) {
+      const prevRoom = prevPlayer.room;
+      socket.leave(prevRoom);
+      const prevSet = gameState.rooms.get(prevRoom);
+      if (prevSet) {
+        prevSet.delete(socket.id);
+        if (prevSet.size === 0) {
+          gameState.rooms.delete(prevRoom);
+          gameState.stats.totalRooms--;
+        }
+      }
+      io.to(prevRoom).emit('playerLeft', { playerId: socket.id });
+      if (prevRoom.indexOf('hideAndSeek:') === 0) hsOnLeave(io, prevRoom, socket.id);
+      if (prevRoom.indexOf('race:') === 0) broadcastRaceScores(io, prevRoom);
+    }
+
     const player = {
       id: socket.id,
       nid: (nidSeq = (nidSeq + 1) % 1000000000),
@@ -906,17 +942,17 @@ io.on('connection', (socket) => {
 // (редирект ломал кнопку "Назад": браузер возвращался и его снова перекидывало)
 app.get('*', (req, res) => {
   if (!path.extname(req.path) || req.path.endsWith('.html')) {
-    return res.status(404).send(`<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
+    return res.status(404).send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AIBrofist</title><style>body{font-family:sans-serif;display:flex;height:100vh;margin:0;
 align-items:center;justify-content:center;flex-direction:column;gap:14px;color:#191919;text-align:center;padding:20px}
 a,button{border:1px solid #2196F3;border-radius:4px;padding:11px 22px;background:#fff;color:#000;
 text-decoration:none;font-size:16px;cursor:pointer}</style></head><body>
-<h2>Этот раздел ещё не готов</h2>
-<p style="color:#777;margin:0">Такой страницы в игре пока нет.</p>
+<h2>This section isn't ready yet</h2>
+<p style="color:#777;margin:0">There's no such page in the game yet.</p>
 <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
-<button onclick="history.back()">&larr; Назад</button>
-<a href="/">В главное меню</a></div></body></html>`);
+<button onclick="history.back()">&larr; Back</button>
+<a href="/">Main menu</a></div></body></html>`);
   }
   res.status(404).send('Not found');
 });

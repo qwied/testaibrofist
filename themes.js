@@ -35,14 +35,14 @@ function register(app, acc) {
   app.post('/theme/mode', (req, res) => {
     const want = String(req.body.mode || '').toLowerCase();
     if (MODES.indexOf(want) === -1)
-      return res.json({ status: 'error', message: 'Неизвестная тема' });
+      return res.json({ status: 'error', message: 'Unknown theme' });
 
     const u = currentUser(req);
     if (!u) return res.json({ status: 'error', code: 'guest',
-                              message: 'Сначала войдите в аккаунт' });
+                              message: 'Sign in first' });
     if (!unlockedFor(u))
       return res.json({ status: 'error', code: 'locked',
-                        message: 'Темы ещё не открыты — нужно ' + UNLOCK_PRICE + ' монет' });
+                        message: 'Themes are not unlocked yet — needs ' + UNLOCK_PRICE + ' coins' });
 
     u.themeMode = want;
     save();
@@ -51,7 +51,7 @@ function register(app, acc) {
 
   app.post('/theme/unlock', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     if (u.themeUnlocked)
       return res.json({ status: 'success', unlocked: true, coins: u.coins || 0 });
 
@@ -59,7 +59,7 @@ function register(app, acc) {
     if (coins < UNLOCK_PRICE)
       return res.json({
         status: 'error',
-        message: 'Не хватает ' + (UNLOCK_PRICE - coins) + ' монет из ' + UNLOCK_PRICE
+        message: 'You need ' + (UNLOCK_PRICE - coins) + ' more of ' + UNLOCK_PRICE + ' coins'
       });
 
     u.coins = coins - UNLOCK_PRICE;
@@ -68,7 +68,7 @@ function register(app, acc) {
     delete u.themeColors;
     save();
     res.json({ status: 'success', unlocked: true, coins: u.coins,
-               message: 'Темы открыты' });
+               message: 'Themes unlocked' });
   });
 }
 

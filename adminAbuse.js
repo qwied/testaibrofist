@@ -37,7 +37,7 @@
   }
   function done(r, good) {
     if (r && r.status === 'success') { say(good); if (window.BFShow) BFShow.pull(); }
-    else say((r && r.message) || 'Ошибка');
+    else say((r && r.message) || 'Error');
   }
 
   // по расширению или типу файла решаем, это видео, звук или картинка
@@ -103,70 +103,70 @@
     panel = document.createElement('div');
     panel.id = 'aaPanel';
     panel.innerHTML =
-        '<div id="aaHead"><b>Admin Abuse</b><button id="aaClose" type="button" aria-label="Закрыть">&times;</button></div>'
+        '<div id="aaHead"><b>Admin Abuse</b><button id="aaClose" type="button" aria-label="Close">&times;</button></div>'
       + '<div id="aaBody">'
-      + '<div class="aaH">Летающее медиа</div>'
-      + '<input id="aaUrl" placeholder="ссылка на картинку, гифку или видео">'
+      + '<div class="aaH">Flying media</div>'
+      + '<input id="aaUrl" placeholder="link to an image, gif or video">'
       + '<input id="aaFile" type="file" multiple accept="image/*,video/*,audio/*">'
       + '<label style="display:block;font-size:12px;margin:2px 0 6px">'
       +   '<input id="aaSound" type="checkbox" checked style="width:auto;margin-right:6px">'
-      +   'видео со звуком</label>'
+      +   'video with sound</label>'
       + '<div class="aaRow">'
       +   '<select id="aaDir">'
-      +     '<option value="right">вправо</option><option value="left">влево</option>'
-      +     '<option value="up">вверх</option><option value="down">вниз</option>'
+      +     '<option value="right">right</option><option value="left">left</option>'
+      +     '<option value="up">up</option><option value="down">down</option>'
       +   '</select>'
-      +   '<input id="aaSpeed" type="number" value="4" min="1" max="40" title="скорость">'
-      +   '<input id="aaSize" type="number" value="120" min="20" max="3000" title="размер, px">'
+      +   '<input id="aaSpeed" type="number" value="4" min="1" max="40" title="speed">'
+      +   '<input id="aaSize" type="number" value="120" min="20" max="3000" title="size, px">'
       + '</div>'
       + '<label style="display:block;font-size:12px;margin:2px 0 6px">'
       +   '<input id="aaFull" type="checkbox" style="width:auto;margin-right:6px">'
-      +   'во весь экран</label>'
-      + '<button class="go" id="aaGo">Запустить всем</button>'
-      + '<button class="danger" id="aaClr">Убрать медиа</button>'
+      +   'full screen</label>'
+      + '<button class="go" id="aaGo">Launch for everyone</button>'
+      + '<button class="danger" id="aaClr">Clear media</button>'
 
-      + '<div class="aaH">Музыка</div>'
-      + '<input id="aaSong" placeholder="ссылка на mp3">'
+      + '<div class="aaH">Music</div>'
+      + '<input id="aaSong" placeholder="link to an mp3">'
       + '<input id="aaVol" type="range" min="0" max="1" step="0.05" value="0.7">'
-      + '<button class="go" id="aaSongGo">Играть всем</button>'
-      + '<button id="aaSongStop">Стоп</button>'
+      + '<button class="go" id="aaSongGo">Play for everyone</button>'
+      + '<button id="aaSongStop">Stop</button>'
 
-      + '<div class="aaH">Погода и эффекты</div>'
+      + '<div class="aaH">Weather and effects</div>'
       + '<div class="aaRow">'
       +   '<input id="aaSecs" type="number" value="0" min="0" max="3600" '
-      +     'title="сколько секунд держать, 0 — до выключения вручную">'
+      +     'title="how many seconds to keep it on, 0 — until turned off manually">'
       +   '<input id="aaCount" type="number" value="1" min="1" max="300" '
-      +     'title="сколько штук: взрывов или монет">'
+      +     'title="how many: explosions or coins">'
       + '</div>'
       + '<div id="aaW">'
-      +   '<button data-w="rain">Дождь</button><button data-w="hail">Град</button>'
-      +   '<button data-w="snow">Снег</button><button data-w="sun">Солнце</button>'
-      +   '<button data-w="nuke">Взрывы</button><button data-w="coins">Монеты</button>'
-      +   '<button data-w="none">Выключить</button>'
+      +   '<button data-w="rain">Rain</button><button data-w="hail">Hail</button>'
+      +   '<button data-w="snow">Snow</button><button data-w="sun">Sun</button>'
+      +   '<button data-w="nuke">Explosions</button><button data-w="coins">Coins</button>'
+      +   '<button data-w="none">Turn off</button>'
       + '</div>'
       + '<label style="display:block;font-size:12px;margin:4px 0 6px">'
       +   '<input id="aaReward" type="checkbox" style="width:auto;margin-right:6px">'
-      +   'за пойманные монеты давать настоящие</label>'
+      +   'give real coins for caught coins</label>'
       + '<div id="aaNote2" style="font-size:11px;color:#94a3b8;line-height:1.5;margin-top:2px">'
-      +   'Секунды — для дождя, града, снега и солнца. Количество — для взрывов и монет: '
-      +   'они летят пачкой и гаснут сами. Монеты игроки ловят пальцем; если галочка '
-      +   'снята, это просто украшение.</div>'
+      +   'Seconds — for rain, hail, snow and sun. Count — for explosions and coins: '
+      +   'they fly in one batch and fade on their own. Players catch coins with a tap; if the '
+      +   'checkbox is off, it\'s just decoration.</div>'
 
-      + '<div class="aaH">Таймер до обновления</div>'
+      + '<div class="aaH">Update timer</div>'
       + '<div class="aaRow">'
-      +   '<input id="aaHrs" type="number" value="3" min="0" max="999" title="часы">'
-      +   '<input id="aaMin" type="number" value="0" min="0" max="59" title="минуты">'
-      +   '<input id="aaSec" type="number" value="0" min="0" max="59" title="секунды">'
+      +   '<input id="aaHrs" type="number" value="3" min="0" max="999" title="hours">'
+      +   '<input id="aaMin" type="number" value="0" min="0" max="59" title="minutes">'
+      +   '<input id="aaSec" type="number" value="0" min="0" max="59" title="seconds">'
       + '</div>'
-      + '<button class="go" id="aaTimeGo">Запустить таймер до обновления</button>'
-      + '<button id="aaTimeOff">Убрать таймер</button>'
+      + '<button class="go" id="aaTimeGo">Start update timer</button>'
+      + '<button id="aaTimeOff">Remove timer</button>'
 
-      + '<div class="aaH">Разное</div>'
-      + '<button class="danger" id="aaAll">Убрать всё шоу</button>'
+      + '<div class="aaH">Misc</div>'
+      + '<button class="danger" id="aaAll">Clear the whole show</button>'
       + '<div id="aaMsg"></div>'
-      + '<div id="aaNote">Всё, что тут включено, видят все игроки на всех '
-      +   'страницах. Обновляется у них в течение трёх секунд. Файлов за раз — '
-      +   'сколько выберешь, в полёте держится до тридцати.</div>'
+      + '<div id="aaNote">Everything turned on here is visible to all players on all '
+      +   'pages. It updates for them within three seconds. You can pick as many '
+      +   'files at once as you like, up to thirty stay in flight.</div>'
       + '</div>';
     document.body.appendChild(panel);
 
@@ -192,16 +192,16 @@
       if (kind === 'audio')
         return post('/abuse/set', { what: 'song', url: url,
                                     vol: document.getElementById('aaVol').value })
-               .then(function (r) { done(r, 'Играет у всех'); });
+               .then(function (r) { done(r, 'Playing for everyone'); });
       return post('/abuse/set', { what: 'media', url: url, kind: kind,
                                   dir: o.dir, v: o.v, s: o.s,
                                   full: o.full, sound: o.sound })
-             .then(function (r) { done(r, 'Запущено у всех: ' + (r.count || '')); });
+             .then(function (r) { done(r, 'Launched for everyone: ' + (r.count || '')); });
     }
 
     document.getElementById('aaGo').onclick = function () {
       var url = document.getElementById('aaUrl').value.trim();
-      if (!url) { say('Дай ссылку или выбери файл'); return; }
+      if (!url) { say('Give a link or pick a file'); return; }
       send(url, kindOf(url, ''));
     };
 
@@ -211,13 +211,13 @@
       var list = this.files || [], i = 0, okCount = 0, total = list.length;
       var self = this;
       if (!total) return;
-      say('Загружаю 0 из ' + total + '…');
+      say('Uploading 0 of ' + total + '…');
       /* Файлы идут по очереди, а не разом: десяток видео одновременно
          забьёт и канал, и память телефона. */
       function next() {
         if (i >= total) {
           self.value = '';
-          say('Загружено ' + okCount + ' из ' + total);
+          say('Uploaded ' + okCount + ' of ' + total);
           return;
         }
         var f = list[i++], kind = kindOf(f.name, f.type);
@@ -225,33 +225,33 @@
         fr.onload = function () {
           postJSON('/abuse/upload', { data: fr.result }).then(function (r) {
             if (r.status !== 'success') {
-              say(f.name + ': ' + (r.message || 'не загрузилось'));
+              say(f.name + ': ' + (r.message || 'failed to upload'));
               next();               // остальные всё равно грузим
               return;
             }
             okCount++;
-            say('Загружаю ' + okCount + ' из ' + total + '…');
+            say('Uploading ' + okCount + ' of ' + total + '…');
             send(r.url, kind).then(next);
-          }).catch(function () { say(f.name + ': сервер не ответил'); next(); });
+          }).catch(function () { say(f.name + ': server did not respond'); next(); });
         };
-        fr.onerror = function () { say(f.name + ': файл не прочитался'); next(); };
+        fr.onerror = function () { say(f.name + ': file could not be read'); next(); };
         fr.readAsDataURL(f);
       }
       next();
     };
 
     document.getElementById('aaClr').onclick = function () {
-      post('/abuse/set', { what: 'mediaClear' }).then(function (r) { done(r, 'Медиа убрано у всех'); });
+      post('/abuse/set', { what: 'mediaClear' }).then(function (r) { done(r, 'Media cleared for everyone'); });
     };
 
     document.getElementById('aaSongGo').onclick = function () {
       post('/abuse/set', { what: 'song',
                            url: document.getElementById('aaSong').value.trim(),
                            vol: document.getElementById('aaVol').value })
-        .then(function (r) { done(r, 'Играет у всех'); });
+        .then(function (r) { done(r, 'Playing for everyone'); });
     };
     document.getElementById('aaSongStop').onclick = function () {
-      post('/abuse/set', { what: 'song', url: '' }).then(function (r) { done(r, 'Тишина'); });
+      post('/abuse/set', { what: 'song', url: '' }).then(function (r) { done(r, 'Silence'); });
     };
 
     document.getElementById('aaW').onclick = function (e) {
@@ -262,7 +262,7 @@
         secs: document.getElementById('aaSecs').value,
         count: document.getElementById('aaCount').value,
         reward: document.getElementById('aaReward').checked
-      }).then(function (r) { done(r, 'У всех: ' + b.textContent); });
+      }).then(function (r) { done(r, 'For everyone: ' + b.textContent); });
     };
 
 
@@ -272,19 +272,19 @@
       var m = parseInt(document.getElementById('aaMin').value, 10) || 0;
       var sc = parseInt(document.getElementById('aaSec').value, 10) || 0;
       post('/update/set', { seconds: h * 3600 + m * 60 + sc }).then(function (r) {
-        say(r.status === 'success' ? 'Таймер поставлен' : (r.message || 'Ошибка'));
+        say(r.status === 'success' ? 'Timer set' : (r.message || 'Error'));
         if (window.BFUpdate) BFUpdate.refresh();
       });
     };
     document.getElementById('aaTimeOff').onclick = function () {
       post('/update/set', { seconds: 0 }).then(function () {
-        say('Таймер убран');
+        say('Timer removed');
         if (window.BFUpdate) BFUpdate.refresh();
       });
     };
 
     document.getElementById('aaAll').onclick = function () {
-      post('/abuse/set', { what: 'clear' }).then(function (r) { done(r, 'Шоу выключено у всех'); });
+      post('/abuse/set', { what: 'clear' }).then(function (r) { done(r, 'Show turned off for everyone'); });
     };
   }
 

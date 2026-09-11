@@ -31,7 +31,7 @@ function register(app, acc) {
 
   app.post('/update/set', (req, res) => {
     const u = currentUser(req);
-    if (!isOwner(u)) return res.json({ status: 'error', message: 'Только для владельца' });
+    if (!isOwner(u)) return res.json({ status: 'error', message: 'Owner only' });
 
     /* Принимаем и секунды, и минуты: панель шлёт секунды, но старые
        вызовы с минутами тоже должны работать. */

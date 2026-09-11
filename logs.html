@@ -62,7 +62,7 @@
                 .logImg.noSize img{height:auto;max-height:520px;object-fit:contain}
                 .logImg.bad img{display:none}
                 .logImg.bad{aspect-ratio:auto!important;max-width:100%!important;min-height:64px}
-                .logImg.bad::after{content:'Изображение недоступно';display:block;padding:22px 10px;text-align:center;
+                .logImg.bad::after{content:'Image unavailable';display:block;padding:22px 10px;text-align:center;
                         color:var(--muted,#8b93a1);font-size:13px}
 
                 /* ---- просмотр во весь экран ---- */
@@ -258,7 +258,7 @@
                 thumbs.innerHTML = picked.map(function (p, n) {
                         return '<div class="lTh"><img src="' + esc(p.data || p.u) + '" alt="">'
                                 + '<b>' + (p.kb ? p.kb + T('kbUnit', ' КБ') : T('kbLoaded', 'загружено')) + '</b>'
-                                + '<i data-n="' + n + '" title="Убрать">&times;</i></div>';
+                                + '<i data-n="' + n + '" title="Remove">&times;</i></div>';
                 }).join('');
         }
         thumbs.addEventListener('click', function (e) {
@@ -271,7 +271,7 @@
                 return new Promise(function (res, rej) {
                         var r = new FileReader();
                         r.onload = function () { res(r.result); };
-                        r.onerror = function () { rej(new Error('Файл не читается')); };
+                        r.onerror = function () { rej(new Error('File cannot be read')); };
                         r.readAsDataURL(f);
                 });
         }
@@ -280,7 +280,7 @@
                 return new Promise(function (res, rej) {
                         var im = new Image();
                         im.onload = function () { res(im); };
-                        im.onerror = function () { rej(new Error('Это не картинка')); };
+                        im.onerror = function () { rej(new Error('This is not an image')); };
                         im.src = src;
                 });
         }
@@ -323,23 +323,23 @@
                 var arr = [].slice.call(files || []);
                 if (!arr.length) return;
                 var free = MAX_IMAGES - picked.length;
-                if (free <= 0) { say('Больше ' + MAX_IMAGES + ' картинок в одну новость нельзя', true); return; }
-                if (arr.length > free) { say('Взял первые ' + free + ': больше ' + MAX_IMAGES + ' нельзя', true); arr = arr.slice(0, free); }
+                if (free <= 0) { say('No more than ' + MAX_IMAGES + ' images per news entry', true); return; }
+                if (arr.length > free) { say('Took the first ' + free + ': no more than ' + MAX_IMAGES + ' allowed', true); arr = arr.slice(0, free); }
 
                 var i = 0;
                 (function next() {
                         if (i >= arr.length) { drawThumbs(); return; }
                         var f = arr[i++];
                         if (f.type && f.type.indexOf('image/') !== 0) {
-                                say('«' + f.name + '» — не картинка, пропустил', true);
+                                say('«' + f.name + '» is not an image, skipped', true);
                                 return next();
                         }
-                        say('Готовлю ' + (f.name || 'картинку') + '…');
+                        say('Preparing ' + (f.name || 'image') + '…');
                         readFile(f)
                                 .then(function (d) { return loadImg(d).then(function (im) { return { im: im, d: d }; }); })
                                 .then(function (r) {
                                         var out = shrink(r.im, r.d, f.type);
-                                        if (bytesOf(out) > HARD_BYTES) throw new Error('«' + f.name + '» больше 12 МБ');
+                                        if (bytesOf(out) > HARD_BYTES) throw new Error('«' + f.name + '» is larger than 12 MB');
                                         // размеры берём у готового файла: пропорции в ленте
                                         // должны совпасть с тем, что реально уйдёт на сервер
                                         return loadImg(out).then(function (fin) {
@@ -352,7 +352,7 @@
                                                 say('');
                                         });
                                 })
-                                .catch(function (err) { say(err.message || 'Не смог прочитать файл', true); })
+                                .catch(function (err) { say(err.message || 'Could not read the file', true); })
                                 .then(next);
                 })();
         }
@@ -399,11 +399,11 @@
                         if (i >= picked.length) return Promise.resolve(out);
                         var p = picked[i++];
                         if (p.u) { out.push({ u: p.u, w: p.w || 0, h: p.h || 0 }); return next(); }
-                        say('Загружаю ' + i + ' из ' + picked.length + '…');
+                        say('Uploading ' + i + ' of ' + picked.length + '…');
                         return post('/log/upload', 'data=' + encodeURIComponent(p.data)
                                         + '&w=' + (p.w || 0) + '&h=' + (p.h || 0))
                                 .then(function (r) {
-                                        if (r.status !== 'success') throw new Error(r.message || 'Картинка не загрузилась');
+                                        if (r.status !== 'success') throw new Error(r.message || 'Image failed to upload');
                                         out.push({ u: r.url, w: p.w || 0, h: p.h || 0 });
                                         return next();
                                 });
@@ -429,18 +429,18 @@
                 addBtn.disabled = true;
                 uploadAll()
                         .then(function (imgs) {
-                                say('Публикую…');
+                                say('Publishing…');
                                 var body = 'title=' + encodeURIComponent(t) + '&text=' + encodeURIComponent(x)
                                         + '&images=' + encodeURIComponent(JSON.stringify(imgs));
                                 return post(editing ? '/editLog' : '/addLog',
                                         editing ? 'id=' + encodeURIComponent(editing) + '&' + body : body);
                         })
                         .then(function (r) {
-                                if (r.status !== 'success') throw new Error(r.message || 'Ошибка');
+                                if (r.status !== 'success') throw new Error(r.message || 'Error');
                                 resetEditor();
                                 load();
                         })
-                        .catch(function (err) { say(err.message || 'Ошибка', true); })
+                        .catch(function (err) { say(err.message || 'Error', true); })
                         .then(function () { addBtn.disabled = false; });
         };
 
@@ -461,10 +461,10 @@
                 document.getElementById('lTitle').value = l.title || '';
                 document.getElementById('lText').value = l.text || '';
                 picked = (l.images || []).map(function (i) { return { u: i.u, w: i.w, h: i.h }; });
-                addBtn.textContent = 'Сохранить';
+                addBtn.textContent = T('save', 'Save');
                 cancelBtn.style.display = '';
                 drawThumbs();
-                say('Правим новость от ' + when(l.date));
+                say('Editing the entry from ' + when(l.date));
                 document.getElementById('editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
 

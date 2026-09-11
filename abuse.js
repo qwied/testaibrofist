@@ -35,13 +35,13 @@ function bump() { state.v = (state.v || 0) + 1; save(); }
 // data:video/mp4;base64,.... -> буфер
 function decode(raw) {
   const m = /^data:([\w/+.-]+);base64,([\s\S]+)$/.exec(String(raw || '').trim());
-  if (!m) return { bad: 'Файл не читается' };
+  if (!m) return { bad: 'File cannot be read' };
   let buf;
   try { buf = Buffer.from(m[2], 'base64'); }
-  catch (e) { return { bad: 'Файл не читается' }; }
-  if (!buf.length) return { bad: 'Пустой файл' };
+  catch (e) { return { bad: 'File cannot be read' }; }
+  if (!buf.length) return { bad: 'File is empty' };
   if (buf.length > MAX_BYTES)
-    return { bad: 'Файл больше ' + Math.round(MAX_BYTES / 1048576) + ' МБ' };
+    return { bad: 'File is larger than ' + Math.round(MAX_BYTES / 1048576) + ' MB' };
   return { buf, mime: m[1] };
 }
 
@@ -66,7 +66,7 @@ function register(app, acc) {
 
   const guard = (req, res) => {
     if (isOwner(currentUser(req))) return true;
-    res.json({ status: 'error', message: 'Только для владельца' });
+    res.json({ status: 'error', message: 'Owner only' });
     return false;
   };
 
@@ -83,7 +83,7 @@ function register(app, acc) {
       fs.mkdirSync(FILE_DIR, { recursive: true });
       fs.writeFileSync(path.join(FILE_DIR, name), d.buf);
     } catch (e) {
-      return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message });
+      return res.json({ status: 'error', message: 'Failed to save: ' + e.message });
     }
     res.json({ status: 'success', url: '/abusefile/' + name, mime: d.mime });
   });
@@ -94,18 +94,18 @@ function register(app, acc) {
   const grabbed = {};        // "имя::шоу" -> сколько уже поймал
   app.post('/abuse/coin', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Нужен аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Account required' });
     if (state.weather !== 'coins' || !state.reward)
-      return res.json({ status: 'error', message: 'Сейчас монеты не раздают' });
+      return res.json({ status: 'error', message: 'No coins are being given out right now' });
     // шоу живёт минуту: дольше монеты всё равно не летят
     if (!state.shotAt || Date.now() - state.shotAt > 60000)
-      return res.json({ status: 'error', message: 'Шоу уже кончилось' });
+      return res.json({ status: 'error', message: 'The show is already over' });
 
     const key = String(u.name).toLowerCase() + '::' + state.shotAt;
     const cap = Math.min(MAX_GRAB, state.count || 1);
     grabbed[key] = grabbed[key] || 0;
     if (grabbed[key] >= cap)
-      return res.json({ status: 'error', message: 'Хватит с тебя' });
+      return res.json({ status: 'error', message: 'That\'s enough for you' });
 
     grabbed[key]++;
     u.coins = (u.coins || 0) + 1;
@@ -149,7 +149,7 @@ function register(app, acc) {
 
     if (what === 'media') {
       const url = String(req.body.url || '').trim();
-      if (!url) return res.json({ status: 'error', message: 'Нет ссылки' });
+      if (!url) return res.json({ status: 'error', message: 'No URL provided' });
       state.media.push({
         url,
         kind: String(req.body.kind || 'image'),
@@ -185,7 +185,7 @@ function register(app, acc) {
       return res.json({ status: 'success' });
     }
 
-    res.json({ status: 'error', message: 'Неизвестное действие' });
+    res.json({ status: 'error', message: 'Unknown action' });
   });
 }
 

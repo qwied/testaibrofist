@@ -72,25 +72,25 @@ function rehashIfNeeded(u, password) {
 
 // логин: 2-20 символов, русские и английские буквы, цифры, - _ .
 function checkName(name) {
-  if (typeof name !== 'string') return 'Введите логин';
+  if (typeof name !== 'string') return 'Enter a username';
   name = name.trim();
-  if (name.length < 2) return 'Логин должен быть не короче 2 символов';
-  if (name.length > 20) return 'Логин должен быть не длиннее 20 символов';
+  if (name.length < 2) return 'Username must be at least 2 characters';
+  if (name.length > 20) return 'Username must be 20 characters or fewer';
   if (!/^[A-Za-zА-Яа-яЁё0-9._-]+$/.test(name))
-    return 'В логине можно использовать русские и английские буквы, цифры, а также - _ .';
-  if (!/^[A-Za-zА-Яа-яЁё0-9]/.test(name)) return 'Логин должен начинаться с буквы или цифры';
+    return 'Username may only contain letters, digits, and - _ .';
+  if (!/^[A-Za-zА-Яа-яЁё0-9]/.test(name)) return 'Username must start with a letter or digit';
   return '';
 }
 function checkPassword(pw) {
-  if (typeof pw !== 'string' || pw.length === 0) return 'Введите пароль';
+  if (typeof pw !== 'string' || pw.length === 0) return 'Enter a password';
   return '';
 }
 // для новой регистрации пароль не пустой и не короче 4 символов
 function checkNewPassword(pw) {
   let err = checkPassword(pw);
   if (err) return err;
-  if (pw.length < 4) return 'Пароль должен быть не короче 4 символов';
-  if (pw.length > 100) return 'Пароль должен быть не длиннее 100 символов';
+  if (pw.length < 4) return 'Password must be at least 4 characters';
+  if (pw.length > 100) return 'Password must be 100 characters or fewer';
   return '';
 }
 
@@ -334,21 +334,21 @@ function register(app) {
     const password = String(req.body.password || '');
     let err = checkName(name) || checkNewPassword(password);
     if (err) return res.json({ status: 'error', message: err });
-    if (db.users[key(name)]) return res.json({ status: 'error', message: 'Такой логин уже занят' });
+    if (db.users[key(name)]) return res.json({ status: 'error', message: 'This username is already taken' });
     // права владельца выдаются по совпадению ника с OWNER_ALIASES (см. isOwner) —
     // без этой проверки самозахват ника «System»/«AIBrofist» через обычную
     // регистрацию давал бы полные права владельца. Сам аккаунт владельца
     // заводится не через публичную форму, а вручную (data/users.json) или
     // через /renameUser существующим владельцем.
     if (OWNER_ALIASES.indexOf(key(name)) !== -1)
-      return res.json({ status: 'error', message: 'Этот логин зарезервирован' });
+      return res.json({ status: 'error', message: 'This username is reserved' });
 
     const ip = ipKey(req);
     if (ip) {
       const owned = Object.values(db.users).some(u => u.ip === ip && isOwner(u));
       const taken = Object.values(db.users).find(u => u.ip === ip);
       if (taken && !owned)
-        return res.json({ status: 'error', message: 'С этого устройства уже создан аккаунт «' + taken.name + '»' });
+        return res.json({ status: 'error', message: 'An account («' + taken.name + '») already exists on this device' });
     }
 
     const salt = crypto.randomBytes(16).toString('hex');
@@ -361,7 +361,7 @@ function register(app) {
     };
     newSession(res, name, req);
     save();
-    res.json({ status: 'success', message: 'Аккаунт создан' });
+    res.json({ status: 'success', message: 'Account created' });
   });
 
   const doLogin = (req, res) => {
@@ -371,19 +371,19 @@ function register(app) {
     const blocked = loginBlocked(k);
     if (blocked)
       return res.json({ status: 'error',
-                        message: 'Слишком много попыток. Подождите ' +
-                                 Math.ceil((blocked - Date.now()) / 60000) + ' мин' });
+                        message: 'Too many attempts. Wait ' +
+                                 Math.ceil((blocked - Date.now()) / 60000) + ' min' });
     const u = db.users[key(name)];
     if (!u || !verifyPassword(password, u.salt, u.hash)) {
       loginFail(k);
-      return res.json({ status: 'error', message: 'Неверный логин или пароль' });
+      return res.json({ status: 'error', message: 'Wrong username or password' });
     }
     loginOk(k);
     rehashIfNeeded(u, password);       // старый хеш тихо заменяется стойким
     u.lastSeen = Date.now();
     newSession(res, u.name, req);
     save();
-    res.json({ status: 'success', message: 'Вход выполнен' });
+    res.json({ status: 'success', message: 'Signed in' });
   };
   app.post('/login/password', doLogin);
   app.post('/signIn', doLogin);
@@ -391,11 +391,11 @@ function register(app) {
   // ---------- смена пароля ----------
   app.post('/changePassword', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const oldPw = String(req.body.oldPassword || '');
     const newPw = String(req.body.newPassword || '');
     if (!verifyPassword(oldPw, u.salt, u.hash))
-      return res.json({ status: 'error', message: 'Текущий пароль неверный' });
+      return res.json({ status: 'error', message: 'Current password is incorrect' });
     const err = checkNewPassword(newPw);
     if (err) return res.json({ status: 'error', message: err });
     u.salt = crypto.randomBytes(16).toString('hex');
@@ -404,7 +404,7 @@ function register(app) {
     const sid = parseCookies(req).sid;
     dropUserSessions(u.name, sid);
     save();
-    res.json({ status: 'success', message: 'Пароль изменён' });
+    res.json({ status: 'success', message: 'Password changed' });
   });
 
   app.post('/logOut', (req, res) => {
@@ -488,7 +488,7 @@ function register(app) {
   // сохранение аватара и цвета чата
   app.post('/setMyBio', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const avatar = String(req.body.avatar || '').trim();
     const chatColor = String(req.body.chatColor || '').trim();
     if (avatar) u.avatar = avatar.slice(0, 40);

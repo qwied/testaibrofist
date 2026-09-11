@@ -142,7 +142,7 @@ ok('потерянная картинка скина донавешиваетс�
 ok('и её вид (kind) донавешивается вместе с ней', /o\.skin\.kind = kindCache\[o\.name\];/.test(game));
 
 const i18n = fs.readFileSync(__dirname + '/i18n.js', 'utf8');
-ok('подпись пинга переводится', /gPing:\s+\[/.test(i18n) && /gPingMs:\s+\[/.test(i18n));
+ok('подпись пинга переводится', /gPing:\s+"/.test(i18n) && /gPingMs:\s+"/.test(i18n));
 
 const gameHtml = fs.readFileSync(__dirname + '/game.html', 'utf8');
 const editorHtml = fs.readFileSync(__dirname + '/editor.html', 'utf8');
@@ -162,7 +162,7 @@ ok('второе соединение из редактора убрано', !/c
 const logsHtml = fs.readFileSync(__dirname + '/logs.html', 'utf8');
 const lbHtml = fs.readFileSync(__dirname + '/leaderboard.html', 'utf8');
 ok('кнопки новостей переведены', /T\('removeTxt', 'Удалить'\)/.test(logsHtml) && /T\('editTxt', 'Изменить'\)/.test(logsHtml));
-ok('заголовок лидеров переведён', /data-i18n="lbSub"/.test(lbHtml) && /lbSub:\s+\[/.test(i18n));
+ok('заголовок лидеров переведён', /data-i18n="lbSub"/.test(lbHtml) && /lbSub:\s+"/.test(i18n));
 ok('страницы режимов переведены', /data-i18n="hsRule1"/.test(fs.readFileSync(__dirname + '/hide-and-seek.html', 'utf8')) &&
    /data-i18n="raceRule1"/.test(fs.readFileSync(__dirname + '/race.html', 'utf8')));
 

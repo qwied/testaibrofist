@@ -104,11 +104,11 @@ function fromDataUrl(raw) {
   const m = /^data:([\w/+.-]+);base64,([\s\S]+)$/.exec(String(raw || '').trim());
   if (!m) return null;
   const ext = IMG_TYPES[m[1].toLowerCase()];
-  if (!ext) return { bad: 'Такой формат картинки не поддерживается' };
+  if (!ext) return { bad: 'This image format is not supported' };
   let buf;
-  try { buf = Buffer.from(m[2], 'base64'); } catch (e) { return { bad: 'Картинка не читается' }; }
-  if (!buf.length) return { bad: 'Пустая картинка' };
-  if (buf.length > IMG_MAX) return { bad: 'Картинка больше 3 МБ' };
+  try { buf = Buffer.from(m[2], 'base64'); } catch (e) { return { bad: 'Image cannot be read' }; }
+  if (!buf.length) return { bad: 'Image is empty' };
+  if (buf.length > IMG_MAX) return { bad: 'Image is larger than 3 MB' };
   return { buf, ext };
 }
 
@@ -119,26 +119,26 @@ const PRIVATE_HOST = /^(localhost$|127\.|10\.|192\.168\.|169\.254\.|0\.|\[?::1)|
 const PRIVATE_IP = /^(127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(1[6-9]|2\d|3[01])\.)/;
 
 async function assertPublicHost(hostname) {
-  if (PRIVATE_HOST.test(hostname)) throw new Error('локальная сеть запрещена');
+  if (PRIVATE_HOST.test(hostname)) throw new Error('local network addresses are not allowed');
   // имя хоста разрешаем и проверяем все полученные адреса
   const addrs = await dns.lookup(hostname, { all: true, verbatim: true });
   addrs.forEach(a => {
     if (PRIVATE_IP.test(a.address) || a.address === '::1')
-      throw new Error('этот адрес ведёт в локальную сеть');
+      throw new Error('this address leads to a local network');
   });
 }
 
 async function fromUrl(raw) {
   let u;
-  try { u = new URL(String(raw).trim()); } catch (e) { return { bad: 'Это не адрес' }; }
+  try { u = new URL(String(raw).trim()); } catch (e) { return { bad: 'That is not a valid URL' }; }
   if (u.protocol !== 'http:' && u.protocol !== 'https:')
-    return { bad: 'Нужна ссылка http или https' };
+    return { bad: 'The URL must use http or https' };
   if (u.port && u.port !== '80' && u.port !== '443')
-    return { bad: 'Нестандартный порт в ссылке запрещён' };
+    return { bad: 'Non-standard ports are not allowed in the URL' };
   if (u.username || u.password)
-    return { bad: 'Логины и пароли в ссылке запрещены' };
+    return { bad: 'Credentials are not allowed in the URL' };
   try { await assertPublicHost(u.hostname); }
-  catch (e) { return { bad: 'Ссылки на локальную сеть запрещены' }; }
+  catch (e) { return { bad: 'Links to a local network are not allowed' }; }
 
   let r;
   try {
@@ -146,18 +146,18 @@ async function fromUrl(raw) {
     const t = setTimeout(() => ctl.abort(), 12000);
     r = await fetch(u.href, { redirect: 'follow', signal: ctl.signal });
     clearTimeout(t);
-  } catch (e) { return { bad: 'Не удалось скачать: ' + (e.message || e) }; }
+  } catch (e) { return { bad: 'Failed to download: ' + (e.message || e) }; }
 
   // после редиректов адрес мог переехать в локальную сеть — проверяем ещё раз
   try { await assertPublicHost(new URL(r.url).hostname); }
-  catch (e) { return { bad: 'Ссылки на локальную сеть запрещены' }; }
+  catch (e) { return { bad: 'Links to a local network are not allowed' }; }
 
-  if (!r.ok) return { bad: 'Сервер картинки ответил ' + r.status };
+  if (!r.ok) return { bad: 'Image server responded ' + r.status };
   const ct = String(r.headers.get('content-type') || '').split(';')[0].toLowerCase();
   const ext = IMG_TYPES[ct];
-  if (!ext) return { bad: 'По ссылке не картинка (' + (ct || 'без типа') + ')' };
+  if (!ext) return { bad: 'That URL is not an image (' + (ct || 'no type') + ')' };
   const len = parseInt(r.headers.get('content-length') || '0', 10);
-  if (len > IMG_MAX) return { bad: 'Картинка больше 3 МБ' };
+  if (len > IMG_MAX) return { bad: 'Image is larger than 3 MB' };
 
   /* Content-Length — это то, что СКАЗАЛ чужой сервер, а не факт. При
      chunked-ответе заголовка может не быть вовсе (len тогда 0, проверка
@@ -165,8 +165,8 @@ async function fromUrl(raw) {
      ещё до проверки размера — чужой сервер мог стримить гигабайты и
      положить процесс. Теперь режем поток сами, как только он превысил лимит. */
   const buf = await readLimited(r.body, IMG_MAX);
-  if (buf === null) return { bad: 'Картинка больше 3 МБ' };
-  if (!buf.length) return { bad: 'Пустой ответ' };
+  if (buf === null) return { bad: 'Image is larger than 3 MB' };
+  if (!buf.length) return { bad: 'Empty response' };
   return { buf, ext };
 }
 
@@ -195,7 +195,7 @@ function register(app, acc) {
   const { currentUser, isOwner, save: saveUsers, getDb, key } = acc;
   const ownerOnly = (req, res) => {
     const u = currentUser(req);
-    if (!isOwner(u)) { res.json({ status: 'error', message: 'Недоступно' }); return null; }
+    if (!isOwner(u)) { res.json({ status: 'error', message: 'Not available' }); return null; }
     return u;
   };
 
@@ -229,19 +229,19 @@ function register(app, acc) {
   // Бесплатно и без публикации — только «примерить» свежий рисунок себе.
   app.post('/skin/drawing', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
 
     const raw = String(req.body.img || '').trim();
-    if (!raw) return res.json({ status: 'error', message: 'Картинка не передана' });
+    if (!raw) return res.json({ status: 'error', message: 'No image provided' });
 
     const got = fromDataUrl(raw);
-    if (!got) return res.json({ status: 'error', message: 'Картинка не распознана' });
+    if (!got) return res.json({ status: 'error', message: 'Image not recognized' });
     if (got.bad) return res.json({ status: 'error', message: got.bad });
 
     const id = 'd' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
     let img;
     try { img = saveImage(got.buf, got.ext, id); }
-    catch (e) { return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message }); }
+    catch (e) { return res.json({ status: 'error', message: 'Failed to save: ' + e.message }); }
 
     const oldImg = u.skinImg;
     delete u.skin;
@@ -253,13 +253,13 @@ function register(app, acc) {
     u.wearing = '';
     saveUsers();
     if (oldImg && oldImg !== img) unlinkSkinImg(oldImg);
-    res.json({ status: 'success', img, message: 'Скин сохранён' });
+    res.json({ status: 'success', img, message: 'Skin saved' });
   });
 
   // ---------- снять надетый скин — вернуться к обычной фигуре ----------
   app.post('/skins/reset', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     delete u.skin;
     delete u.skinImg;
     delete u.skinKind;
@@ -274,36 +274,36 @@ function register(app, acc) {
      что достойно попасть в Avatar за монеты (см. /owner/skinToAvatar). */
   app.post('/skins/publish', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
 
     const skinName = cleanText(req.body.skinName, 30);
     if (skinName.length < 2 || skinName.length > 30)
-      return res.json({ status: 'error', message: 'Название скина: от 2 до 30 символов' });
+      return res.json({ status: 'error', message: 'Skin name: 2 to 30 characters' });
 
     const raw = String(req.body.img || '').trim();
-    if (!raw) return res.json({ status: 'error', message: 'Картинка не передана' });
+    if (!raw) return res.json({ status: 'error', message: 'No image provided' });
     const got = fromDataUrl(raw);
-    if (!got) return res.json({ status: 'error', message: 'Картинка не распознана' });
+    if (!got) return res.json({ status: 'error', message: 'Image not recognized' });
     if (got.bad) return res.json({ status: 'error', message: got.bad });
 
     const mine = mineOf(u.name);
     if (mine.some(s => low(s.skinName) === low(skinName)))
-      return res.json({ status: 'error', message: 'У вас уже есть скин с таким названием' });
+      return res.json({ status: 'error', message: 'You already have a skin with this name' });
     if (mine.length >= MINE_LIMIT)
       return res.json({ status: 'error',
-                        message: 'В Skins Browser помещается ' + MINE_LIMIT +
-                                 ' ваших скинов. Удалите лишние.' });
+                        message: 'The Skins Browser holds up to ' + MINE_LIMIT +
+                                 ' of your skins. Delete some to make room.' });
 
     const sig = imgSig(got.buf);
     const twin = mine.find(s => s.sig === sig);
     if (twin)
       return res.json({ status: 'error',
-                        message: 'Такой же рисунок уже опубликован — «' + twin.skinName + '»' });
+                        message: 'This exact drawing is already published — «' + twin.skinName + '»' });
 
     const id = 's' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
     let img;
     try { img = saveImage(got.buf, got.ext, id); }
-    catch (e) { return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message }); }
+    catch (e) { return res.json({ status: 'error', message: 'Failed to save: ' + e.message }); }
 
     const item = {
       id, skinName, author: u.name, img, sig, kind: 'accessory2',
@@ -325,8 +325,8 @@ function register(app, acc) {
     const left = Math.max(0, MINE_LIMIT - mineOf(u.name).length);
     res.json({
       status: 'success', id, left, limit: MINE_LIMIT,
-      message: 'Скин «' + skinName + '» опубликован в Skins Browser  ·  осталось мест: ' +
-               left + ' из ' + MINE_LIMIT
+      message: 'Skin «' + skinName + '» published to Skins Browser  ·  slots left: ' +
+               left + ' of ' + MINE_LIMIT
     });
   });
 
@@ -337,13 +337,13 @@ function register(app, acc) {
 
     const skinName = cleanText(req.body.skinName, 30);
     if (skinName.length < 2 || skinName.length > 30)
-      return res.json({ status: 'error', message: 'Название скина: от 2 до 30 символов' });
+      return res.json({ status: 'error', message: 'Skin name: 2 to 30 characters' });
 
     if (list.some(s => low(s.skinName) === low(skinName) && low(s.author) === low(u.name)))
-      return res.json({ status: 'error', message: 'У вас уже есть скин с таким названием' });
+      return res.json({ status: 'error', message: 'You already have a skin with this name' });
 
     const raw = String(req.body.img || '').trim();
-    if (!raw) return res.json({ status: 'error', message: 'Картинка не передана' });
+    if (!raw) return res.json({ status: 'error', message: 'No image provided' });
 
     const id = 's' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
 
@@ -351,12 +351,12 @@ function register(app, acc) {
     // как обычный адрес. Во втором случае скачиваем сами: иначе картинка
     // держалась бы на чужом сервере и пропала бы вместе с ним.
     let got = /^data:/i.test(raw) ? fromDataUrl(raw) : await fromUrl(raw);
-    if (!got) return res.json({ status: 'error', message: 'Картинка не распознана' });
+    if (!got) return res.json({ status: 'error', message: 'Image not recognized' });
     if (got.bad) return res.json({ status: 'error', message: got.bad });
 
     let img;
     try { img = saveImage(got.buf, got.ext, id); }
-    catch (e) { return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message }); }
+    catch (e) { return res.json({ status: 'error', message: 'Failed to save: ' + e.message }); }
 
     const item = {
       id: id,
@@ -371,14 +371,14 @@ function register(app, acc) {
     // суточный лимит и награда сюда не применяются: это инструмент владельца,
     // а не обычная публикация игрока
     res.json({ status: 'success', id: item.id, img: item.img,
-               message: 'Скин из картинки добавлен: «' + skinName + '»' });
+               message: 'Skin added from image: «' + skinName + '»' });
   });
 
   // заменить картинку у существующего скина
   app.post('/owner/skinImage', async (req, res) => {
     if (!ownerOnly(req, res)) return;
     const s = list.find(x => x.id === String(req.body.id || ''));
-    if (!s) return res.json({ status: 'error', message: 'Скин не найден' });
+    if (!s) return res.json({ status: 'error', message: 'Skin not found' });
     const raw = String(req.body.img || '').trim();
     if (!raw) {
       const had = s.img;
@@ -388,11 +388,11 @@ function register(app, acc) {
     }
 
     let got = /^data:/i.test(raw) ? fromDataUrl(raw) : await fromUrl(raw);
-    if (!got) return res.json({ status: 'error', message: 'Картинка не распознана' });
+    if (!got) return res.json({ status: 'error', message: 'Image not recognized' });
     if (got.bad) return res.json({ status: 'error', message: got.bad });
     const oldImg = s.img;
     try { s.img = saveImage(got.buf, got.ext, s.id); }
-    catch (e) { return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message }); }
+    catch (e) { return res.json({ status: 'error', message: 'Failed to save: ' + e.message }); }
     // владелец подставляет произвольную картинку — она снова заменяет
     // фигуру целиком, а не ложится аксессуаром поверх тела
     delete s.kind;
@@ -442,11 +442,11 @@ function register(app, acc) {
   // ---------- оценка ----------
   app.post('/skins/vote', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const s = list.find(x => x.id === String(req.body.id || ''));
-    if (!s) return res.json({ status: 'error', message: 'Скин не найден' });
+    if (!s) return res.json({ status: 'error', message: 'Skin not found' });
     if (low(s.author) === low(u.name))
-      return res.json({ status: 'error', message: 'Свой скин оценивать нельзя' });
+      return res.json({ status: 'error', message: 'You can\'t vote on your own skin' });
 
     const v = parseInt(req.body.vote) > 0 ? 1 : -1;
     s.votes = s.votes || {};
@@ -461,11 +461,11 @@ function register(app, acc) {
   // ---------- удаление ----------
   app.post('/skins/remove', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const i = list.findIndex(x => x.id === String(req.body.id || ''));
-    if (i === -1) return res.json({ status: 'error', message: 'Скин не найден' });
+    if (i === -1) return res.json({ status: 'error', message: 'Skin not found' });
     if (low(list[i].author) !== low(u.name) && !isOwner(u))
-      return res.json({ status: 'error', message: 'Можно удалять только свои скины' });
+      return res.json({ status: 'error', message: 'You can only delete your own skins' });
     unlinkSkinImg(list[i].img);
     list.splice(i, 1);
     save();
@@ -475,9 +475,9 @@ function register(app, acc) {
   // ---------- примерить чужой скин ----------
   app.post('/skins/wear', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const s = list.find(x => x.id === String(req.body.id || ''));
-    if (!s) return res.json({ status: 'error', message: 'Скин не найден' });
+    if (!s) return res.json({ status: 'error', message: 'Skin not found' });
 
     // Надеть можно только свой образ, купленный или выставленный в витрине
     // Avatar. Раньше через Skins Browser надевался любой чужой скин даром.
@@ -486,12 +486,12 @@ function register(app, acc) {
     const bought = u.boughtSkins.indexOf(s.id) !== -1;
     if (!mine && !bought && !s.inAvatar)
       return res.json({ status: 'error',
-                        message: 'Этот скин не ваш — надеть его нельзя' });
+                        message: 'This isn\'t your skin — you can\'t wear it' });
 
     // скины из витрины Avatar с ценой нужно сначала купить
     if (s.inAvatar && (s.price || 0) > 0 && !mine && !bought)
       return res.json({ status: 'error', code: 'buy', price: s.price,
-                        message: 'Сначала купите этот скин за ' + s.price + ' монет' });
+                        message: 'Buy this skin first for ' + s.price + ' coins' });
 
     delete u.skin;
     u.wearing = s.id;
@@ -522,17 +522,17 @@ function register(app, acc) {
 
   app.post('/skins/buy', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const s = list.find(x => x.id === String(req.body.id || ''));
-    if (!s || !s.inAvatar) return res.json({ status: 'error', message: 'Скин не продаётся' });
+    if (!s || !s.inAvatar) return res.json({ status: 'error', message: 'This skin is not for sale' });
 
     u.boughtSkins = Array.isArray(u.boughtSkins) ? u.boughtSkins : [];
     if (u.boughtSkins.indexOf(s.id) !== -1 || low(s.author) === low(u.name))
-      return res.json({ status: 'error', message: 'Этот скин уже ваш' });
+      return res.json({ status: 'error', message: 'You already own this skin' });
 
     const price = s.price || 0;
     if ((u.coins || 0) < price)
-      return res.json({ status: 'error', message: 'Не хватает ' + (price - (u.coins || 0)) + ' монет' });
+      return res.json({ status: 'error', message: 'You need ' + (price - (u.coins || 0)) + ' more coins' });
 
     u.coins = (u.coins || 0) - price;
     u.boughtSkins.push(s.id);
@@ -544,7 +544,7 @@ function register(app, acc) {
   app.post('/owner/skinToAvatar', (req, res) => {
     if (!ownerOnly(req, res)) return;
     const s = list.find(x => x.id === String(req.body.id || ''));
-    if (!s) return res.json({ status: 'error', message: 'Скин не найден' });
+    if (!s) return res.json({ status: 'error', message: 'Skin not found' });
 
     const on = String(req.body.on || 'true') === 'true';
     s.inAvatar = on;
@@ -553,8 +553,8 @@ function register(app, acc) {
     res.json({
       status: 'success', inAvatar: s.inAvatar, price: s.price || 0,
       message: on
-        ? '«' + s.skinName + '» в Avatar за ' + (s.price || 0) + ' монет'
-        : '«' + s.skinName + '» убран из Avatar'
+        ? '«' + s.skinName + '» in Avatar for ' + (s.price || 0) + ' coins'
+        : '«' + s.skinName + '» removed from Avatar'
     });
   });
 
@@ -562,7 +562,7 @@ function register(app, acc) {
   app.post('/owner/skinVotes', (req, res) => {
     if (!ownerOnly(req, res)) return;
     const s = list.find(x => x.id === String(req.body.id || ''));
-    if (!s) return res.json({ status: 'error', message: 'Скин не найден' });
+    if (!s) return res.json({ status: 'error', message: 'Skin not found' });
     if (req.body.likes !== undefined && req.body.likes !== '')
       s.boostLikes = Math.max(0, parseInt(req.body.likes) || 0);
     if (req.body.dislikes !== undefined && req.body.dislikes !== '')
@@ -625,8 +625,8 @@ function register(app, acc) {
     if (!u) return res.json({ code: 1 });
     const s = list.find(x => low(x.skinName) === low(req.body.skinName) &&
                              low(x.author) === low(req.body.author));
-    if (!s) return res.json({ code: 2, val: 'Скин не найден' });
-    if (low(s.author) === low(u.name)) return res.json({ code: 2, val: 'Свой скин оценивать нельзя' });
+    if (!s) return res.json({ code: 2, val: 'Skin not found' });
+    if (low(s.author) === low(u.name)) return res.json({ code: 2, val: 'You can\'t vote on your own skin' });
     const v = parseInt(req.body.vote) > 0 ? 1 : -1;
     s.votes = s.votes || {};
     if (s.votes[low(u.name)] === v) delete s.votes[low(u.name)];

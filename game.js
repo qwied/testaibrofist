@@ -292,6 +292,11 @@
     + '#gMsgsInput{flex:1;font-size:13px;padding:7px 9px;border:1px solid #d7dee7;border-radius:8px;min-width:0}'
     + '#gMsgsSendBtn{padding:7px 12px;border-radius:8px;border:1px solid #2196F3;background:#2196F3;'
     + 'color:#fff;cursor:pointer;font-weight:700;font-size:12.5px}'
+    + '#gMsgsNewRow{display:none;gap:6px;padding:8px 11px;border-bottom:1px solid #eef1f5;flex:0 0 auto}'
+    + '#gMsgsNewRow.on{display:flex}'
+    + '#gMsgsNewInput{flex:1;font-size:13px;padding:7px 9px;border:1px solid #d7dee7;border-radius:8px;min-width:0}'
+    + '#gMsgsNewOk{padding:7px 12px;border-radius:8px;border:1px solid #2196F3;background:#2196F3;'
+    + 'color:#fff;cursor:pointer;font-weight:700;font-size:12.5px}'
     /* На телефоне (тач-пад для движения снизу, #pad в game.html) прежний
        отступ 100px оказался МЕНЬШЕ реальной высоты пэда (74px кнопки +
        нижний паддинг с учётом safe-area — проверено на живом мобильном
@@ -315,7 +320,7 @@
     + '<span id="gTimeBox"><span id="gLblTime">Время</span>: <b id="gTime">—</b></span>'
     + '<button id="gSound" aria-label="Звук"></button>'
     + '<button id="gExit">Меню</button></div>'
-    + '<div id="gMap"><div class="n" id="gMapName">Загрузка карты…</div>'
+    + '<div id="gMap"><div class="n" id="gMapName">Loading map…</div>'
     + '<div class="a" id="gMapAuthor"></div><div class="rate" id="gRate" style="display:none">'
     + '<button data-v="1">👍</button><button data-v="-1">👎</button>'
     + '<span id="gRating" style="color:#6b7280"></span></div></div>'
@@ -336,6 +341,8 @@
     +   '<div id="gMsgsHead"><button id="gMsgsBack">&larr;</button>'
     +     '<span id="gMsgsTitle">Messages</span>'
     +     '<button id="gMsgsNewBtn" aria-label="New chat" title="New chat">+</button></div>'
+    +   '<div id="gMsgsNewRow"><input id="gMsgsNewInput" maxlength="200">'
+    +     '<button id="gMsgsNewOk">OK</button></div>'
     +   '<div id="gMsgsList"></div>'
     +   '<div id="gMsgsThread"><div id="gMsgsBody"></div>'
     +     '<div id="gMsgsSend"><input id="gMsgsInput" maxlength="400">'
@@ -366,6 +373,10 @@
     if (msb2) msb2.textContent = TR('msSend', 'Send');
     var mi2 = $('gMsgsInput');
     if (mi2) mi2.placeholder = TR('msTypeHint', 'Message');
+    var mni2 = $('gMsgsNewInput');
+    if (mni2) mni2.placeholder = TR('msNewAsk', 'Player name(s), comma-separated');
+    var mno2 = $('gMsgsNewOk');
+    if (mno2) mno2.textContent = TR('ok', 'OK');
     paintSoundBtn();
   }
   window.addEventListener('bf-lang', refreshGameLabels);
@@ -506,16 +517,29 @@
       var row = e.target.closest ? e.target.closest('.gMsgsRow') : null;
       if (row) msgsOpenThread(row.dataset.id);
     });
-    $('gMsgsNewBtn').addEventListener('click', function () {
-      var names = prompt(TR('msNewAsk', 'Player name(s), comma-separated for a group chat:'), '');
-      if (names === null) return;
-      names = names.trim();
+    var msgsNewRow = $('gMsgsNewRow'), msgsNewInput = $('gMsgsNewInput');
+    function msgsStartChat() {
+      var names = msgsNewInput.value.trim();
       if (!names) return;
+      msgsNewRow.classList.remove('on');
+      msgsNewInput.value = '';
       msgsPost('/messages/start', { names: names }).then(function (r) {
         if (r.status !== 'success') { log(esc(r.message || TR('errorTxt', 'Error'))); return; }
         msgsLoadThreads();
         msgsOpenThread(r.id);
       }).catch(function () {});
+    }
+    // не-блокирующее поле вместо prompt() — иначе физика/сеть/детект
+    // поимки замирают на всё время, пока открыт системный диалог
+    $('gMsgsNewBtn').addEventListener('click', function () {
+      var open = msgsNewRow.classList.toggle('on');
+      if (open) setTimeout(function () { msgsNewInput.focus(); }, 0);
+      else msgsNewInput.value = '';
+    });
+    $('gMsgsNewOk').addEventListener('click', msgsStartChat);
+    msgsNewInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); msgsStartChat(); }
+      if (e.key === 'Escape') { msgsNewRow.classList.remove('on'); msgsNewInput.value = ''; }
     });
     $('gMsgsSendBtn').addEventListener('click', msgsSend);
     msgsInput.addEventListener('keydown', function (e) {
@@ -1423,7 +1447,7 @@
         if (Math.abs(o.tx - p.x) < 34 && Math.abs(o.ty - p.y) < 60) {
           o.caught = true;
           caughtNames[o.name] = 1;
-          socket.emit('sendChat', { text: o.name + ' пойман!' });
+          socket.emit('sendChat', { text: o.name + ' caught!' });
           // монету за поимку начисляет сервер сам, проверив дистанцию
           // по своим же координатам — этому emit он не верит на слово
           socket.emit('hsCatch', { targetId: id });
@@ -1442,13 +1466,13 @@
     for (var i = 0; i < ids.length; i++) if (!others[ids[i]].caught) return;
 
     switching = true;
-    log(TR('allCaughtT', 'Все пойманы — раунд окончен!'));
+    log(TR('allCaughtT', 'Everyone caught — round over!'));
     if (window.BFSound) BFSound.win();
     if (socket) {
       // при серверных фазах досрочно завершает раунд сервер —
       // сообщение принимается только от текущего искателя
       if (hsSync) socket.emit('hsCaught');
-      else socket.emit('sendChat', { text: 'Все пойманы' });
+      else socket.emit('sendChat', { text: 'Everyone caught' });
     }
     setTimeout(function () { switching = false; if (!hsSync) advance(); }, 1200);
   }
@@ -1462,10 +1486,10 @@
        обрывающего раунд). Доверяем только тому, кто сейчас реально
        искатель — его id сервер уже сообщил через hsPhase/hsRoulette. */
     if (!hsWinnerId || fromId !== hsWinnerId) return;
-    /* Сообщение о поимке имеет вид «Имя пойман!». Сверяем именно эту
+    /* Сообщение о поимке имеет вид «Имя caught!». Сверяем именно эту
        форму: искать имя подстрокой нельзя — игрока с коротким именем
        помечало бы пойманным от любой чужой реплики. */
-    var m = /^(.+?) пойман/.exec(text);
+    var m = /^(.+?) caught/.exec(text);
     if (!m) return;
     var who = m[1];
     if (who === me.name) { me.caught = true; applyColor(); if (window.BFSound) BFSound.death(); }
@@ -1693,9 +1717,19 @@
     typing = v;
   });
 
+  // ввод в любое другое текстовое поле (например, ответ в Messages) не должен
+  // перехватываться публичным чатом — иначе символы утекают в него
+  function isTypingElsewhere() {
+    var el = document.activeElement;
+    if (!el || el === inp) return false;
+    var tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+  }
+
   // любая печатная клавиша начинает реплику
   document.addEventListener('keydown', function (e) {
     if (document.activeElement === inp) return;
+    if (isTypingElsewhere()) return;
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     if (e.key.length !== 1) return;
     if (e.key === ' ') return;                  // пробел — прыжок
@@ -1703,6 +1737,7 @@
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && document.activeElement !== $('gMsg')) {
+      if (isTypingElsewhere()) return;
       e.preventDefault(); $('gMsg').focus();
     }
   });
