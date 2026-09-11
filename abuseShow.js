@@ -562,7 +562,7 @@
     if (!on) { if (hintBox) { hintBox.remove(); hintBox = null; } return; }
     if (hintBox) return;
     hintBox = document.createElement('div');
-    hintBox.textContent = 'Нажмите на экран, чтобы включить звук';
+    hintBox.textContent = 'Tap the screen to enable sound';
     hintBox.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);'
       + 'z-index:10001;padding:8px 14px;border-radius:20px;background:rgba(15,23,42,.88);'
       + 'color:#fff;font:600 12.5px system-ui,sans-serif;pointer-events:none;'

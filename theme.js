@@ -384,7 +384,7 @@
   function setMode(mode) {
     if (!state.unlocked)
       return Promise.resolve({ status: 'error', code: 'locked',
-                              message: 'Темы ещё не открыты' });
+                              message: 'Themes are not unlocked yet' });
     state.mode = (mode === 'dark') ? 'dark' : 'light';
     apply(state.mode);
     try { localStorage.setItem('bfThemeMode', state.mode); } catch (e) {}

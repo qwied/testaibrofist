@@ -99,7 +99,7 @@
   };
 
   function pick() {
-    var lang = (window.I18N && I18N.current) || document.documentElement.lang || 'ru';
+    var lang = (window.I18N && I18N.current) || document.documentElement.lang || 'en';
     return TEXT[lang] || (lang === 'uk' ? TEXT.ru : TEXT.en);
   }
 

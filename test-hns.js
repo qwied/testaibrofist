@@ -28,7 +28,7 @@ ok('сброс в начале раунда', /clearCaught\(\);\s*\/\/ новы�
 ok('сброс при уходе в лобби', (src.match(/clearCaught\(\);/g) || []).length >= 2);
 ok('чужие тоже сбрасываются', /others\[id\]\.caught = false/.test(src));
 ok('чужие поимки слышны',   /if \(others\[id\]\.name === who\) others\[id\]\.caught = true;/.test(src));
-ok('имя сверяется целиком',  /\^\(\.\+\?\) пойман/.test(src));
+ok('имя сверяется целиком',  /\^\(\.\+\?\) caught/.test(src));
 
 console.log('\nконец раунда:');
 ok('проверка «все пойманы»', /function checkAllCaught/.test(src));
@@ -72,7 +72,7 @@ ok('плашки «жду игроков» нет',  !/waitTitle/.test(src) && !
 ok('таймер не завязан на паузу', !/phase === 'waiting'/.test(src));
 
 console.log('\nпроверка поимки не зависит от отправки позиции:');
-ok('checkAllFinished вне троттлинга', /checkAllFinished\(\);\s*\n\s*\/\/ искатель ловит/.test(src));
+ok('checkAllFinished вне троттлинга', /checkAllFinished\(\);\s*\n\s*checkRaceFinish\(\);/.test(src));
 ok('отправка на сервер троттлится отдельно', /if \(now - lastSent >= minGap && \(moved \|\| force\)\) \{/.test(src));
 
 console.log('\nвидимость в прятках:');

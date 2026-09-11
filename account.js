@@ -45,32 +45,32 @@
   // ---------- экран выбора ----------
   function screenChoice() {
     open('<div class="bf-x">X</div>'
-       + '<div class="bf-t">Вход или регистрация</div>'
-       + '<div class="bf-b" id="bfLogin">Войти в аккаунт</div>'
-       + '<div class="bf-b" id="bfReg">Создать аккаунт</div>');
+       + '<div class="bf-t">Sign in or sign up</div>'
+       + '<div class="bf-b" id="bfLogin">Sign in to account</div>'
+       + '<div class="bf-b" id="bfReg">Create account</div>');
     box.querySelector('#bfLogin').onclick = screenLogin;
     box.querySelector('#bfReg').onclick = screenRegister;
   }
 
   function screenLogin() {
     open('<div class="bf-x">X</div><div class="bf-back">&lt;</div>'
-       + '<div class="bf-t">Вход</div>'
-       + '<input class="bf-i" id="bfName" type="text" maxlength="20" placeholder="Логин">'
-       + '<input class="bf-i" id="bfPass" type="password" placeholder="Пароль">'
+       + '<div class="bf-t">Sign in</div>'
+       + '<input class="bf-i" id="bfName" type="text" maxlength="20" placeholder="Username">'
+       + '<input class="bf-i" id="bfPass" type="password" placeholder="Password">'
        + '<div class="bf-e" id="bfErr"></div>'
-       + '<div class="bf-b" id="bfGo">Войти</div>');
+       + '<div class="bf-b" id="bfGo">Sign in</div>');
     box.querySelector('.bf-back').onclick = screenChoice;
     var go = box.querySelector('#bfGo');
     go.onclick = function () {
       var n = box.querySelector('#bfName').value.trim();
       var p = box.querySelector('#bfPass').value;
       var err = box.querySelector('#bfErr');
-      if (!n) { err.textContent = 'Введите логин'; return; }
-      if (!p) { err.textContent = 'Введите пароль'; return; }
-      go.textContent = 'Проверяю...';
+      if (!n) { err.textContent = 'Enter your username'; return; }
+      if (!p) { err.textContent = 'Enter your password'; return; }
+      go.textContent = 'Checking...';
       post('/login/password', { username: n, password: p }, function (r) {
         if (r && r.status === 'success') location.reload();
-        else { err.textContent = (r && r.message) || 'Ошибка входа'; go.textContent = 'Войти'; }
+        else { err.textContent = (r && r.message) || 'Sign in failed'; go.textContent = 'Sign in'; }
       });
     };
     enterKey(screenLoginSubmit);
@@ -79,26 +79,26 @@
 
   function screenRegister() {
     open('<div class="bf-x">X</div><div class="bf-back">&lt;</div>'
-       + '<div class="bf-t">Регистрация</div>'
-       + '<input class="bf-i" id="bfName" type="text" maxlength="20" placeholder="Логин">'
-       + '<div class="bf-h">до 20 символов, русские и английские буквы</div>'
-       + '<input class="bf-i" id="bfPass" type="password" placeholder="Пароль">'
-       + '<div class="bf-h">пароль — минимум 4 символа</div>'
+       + '<div class="bf-t">Sign up</div>'
+       + '<input class="bf-i" id="bfName" type="text" maxlength="20" placeholder="Username">'
+       + '<div class="bf-h">up to 20 characters, Latin or Cyrillic letters</div>'
+       + '<input class="bf-i" id="bfPass" type="password" placeholder="Password">'
+       + '<div class="bf-h">password — at least 4 characters</div>'
        + '<div class="bf-e" id="bfErr"></div>'
-       + '<div class="bf-b" id="bfGo">Создать аккаунт</div>');
+       + '<div class="bf-b" id="bfGo">Create account</div>');
     box.querySelector('.bf-back').onclick = screenChoice;
     var go = box.querySelector('#bfGo');
     go.onclick = function () {
       var n = box.querySelector('#bfName').value.trim();
       var p = box.querySelector('#bfPass').value;
       var err = box.querySelector('#bfErr');
-      if (!n) { err.textContent = 'Введите логин'; return; }
-      if (n.length > 20) { err.textContent = 'Логин не длиннее 20 символов'; return; }
-      if (!p) { err.textContent = 'Введите пароль'; return; }
-      go.textContent = 'Создаю...';
+      if (!n) { err.textContent = 'Enter a username'; return; }
+      if (n.length > 20) { err.textContent = 'Username must be 20 characters or fewer'; return; }
+      if (!p) { err.textContent = 'Enter a password'; return; }
+      go.textContent = 'Creating...';
       post('/signUp', { name: n, password: p }, function (r) {
         if (r && r.status === 'success') location.reload();
-        else { err.textContent = (r && r.message) || 'Ошибка регистрации'; go.textContent = 'Создать аккаунт'; }
+        else { err.textContent = (r && r.message) || 'Sign up failed'; go.textContent = 'Create account'; }
       });
     };
     enterKey(function () { go.click(); });
@@ -121,7 +121,7 @@
       body: body
     }).then(function (r) { return r.json(); })
       .then(cb)
-      .catch(function () { cb({ status: 'error', message: 'Сервер недоступен. Запусти npm start' }); });
+      .catch(function () { cb({ status: 'error', message: 'Server unavailable' }); });
   }
   function get(url, cb) {
     fetch(url, { credentials: 'same-origin' })
@@ -150,7 +150,7 @@
        +   T('logoutAll', 'Выйти на всех устройствах') + '</div>'
        + '<div class="bf-h" id="bfSecNote">' + T('secNote',
            'Пароль хранится в зашифрованном виде — его не видно даже администратору.') + '</div>'
-       + '<div class="bf-b" id="bfGoogle">Привязать Google аккаунт</div>'
+       + '<div class="bf-b" id="bfGoogle">Link Google account</div>'
        + '<div class="bf-h" id="bfGoogleNote"></div>'
        + '<div id="bfOwner"></div>');
     box.querySelector('#bfProfile').onclick = function () {
@@ -173,10 +173,10 @@
       post('/changePassword', { oldPassword: oldPw, newPassword: newPw }, function (r) {
         if (r && r.status === 'success') {
           passErr.style.color = 'green';
-          passErr.textContent = r.message || 'Пароль изменён';
+          passErr.textContent = r.message || 'Password changed';
           box.querySelector('#bfOldPass').value = '';
           box.querySelector('#bfNewPass').value = '';
-        } else passErr.textContent = (r && r.message) || 'Ошибка';
+        } else passErr.textContent = (r && r.message) || 'Error';
       });
     };
     box.querySelector('#bfLogoutAll').onclick = function () {
@@ -185,8 +185,8 @@
 
     box.querySelector('#bfGoogle').onclick = function () {
       box.querySelector('#bfGoogleNote').innerHTML =
-        'Привязка пока недоступна: для неё нужен ключ приложения Google ' +
-        'и почтовый сервис для отправки кодов. Сейчас вход только по логину и паролю.';
+        'Linking is not available yet: it needs a Google app key ' +
+        'and an email service to send codes. Sign in is username/password only for now.';
     };
     // панель владельца живёт в owner.js, а этот файл сервер отдаёт
     // только самому владельцу — у остальных её кода нет вообще

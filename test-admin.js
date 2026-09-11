@@ -36,7 +36,7 @@ ok('четыре направления',  ['right','left','up','down'].every(d 
 ok('музыка по кругу',     /audio\.loop = true/.test(show));
 ok('звук готовится заранее', /function armUnlock/.test(show) && /capture: true/.test(show));
 ok('снимаем слушатели после', /function disarm/.test(show));
-ok('подсказка про звук',   /Нажмите на экран, чтобы включить звук/.test(show));
+ok('подсказка про звук',   /Tap the screen to enable sound/.test(show));
 ok('звук ждёт нажатия',   /function waitForGesture/.test(show) && /pointerdown/.test(show));
 ok('видео тоже ждёт звука', /if \(m\.sound\) waitForGesture\(el\)/.test(show));
 ok('после жеста звук включается', /el\.muted = false;/.test(show));
@@ -68,18 +68,18 @@ ok('тучки над монетами',    /function drawClouds/.test(show) && 
 ok('атомная бомба крупнее', /i === 0 \? 1\.35/.test(show));
 ok('раскат и эхо',          /эхо: тот же шум тише и позже/.test(show));
 ok('контекст будится всегда', /if \(actx\.state === 'suspended'\) actx\.resume\(\);/.test(show));
-ok('прогресс загрузки',    /Загружаю ' \+ okCount \+ ' из '/.test(src));
+ok('прогресс загрузки',    /Uploading ' \+ okCount \+ ' of '/.test(src));
 ok('битый файл не рвёт очередь', /остальные всё равно грузим/.test(src));
 ok('слои не ловят нажатия', (show.match(/pointer-events:none/g) || []).length >= 2);
 ok('монеты без лимита',   /window\.BFAdminAbuse = true/.test(src) && /function coinCapped/.test(ed));
 
 console.log('\nтаймер обновления:');
-ok('отсчёт виден всем',   /До обновления: /.test(shell));
-ok('часы, минуты, секунды', /' ч ' \+ two\(m\) \+ ' мин ' \+ two\(sec\) \+ ' сек'/.test(shell));
+ok('отсчёт виден всем',   /Update in: /.test(shell));
+ok('часы, минуты, секунды', /'h ' \+ two\(m\) \+ 'm ' \+ two\(sec\) \+ 's'/.test(shell));
 ok('тикает каждую секунду', /if \(left > 0\) \{ left -= 1000; paint\(\); \}/.test(shell) && /\}, 1000\);/.test(shell));
 ok('сам гаснет по нулю',   /if \(left <= 0\) \{\s*\n\s*if \(box\) \{ box\.remove\(\); box = null; \}/.test(shell));
-ok('кнопка запуска',       /Запустить таймер до обновления/.test(src));
-ok('можно убрать вручную', /Убрать таймер/.test(src));
+ok('кнопка запуска',       /Start update timer/.test(src));
+ok('можно убрать вручную', /Remove timer/.test(src));
 ok('поле секунд',          /id="aaSec"/.test(src));
 
 const routes = {};

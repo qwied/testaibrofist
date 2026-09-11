@@ -25,7 +25,7 @@
   // Maps Browser, сюда не дублируются)
   var MENU = [
     { key: 'messages',    href: 'messages.html',       txt: 'Messages' },
-    { key: 'themes',      href: 'themes.html',         txt: 'Темы' },
+    { key: 'themes',      href: 'themes.html',         txt: 'Themes' },
     { txt: 'Telegram', href: 'https://t.me/aibrofist', ext: true },
     { txt: 'Discord', href: 'https://discord.gg/Rah4FvcXDw', ext: true }
   ];
@@ -314,9 +314,9 @@
     var m = Math.floor((t % 3600) / 60);
     var sec = t % 60;
     var two = function (n) { return n < 10 ? '0' + n : String(n); };
-    if (h) return h + ' ч ' + two(m) + ' мин ' + two(sec) + ' сек';
-    if (m) return m + ' мин ' + two(sec) + ' сек';
-    return sec + ' сек';
+    if (h) return h + 'h ' + two(m) + 'm ' + two(sec) + 's';
+    if (m) return m + 'm ' + two(sec) + 's';
+    return sec + 's';
   }
 
   function paint() {
@@ -325,7 +325,7 @@
       if (box) { box.remove(); box = null; }
       return;
     }
-    chip().textContent = 'До обновления: ' + human(left);
+    chip().textContent = 'Update in: ' + human(left);
   }
 
   function refresh() {

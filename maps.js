@@ -36,9 +36,9 @@ const TOOL_MODES = {
   door:null, seeker:null, liquid:null, box:null
 };
 const TOOL_RU = {
-  cover:'Укрытие', seeker:'Ищущий', door:'Дверь', button:'Кнопка',
-  lever:'Рычаг', checkpoint:'Чекпоинт', finishline:'Финиш', water:'Вода',
-  liquid:'Жидкость'
+  cover:'Cover', seeker:'Seeker', door:'Door', button:'Button',
+  lever:'Lever', checkpoint:'Checkpoint', finishline:'Finish', water:'Water',
+  liquid:'Liquid'
 };
 
 // объекты карты (mapData — JSON из редактора)
@@ -129,7 +129,7 @@ function register(app, getUser, acc) {
   // ---------- публикация карты из редактора ----------
   app.post('/uploadMap', (req, res) => {
     const u = getUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
 
     const mapName = String(req.body.mapName || '').trim();
     const mapType = String(req.body.mapType || 'hideAndSeek');
@@ -137,23 +137,23 @@ function register(app, getUser, acc) {
     const overwrite = String(req.body.mapOverwrite || '') === 'true';
 
     if (mapName.length < 2 || mapName.length > 30)
-      return res.json({ status: 'error', message: 'Название карты: от 2 до 30 символов' });
+      return res.json({ status: 'error', message: 'Map name: 2 to 30 characters' });
     if (MODES.indexOf(mapType) === -1)
-      return res.json({ status: 'error', message: 'Неизвестный режим карты' });
+      return res.json({ status: 'error', message: 'Unknown map mode' });
     if (!mapData)
-      return res.json({ status: 'error', message: 'Карта пустая' });
+      return res.json({ status: 'error', message: 'Map is empty' });
 
     const list = objectsOf(mapData);
     // objectsOf молча возвращает [] на любой мусор/битый JSON — без этой
     // проверки такой mapData спокойно проходил все лимиты (0 не больше
     // 2000, 0 монет не больше 3) и приносил полную награду ни за что
     if (!list.length)
-      return res.json({ status: 'error', message: 'Карта повреждена или пуста' });
+      return res.json({ status: 'error', message: 'Map is corrupted or empty' });
 
     if (list.length > OBJ_LIMIT)
       return res.json({
         status: 'error',
-        message: 'В карте ' + list.length + ' объектов. Разрешено не больше ' + OBJ_LIMIT + '.'
+        message: 'The map has ' + list.length + ' objects. No more than ' + OBJ_LIMIT + ' allowed.'
       });
 
     // за новую карту платим монетами — иначе публиковали бы карту из
@@ -162,8 +162,8 @@ function register(app, getUser, acc) {
     if (list.length < OBJ_MIN && !isOwnerName(u.name))
       return res.json({
         status: 'error',
-        message: 'В карте ' + list.length + ' объектов. Нужно не меньше ' + OBJ_MIN +
-                 ' для публикации.'
+        message: 'The map has ' + list.length + ' objects. At least ' + OBJ_MIN +
+                 ' are required to publish.'
       });
 
     // текстом легче всего накрутить число объектов, не строя саму карту —
@@ -173,8 +173,8 @@ function register(app, getUser, acc) {
     if (textCount > 0 && textCount > Math.floor(list.length * TEXT_MAX_RATIO) && !isOwnerName(u.name))
       return res.json({
         status: 'error',
-        message: 'Текстовых объектов ' + textCount + ' из ' + list.length + ' — больше ' +
-                 Math.round(TEXT_MAX_RATIO * 100) + '% карты. Добавьте больше настоящей геометрии.'
+        message: textCount + ' of ' + list.length + ' objects are text — more than ' +
+                 Math.round(TEXT_MAX_RATIO * 100) + '% of the map. Add more actual geometry.'
       });
 
     const coins = list.filter(o => o.type === 'coin').length;
@@ -182,16 +182,16 @@ function register(app, getUser, acc) {
     if (coins > COIN_LIMIT && !isOwnerName(u.name))
       return res.json({
         status: 'error',
-        message: 'В карте ' + coins + ' монет. Разрешено не больше ' + COIN_LIMIT +
-                 ' — уберите лишние и попробуйте снова.'
+        message: 'The map has ' + coins + ' coins. No more than ' + COIN_LIMIT +
+                 ' allowed — remove the extra ones and try again.'
       });
 
     const bad = wrongForMode(list, mapType);
     if (bad.length)
       return res.json({
         status: 'error',
-        message: 'Эти объекты не работают в режиме «' + mapType + '»: ' +
-                 bad.map(t => TOOL_RU[t] || t).join(', ') + '. Уберите их из карты.'
+        message: 'These objects don\'t work in the «' + mapType + '» mode: ' +
+                 bad.map(t => TOOL_RU[t] || t).join(', ') + '. Remove them from the map.'
       });
 
     const i = maps.findIndex(m => low(m.author) === low(u.name) && low(m.mapName) === low(mapName));
@@ -204,20 +204,20 @@ function register(app, getUser, acc) {
         const h = Math.floor(mins / 60), mn = mins % 60;
         return res.json({
           status: 'error',
-          message: 'Лимит ' + DAILY_LIMIT + ' карты в сутки исчерпан. Следующую можно выложить через '
-                   + (h > 0 ? h + ' ч ' + mn + ' мин' : mn + ' мин') + '.'
+          message: 'Daily limit of ' + DAILY_LIMIT + ' maps reached. You can publish the next one in '
+                   + (h > 0 ? h + 'h ' + mn + 'm' : mn + 'm') + '.'
         });
       }
     }
 
     if (i !== -1) {
       if (!overwrite)
-        return res.json({ status: 'exists', message: 'Карта с таким названием уже есть. Перезаписать?' });
+        return res.json({ status: 'exists', message: 'A map with this name already exists. Overwrite it?' });
       maps[i].mapData = mapData;
       maps[i].mapType = mapType;
       maps[i].date = Date.now();
       save();
-      return res.json({ status: 'success', message: 'Карта обновлена' });
+      return res.json({ status: 'success', message: 'Map updated' });
     }
 
     maps.push({
@@ -243,8 +243,8 @@ function register(app, getUser, acc) {
       coins: balance,
       left: Math.max(0, left),
       limit: DAILY_LIMIT,
-      message: 'Карта опубликована. +' + REWARD + ' монет  ·  осталось сегодня: ' +
-               Math.max(0, left) + ' из ' + DAILY_LIMIT
+      message: 'Map published. +' + REWARD + ' coins  ·  left today: ' +
+               Math.max(0, left) + ' of ' + DAILY_LIMIT
     });
   });
 
@@ -277,7 +277,9 @@ function register(app, getUser, acc) {
       return b.date - a.date;
     });
 
-    const slice = out.slice((page - 1) * per, page * per).map(m => {
+    const pages = Math.max(1, Math.ceil(out.length / per));
+    const curPage = Math.min(page, pages);
+    const slice = out.slice((curPage - 1) * per, curPage * per).map(m => {
       const t = tally(m);
       return {
         mapName: m.mapName, rating: t.rating, likes: t.likes, dislikes: t.dislikes,
@@ -287,8 +289,7 @@ function register(app, getUser, acc) {
       };
     });
 
-    const pages = Math.max(1, Math.ceil(out.length / per));
-    res.json({ page: String(Math.min(page, pages)) + '/' + pages,
+    res.json({ page: String(curPage) + '/' + pages,
                pages, count: out.length, maps: slice });
   }
   app.get('/getMaps', list);
@@ -327,16 +328,16 @@ function register(app, getUser, acc) {
   // ---------- оценка ----------
   app.post('/uploadVote', (req, res) => {
     const u = getUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const m = maps.find(x => low(x.author) === low(req.body.author) &&
                              low(x.mapName) === low(req.body.mapName));
-    if (!m) return res.json({ status: 'error', message: 'Карта не найдена' });
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
     if (low(m.author) === low(u.name))
-      return res.json({ status: 'error', message: 'Нельзя оценивать свою карту' });
+      return res.json({ status: 'error', message: 'You can\'t vote on your own map' });
     // мусор в запросе не должен молча превращаться в дизлайк
     const raw = parseInt(req.body.vote, 10);
     if (!(raw === 1 || raw === -1))
-      return res.json({ status: 'error', message: 'Неизвестная оценка' });
+      return res.json({ status: 'error', message: 'Unknown vote value' });
     const v = raw;
     m.votes = m.votes || {};
     // повторный клик по той же кнопке снимает оценку
@@ -366,17 +367,17 @@ function register(app, getUser, acc) {
 
   app.post('/removeMap', (req, res) => {
     const u = getUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Сначала войдите в аккаунт' });
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const author = String(req.body.author || u.name);
     if (!canDelete(u, author))
-      return res.json({ status: 'error', message: 'Можно удалять только свои карты' });
+      return res.json({ status: 'error', message: 'You can only delete your own maps' });
     res.json({ status: remove(author, req.body.mapName) ? 'success' : 'error' });
   });
 
   app.post('/map/disable', (req, res) => {
     const u = getUser(req);
     if (!canDelete(u, req.body.author_name))
-      return res.json({ status: 'error', message: 'Можно удалять только свои карты' });
+      return res.json({ status: 'error', message: 'You can only delete your own maps' });
     res.json({ status: remove(req.body.author_name, req.body.map_name) ? 'success' : 'error' });
   });
 
@@ -384,12 +385,12 @@ function register(app, getUser, acc) {
   app.post('/owner/removeMap', (req, res) => {
     const u = getUser(req);
     if (!u || !isOwnerName(u.name))
-      return res.json({ status: 'error', message: 'Недоступно' });
+      return res.json({ status: 'error', message: 'Not available' });
     const author = String(req.body.author || '').trim();
     const mapName = String(req.body.mapName || '').trim();
     if (!remove(author, mapName))
-      return res.json({ status: 'error', message: 'Карта не найдена' });
-    res.json({ status: 'success', message: '«' + mapName + '» удалена' });
+      return res.json({ status: 'error', message: 'Map not found' });
+    res.json({ status: 'success', message: '«' + mapName + '» deleted' });
   });
 
   // ---------- карты игрока (вкладка Maps в профиле) ----------

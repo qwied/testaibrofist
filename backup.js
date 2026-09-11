@@ -116,25 +116,25 @@ function register(app, hooks) {
       let pack;
       try { pack = JSON.parse(String((req.body && req.body.data) || '')); }
       catch (e) {
-        return res.json({ status: 'error', message: 'Файл не читается — это не бэкап AIBROFIST' });
+        return res.json({ status: 'error', message: 'File cannot be read — this is not an AIBROFIST backup' });
       }
       if (!pack || pack.app !== 'AIBROFIST' || !pack.backup || !Array.isArray(pack.files))
-        return res.json({ status: 'error', message: 'Это не файл бэкапа AIBROFIST' });
+        return res.json({ status: 'error', message: 'This is not an AIBROFIST backup file' });
       if (pack.files.length > MAX_FILES)
-        return res.json({ status: 'error', message: 'В бэкапе слишком много файлов' });
+        return res.json({ status: 'error', message: 'The backup has too many files' });
 
       let restored = 0;
       try {
         pack.files.forEach(f => {
           const full = safePath(f && f.name);
-          if (!full) throw new Error('опасный путь в бэкапе: ' + (f && f.name));
+          if (!full) throw new Error('unsafe path in backup: ' + (f && f.name));
           const buf = Buffer.from(String(f.data || ''), 'base64');
           fs.mkdirSync(path.dirname(full), { recursive: true });
           fs.writeFileSync(full, buf);
           restored++;
         });
       } catch (e) {
-        return res.json({ status: 'error', message: 'Восстановление прервано: ' + e.message });
+        return res.json({ status: 'error', message: 'Restore interrupted: ' + e.message });
       }
 
       /* Сессии, созданные уже на этом сервере, должны пережить подмену
@@ -157,9 +157,9 @@ function register(app, hooks) {
       const skipped = Array.isArray(pack.skipped) ? pack.skipped.length : 0;
       res.json({
         status: 'success', restored: restored, keptSessions: kept,
-        message: 'Восстановлено файлов: ' + restored +
-          (skipped ? ' (в бэкапе не было ещё ' + skipped + ' тяжёлых)' : '') +
-          '. Данные уже в работе.'
+        message: 'Files restored: ' + restored +
+          (skipped ? ' (' + skipped + ' large files were not in the backup yet)' : '') +
+          '. Data is now live.'
       });
     });
 }

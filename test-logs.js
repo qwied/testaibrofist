@@ -163,7 +163,7 @@ const files = () => { try { return fs.readdirSync(IMG_DIR); } catch (e) { return
   const html = fs.readFileSync(__dirname + '/logs.html', 'utf8');
   ok('пропорции заданы заранее',  /aspect-ratio:/.test(html));
   ok('картинки грузятся лениво',  /loading="lazy"/.test(html) && /decoding="async"/.test(html));
-  ok('битая картинка не ломает вёрстку', /classList\.add\('bad'\)/.test(html) && /Изображение недоступно/.test(html));
+  ok('битая картинка не ломает вёрстку', /classList\.add\('bad'\)/.test(html) && /Image unavailable/.test(html));
   ok('просмотр во весь экран',    /id="lbox"/.test(html) && /function openBox/.test(html));
   ok('Esc закрывает просмотр',    /e\.key === 'Escape'/.test(html));
   ok('выбор файлов',              /id="lFile"/.test(html) && /accept="image\/\*"/.test(html));
@@ -172,7 +172,7 @@ const files = () => { try { return fs.readdirSync(IMG_DIR); } catch (e) { return
   ok('тяжёлое ужимается в браузере', /function shrink/.test(html) && /toDataURL\('image\/webp'/.test(html));
   ok('гифки не пережимаются',     /mime === 'image\/gif'/.test(html));
   ok('прозрачность не чернеет',   /fillStyle = '#fff'/.test(html));
-  ok('загрузка по одной картинке', /function uploadAll/.test(html) && /Загружаю '/.test(html));
+  ok('загрузка по одной картинке', /function uploadAll/.test(html) && /Uploading '/.test(html));
   ok('можно править новость',     /'\/editLog'/.test(html) && /logEdit/.test(html));
   ok('обновление не стирает черновик', /if \(!editing && !addBtn\.disabled\) load\(\)/.test(html));
   ok('цвета берутся из темы',     /var\(--ink/.test(html) && /var\(--line/.test(html));
