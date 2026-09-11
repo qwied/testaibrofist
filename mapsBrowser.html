@@ -152,6 +152,13 @@
   var $ = function (id) { return document.getElementById(id); };
   var page = 1, pages = 1, me = null;
 
+  var THUMB_UP = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+    + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">'
+    + '<path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>';
+  var THUMB_DOWN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+    + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">'
+    + '<path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>';
+
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
       return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c];
@@ -190,9 +197,9 @@
       + '<div class="mbDate">' + when(m.date) + '</div>'
       + '<div class="mbVote">'
       +   '<button class="up' + (m.myVote > 0 ? ' on' : '') + '" data-vote="1">'
-      +     '\uD83D\uDC4D ' + m.likes + '</button>'
+      +     THUMB_UP + ' ' + m.likes + '</button>'
       +   '<button class="down' + (m.myVote < 0 ? ' on' : '') + '" data-vote="-1">'
-      +     '\uD83D\uDC4E ' + m.dislikes + '</button>'
+      +     THUMB_DOWN + ' ' + m.dislikes + '</button>'
       + '</div>'
       + '<button class="mbPlay" data-play="1">' + T('play', 'Играть') + '</button>'
       + (mine ? '<div class="mbExtra"><button class="mbDel" data-del="1">'
