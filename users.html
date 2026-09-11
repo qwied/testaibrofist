@@ -27,9 +27,10 @@
 .upCoins{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--gold);
   font-size:16px;margin-bottom:10px}
 .upActs{display:flex;gap:8px;flex-wrap:wrap}
-.upActs button{padding:10px 18px;border-radius:9px;cursor:pointer;font-size:14px;
-  border:1px solid var(--blue);background:#fff;color:var(--blue)}
-.upActs button:hover{background:var(--blue);color:#fff}
+.upActs button,.upActs a{padding:10px 18px;border-radius:9px;cursor:pointer;font-size:14px;
+  border:1px solid var(--blue);background:#fff;color:var(--blue);text-decoration:none;
+  display:inline-block;box-sizing:border-box}
+.upActs button:hover,.upActs a:hover{background:var(--blue);color:#fff}
 .upActs button.warn{border-color:var(--red);color:var(--red)}
 .upActs button.warn:hover{background:var(--red);color:#fff}
 
@@ -169,6 +170,7 @@
       else if (t === '2') acts = '<button data-rel="cancel">' + T('cancelReq', 'Отменить заявку') + '</button>'
                                + '<button class="go" data-rel="accept">' + T('accept', 'Принять') + '</button>';
       else acts = '<button data-rel="add">' + T('addFriend', 'Добавить в друзья') + '</button>';
+      acts += '<a href="messages.html?with=' + encodeURIComponent(who) + '">' + T('msgBtn', 'Message') + '</a>';
     }
 
     return '<div class="upTop">'
@@ -346,11 +348,9 @@
       get('/getJoinDate?name=' + encodeURIComponent(who)).catch(function () { return 0; }),
       get('/getCoins?name=' + encodeURIComponent(who)).catch(function () { return 0; }),
       get('/getAboutMe?name=' + encodeURIComponent(who)).catch(function () { return ''; }),
-      get('/getRelation?name=' + encodeURIComponent(who)).catch(function () { return '0'; }),
-      get('/skin/catalog').catch(function () { return { items: [] }; })
+      get('/getRelation?name=' + encodeURIComponent(who)).catch(function () { return '0'; })
     ]).then(function (r) {
       me = r[0];
-      (r[5].items || []).forEach(function (i) { byId[i.id] = i; });
 
       var coins = typeof r[2] === 'object' ? (r[2].coins || 0) : r[2];
       $('upBody').innerHTML = drawHead({

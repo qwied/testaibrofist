@@ -268,6 +268,7 @@ require('./backup.js').register(app, {
     require('./accounts.js').reload();
     require('./maps.js').reload();
     require('./userSkins.js').reload();
+    require('./messages.js').reload();
     require('./extras.js').reload();
     require('./abuse.js').reload();
   }
@@ -293,6 +294,7 @@ accountsRef = accounts;
 accounts.register(app);
 require('./maps.js').register(app, accounts.currentUser, accounts);
 require('./userSkins.js').register(app, accounts);
+require('./messages.js').register(app, accounts);
 require('./themes.js').register(app, accounts);
 require('./updateTimer.js').register(app, accounts);
 require('./abuse.js').register(app, accounts);
