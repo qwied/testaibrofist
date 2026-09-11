@@ -246,6 +246,59 @@
     + '#gScoresEmpty{color:#8b93a1}'
     + 'html.is-mobile #gScoresBtn,html.is-tablet #gScoresBtn{top:44px}'
     + 'html.is-mobile #gScoresPanel,html.is-tablet #gScoresPanel{top:88px}'
+    /* --- личные сообщения (Messages) прямо в игре, левый нижний угол:
+           та же переписка, что и на messages.html, чтобы не выходить
+           из матча ради ответа. Во всех режимах, не только в Race. --- */
+    + '#gMsgsBtn{display:none;position:fixed;bottom:14px;left:12px;z-index:61;'
+    + 'width:44px;height:44px;padding:0;background:rgba(255,255,255,.92);color:#111827;'
+    + 'border:1px solid #d7dee7;border-radius:50%;cursor:pointer;font-size:19px;line-height:1;'
+    + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.4)}'
+    + '#gMsgsBtn:active{background:#f2f7fd}'
+    + '#gMsgsBadge{display:none;position:fixed;bottom:41px;left:39px;z-index:62;min-width:16px;'
+    + 'height:16px;padding:0 3px;border-radius:9px;background:#ef4444;color:#fff;'
+    + 'font:700 10px/16px sans-serif;text-align:center;pointer-events:none}'
+    + '#gMsgsBadge.on{display:block}'
+    + '#gMsgsPanel{display:none;flex-direction:column;position:fixed;bottom:64px;left:12px;z-index:61;'
+    + 'width:280px;max-width:calc(100vw - 24px);height:360px;max-height:60vh;'
+    + 'background:rgba(255,255,255,.98);border:1px solid #d7dee7;border-radius:12px;overflow:hidden;'
+    + 'box-shadow:0 10px 30px -12px rgba(15,23,42,.5);font:13px sans-serif}'
+    + '#gMsgsPanel.on{display:flex}'
+    + '#gMsgsHead{display:flex;align-items:center;gap:6px;padding:9px 11px;'
+    + 'border-bottom:1px solid #eef1f5;font-weight:700;color:#191919;flex:0 0 auto}'
+    + '#gMsgsBack{display:none;border:none;background:none;color:#2196F3;cursor:pointer;'
+    + 'font-size:14px;font-weight:700;padding:0}'
+    + '#gMsgsBack.on{display:inline}'
+    + '#gMsgsTitle{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}'
+    + '#gMsgsNewBtn{border:none;background:none;color:#2196F3;cursor:pointer;font-size:18px;'
+    + 'line-height:1;padding:0 2px}'
+    + '#gMsgsList{flex:1;overflow-y:auto}'
+    + '.gMsgsRow{display:block;width:100%;text-align:left;padding:8px 11px;border:none;'
+    + 'background:none;cursor:pointer;border-bottom:1px solid #f3f5f8;color:#191919}'
+    + '.gMsgsRow:active{background:#f7f9fb}'
+    + '.gMsgsRowName{font-weight:700;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    + '.gMsgsRowPrev{font-size:11.5px;color:#8b93a1;overflow:hidden;text-overflow:ellipsis;'
+    + 'white-space:nowrap;margin-top:1px}'
+    + '.gMsgsDot{display:inline-block;min-width:15px;height:15px;border-radius:8px;background:#2196F3;'
+    + 'color:#fff;font:700 10px/15px sans-serif;text-align:center;margin-left:5px;padding:0 3px}'
+    + '#gMsgsEmpty{padding:16px 11px;color:#8b93a1;text-align:center;font-size:12.5px}'
+    + '#gMsgsThread{display:none;flex-direction:column;flex:1;min-height:0}'
+    + '#gMsgsThread.on{display:flex}'
+    + '#gMsgsBody{flex:1;overflow-y:auto;padding:9px 11px;display:flex;flex-direction:column;gap:6px}'
+    + '.gMsgsBubble{max-width:82%;padding:6px 10px;border-radius:12px;font-size:12.5px;'
+    + 'line-height:1.3;word-break:break-word}'
+    + '.gMsgsBubble.me{align-self:flex-end;background:#2196F3;color:#fff;border-bottom-right-radius:3px}'
+    + '.gMsgsBubble.them{align-self:flex-start;background:#f0f3f7;color:#191919;border-bottom-left-radius:3px}'
+    + '#gMsgsSend{display:flex;gap:6px;padding:8px;border-top:1px solid #eef1f5;flex:0 0 auto}'
+    + '#gMsgsInput{flex:1;font-size:13px;padding:7px 9px;border:1px solid #d7dee7;border-radius:8px;min-width:0}'
+    + '#gMsgsSendBtn{padding:7px 12px;border-radius:8px;border:1px solid #2196F3;background:#2196F3;'
+    + 'color:#fff;cursor:pointer;font-weight:700;font-size:12.5px}'
+    + 'html.is-mobile #gMsgsBtn,html.is-tablet #gMsgsBtn{'
+    + 'bottom:calc(100px + env(safe-area-inset-bottom,0px));left:calc(12px + env(safe-area-inset-left,0px))}'
+    + 'html.is-mobile #gMsgsBadge,html.is-tablet #gMsgsBadge{'
+    + 'bottom:calc(127px + env(safe-area-inset-bottom,0px));left:calc(39px + env(safe-area-inset-left,0px))}'
+    + 'html.is-mobile #gMsgsPanel,html.is-tablet #gMsgsPanel{'
+    + 'bottom:calc(150px + env(safe-area-inset-bottom,0px));left:calc(12px + env(safe-area-inset-left,0px));'
+    + 'width:calc(100vw - 24px)}'
     ;
 
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
@@ -272,6 +325,17 @@
     + '8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>'
     + '<button id="gScoresBtn" aria-label="Scores">🏆</button>'
     + '<div id="gScoresPanel"><h4 id="gScoresTitle">Scores</h4><div id="gScoresList"></div></div>'
+    + '<button id="gMsgsBtn" aria-label="Messages">✉️</button>'
+    + '<span id="gMsgsBadge"></span>'
+    + '<div id="gMsgsPanel">'
+    +   '<div id="gMsgsHead"><button id="gMsgsBack">&larr;</button>'
+    +     '<span id="gMsgsTitle">Messages</span>'
+    +     '<button id="gMsgsNewBtn" aria-label="New chat" title="New chat">+</button></div>'
+    +   '<div id="gMsgsList"></div>'
+    +   '<div id="gMsgsThread"><div id="gMsgsBody"></div>'
+    +     '<div id="gMsgsSend"><input id="gMsgsInput" maxlength="400">'
+    +       '<button id="gMsgsSendBtn">Send</button></div></div>'
+    + '</div>'
 );
 
   /* надписи верхней панели обновляются при смене языка */
@@ -289,6 +353,14 @@
     if (sb2) sb2.setAttribute('aria-label', TR('raceScoresTitle', 'Scores'));
     var st2 = $('gScoresTitle');
     if (st2) st2.textContent = TR('raceScoresTitle', 'Scores');
+    var mb2 = $('gMsgsBtn');
+    if (mb2) mb2.setAttribute('aria-label', TR('messagesTitle', 'Messages'));
+    var mn2 = $('gMsgsNewBtn');
+    if (mn2) mn2.title = TR('msNewChat', 'New chat');
+    var msb2 = $('gMsgsSendBtn');
+    if (msb2) msb2.textContent = TR('msSend', 'Send');
+    var mi2 = $('gMsgsInput');
+    if (mi2) mi2.placeholder = TR('msTypeHint', 'Message');
     paintSoundBtn();
   }
   window.addEventListener('bf-lang', refreshGameLabels);
@@ -332,6 +404,130 @@
             + '<span class="gScoreN">' + esc(r.name) + '</span><b>' + (r.score || 0) + '</b></div>';
         }).join('')
       : '<div id="gScoresEmpty">' + TR('topScoresEmpty', 'No scores yet') + '</div>';
+  }
+
+  /* ---------- личные сообщения (Messages) прямо в игре, левый нижний
+     угол ---------- та же переписка, что и на messages.html: одни и те
+     же /messages/* эндпоинты, чтобы отвечать не выходя из матча.
+     Только для аккаунта (у гостя переписок нет — кнопка скрыта). */
+  var msgsBtn = $('gMsgsBtn'), msgsPanel = $('gMsgsPanel'), msgsBadge = $('gMsgsBadge');
+  var msgsList = $('gMsgsList'), msgsThreadBox = $('gMsgsThread'), msgsBack = $('gMsgsBack');
+  var msgsTitle = $('gMsgsTitle'), msgsBody = $('gMsgsBody'), msgsInput = $('gMsgsInput');
+  var msgsThreads = [], msgsActiveId = null, msgsPollTimer = null;
+
+  function msgsPost(url, data) {
+    var body = Object.keys(data).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
+    }).join('&');
+    return fetch(url, { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+      .then(function (r) { return r.json(); });
+  }
+  function msgsGet(url) {
+    return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+  }
+
+  function msgsRenderList() {
+    msgsThreadBox.classList.remove('on');
+    msgsBack.classList.remove('on');
+    msgsTitle.textContent = TR('messagesTitle', 'Messages');
+    msgsList.style.display = '';
+    msgsList.innerHTML = msgsThreads.length
+      ? msgsThreads.map(function (t) {
+          var names = (t.members || []).join(', ') || TR('guest', 'Guest');
+          var prev = t.lastText
+            ? (t.lastFrom && t.lastFrom !== me.name ? esc(t.lastFrom) + ': ' : '') + esc(t.lastText) : '';
+          return '<button class="gMsgsRow" data-id="' + t.id + '">'
+            + '<div class="gMsgsRowName">' + esc(names)
+            +   (t.unread ? '<span class="gMsgsDot">' + t.unread + '</span>' : '') + '</div>'
+            + '<div class="gMsgsRowPrev">' + prev + '</div></button>';
+        }).join('')
+      : '<div id="gMsgsEmpty">' + TR('msNone', 'No chats yet.') + '</div>';
+  }
+
+  function msgsLoadThreads() {
+    msgsGet('/messages/threads').then(function (d) {
+      msgsThreads = d.threads || [];
+      var unread = msgsThreads.reduce(function (s, t) { return s + (t.unread || 0); }, 0);
+      msgsBadge.textContent = unread > 9 ? '9+' : String(unread);
+      msgsBadge.classList.toggle('on', unread > 0);
+      if (!msgsActiveId) msgsRenderList();
+    }).catch(function () {});
+  }
+
+  function msgsDrawMessages(list) {
+    var atBottom = msgsBody.scrollTop + msgsBody.clientHeight >= msgsBody.scrollHeight - 30;
+    msgsBody.innerHTML = list.map(function (m) {
+      var mine = m.from === me.name;
+      return '<div class="gMsgsBubble ' + (mine ? 'me' : 'them') + '">' + esc(m.text) + '</div>';
+    }).join('');
+    if (atBottom || !list.length) msgsBody.scrollTop = msgsBody.scrollHeight;
+  }
+
+  function msgsFetchThread() {
+    if (!msgsActiveId) return;
+    msgsGet('/messages/thread?id=' + encodeURIComponent(msgsActiveId)).then(function (d) {
+      if (d.status !== 'success') return;
+      msgsTitle.textContent = (d.members || []).join(', ') || TR('guest', 'Guest');
+      msgsDrawMessages(d.messages || []);
+      msgsLoadThreads();
+    }).catch(function () {});
+  }
+
+  function msgsOpenThread(id) {
+    msgsActiveId = id;
+    msgsList.style.display = 'none';
+    msgsThreadBox.classList.add('on');
+    msgsBack.classList.add('on');
+    msgsFetchThread();
+  }
+
+  function msgsSend() {
+    var text = msgsInput.value.trim();
+    if (!text || !msgsActiveId) return;
+    msgsInput.value = '';
+    msgsPost('/messages/send', { id: msgsActiveId, text: text }).then(function (r) {
+      if (r.status === 'success') msgsFetchThread(); else msgsInput.value = text;
+    }).catch(function () { msgsInput.value = text; });
+  }
+
+  if (msgsBtn) {
+    msgsBtn.addEventListener('click', function () {
+      var open = msgsPanel.classList.toggle('on');
+      if (open) { msgsActiveId = null; msgsLoadThreads(); }
+    });
+    msgsBack.addEventListener('click', function () { msgsActiveId = null; msgsRenderList(); });
+    msgsList.addEventListener('click', function (e) {
+      var row = e.target.closest ? e.target.closest('.gMsgsRow') : null;
+      if (row) msgsOpenThread(row.dataset.id);
+    });
+    $('gMsgsNewBtn').addEventListener('click', function () {
+      var names = prompt(TR('msNewAsk', 'Player name(s), comma-separated for a group chat:'), '');
+      if (names === null) return;
+      names = names.trim();
+      if (!names) return;
+      msgsPost('/messages/start', { names: names }).then(function (r) {
+        if (r.status !== 'success') { log(esc(r.message || TR('errorTxt', 'Error'))); return; }
+        msgsLoadThreads();
+        msgsOpenThread(r.id);
+      }).catch(function () {});
+    });
+    $('gMsgsSendBtn').addEventListener('click', msgsSend);
+    msgsInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); msgsSend(); }
+    });
+  }
+
+  // кнопка скрыта у гостя — своих переписок у него нет (см. messages.js)
+  function msgsSetup() {
+    fetch('/whoAmI', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || d.guest || !msgsBtn) return;
+        msgsBtn.style.display = 'flex';
+        msgsLoadThreads();
+        clearInterval(msgsPollTimer);
+        msgsPollTimer = setInterval(msgsLoadThreads, 8000);
+      }).catch(function () {});
   }
 
   // системные сообщения — короткой плашкой, история не хранится
@@ -772,6 +968,7 @@
     connect();
 
     if (MODE === 'race' && scoresBtn) scoresBtn.style.display = 'flex';
+    msgsSetup();
 
     if (MODE === 'hideAndSeek') {
       /* Раньше тут висел свой баннер «роли распределятся через 30 секунд» —

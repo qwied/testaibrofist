@@ -80,7 +80,7 @@
       <div class="seTools" id="seTools"></div>
       <div class="seLabel" data-i18n="skinBrushSize">Brush size</div>
       <div class="seSizes" id="seSizes"></div>
-      <div class="seHint" data-i18n="skinBodyHint">The greyed-out silhouette is fixed — draw hats, masks and other extras around it.</div>
+      <div class="seHint" data-i18n="skinBodyHint">The greyed-out silhouette just shows where the head and body land — you can draw on it too, not only around it.</div>
       <div class="seHint" data-i18n="skinMarginHint">There's room above, left and right of the head for tall hats, ears, wide shoulders and the like.</div>
       <div class="seHint" data-i18n="skinMirrorHint">Left/right mirror is on by default — turn it off with the ⇋ button.</div>
       <div class="seHint" data-i18n="skinKeysHint">Shortcuts: B/L/R/G/E/I for tools, [ ] for brush size, Ctrl+Z / Ctrl+Shift+Z to undo/redo.</div>
@@ -165,12 +165,14 @@
     '#10b981', '#14b8a6', '#06b6d4', '#3b82f6', '#2196f3', '#6366f1', '#8b5cf6', '#d946ef'
   ];
 
-  /* Силуэт фигуры под сеткой — не просто ориентир: тело в игре красит
-     сама игра (роль в прятках), поэтому рисовать здесь нельзя — можно
-     только вокруг него (аксессуары: шляпы, маски и т.п.). guideGeom()
-     считает форму один раз (по BASE_W/BASE_H — без поля, тем же
-     масштабом, что и раньше), ей пользуются и отрисовка, и проверка
-     «можно ли красить эту клетку»; смещена на поле (MARGIN_L/MARGIN_T),
+  /* Силуэт фигуры под сеткой — теперь просто ориентир, где на реальной
+     фигуре окажутся голова и тело: рисовать поверх него можно, как и
+     везде — раньше это было запрещено (тело же красит сама игра, роль
+     в прятках), но по просьбе решили, что своя раскраска головы/тела
+     важнее — она просто ляжет поверх игрового цвета слоем сверху (см.
+     acc2Box() в game.html/editor.html и ACC2_BOX в skinRender.js).
+     guideGeom() считает форму один раз (по BASE_W/BASE_H — без поля,
+     тем же масштабом, что и раньше), смещена на поле (MARGIN_L/MARGIN_T),
      чтобы остаться в реальном размере на новом, большем холсте. */
   var guide = null;
   function guideGeom() {
@@ -183,26 +185,6 @@
       bx0: ox, by0: oy + S.BODY_TOP * ky, bw: S.W * kx, bh: S.BODY_H * ky, br: S.BODY_RX * kx
     };
     return guide;
-  }
-
-  function inCircle(px, py, cx, cy, r) {
-    var dx = px - cx, dy = py - cy;
-    return dx * dx + dy * dy <= r * r;
-  }
-  function inRoundRect(px, py, x0, y0, w, h, r) {
-    if (px < x0 || px > x0 + w || py < y0 || py > y0 + h) return false;
-    var cx = Math.min(Math.max(px, x0 + r), x0 + w - r);
-    var cy = Math.min(Math.max(py, y0 + r), y0 + h - r);
-    var dx = px - cx, dy = py - cy;
-    return dx * dx + dy * dy <= r * r;
-  }
-  // клетка внутри силуэта — тело/голова, там рисовать запрещено
-  function locked(x, y) {
-    var g = guideGeom();
-    if (!g) return false;
-    var px = (x + .5) * CELL, py = (y + .5) * CELL;
-    return inCircle(px, py, g.hcx, g.hcy, g.hr) ||
-           inRoundRect(px, py, g.bx0, g.by0, g.bw, g.bh, g.br);
   }
 
   function drawGuide() {
@@ -268,10 +250,10 @@
 
   function setPixel(x, y, val) {
     if (x < 0 || x >= GW || y < 0 || y >= GH) return;
-    if (!locked(x, y)) grid[idx(x, y)] = val;
+    grid[idx(x, y)] = val;
     if (mirror) {
       var mx = GW - 1 - x;
-      if (mx !== x && !locked(mx, y)) grid[idx(mx, y)] = val;
+      if (mx !== x) grid[idx(mx, y)] = val;
     }
   }
 

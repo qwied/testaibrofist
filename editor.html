@@ -205,7 +205,7 @@ body.mob #zoomBox{bottom:68px;right:8px}
 body.mob #msg h1{font-size:38px}
 </style>
         <script src="device.js?v=100"></script>
-        <script src="sound.js?v=102"></script>
+        <script src="sound.js?v=103"></script>
         <script src="skinRender.js?v=104"></script>
         <script src="skinCanvas.js?v=101"></script>
         <script src="coin.js?v=101"></script>
@@ -386,10 +386,10 @@ function figure(w,h,col,accent,skin){
   ctx.fillStyle = col;
   ctx.beginPath(); ctx.arc(w/2, d/2, d/2, 0, 6.2832); ctx.fill();
   if(bodyH > 0){ rr(0, top, w, bodyH, Math.min(w*0.22, bodyH/2)); ctx.fill(); }
-  /* рисунок из Skin Editor — аксессуары поверх фигуры; цвет тела
-     остаётся игровым, рисунок его не перекрывает. 'accessory' —
-     старый формат, точно по контуру. 'accessory2' — новый, с полем
-     вокруг для шляп/ушей/широких деталей. */
+  /* рисунок из Skin Editor поверх фигуры — можно закрасить и голову с
+     телом (тогда игровой цвет роли под ними не виден), не только
+     аксессуары вокруг. 'accessory' — старый формат, точно по контуру.
+     'accessory2' — новый, с полем вокруг для шляп/ушей/широких деталей. */
   if(pic && skin.kind === 'accessory') ctx.drawImage(pic, 0, 0, w, h);
   else if(pic && skin.kind === 'accessory2'){
     var b = acc2Box(w, h);

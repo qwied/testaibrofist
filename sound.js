@@ -82,34 +82,36 @@
     src.start(t0); src.stop(t0 + dur + 0.02);
   }
 
-  function jump()  { tone(560, 0.1, { type: 'sine', endFreq: 740, volume: 0.055, cutoff: 1400 }); }
-  function go()    { tone(560, 0.16, { type: 'triangle', endFreq: 740, volume: 0.075, cutoff: 1600 }); }
-  function death() { tone(280, 0.3, { type: 'triangle', endFreq: 100, volume: 0.06, cutoff: 900 }); }
-  function tick()  { tone(760, 0.06, { type: 'sine', volume: 0.045, cutoff: 1600 }); }
-  function chat()  { tone(880, 0.05, { type: 'sine', volume: 0.035, cutoff: 1800 }); }
+  // громкость поднята ещё немного (была снижена дважды по прошлым
+  // жалобам «слишком громко/резко» — теперь наоборот просили погромче)
+  function jump()  { tone(560, 0.1, { type: 'sine', endFreq: 740, volume: 0.08, cutoff: 1400 }); }
+  function go()    { tone(560, 0.16, { type: 'triangle', endFreq: 740, volume: 0.1, cutoff: 1600 }); }
+  function death() { tone(280, 0.3, { type: 'triangle', endFreq: 100, volume: 0.085, cutoff: 900 }); }
+  function tick()  { tone(760, 0.06, { type: 'sine', volume: 0.065, cutoff: 1600 }); }
+  function chat()  { tone(880, 0.05, { type: 'sine', volume: 0.05, cutoff: 1800 }); }
   function finish() {
-    tone(620, 0.09, { type: 'triangle', volume: 0.06, cutoff: 1600 });
-    tone(780, 0.13, { type: 'triangle', volume: 0.065, delay: 0.09, cutoff: 1600 });
+    tone(620, 0.09, { type: 'triangle', volume: 0.085, cutoff: 1600 });
+    tone(780, 0.13, { type: 'triangle', volume: 0.09, delay: 0.09, cutoff: 1600 });
   }
   function win() {
-    tone(500, 0.11, { type: 'triangle', volume: 0.055, cutoff: 1600 });
-    tone(620, 0.11, { type: 'triangle', volume: 0.06, delay: 0.1, cutoff: 1600 });
-    tone(740, 0.16, { type: 'triangle', volume: 0.065, delay: 0.2, cutoff: 1600 });
+    tone(500, 0.11, { type: 'triangle', volume: 0.08, cutoff: 1600 });
+    tone(620, 0.11, { type: 'triangle', volume: 0.085, delay: 0.1, cutoff: 1600 });
+    tone(740, 0.16, { type: 'triangle', volume: 0.09, delay: 0.2, cutoff: 1600 });
   }
 
-  // клик по кнопке/ссылке — тихий тёплый «тап», не писк
-  function click() { tap(0.032, 0.03, 2400 + Math.random() * 400); }
+  // клик по кнопке/ссылке — тёплый «тап», не писк
+  function click() { tap(0.032, 0.045, 2400 + Math.random() * 400); }
   // печать — самый тихий и короткий, лёгкая случайная вариация как у
   // настоящей клавиатуры, чтобы монотонный текст не звучал как метроном
-  function type()  { tap(0.02, 0.02, 2800 + Math.random() * 900); }
+  function type()  { tap(0.02, 0.03, 2800 + Math.random() * 900); }
   // шаги — ниже и глуше клика, левая/правая нога чуть разной высоты
   var stepFoot = 0;
   function step() {
     stepFoot = 1 - stepFoot;
-    tap(0.05, 0.03, stepFoot ? 420 : 360);
+    tap(0.05, 0.045, stepFoot ? 420 : 360);
   }
   // постановка блока в Map Editor — самый низкий и весомый «тук»
-  function place() { tap(0.09, 0.045, 300); }
+  function place() { tap(0.09, 0.065, 300); }
 
   function setOn(v) {
     on = !!v;
