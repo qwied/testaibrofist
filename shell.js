@@ -24,6 +24,7 @@
   // в верхней панели или доступные через выпадающий выбор Map Editor /
   // Maps Browser, сюда не дублируются)
   var MENU = [
+    { key: 'messages',    href: 'messages.html',       txt: 'Messages' },
     { key: 'themes',      href: 'themes.html',         txt: 'Темы' },
     { txt: 'Telegram', href: 'https://t.me/aibrofist', ext: true },
     { txt: 'Discord', href: 'https://discord.gg/Rah4FvcXDw', ext: true }
