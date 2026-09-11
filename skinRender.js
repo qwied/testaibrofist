@@ -18,6 +18,31 @@
   var BODY_H = H - BODY_TOP;             // 219.54
   var BODY_RX = Math.min(W * 0.22, BODY_H / 2);
   var T = BODY_TOP;
+
+  /* Запас для рисунка из Skin Editor (kind === 'accessory2'): раньше
+     холст редактора был точно по контуру фигуры (28x92 клеток), и
+     высоким шляпам, широким плечам, ушам было негде поместиться — они
+     упирались в край рисунка. Теперь у холста есть поле в 50 клеток
+     сверху, слева и справа (снизу не нужно — там только ноги).
+     BASE_W/BASE_H — те же 28x92, что и раньше, ими по-прежнему меряется
+     сама фигура; ACC2_W/ACC2_H — полный холст редактора со полем.
+     Это же поле знает skinEditor.html — при правке размеров менять
+     синхронно в обоих местах. Старый формат (kind === 'accessory',
+     уже опубликованные скины) продолжает рисоваться без поля, как раньше. */
+  var ACC2_BASE_W = 28, ACC2_BASE_H = 92;
+  var ACC2_MARGIN_T = 50, ACC2_MARGIN_L = 50, ACC2_MARGIN_R = 50;
+  var ACC2_W = ACC2_MARGIN_L + ACC2_BASE_W + ACC2_MARGIN_R;   // 128
+  var ACC2_H = ACC2_MARGIN_T + ACC2_BASE_H;                    // 142
+  // рамка встраивания рисунка 128x142 в систему координат фигуры (0,0..W,H):
+  // базовая часть (клетки [50..78)x[50..142)) ложится ровно на (0,0..W,H),
+  // остальное — за её пределами, пропорционально тому же масштабу
+  var ACC2_BOX = {
+    x: -(ACC2_MARGIN_L / ACC2_BASE_W) * W,
+    y: -(ACC2_MARGIN_T / ACC2_BASE_H) * H,
+    w: (ACC2_W / ACC2_BASE_W) * W,
+    h: (ACC2_H / ACC2_BASE_H) * H
+  };
+  function isAccessoryKind(kind) { return kind === 'accessory' || kind === 'accessory2'; }
   var NECK = 108;                        // середина зазора между головой и телом
   var BASE = '/skinparts/';              // где лежат картинки деталей
   var uid = 0;
@@ -66,9 +91,9 @@
 
   function svg(skin, byId, opt) {
     opt = opt || {};
-    // готовая картинка от владельца (kind !== 'accessory') по-прежнему
+    // готовая картинка от владельца (не рисунок из Skin Editor) по-прежнему
     // заменяет фигуру целиком — такое добавляют вручную в Skins Browser
-    if (skin && skin.img && skin.kind !== 'accessory') {
+    if (skin && skin.img && !isAccessoryKind(skin.kind)) {
       var ih = opt.height || 260;
       var iw = opt.width || Math.round(ih * 0.55);
       return '<svg viewBox="0 0 100 182" width="' + iw + '" height="' + ih + '" ' +
@@ -86,19 +111,34 @@
     out.push(p.body.map(shape).join(''));
     out.push(p.head.map(shape).join(''));
 
-    // рисунок из Skin Editor (kind === 'accessory'): аксессуары поверх
-    // силуэта — тело редактор рисовать не даёт, поэтому оно остаётся
-    // цвета игры. Встраиваем в тот же SVG, чтобы рисунок никогда не
-    // съезжал относительно фигуры при любой высоте/обрезке карточки.
-    if (skin && skin.img && skin.kind === 'accessory') {
+    /* Рисунок из Skin Editor: аксессуары поверх силуэта — тело редактор
+       рисовать не даёт, поэтому оно остаётся цвета игры. Встраиваем в тот
+       же SVG, чтобы рисунок никогда не съезжал относительно фигуры при
+       любой высоте/обрезке карточки.
+       'accessory' — старый формат, рисунок точно по контуру (0,0,W,H),
+       без поля — оставлен как есть для уже опубликованных скинов.
+       'accessory2' — новый формат с полем вокруг (см. ACC2_BOX выше). */
+    var accBox = null;
+    if (skin && skin.img && skin.kind === 'accessory') accBox = { x: 0, y: 0, w: W, h: H };
+    else if (skin && skin.img && skin.kind === 'accessory2') accBox = ACC2_BOX;
+    if (accBox) {
       out.push('<image href="' + esc(skin.img) + '" xlink:href="' + esc(skin.img) + '"' +
-               ' x="0" y="0" width="' + W + '" height="' + H + '" preserveAspectRatio="none"/>');
+               ' x="' + accBox.x + '" y="' + accBox.y + '" width="' + accBox.w + '" height="' + accBox.h +
+               '" preserveAspectRatio="none"/>');
     }
 
     // Рамка с запасом: детали выходят за фигуру — шляпы вверх, плащи и
     // крылья вбок, скейтборд вниз. Витрина магазина просит рамку поуже
-    // (opt.crop), чтобы вещь на карточке было видно крупно.
+    // (opt.crop), чтобы вещь на карточке было видно крупно. У accessory2
+    // поле нарисованного холста намного больше обычного PAD — иначе
+    // выходящие за фигуру детали просто обрезались бы этим viewBox,
+    // хотя сам рисунок на месте.
     var PAD = 70, vx = -PAD, vy = -PAD, vw = W + PAD*2, vh = H + PAD*2;
+    if (skin && skin.kind === 'accessory2') {
+      var EPAD = 12;
+      vx = ACC2_BOX.x - EPAD; vy = ACC2_BOX.y - EPAD;
+      vw = ACC2_BOX.w + EPAD * 2; vh = ACC2_BOX.h + EPAD * 2;
+    }
     if (opt.crop) { vx = opt.crop.x; vy = opt.crop.y; vw = opt.crop.w; vh = opt.crop.h; }
     var vb = vx + ' ' + vy + ' ' + vw + ' ' + vh;
     var h = opt.height || 260;
@@ -136,7 +176,7 @@
   function render(skin, byId, opt) {
     opt = opt || {};
     var img = skin && skin.img;
-    if (!img || skin.kind === 'accessory') return svg(skin, byId, opt);
+    if (!img || isAccessoryKind(skin.kind)) return svg(skin, byId, opt);
     var h = opt.height || 260;
     return '<img src="' + esc(img) + '" alt="" ' +
            'style="height:' + h + 'px;width:auto;max-width:100%;object-fit:contain;display:block;' +
@@ -146,6 +186,9 @@
   window.BFSkin = {
     svg: svg, render: render, preview: preview, parts: parts, shade: shade,
     W: W, H: H, BODY_TOP: T, BODY_H: BODY_H, BODY_RX: BODY_RX, HEAD_R: HEAD_R,
-    NECK: NECK, BASE: BASE
+    NECK: NECK, BASE: BASE, isAccessoryKind: isAccessoryKind,
+    ACC2_BASE_W: ACC2_BASE_W, ACC2_BASE_H: ACC2_BASE_H,
+    ACC2_MARGIN_T: ACC2_MARGIN_T, ACC2_MARGIN_L: ACC2_MARGIN_L, ACC2_MARGIN_R: ACC2_MARGIN_R,
+    ACC2_W: ACC2_W, ACC2_H: ACC2_H, ACC2_BOX: ACC2_BOX
   };
 })();

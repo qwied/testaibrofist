@@ -204,7 +204,7 @@ body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="device.js?v=100"></script>
         <script src="sound.js?v=102"></script>
-        <script src="skinRender.js?v=103"></script>
+        <script src="skinRender.js?v=104"></script>
         <script src="skinCanvas.js?v=101"></script>
         <script src="coin.js?v=101"></script>
         <link rel="stylesheet" type="text/css" href="mobile.css?v=85">
@@ -352,12 +352,28 @@ function skinImage(src){
   return (im.complete && im.naturalWidth) ? im : null;
 }
 
+// поле вокруг фигуры для рисунков из нового Skin Editor (kind
+// 'accessory2') — доли ширины/высоты фигуры, те же числа, что и
+// ACC2_* в skinRender.js (запасной вариант — на случай, если тот
+// скрипт почему-то не успел загрузиться раньше этого кадра)
+function acc2Box(w, h){
+  var S = window.BFSkin;
+  var baseW = (S && S.ACC2_BASE_W) || 28, baseH = (S && S.ACC2_BASE_H) || 92;
+  var mL = (S && S.ACC2_MARGIN_L) || 50, mR = (S && S.ACC2_MARGIN_R) || 50, mT = (S && S.ACC2_MARGIN_T) || 50;
+  return {
+    x: -(mL / baseW) * w, y: -(mT / baseH) * h,
+    w: ((mL + baseW + mR) / baseW) * w, h: ((mT + baseH) / baseH) * h
+  };
+}
+
 function figure(w,h,col,accent,skin){
   var d = w, top = d + h*FIG_GAP, bodyH = Math.max(0, h - top);
   var pic = (skin && skin.img) ? skinImage(skin.img) : null;
-  // готовая картинка от владельца (kind !== 'accessory') по-прежнему
+  var isAcc = !!skin && (window.BFSkin ? window.BFSkin.isAccessoryKind(skin.kind)
+                                        : (skin.kind === 'accessory' || skin.kind === 'accessory2'));
+  // готовая картинка от владельца (не рисунок из Skin Editor) по-прежнему
   // заменяет фигуру целиком
-  if(pic && skin.kind !== 'accessory'){
+  if(pic && !isAcc){
     var k = Math.min(w/pic.naturalWidth, h/pic.naturalHeight);
     var pw = pic.naturalWidth*k, ph = pic.naturalHeight*k;
     ctx.drawImage(pic, (w-pw)/2, h-ph, pw, ph);
@@ -367,10 +383,16 @@ function figure(w,h,col,accent,skin){
   ctx.fillStyle = col;
   ctx.beginPath(); ctx.arc(w/2, d/2, d/2, 0, 6.2832); ctx.fill();
   if(bodyH > 0){ rr(0, top, w, bodyH, Math.min(w*0.22, bodyH/2)); ctx.fill(); }
-  // рисунок из Skin Editor (kind === 'accessory') — аксессуары поверх
-  // фигуры; цвет тела остаётся игровым (роль в прятках), рисунок его
-  // не перекрывает — редактор не даёт красить сам силуэт
+  /* Рисунок из Skin Editor — аксессуары поверх фигуры; цвет тела
+     остаётся игровым (роль в прятках), рисунок его не перекрывает —
+     редактор не даёт красить сам силуэт. 'accessory' — старый формат,
+     точно по контуру (0,0,w,h), для уже опубликованных скинов.
+     'accessory2' — новый, с полем вокруг для шляп/ушей/широких деталей. */
   if(pic && skin.kind === 'accessory') ctx.drawImage(pic, 0, 0, w, h);
+  else if(pic && skin.kind === 'accessory2'){
+    var b = acc2Box(w, h);
+    ctx.drawImage(pic, b.x, b.y, b.w, b.h);
+  }
   if(skin && window.BFSkinCanvas) BFSkinCanvas.front(ctx, w, h, skin);
 }
 
@@ -2353,6 +2375,6 @@ requestAnimationFrame(loop);
 <script src="game.js?v=110"></script>
         <script src="i18n.js?v=109"></script>
         <script src="owner.js?v=102" defer></script>
-        <script src="skinAvatar.js?v=101" defer></script>
+        <script src="skinAvatar.js?v=102" defer></script>
 </body>
 </html>
