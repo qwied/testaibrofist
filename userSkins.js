@@ -246,7 +246,10 @@ function register(app, acc) {
     const oldImg = u.skinImg;
     delete u.skin;
     u.skinImg = img;
-    u.skinKind = 'accessory';
+    // 'accessory2' — новый холст с полем вокруг фигуры (см. skinEditor.html
+    // и ACC2_* в skinRender.js). Старые скины на диске остались 'accessory'
+    // и продолжают рисоваться по-старому — так они не съезжают задним числом.
+    u.skinKind = 'accessory2';
     u.wearing = '';
     saveUsers();
     if (oldImg && oldImg !== img) unlinkSkinImg(oldImg);
@@ -303,7 +306,7 @@ function register(app, acc) {
     catch (e) { return res.json({ status: 'error', message: 'Не удалось сохранить: ' + e.message }); }
 
     const item = {
-      id, skinName, author: u.name, img, sig, kind: 'accessory',
+      id, skinName, author: u.name, img, sig, kind: 'accessory2',
       date: Date.now(), created: Date.now(),
       votes: {}, boostLikes: 0, boostDislikes: 0, rating: 0,
       inAvatar: false, price: 0
@@ -314,7 +317,7 @@ function register(app, acc) {
     const oldImg = u.skinImg;
     delete u.skin;
     u.skinImg = img;
-    u.skinKind = 'accessory';
+    u.skinKind = 'accessory2';
     u.wearing = id;
     saveUsers();
     if (oldImg && oldImg !== img) unlinkSkinImg(oldImg);

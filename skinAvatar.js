@@ -13,16 +13,20 @@
      Портретная обрезка показывала одну голову — по ней было не понять,
      что за скин. Вписывание делает object-fit: contain. Своей картинки
      нет — рисуем обычную пустую фигуру (её же рисует и сама игра). */
+  function isAcc(skin) {
+    return !!skin && (window.BFSkin ? window.BFSkin.isAccessoryKind(skin.kind)
+                                     : (skin.kind === 'accessory' || skin.kind === 'accessory2'));
+  }
   function dataUri(skin) {
-    // готовая картинка от владельца (kind !== 'accessory') можно отдать
-    // прямой ссылкой. Рисунок из Skin Editor (kind === 'accessory') —
-    // это аксессуары поверх фигуры, а не сама картинка целиком, но
-    // BFSkin.svg() их и так вкладывает в тот же SVG слоем поверх силуэта
-    // (см. skinRender.js) — передаём ему реальный skin, а не пустой,
-    // иначе аксессуары нигде, кроме карточки в Skins Browser, не видны.
-    // Нет скина вовсе (undefined/{}) — svg() сам рисует стандартную
-    // фигуру: чёрный прямоугольник и круг.
-    if (skin && skin.img && skin.kind !== 'accessory') return skin.img;
+    // готовая картинка от владельца (не рисунок из Skin Editor) можно
+    // отдать прямой ссылкой. Рисунок из Skin Editor (kind 'accessory' /
+    // 'accessory2') — это аксессуары поверх фигуры, а не сама картинка
+    // целиком, но BFSkin.svg() их и так вкладывает в тот же SVG слоем
+    // поверх силуэта (см. skinRender.js) — передаём ему реальный skin,
+    // а не пустой, иначе аксессуары нигде, кроме карточки в Skins
+    // Browser, не видны. Нет скина вовсе (undefined/{}) — svg() сам
+    // рисует стандартную фигуру: чёрный прямоугольник и круг.
+    if (skin && skin.img && !isAcc(skin)) return skin.img;
     if (!window.BFSkin) return null;
     var svg = window.BFSkin.svg(skin || {}, {}, { height: 300 });
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -34,7 +38,7 @@
      сломанной. Теперь у такого элемента создаётся <img class="bfAva">,
      а остальное содержимое убирается. */
   function paint(el, skin) {
-    var uri = (skin && skin.img && skin.kind !== 'accessory') ? skin.img : dataUri(skin);
+    var uri = (skin && skin.img && !isAcc(skin)) ? skin.img : dataUri(skin);
     if (!uri) return;
 
     var img = el;

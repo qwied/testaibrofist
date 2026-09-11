@@ -28,6 +28,19 @@
   background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
   font-size:19px;padding:0}
 .seTool.on{border-color:var(--blue);background:#eef7ff;box-shadow:inset 0 0 0 2px var(--blue)}
+.seTool:disabled{opacity:.35;cursor:default}
+.seZoom{display:flex;align-items:center;justify-content:center;gap:10px;margin:2px 0 12px}
+.seZoom button{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);
+  background:#fff;cursor:pointer;font-size:16px;padding:0;line-height:1}
+.seZoom span{font-size:12.5px;color:var(--muted);min-width:38px;text-align:center}
+.seSizes{display:flex;gap:6px;justify-content:center;margin:0 0 4px}
+.seSizeBtn{min-width:38px;height:32px;padding:0 8px;border-radius:8px;border:1px solid var(--line);
+  background:#fff;cursor:pointer;font-size:12.5px;font-weight:700;color:var(--ink)}
+.seSizeBtn.on{border-color:var(--blue);background:#eef7ff;box-shadow:inset 0 0 0 2px var(--blue)}
+.seLabel{font-size:11.5px;color:var(--muted);text-align:center;text-transform:uppercase;
+  letter-spacing:.4px;margin:10px 0 4px}
+.seHistBtns{display:flex;gap:8px}
+.seHistBtns .bfBtn{margin-bottom:0}
 .sePalette{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin:10px 0}
 .seSwatch{aspect-ratio:1;border-radius:7px;border:1px solid rgba(0,0,0,.15);cursor:pointer;padding:0}
 .seSwatch.on{box-shadow:0 0 0 2px var(--blue)}
@@ -59,9 +72,18 @@
   <div class="seLayout">
     <div>
       <div class="seCanvasWrap"><canvas id="seCanvas"></canvas></div>
+      <div class="seZoom">
+        <button id="seZoomOut" aria-label="Zoom out">−</button>
+        <span id="seZoomLabel">50%</span>
+        <button id="seZoomIn" aria-label="Zoom in">+</button>
+      </div>
       <div class="seTools" id="seTools"></div>
+      <div class="seLabel" data-i18n="skinBrushSize">Brush size</div>
+      <div class="seSizes" id="seSizes"></div>
       <div class="seHint" data-i18n="skinBodyHint">The greyed-out silhouette is fixed — draw hats, masks and other extras around it.</div>
+      <div class="seHint" data-i18n="skinMarginHint">There's room above, left and right of the head for tall hats, ears, wide shoulders and the like.</div>
       <div class="seHint" data-i18n="skinMirrorHint">Left/right mirror is on by default — turn it off with the ⇋ button.</div>
+      <div class="seHint" data-i18n="skinKeysHint">Shortcuts: B/L/R/G/E/I for tools, [ ] for brush size, Ctrl+Z / Ctrl+Shift+Z to undo/redo.</div>
     </div>
 
     <div class="seSide">
@@ -70,6 +92,10 @@
       <div class="seCustom">
         <input type="color" id="seCustom" value="#2196f3">
         <span data-i18n="skinCustomColor">Custom color</span>
+      </div>
+      <div class="seHistBtns">
+        <button class="bfBtn ghost" id="seUndo" data-i18n="skinUndo">Undo</button>
+        <button class="bfBtn ghost" id="seRedo" data-i18n="skinRedo">Redo</button>
       </div>
       <button class="bfBtn go" id="seWear" data-i18n="skinWear">Wear it</button>
       <button class="bfBtn" id="sePublish" data-i18n="publishSkin">Publish to Skins Browser</button>
@@ -83,7 +109,7 @@
 
 <link rel="stylesheet" href="mobile.css?v=85">
 <script src="i18n.js?v=109"></script>
-<script src="skinRender.js?v=103"></script>
+<script src="skinRender.js?v=104"></script>
 <script src="coin.js?v=101"></script>
 <script src="shell.js?v=102"></script>
 <script src="abuseShow.js?v=101" defer></script>
@@ -98,8 +124,20 @@
   /* Сетка рисования: пропорции близки к фигуре игрока (BFSkin.W/H —
      100x336, круглая голова сверху + капсула-тело), но рисуем прямо
      по прямоугольнику — игра всё равно масштабирует картинку целиком
-     в габариты игрока, форма контура тут не обязана совпадать. */
-  var GW = 28, GH = 92, CELL = 10;
+     в габариты игрока, форма контура тут не обязана совпадать.
+
+     BASE_W/BASE_H — сетка точно по контуру фигуры, как было раньше.
+     Вокруг неё — поле (MARGIN_*) для деталей, которые фигуру
+     перерастают: высокие шляпы, уши, широкие плечи. Раньше поля не
+     было вовсе, и таким деталям было просто негде поместиться — они
+     упирались в край рисунка. Эти же числа (и то, что снизу поля нет —
+     там только ноги) знает рендер сайта и игры: ACC2_* в skinRender.js
+     и acc2Box() в game.html/editor.html — менять только вместе. */
+  var BASE_W = 28, BASE_H = 92;
+  var MARGIN_T = 50, MARGIN_L = 50, MARGIN_R = 50;
+  var GW = MARGIN_L + BASE_W + MARGIN_R;    // 128
+  var GH = MARGIN_T + BASE_H;               // 142
+  var CELL = 10;
   var grid = new Array(GW * GH).fill(null);   // null — прозрачный пиксель
   var idx = function (x, y) { return y * GW + x; };
 
@@ -109,12 +147,17 @@
 
   var TOOLS = [
     { id: 'brush', icon: '✏️', label: 'skinToolBrush' },
+    { id: 'line', icon: '📏', label: 'skinToolLine' },
+    { id: 'rect', icon: '⬜', label: 'skinToolRect' },
     { id: 'eyedrop', icon: '💧', label: 'skinToolEyedrop' },
     { id: 'fill', icon: '🪣', label: 'skinToolFill' },
     { id: 'eraser', icon: '🧽', label: 'skinToolEraser' },
     { id: 'mirror', icon: '⇋', label: 'skinToolMirror' }
   ];
   var tool = 'brush', mirror = true, color = '#2196f3';
+
+  var SIZES = [1, 2, 3];
+  var brushSize = 1;
 
   var PALETTE = [
     '#000000', '#ffffff', '#6b7280', '#9ca3af', '#d1d5db', '#7c4a2d', '#a5673f', '#e8b98a',
@@ -125,16 +168,19 @@
   /* Силуэт фигуры под сеткой — не просто ориентир: тело в игре красит
      сама игра (роль в прятках), поэтому рисовать здесь нельзя — можно
      только вокруг него (аксессуары: шляпы, маски и т.п.). guideGeom()
-     считает форму один раз, ей пользуются и отрисовка, и проверка
-     «можно ли красить эту клетку». */
+     считает форму один раз (по BASE_W/BASE_H — без поля, тем же
+     масштабом, что и раньше), ей пользуются и отрисовка, и проверка
+     «можно ли красить эту клетку»; смещена на поле (MARGIN_L/MARGIN_T),
+     чтобы остаться в реальном размере на новом, большем холсте. */
   var guide = null;
   function guideGeom() {
     if (guide || !window.BFSkin) return guide;
     var S = window.BFSkin;
-    var kx = cv.width / S.W, ky = cv.height / S.H;
+    var kx = (BASE_W * CELL) / S.W, ky = (BASE_H * CELL) / S.H;
+    var ox = MARGIN_L * CELL, oy = MARGIN_T * CELL;
     guide = {
-      hcx: S.HEAD_R * kx, hcy: S.HEAD_R * ky, hr: S.HEAD_R * Math.min(kx, ky),
-      bx0: 0, by0: S.BODY_TOP * ky, bw: S.W * kx, bh: S.BODY_H * ky, br: S.BODY_RX * kx
+      hcx: ox + S.HEAD_R * kx, hcy: oy + S.HEAD_R * ky, hr: S.HEAD_R * Math.min(kx, ky),
+      bx0: ox, by0: oy + S.BODY_TOP * ky, bw: S.W * kx, bh: S.BODY_H * ky, br: S.BODY_RX * kx
     };
     return guide;
   }
@@ -178,6 +224,10 @@
     return ((x + y) % 2 === 0) ? '#e5e7eb' : '#f3f4f6';
   }
 
+  // незафиксированная линия/прямоугольник — «призрак» поверх сетки,
+  // пока ведёшь мышь/палец; фиксируется в grid только на отпускании
+  var previewCells = [];
+
   function render() {
     ctx.clearRect(0, 0, cv.width, cv.height);
     drawGuide();
@@ -188,6 +238,12 @@
         ctx.fillStyle = c;
         ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
       }
+    }
+    if (previewCells.length) {
+      ctx.fillStyle = color;
+      previewCells.forEach(function (c) {
+        if (c.x >= 0 && c.x < GW && c.y >= 0 && c.y < GH) ctx.fillRect(c.x * CELL, c.y * CELL, CELL, CELL);
+      });
     }
     // тонкая сетка — только пока рисуем в разумном зуме
     ctx.strokeStyle = 'rgba(0,0,0,.06)';
@@ -219,6 +275,41 @@
     }
   }
 
+  // штамп кисти/ластика size x size клеток, центр — под курсором
+  function stampCells(cx, cy, size) {
+    var cells = [], half = Math.floor((size - 1) / 2);
+    for (var dy = 0; dy < size; dy++)
+      for (var dx = 0; dx < size; dx++)
+        cells.push({ x: cx - half + dx, y: cy - half + dy });
+    return cells;
+  }
+
+  // прямая линия между двумя клетками (алгоритм Брезенхэма)
+  function lineCells(x0, y0, x1, y1) {
+    var cells = [];
+    var dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    var sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    var err = dx - dy, x = x0, y = y0;
+    while (true) {
+      cells.push({ x: x, y: y });
+      if (x === x1 && y === y1) break;
+      var e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x += sx; }
+      if (e2 < dx) { err += dx; y += sy; }
+    }
+    return cells;
+  }
+
+  // контур прямоугольника между двумя противоположными углами
+  function rectCells(x0, y0, x1, y1) {
+    var cells = [];
+    var xa = Math.min(x0, x1), xb = Math.max(x0, x1);
+    var ya = Math.min(y0, y1), yb = Math.max(y0, y1);
+    for (var x = xa; x <= xb; x++) { cells.push({ x: x, y: ya }); cells.push({ x: x, y: yb }); }
+    for (var y = ya; y <= yb; y++) { cells.push({ x: xa, y: y }); cells.push({ x: xb, y: y }); }
+    return cells;
+  }
+
   function floodFill(x, y, val) {
     var start = grid[idx(x, y)];
     if (start === val) return;
@@ -242,11 +333,36 @@
     return { x: x, y: y };
   }
 
+  /* ---------- отмена/повтор ----------
+     Снимок всей сетки (не diff — она умещается в памяти без проблем,
+     а код от этого проще и без крайних случаев) кладём в стек ОДИН раз,
+     перед началом мазка/фигуры/очистки — не на каждый пиксель, иначе
+     один мазок откатывался бы по пикселю за раз. */
+  var undoStack = [], redoStack = [];
+  var MAX_HISTORY = 50;
+  function pushHistory() {
+    undoStack.push(grid.slice());
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack.length = 0;
+  }
+  function undo() {
+    if (!undoStack.length) return;
+    redoStack.push(grid.slice());
+    grid = undoStack.pop();
+    render();
+  }
+  function redo() {
+    if (!redoStack.length) return;
+    undoStack.push(grid.slice());
+    grid = redoStack.pop();
+    render();
+  }
+
   var painting = false;
   function act(x, y) {
     if (x < 0 || x >= GW || y < 0 || y >= GH) return;
-    if (tool === 'brush') setPixel(x, y, color);
-    else if (tool === 'eraser') setPixel(x, y, null);
+    if (tool === 'brush') stampCells(x, y, brushSize).forEach(function (c) { setPixel(c.x, c.y, color); });
+    else if (tool === 'eraser') stampCells(x, y, brushSize).forEach(function (c) { setPixel(c.x, c.y, null); });
     else if (tool === 'fill') floodFill(x, y, color);
     else if (tool === 'eyedrop') {
       var got = grid[idx(x, y)];
@@ -256,19 +372,72 @@
     render();
   }
 
+  // линия/прямоугольник ведутся отдельно от act(): фигура держится
+  // «призраком» (previewCells), пока не отпустили палец/кнопку мыши
+  var shapeStart = null;
+  function commitShape() {
+    if (!shapeStart) return;
+    previewCells.forEach(function (c) { setPixel(c.x, c.y, color); });
+    shapeStart = null; previewCells = [];
+    render();
+  }
+
   cv.addEventListener('pointerdown', function (e) {
-    painting = true;
     var c = cellAt(e.clientX, e.clientY);
-    act(c.x, c.y);
     cv.setPointerCapture(e.pointerId);
+    if (tool === 'line' || tool === 'rect') {
+      pushHistory();
+      shapeStart = c;
+      previewCells = [c];
+      render();
+      return;
+    }
+    painting = true;
+    pushHistory();
+    act(c.x, c.y);
   });
   cv.addEventListener('pointermove', function (e) {
-    if (!painting || tool === 'fill' || tool === 'eyedrop') return;
     var c = cellAt(e.clientX, e.clientY);
+    if (shapeStart) {
+      previewCells = tool === 'line' ? lineCells(shapeStart.x, shapeStart.y, c.x, c.y)
+                                      : rectCells(shapeStart.x, shapeStart.y, c.x, c.y);
+      render();
+      return;
+    }
+    if (!painting || tool === 'fill' || tool === 'eyedrop') return;
     act(c.x, c.y);
   });
-  cv.addEventListener('pointerup', function () { painting = false; });
-  cv.addEventListener('pointerleave', function () { painting = false; });
+  cv.addEventListener('pointerup', function () { painting = false; commitShape(); });
+  cv.addEventListener('pointerleave', function () { painting = false; commitShape(); });
+
+  /* ---------- зум ----------
+     Холст всегда рисуется в полном разрешении (GW*CELL px) — зум просто
+     растягивает/сжимает его показ через CSS, поэтому пиксели остаются
+     чёткими (image-rendering: pixelated), а расчёт клетки под курсором
+     (cellAt) не меняется — он уже мерит в долях от текущего showing-размера. */
+  var ZOOM_MIN = 0.25, ZOOM_MAX = 2, ZOOM_STEP = 0.15;
+  var zoom = 0.5;
+  function applyZoom() {
+    cv.style.width = Math.round(GW * CELL * zoom) + 'px';
+    cv.style.height = Math.round(GH * CELL * zoom) + 'px';
+    $('seZoomLabel').textContent = Math.round(zoom * 100) + '%';
+  }
+  function zoomBy(delta) {
+    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((zoom + delta) * 100) / 100));
+    applyZoom();
+  }
+  $('seZoomOut').onclick = function () { zoomBy(-ZOOM_STEP); };
+  $('seZoomIn').onclick = function () { zoomBy(ZOOM_STEP); };
+  applyZoom();
+
+  function setTool(id) {
+    // смена инструмента посреди незавершённой фигуры — отменяем призрак,
+    // а не бросаем его недорисованным на холсте
+    shapeStart = null; previewCells = [];
+    tool = id;
+    drawTools();
+    render();
+  }
 
   function drawTools() {
     var box = $('seTools'); box.innerHTML = '';
@@ -278,10 +447,22 @@
       b.textContent = t.icon;
       b.title = T(t.label);
       b.onclick = function () {
-        if (t.id === 'mirror') mirror = !mirror;
-        else tool = t.id;
-        drawTools();
+        if (t.id === 'mirror') { mirror = !mirror; drawTools(); }
+        else setTool(t.id);
       };
+      box.appendChild(b);
+    });
+  }
+
+  function setBrushSize(n) { brushSize = n; drawSizes(); }
+  function drawSizes() {
+    var box = $('seSizes'); box.innerHTML = '';
+    SIZES.forEach(function (n) {
+      var b = document.createElement('button');
+      b.className = 'seSizeBtn' + (n === brushSize ? ' on' : '');
+      b.textContent = n + '×' + n;
+      b.title = T('skinBrushSize', 'Brush size') + ': ' + n;
+      b.onclick = function () { setBrushSize(n); };
       box.appendChild(b);
     });
   }
@@ -292,13 +473,37 @@
       var b = document.createElement('button');
       b.className = 'seSwatch' + (c === color ? ' on' : '');
       b.style.background = c;
-      b.onclick = function () { color = c; tool = 'brush'; $('seCustom').value = c; drawSwatches(); drawTools(); };
+      b.onclick = function () { color = c; setTool('brush'); $('seCustom').value = c; drawSwatches(); };
       box.appendChild(b);
     });
   }
-  $('seCustom').oninput = function () { color = this.value; tool = 'brush'; drawSwatches(); drawTools(); };
+  $('seCustom').oninput = function () { color = this.value; setTool('brush'); drawSwatches(); };
 
-  drawTools(); drawSwatches(); render();
+  $('seUndo').onclick = function () { undo(); };
+  $('seRedo').onclick = function () { redo(); };
+
+  // клавиатурные сокращения — не трогаем, пока фокус в текстовом поле
+  // (например, при выборе цвета через нативный color-picker)
+  var TOOL_KEYS = { b: 'brush', l: 'line', r: 'rect', g: 'fill', e: 'eraser', i: 'eyedrop' };
+  document.addEventListener('keydown', function (e) {
+    var tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    var k = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && k === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) redo(); else undo();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
+    if (TOOL_KEYS[k]) { setTool(TOOL_KEYS[k]); return; }
+    if (k === 'm') { mirror = !mirror; drawTools(); return; }
+    if (k === '[') { setBrushSize(Math.max(SIZES[0], brushSize - 1)); return; }
+    if (k === ']') { setBrushSize(Math.min(SIZES[SIZES.length - 1], brushSize + 1)); return; }
+    if (k === '=' || k === '+') { zoomBy(ZOOM_STEP); return; }
+    if (k === '-') { zoomBy(-ZOOM_STEP); return; }
+  });
+
+  drawTools(); drawSwatches(); drawSizes(); render();
 
   function msg(text, ok) {
     var m = $('seMsg');
@@ -370,6 +575,7 @@
   };
 
   $('seClear').onclick = function () {
+    pushHistory();
     grid = new Array(GW * GH).fill(null);
     render();
   };
@@ -385,9 +591,9 @@
     .then(function (d) { $('seNick').value = d.name || T('guest'); })
     .catch(function () { $('seNick').value = T('guest'); });
 
-  window.addEventListener('bf-lang', function () { drawTools(); });
+  window.addEventListener('bf-lang', function () { drawTools(); drawSizes(); });
 })();
 </script>
-        <script src="skinAvatar.js?v=101" defer></script>
+        <script src="skinAvatar.js?v=102" defer></script>
 </body>
 </html>
