@@ -417,6 +417,24 @@ function hsCreditAndNotify(socket, name, amount, reason) {
   socket.emit('coinsAwarded', { amount: credited, coins: u ? (u.coins || 0) : 0, reason: reason });
 }
 
+/* ================== ГОНКА: ОЧКИ ЗА ФИНИШ ==================
+   Табличка «Scores» в углу экрана во время Race — снимок текущей
+   комнаты, не привязан к аккаунту (гость тоже видит себя в списке,
+   просто его очки нигде не сохраняются). Обнуляется, когда игрок
+   выходит из комнаты или переподключается новым сокетом. */
+function raceScoreboard(room) {
+  const set = gameState.rooms.get(room);
+  if (!set) return [];
+  return Array.from(set)
+    .map(id => gameState.players.get(id))
+    .filter(Boolean)
+    .map(p => ({ name: p.name, score: p.raceLiveScore || 0 }))
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+}
+function broadcastRaceScores(io, room) {
+  io.to(room).emit('raceScores', raceScoreboard(room));
+}
+
 function hsMembers(room) {
   const set = gameState.rooms.get(room);
   if (!set) return [];
@@ -700,6 +718,9 @@ io.on('connection', (socket) => {
           seekerId: st.seekerId, seekerName: st.seekerName });
       }
     }
+
+    // Гонка: новичку и всей комнате — актуальная табличка очков (новый участник входит в неё с нулём)
+    if (mode === 'race') broadcastRaceScores(io, room);
   });
 
   socket.on('movePlayer', (data) => {
@@ -810,8 +831,11 @@ io.on('connection', (socket) => {
   /* Race: старт запоминаем, финиш проверяем на его существование, ту же
      карту и минимальное правдоподобное время — иначе можно было бы слать
      raceFinish без единого движения и получать монеты по кругу. Сумму
-     (1–5) решает сервер, а не клиент. */
+     монет (1–5) и очки за скорость решает сервер, а не клиент. */
   const RACE_MIN_MS = 1500;
+  // очки за забег: чем быстрее финиш, тем больше — 120 сек и дольше не
+  // приносят ничего, секунда почти сразу после старта — почти максимум
+  const RACE_SCORE_CAP_S = 120;
   socket.on('raceStart', (data) => {
     if (limRace()) return;
     const player = gameState.players.get(socket.id);
@@ -831,9 +855,18 @@ io.on('connection', (socket) => {
     const author = cleanText(data && data.author, 40);
     const mapName = cleanText(data && data.mapName, 40);
     if (rs.key !== author + '|' + mapName) return;
-    if (Date.now() - rs.at < RACE_MIN_MS) return;
+    const elapsedMs = Date.now() - rs.at;
+    if (elapsedMs < RACE_MIN_MS) return;
+
+    // табличка «Scores» в углу — снимок комнаты, видна и гостям, копится
+    // за все забеги подряд, пока игрок в комнате (см. raceScoreboard)
+    const points = Math.max(0, Math.round(RACE_SCORE_CAP_S - elapsedMs / 1000));
+    player.raceLiveScore = (player.raceLiveScore || 0) + points;
+    broadcastRaceScores(io, player.room);
+
     if (!account) return;
     hsCreditAndNotify(socket, account, 1 + Math.floor(Math.random() * 5), 'raceFinish');
+    if (points > 0) accountsRef.creditScore(account, points);
   });
 
   socket.on('disconnect', () => {
@@ -863,6 +896,7 @@ io.on('connection', (socket) => {
 
       io.to(room).emit('playerLeft', { playerId: socket.id });
       if (room.indexOf('hideAndSeek:') === 0) hsOnLeave(io, room, socket.id);
+      if (room.indexOf('race:') === 0) broadcastRaceScores(io, room);
       console.log(`${player.name} | Осталось: ${gameState.stats.totalPlayers}`);
     }
   });

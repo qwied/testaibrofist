@@ -225,6 +225,27 @@
     + 'html.is-mobile #gRoul,html.is-tablet #gRoul{top:44px;width:130px;'
     + 'right:calc(8px + env(safe-area-inset-right,0px))}'
     + 'html.is-mobile .rName,html.is-tablet .rName{width:130px;font-size:12.5px}'
+    /* --- табличка очков забега (Race), левый верхний угол: кнопка-иконка
+           раскрывает список всех в комнате, кто выше в Scores — тот выше
+           в списке. Только для режима Race, вне редактора. --- */
+    + '#gScoresBtn{display:none;position:fixed;top:52px;left:12px;z-index:61;'
+    + 'width:38px;height:38px;padding:0;background:rgba(255,255,255,.92);color:#111827;'
+    + 'border:1px solid #d7dee7;border-radius:9px;cursor:pointer;font-size:17px;line-height:1;'
+    + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.35)}'
+    + '#gScoresBtn:active{background:#f2f7fd}'
+    + '#gScoresPanel{display:none;position:fixed;top:96px;left:12px;z-index:61;min-width:170px;'
+    + 'max-width:240px;max-height:44vh;overflow-y:auto;background:rgba(255,255,255,.96);'
+    + 'border:1px solid #d7dee7;border-radius:9px;padding:9px 11px;font:12.5px sans-serif;'
+    + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.45)}'
+    + '#gScoresPanel.on{display:block}'
+    + '#gScoresPanel h4{margin:0 0 6px;font-size:11px;color:#8b93a1;text-transform:uppercase;letter-spacing:.03em}'
+    + '.gScoreRow{display:flex;justify-content:space-between;gap:12px;padding:3px 0;color:#191919}'
+    + '.gScoreRow.me{font-weight:bold;color:#2196F3}'
+    + '.gScoreRow b{color:#e2a600;flex:0 0 auto}'
+    + '.gScoreN{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    + '#gScoresEmpty{color:#8b93a1}'
+    + 'html.is-mobile #gScoresBtn,html.is-tablet #gScoresBtn{top:44px}'
+    + 'html.is-mobile #gScoresPanel,html.is-tablet #gScoresPanel{top:88px}'
     ;
 
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
@@ -249,6 +270,8 @@
     + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     + '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 '
     + '8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>'
+    + '<button id="gScoresBtn" aria-label="Scores">🏆</button>'
+    + '<div id="gScoresPanel"><h4 id="gScoresTitle">Scores</h4><div id="gScoresList"></div></div>'
 );
 
   /* надписи верхней панели обновляются при смене языка */
@@ -262,6 +285,10 @@
     if (cl) cl.textContent = TR('chanceLbl', 'Твой шанс');
     var tk = $('gTalk');                          // кнопка чата — теперь иконка, подпись только для скринридера
     if (tk) tk.setAttribute('aria-label', TR('chatBtn', 'Чат'));
+    var sb2 = $('gScoresBtn');
+    if (sb2) sb2.setAttribute('aria-label', TR('raceScoresTitle', 'Scores'));
+    var st2 = $('gScoresTitle');
+    if (st2) st2.textContent = TR('raceScoresTitle', 'Scores');
     paintSoundBtn();
   }
   window.addEventListener('bf-lang', refreshGameLabels);
@@ -289,6 +316,23 @@
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  // ---------- табличка очков забега (Race), левый верхний угол ----------
+  var scoresBtn = $('gScoresBtn'), scoresPanel = $('gScoresPanel');
+  if (scoresBtn) scoresBtn.addEventListener('click', function () {
+    scoresPanel.classList.toggle('on');
+  });
+  function renderRaceScores(list) {
+    if (!scoresPanel) return;
+    var box = $('gScoresList');
+    box.innerHTML = (list && list.length)
+      ? list.map(function (r) {
+          var mine = r.name === me.name;
+          return '<div class="gScoreRow' + (mine ? ' me' : '') + '">'
+            + '<span class="gScoreN">' + esc(r.name) + '</span><b>' + (r.score || 0) + '</b></div>';
+        }).join('')
+      : '<div id="gScoresEmpty">' + TR('topScoresEmpty', 'No scores yet') + '</div>';
+  }
 
   // системные сообщения — короткой плашкой, история не хранится
   function log(html) {
@@ -727,6 +771,8 @@
 
     connect();
 
+    if (MODE === 'race' && scoresBtn) scoresBtn.style.display = 'flex';
+
     if (MODE === 'hideAndSeek') {
       /* Раньше тут висел свой баннер «роли распределятся через 30 секунд» —
          неверный, если в итоге играть не с кем, и всё равно почти сразу
@@ -1095,6 +1141,10 @@
       if (!d || !(d.amount > 0)) return;
       log(TR('coinsGain', '+{n} coins ({t} in total)').replace('{n}', d.amount).replace('{t}', d.coins));
     });
+
+    // табличка очков забега: сервер шлёт полный снимок комнаты при входе,
+    // выходе и каждом финише — просто перерисовываем
+    socket.on('raceScores', function (list) { renderRaceScores(list); });
   }
 
   // ---------- отправка позиции и ловля ----------

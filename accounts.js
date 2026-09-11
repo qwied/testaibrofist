@@ -255,17 +255,65 @@ function creditCoins(name, amount) {
   return n;
 }
 
-// суммы очков за окно времени, топ N игроков
-function topScores(sinceMs, limit) {
-  const since = Date.now() - sinceMs;
+// суммы по журналу (coinLog/scoreLog) за окно времени — общий счётчик для
+// «лучшие сегодня/за неделю» и для таблицы лидеров, sinceMs=0 — весь журнал
+function sumLog(log, sinceMs) {
+  const since = sinceMs ? Date.now() - sinceMs : 0;
   const sums = new Map();
-  coinLog.forEach(e => {
-    if (e.at < since) return;
+  log.forEach(e => {
+    if (sinceMs && e.at < since) return;
     sums.set(e.name, (sums.get(e.name) || 0) + e.amount);
   });
   return Array.from(sums, ([name, amount]) => ({ name, amount }))
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, limit || 5);
+    .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
+}
+// сумма одного игрока по журналу за окно — для профиля (монеты/очки за день/неделю)
+function sumOne(log, name, sinceMs) {
+  const since = Date.now() - sinceMs;
+  const k = key(name);
+  let sum = 0;
+  log.forEach(e => { if (e.at >= since && key(e.name) === k) sum += e.amount; });
+  return sum;
+}
+/* Журнал очков забега (Race) — тем же приёмом, что и coinLog: не часть
+   баланса, только для витрин «день/неделя» и живой таблички в самой
+   гонке. Всё время (all-time) хранится отдельно, в u.score — журнал
+   не бессрочный (см. SCORELOG_KEEP). */
+const SCORELOG_FILE = path.join(DATA_DIR, 'scorelog.json');
+const SCORELOG_KEEP = COINLOG_KEEP;
+let scoreLog = [];
+function loadScoreLog() {
+  try {
+    if (fs.existsSync(SCORELOG_FILE)) scoreLog = JSON.parse(fs.readFileSync(SCORELOG_FILE, 'utf8'));
+  } catch (e) { console.log('scorelog.json не прочитан'); }
+  if (!Array.isArray(scoreLog)) scoreLog = [];
+}
+let scoreLogSaveTimer = null;
+function saveScoreLog() {
+  clearTimeout(scoreLogSaveTimer);
+  scoreLogSaveTimer = setTimeout(() => {
+    try {
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.writeFileSync(SCORELOG_FILE, JSON.stringify(scoreLog, null, 2));
+    } catch (e) { console.log('не смог сохранить scorelog.json:', e.message); }
+  }, 300);
+}
+loadScoreLog();
+
+/* Очки Race начисляет только сервер — по времени финиша (см. raceFinish
+   в server.js), не по заявке клиента. В отличие от монет, часового лимита
+   нет: это игровой счёт, а не разменная валюта, крутить нечего. */
+function creditScore(name, amount) {
+  const u = db.users[key(name)];
+  if (!u || !(amount > 0)) return 0;
+  u.score = (u.score || 0) + amount;
+  save();
+
+  const now = Date.now();
+  scoreLog.push({ name: u.name, amount: amount, at: now });
+  if (scoreLog.length % 200 === 0) scoreLog = scoreLog.filter(e => now - e.at < SCORELOG_KEEP);
+  saveScoreLog();
+  return amount;
 }
 
 function publicUser(u) {
@@ -407,15 +455,14 @@ function register(app) {
   });
   app.get('/getCoins', (req, res) => {
     const u = db.users[key(req.query.name)];
-    res.json(u ? u.coins : 0);
-  });
-  // витрина «лучшие сегодня / за неделю» на главной — очки за Race и
-  // Hide and Seek, заработанные за последние 24 часа/7 дней (скользящее
-  // окно, не привязано к календарному дню/неделе — часовые пояса разные)
-  app.get('/getTopScores', (req, res) => {
+    if (!u) return res.json({ coins: 0, coinsDay: 0, coinsWeek: 0, score: 0, scoreDay: 0, scoreWeek: 0 });
     res.json({
-      today: topScores(24 * 60 * 60 * 1000, 5),
-      week: topScores(7 * 24 * 60 * 60 * 1000, 5)
+      coins: u.coins || 0,
+      coinsDay: sumOne(coinLog, u.name, 24 * 60 * 60 * 1000),
+      coinsWeek: sumOne(coinLog, u.name, 7 * 24 * 60 * 60 * 1000),
+      score: u.score || 0,
+      scoreDay: sumOne(scoreLog, u.name, 24 * 60 * 60 * 1000),
+      scoreWeek: sumOne(scoreLog, u.name, 7 * 24 * 60 * 60 * 1000)
     });
   });
   app.get('/getAboutMe', (req, res) => {
@@ -585,4 +632,4 @@ function register(app) {
   app.get('/captcha/getCaptcha', (req, res) => res.json({}));
 }
 
-module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, clientIp, creditCoins };
+module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, clientIp, creditCoins, creditScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, paginate };
