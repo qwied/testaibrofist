@@ -208,6 +208,32 @@ function newSession(res, name, req) {
    было бы накрутить кап Race, кап поимок и кап побед по отдельности. */
 const COIN_WINDOW = 60 * 60 * 1000;   // час
 const COIN_MAX = 120;                 // максимум монет из игры за час
+
+/* Журнал заработка — отдельно от users.json: только для витрины
+   «лучшие сегодня / за неделю» на главной странице, не связан с самим
+   балансом. Храним только последние 8 дней, этого хватает на неделю
+   с запасом на часовые пояса. */
+const COINLOG_FILE = path.join(DATA_DIR, 'coinlog.json');
+const COINLOG_KEEP = 8 * 24 * 60 * 60 * 1000;
+let coinLog = [];
+function loadCoinLog() {
+  try {
+    if (fs.existsSync(COINLOG_FILE)) coinLog = JSON.parse(fs.readFileSync(COINLOG_FILE, 'utf8'));
+  } catch (e) { console.log('coinlog.json не прочитан'); }
+  if (!Array.isArray(coinLog)) coinLog = [];
+}
+let coinLogSaveTimer = null;
+function saveCoinLog() {
+  clearTimeout(coinLogSaveTimer);
+  coinLogSaveTimer = setTimeout(() => {
+    try {
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.writeFileSync(COINLOG_FILE, JSON.stringify(coinLog, null, 2));
+    } catch (e) { console.log('не смог сохранить coinlog.json:', e.message); }
+  }, 300);
+}
+loadCoinLog();
+
 function creditCoins(name, amount) {
   const u = db.users[key(name)];
   if (!u || !(amount > 0)) return 0;
@@ -220,7 +246,26 @@ function creditCoins(name, amount) {
   u.coinSum = (u.coinSum || 0) + n;
   u.coins = (u.coins || 0) + n;
   save();
+
+  const now = Date.now();
+  coinLog.push({ name: u.name, amount: n, at: now });
+  // старое обрезаем не каждый раз — только когда список ощутимо разросся
+  if (coinLog.length % 200 === 0) coinLog = coinLog.filter(e => now - e.at < COINLOG_KEEP);
+  saveCoinLog();
   return n;
+}
+
+// суммы очков за окно времени, топ N игроков
+function topScores(sinceMs, limit) {
+  const since = Date.now() - sinceMs;
+  const sums = new Map();
+  coinLog.forEach(e => {
+    if (e.at < since) return;
+    sums.set(e.name, (sums.get(e.name) || 0) + e.amount);
+  });
+  return Array.from(sums, ([name, amount]) => ({ name, amount }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, limit || 5);
 }
 
 function publicUser(u) {
@@ -363,6 +408,15 @@ function register(app) {
   app.get('/getCoins', (req, res) => {
     const u = db.users[key(req.query.name)];
     res.json(u ? u.coins : 0);
+  });
+  // витрина «лучшие сегодня / за неделю» на главной — очки за Race и
+  // Hide and Seek, заработанные за последние 24 часа/7 дней (скользящее
+  // окно, не привязано к календарному дню/неделе — часовые пояса разные)
+  app.get('/getTopScores', (req, res) => {
+    res.json({
+      today: topScores(24 * 60 * 60 * 1000, 5),
+      week: topScores(7 * 24 * 60 * 60 * 1000, 5)
+    });
   });
   app.get('/getAboutMe', (req, res) => {
     const u = db.users[key(req.query.name)];
