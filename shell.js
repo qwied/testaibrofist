@@ -66,13 +66,15 @@
       if (l.href.toLowerCase() === here) a.className = 'on';
       return a;
     }
+    // на своей странице подпункта кнопка показывает его название
+    // (напр. «Skin Editor» вместо «Map Editor»), а не название группы
+    var activeSub = l.sub.find(function (s) { return s.href.toLowerCase() === here; });
+    var labelSrc = activeSub || l;
     var trig = el('button');
     trig.type = 'button';
-    trig.textContent = l.txt;
-    if (l.key) trig.setAttribute('data-i18n', l.key);
-    var active = l.href.toLowerCase() === here ||
-      l.sub.some(function (s) { return s.href.toLowerCase() === here; });
-    if (active) trig.className = 'on';
+    trig.textContent = labelSrc.txt;
+    if (labelSrc.key) trig.setAttribute('data-i18n', labelSrc.key);
+    if (l.href.toLowerCase() === here || activeSub) trig.className = 'on';
 
     var drop = el('div', 'bfDrop bfNavDrop');
     l.sub.forEach(function (s) {

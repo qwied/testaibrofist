@@ -108,7 +108,7 @@
   }
 
   function card(s) {
-    var art = window.BFSkin ? BFSkin.render({ img: s.img }, {}, { height: 150 }) : '';
+    var art = window.BFSkin ? BFSkin.render({ img: s.img, kind: s.kind }, {}, { height: 150 }) : '';
     var h = '<div class="sbCard" data-id="' + s.id + '">'
       + '<div class="sbArt">' + art + '</div>'
       + (s.inAvatar ? '<div class="sbTag">Avatar · ' + s.price + ' ' + BFCoin.svg(14) + '</div>' : '')

@@ -258,9 +258,7 @@
       var list = d.skins || [];
       if (!list.length) { box.innerHTML = '<div class="bfHint">' + T('noSkins', 'Скинов нет') + '</div>'; return; }
       box.innerHTML = '<div class="upGrid">' + list.map(function (s) {
-        var art = s.img
-          ? '<img src="' + esc(s.img) + '" alt="" style="height:132px;object-fit:contain">'
-          : (window.BFSkin ? BFSkin.svg(s.skin, byId, { height: 132 }) : '');
+        var art = window.BFSkin ? BFSkin.render({ img: s.img, kind: s.kind }, byId, { height: 132 }) : '';
         return '<div class="upSkin"><div class="art">' + art + '</div>'
           + '<div class="nm">' + esc(s.skinName) + '</div>'
           + '<div class="rt ' + (s.rating > 0 ? 'pos' : (s.rating < 0 ? 'neg' : '')) + '">' + s.rating + '</div></div>';

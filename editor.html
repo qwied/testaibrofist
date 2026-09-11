@@ -355,22 +355,23 @@ function skinImage(src){
 
 function figure(w,h,col,accent,skin){
   var d = w, top = d + h*FIG_GAP, bodyH = Math.max(0, h - top);
-  // скин-картинка от владельца заменяет фигуру целиком
-  if(skin && skin.img){
-    var pic = skinImage(skin.img);
-    if(pic){
-      var k = Math.min(w/pic.naturalWidth, h/pic.naturalHeight);
-      var pw = pic.naturalWidth*k, ph = pic.naturalHeight*k;
-      ctx.drawImage(pic, (w-pw)/2, h-ph, pw, ph);
-      return;
-    }
-    // пока картинка грузится — рисуем обычный силуэт
+  var pic = (skin && skin.img) ? skinImage(skin.img) : null;
+  // готовая картинка от владельца (kind !== 'accessory') по-прежнему
+  // заменяет фигуру целиком; пока грузится — рисуем обычный силуэт
+  if(pic && skin.kind !== 'accessory'){
+    var k = Math.min(w/pic.naturalWidth, h/pic.naturalHeight);
+    var pw = pic.naturalWidth*k, ph = pic.naturalHeight*k;
+    ctx.drawImage(pic, (w-pw)/2, h-ph, pw, ph);
+    return;
   }
   // «за спиной» уходит под силуэт
   if(skin && window.BFSkinCanvas) BFSkinCanvas.behind(ctx, w, h, skin);
   ctx.fillStyle = col;
   ctx.beginPath(); ctx.arc(w/2, d/2, d/2, 0, 6.2832); ctx.fill();
   if(bodyH > 0){ rr(0, top, w, bodyH, Math.min(w*0.22, bodyH/2)); ctx.fill(); }
+  // рисунок из Skin Editor (kind === 'accessory') — аксессуары поверх
+  // фигуры; цвет тела остаётся игровым, рисунок его не перекрывает
+  if(pic && skin.kind === 'accessory') ctx.drawImage(pic, 0, 0, w, h);
   // одежда, лицо и головной убор — поверх
   if(skin && window.BFSkinCanvas) BFSkinCanvas.front(ctx, w, h, skin);
 }

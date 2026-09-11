@@ -69,10 +69,10 @@
     myTab: "My items",
     preview: "Preview",
 
-    skinSub: "Draw your character pixel by pixel. Free for everyone.",
+    skinSub: "Draw accessories for your character — the body color is set by the game.",
     skinsSub: "Player-made skins. Rate the ones you like — the owner picks the best for Avatar.",
     avatarSub: "Buy skins picked by the owner from Skins Browser. Want to make your own? Skin Editor is free.",
-    skinFreeTag: "✓ Free for everyone",
+    skinBodyHint: "The greyed-out silhouette is fixed — draw hats, masks and other extras around it.",
     skinMirrorHint: "Left/right mirror is on by default — turn it off with the ⇋ button.",
     skinCustomColor: "Custom color",
     skinWear: "Wear it",

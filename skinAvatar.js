@@ -14,7 +14,13 @@
      что за скин. Вписывание делает object-fit: contain. Своей картинки
      нет — рисуем обычную пустую фигуру (её же рисует и сама игра). */
   function dataUri(skin) {
-    if (skin && skin.img) return skin.img;
+    // готовая картинка от владельца (kind !== 'accessory') можно отдать
+    // прямой ссылкой. Рисунок из Skin Editor (kind === 'accessory') —
+    // это аксессуары поверх фигуры, а не сама картинка целиком: во
+    // избежание пустой/съехавшей иконки такие маленькие значки просто
+    // показывают обычную фигуру (сам рисунок виден на полной карточке
+    // скина — там он идёт через BFSkin.render(), а не через data-URI).
+    if (skin && skin.img && skin.kind !== 'accessory') return skin.img;
     if (!window.BFSkin) return null;
     var svg = window.BFSkin.svg({}, {}, { height: 300 });
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -26,7 +32,7 @@
      сломанной. Теперь у такого элемента создаётся <img class="bfAva">,
      а остальное содержимое убирается. */
   function paint(el, skin) {
-    var uri = (skin && skin.img) ? skin.img : dataUri(skin);
+    var uri = (skin && skin.img && skin.kind !== 'accessory') ? skin.img : dataUri(skin);
     if (!uri) return;
 
     var img = el;

@@ -66,8 +66,9 @@
 
   function svg(skin, byId, opt) {
     opt = opt || {};
-    // скин-картинка: рисуем её вместо фигуры
-    if (skin && skin.img) {
+    // готовая картинка от владельца (kind !== 'accessory') по-прежнему
+    // заменяет фигуру целиком — такое добавляют вручную в Skins Browser
+    if (skin && skin.img && skin.kind !== 'accessory') {
       var ih = opt.height || 260;
       var iw = opt.width || Math.round(ih * 0.55);
       return '<svg viewBox="0 0 100 182" width="' + iw + '" height="' + ih + '" ' +
@@ -84,6 +85,15 @@
              '" rx="' + BODY_RX + '"/></g>');
     out.push(p.body.map(shape).join(''));
     out.push(p.head.map(shape).join(''));
+
+    // рисунок из Skin Editor (kind === 'accessory'): аксессуары поверх
+    // силуэта — тело редактор рисовать не даёт, поэтому оно остаётся
+    // цвета игры. Встраиваем в тот же SVG, чтобы рисунок никогда не
+    // съезжал относительно фигуры при любой высоте/обрезке карточки.
+    if (skin && skin.img && skin.kind === 'accessory') {
+      out.push('<image href="' + esc(skin.img) + '" xlink:href="' + esc(skin.img) + '"' +
+               ' x="0" y="0" width="' + W + '" height="' + H + '" preserveAspectRatio="none"/>');
+    }
 
     // Рамка с запасом: детали выходят за фигуру — шляпы вверх, плащи и
     // крылья вбок, скейтборд вниз. Витрина магазина просит рамку поуже
@@ -116,13 +126,17 @@
       crop: { x: x0 - m, y: y0 - m, w: (x1 - x0) + m * 2, h: (y1 - y0) + m * 2 } });
   }
 
-  /* Скин может быть не набором деталей, а готовой картинкой — такие
-     добавляет владелец сайта. Внешняя ссылка внутри data-URI SVG не
-     загрузится (это изолированный контекст), поэтому отдаём обычный <img>. */
+  /* Скин может быть не набором деталей, а готовой картинкой. Владелец
+     иногда добавляет такую целиком вручную (kind !== 'accessory') — для
+     неё внешняя ссылка внутри data-URI SVG не загрузится (это
+     изолированный контекст), поэтому отдаём обычный <img>. Рисунок же из
+     Skin Editor (kind === 'accessory') — это аксессуары поверх обычной
+     фигуры, а не замена, поэтому он идёт через svg() как обычно: там
+     рисунок встроен в тот же SVG, что и силуэт. */
   function render(skin, byId, opt) {
     opt = opt || {};
     var img = skin && skin.img;
-    if (!img) return svg(skin, byId, opt);
+    if (!img || skin.kind === 'accessory') return svg(skin, byId, opt);
     var h = opt.height || 260;
     return '<img src="' + esc(img) + '" alt="" ' +
            'style="height:' + h + 'px;width:auto;max-width:100%;object-fit:contain;display:block;' +
