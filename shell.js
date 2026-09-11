@@ -24,9 +24,6 @@
   // в верхней панели или доступные через выпадающий выбор Map Editor /
   // Maps Browser, сюда не дублируются)
   var MENU = [
-    { key: 'hideAndSeek', href: 'hide-and-seek.html',  txt: 'Hide and Seek' },
-    { key: 'race',        href: 'race.html',           txt: 'Race' },
-    { sep: true },
     { key: 'themes',      href: 'themes.html',         txt: 'Темы' },
     { txt: 'Telegram', href: 'https://t.me/aibrofist', ext: true },
     { txt: 'Discord', href: 'https://discord.gg/Rah4FvcXDw', ext: true }
