@@ -420,9 +420,12 @@ function register(app, acc) {
     let out = list.filter(isPublic);
     if (author) out = out.filter(s => low(s.author).indexOf(author) !== -1);
     if (nameQ) out = out.filter(s => low(s.skinName).indexOf(nameQ) !== -1);
-    out.sort((a, b) => sortBy === 'rating'
-      ? (tally(b).rating - tally(a).rating) || (b.date - a.date)
-      : b.date - a.date);
+    out.sort((a, b) => {
+      if (sortBy === 'rating') return (tally(b).rating - tally(a).rating) || (b.date - a.date);
+      if (sortBy === 'dislikes') return (tally(b).dislikes - tally(a).dislikes) || (b.date - a.date);
+      if (sortBy === 'oldest') return a.date - b.date;
+      return b.date - a.date;
+    });
 
     const total = Math.max(1, Math.ceil(out.length / per));
     res.json({

@@ -270,9 +270,12 @@ function register(app, getUser, acc) {
     if (mapType) out = out.filter(m => m.mapType === mapType);
     if (author) out = out.filter(m => low(m.author).indexOf(author) !== -1);
 
-    out.sort((a, b) => sortBy === 'rating'
-      ? (b.rating - a.rating) || (b.date - a.date)
-      : b.date - a.date);
+    out.sort((a, b) => {
+      if (sortBy === 'rating') return (b.rating - a.rating) || (b.date - a.date);
+      if (sortBy === 'dislikes') return (tally(b).dislikes - tally(a).dislikes) || (b.date - a.date);
+      if (sortBy === 'oldest') return a.date - b.date;
+      return b.date - a.date;
+    });
 
     const slice = out.slice((page - 1) * per, page * per).map(m => {
       const t = tally(m);

@@ -161,6 +161,8 @@
     noMaps: "No maps found",
     sortDate: "Sort by date",
     sortRating: "Sort by rating",
+    sortDislikes: "Sort by dislikes",
+    sortOldest: "Sort by oldest",
     modeAll: "Mode: All",
 
     mapsSub: "Player maps. Open them, play and rate.",
