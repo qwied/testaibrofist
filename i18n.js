@@ -75,9 +75,9 @@
     avatarSub: "Buy skins picked by the owner from Skins Browser. Want to make your own? Skin Editor is free.",
     skinWearHint: "Publishing sends it to Skins Browser for rating — you (and everyone else) can wear it once the owner adds it to Avatar.",
     skinReqTitle: "Requirements",
-    skinReqText: "PNG or JPEG only. We resize large photos automatically — final image between " +
-                 "48×48 and 2000×2000 pixels, up to 6 MB. Uploads are screened automatically; explicit or " +
-                 "graphic images are blocked and never published.",
+    skinReqText: "PNG, JPEG or GIF (animated GIFs play in-game). We resize large photos automatically — " +
+                 "final image between 48×48 and 2000×2000 pixels (GIF: up to 600×600, 50 frames), up to 6 MB. " +
+                 "Uploads are screened automatically; explicit or graphic images are blocked and never published.",
     skinChooseFile: "Choose an image",
     skinDropHint: "or drag and drop it here",
     skinNamePlaceholder: "Skin name (2–30 characters)",
@@ -85,8 +85,9 @@
     skinTodayLeft: "New skins left today",
     skinTotalLeft: "Total skin slots left",
     skinEmpty: "Choose an image first",
-    skinFormatBad: "Please choose a PNG or JPEG image",
+    skinFormatBad: "Please choose a PNG, JPEG or GIF image",
     skinTooBig: "That file is too large",
+    skinGifTooBig: "GIF is too large — at most 600×600 pixels",
     openSkinEditor: "Open Skin Editor (free)",
     openSkinsBrowser2: "Open Skins Browser",
     tabWear: "Outfits",

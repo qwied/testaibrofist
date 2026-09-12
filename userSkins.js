@@ -20,7 +20,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
 const dns = require('dns').promises;
-const { decodeImage, scanForBlockedContent, MIN_DIM, MAX_DIM } = require('./imgModeration.js');
+const { decodeImage, scanForBlockedContent, MIN_DIM, MAX_DIM, MAX_GIF_DIM, MAX_GIF_FRAMES } = require('./imgModeration.js');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const FILE = path.join(DATA_DIR, 'userskins.json');
@@ -29,16 +29,22 @@ const MINE_LIMIT = 20;      // сколько своих образов можн
 const SKIN_DAILY_LIMIT = 5; // сколько НОВЫХ скинов можно опубликовать за сутки
 const IMG_DIR = path.join(DATA_DIR, 'skinimg');
 const IMG_MAX = 6 * 1024 * 1024;   // 6 МБ — с запасом под фото с телефона
-/* SVG не принимаем нигде: внутри него может лежать скрипт. GIF/WEBP —
-   тоже нет, но только для игроков (см. PLAYER_IMG_TYPES ниже): их
-   декодер (imgModeration.js) не умеет разбирать, а без разбора по
-   пикселям нечего было бы прогонять через автомодерацию. У владельца
-   (/owner/publishImageSkin) её нет и не нужна — там шире, весь IMG_TYPES. */
+/* SVG не принимаем нигде: внутри него может лежать скрипт. WEBP — тоже
+   нет, но только для игроков (см. PLAYER_IMG_TYPES ниже): его декодер
+   (imgModeration.js) не умеет разбирать, а без разбора по пикселям
+   нечего было бы прогонять через автомодерацию. GIF же декодировать
+   умеет (см. imgModeration.js — там свои, более строгие пределы
+   разрешения и числа кадров: разворачивать все кадры анимации в память
+   для проверки куда затратнее одной картинки). У владельца
+   (/owner/publishImageSkin) автомодерации нет и не нужна — там шире,
+   весь IMG_TYPES. */
 const IMG_TYPES = {
   'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg',
   'image/gif': 'gif', 'image/webp': 'webp'
 };
-const PLAYER_IMG_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg' };
+const PLAYER_IMG_TYPES = {
+  'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/gif': 'gif'
+};
 
 /* Тот же приём, что и в maps.js (публикация карт): считаем не по списку
    скинов, а по счётчику в аккаунте — иначе лимит обходился бы публикацией
@@ -269,15 +275,17 @@ function register(app, acc) {
   });
 
   // ---------- выложить загруженную картинку в Skins Browser ----------
-  /* Публикация открыта всем: загруженная картинка идёт на оценку в Skins
-     Browser. Владелец решает, что достойно попасть в Avatar за монеты
-     (см. /owner/skinToAvatar). Перед сохранением на диск картинка (1)
+  /* Публикация открыта всем: загруженная картинка (или GIF — тогда ещё и
+     анимированная, см. gifPlayer.js) идёт на оценку в Skins Browser.
+     Владелец решает, что достойно попасть в Avatar за монеты (см.
+     /owner/skinToAvatar). Перед сохранением на диск картинка (1)
      проверяется по счётчикам (сколько всего своих скинов и сколько
      опубликовано за сутки — см. SKIN_DAILY_LIMIT), (2) реально
-     декодируется и проверяется на разрешение, (3) прогоняется через
-     эвристическую автомодерацию (imgModeration.js) — если что-то из
-     этого не пройдёт, на диск ничего не попадает вовсе. */
-  app.post('/skins/publish', (req, res) => {
+     декодируется и проверяется на разрешение (у GIF — ещё и на число
+     кадров), (3) прогоняется через нейросеть + эвристику на кровь
+     (imgModeration.js, все кадры для GIF) — если что-то из этого не
+     пройдёт, на диск ничего не попадает вовсе. */
+  app.post('/skins/publish', async (req, res) => {
     const u = currentUser(req);
     if (!u) return res.json({ status: 'error', message: 'Sign in first' });
 
@@ -307,7 +315,7 @@ function register(app, acc) {
       });
     }
 
-    // только реальные PNG/JPEG — это единственные форматы, которые умеет
+    // только реальные PNG/JPEG/GIF — единственные форматы, которые умеет
     // разобрать imgModeration.js; без разбора по пикселям автомодерации
     // было бы нечего проверять
     const got = fromDataUrl(raw, PLAYER_IMG_TYPES);
@@ -320,18 +328,32 @@ function register(app, acc) {
     const decoded = decodeImage(got.buf, got.ext);
     if (!decoded)
       return res.json({ status: 'error',
-                        message: 'Could not read this image — please upload a plain PNG or JPEG photo' });
+                        message: 'Could not read this image — please upload a plain PNG, JPEG or GIF' });
+    const isGif = got.ext === 'gif';
+    const maxDim = isGif ? MAX_GIF_DIM : MAX_DIM;
     if (decoded.width < MIN_DIM || decoded.height < MIN_DIM)
       return res.json({ status: 'error',
                         message: 'Image is too small — at least ' + MIN_DIM + '×' + MIN_DIM + ' pixels required' });
-    if (decoded.width > MAX_DIM || decoded.height > MAX_DIM)
+    if (decoded.width > maxDim || decoded.height > maxDim)
       return res.json({ status: 'error',
-                        message: 'Image is too large — at most ' + MAX_DIM + '×' + MAX_DIM + ' pixels allowed' });
+                        message: (isGif ? 'GIF' : 'Image') + ' is too large — at most ' +
+                                 maxDim + '×' + maxDim + ' pixels allowed' });
+    if (decoded.tooManyFrames)
+      return res.json({ status: 'error',
+                        message: 'GIF has too many frames — at most ' + MAX_GIF_FRAMES + ' allowed' });
+    if (!decoded.frames)
+      return res.json({ status: 'error', message: 'Could not read this image' });
 
-    const flagged = scanForBlockedContent(decoded);
+    let flagged;
+    try { flagged = await scanForBlockedContent(decoded); }
+    catch (e) {
+      console.log('[skin-moderation] проверка недоступна:', e.message);
+      return res.json({ status: 'error',
+                        message: 'Content moderation is temporarily unavailable — please try again in a bit' });
+    }
     if (flagged) {
       console.log('[skin-moderation] blocked upload from', u.name, '- reason:', flagged.reason,
-                  'ratio:', flagged.ratio.toFixed(2));
+                  flagged.ratio !== undefined ? 'ratio: ' + flagged.ratio.toFixed(2) : JSON.stringify(flagged.classes));
       return res.json({
         status: 'error',
         message: 'This image was blocked by automatic content moderation (looks like it may contain explicit ' +
