@@ -1994,10 +1994,18 @@ cv.addEventListener("wheel", function(e){
 var pinch = null;
 function tD(a,b){ var x = a.clientX-b.clientX, y = a.clientY-b.clientY; return Math.sqrt(x*x+y*y); }
 function tM(a,b){ return cPt((a.clientX+b.clientX)/2, (a.clientY+b.clientY)/2); }
+/* Два пальца работают даже во время тестового прохождения (playing) —
+   раньше все touch-обработчики выходили по playing самой первой строкой,
+   и колесо мыши масштаб во время игры уже умело менять (см. комментарий
+   выше), а тем же самым жестом с телефона — нет. Обычный однопальцевый
+   тач ниже по-прежнему выключен во время игры: он там означал бы
+   «строить»/«выделять», а не «идти» — движением занят экранный джойстик.
+   Свободную протяжку двумя пальцами (панораму) во время игры тоже не
+   трогаем — камера сама следит за игроком, так же, как и при зуме колесом. */
 cv.addEventListener("touchstart", function(e){
-  if(playing) return;
   if(e.touches.length === 2){ drag = null; var m = tM(e.touches[0],e.touches[1]);
     pinch = {d:tD(e.touches[0],e.touches[1]), x:m.x, y:m.y}; e.preventDefault(); return; }
+  if(playing) return;
   if(e.touches.length !== 1) return;
   var c = cPt(e.touches[0].clientX, e.touches[0].clientY), p = toWorld(c.x,c.y);
   if(wantPan(p.x, p.y)){
@@ -2007,13 +2015,13 @@ cv.addEventListener("touchstart", function(e){
   down(p.x,p.y); e.preventDefault();
 }, {passive:false});
 cv.addEventListener("touchmove", function(e){
-  if(playing) return;
   if(e.touches.length === 2 && pinch){
     var d = tD(e.touches[0],e.touches[1]), m = tM(e.touches[0],e.touches[1]);
     if(pinch.d > 0) zoomAt(m.x,m.y,d/pinch.d);
-    view.x += m.x-pinch.x; view.y += m.y-pinch.y;
+    if(!playing){ view.x += m.x-pinch.x; view.y += m.y-pinch.y; }
     pinch.d = d; pinch.x = m.x; pinch.y = m.y; e.preventDefault(); return;
   }
+  if(playing) return;
   if(e.touches.length !== 1 || pinch) return;
   var c = cPt(e.touches[0].clientX, e.touches[0].clientY);
   if(pan){
@@ -2025,9 +2033,9 @@ cv.addEventListener("touchmove", function(e){
   move(p.x,p.y); e.preventDefault();
 }, {passive:false});
 cv.addEventListener("touchend", function(e){
+  if(e.touches.length === 0) pinch = null;
   if(playing) return;
   if(e.touches.length === 0){
-    pinch = null;
     if(pan){ pan = null; cv.style.cursor = tool === "hand" ? "grab" : "default"; }
     else up();
   }
