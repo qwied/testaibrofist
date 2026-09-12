@@ -138,7 +138,6 @@
        + '<div class="bf-t">' + T('settings', 'Настройки') + '</div>'
        + '<div style="text-align:center;font-size:13px;color:#6b7280;margin-bottom:4px">' + name + '</div>'
        + '<div class="bf-b" id="bfProfile">' + T('viewProfile', 'Мой профиль') + '</div>'
-       + '<div class="bf-b" id="bfSkin">' + T('avatar', 'Аватар') + '</div>'
        + '<div class="bf-b" id="bfPassBtn">' + T('changePass', 'Сменить пароль') + '</div>'
        + '<div id="bfPassBox" style="display:none">'
        +   '<input class="bf-i" id="bfOldPass" type="password" placeholder="' + T('curPass', 'Текущий пароль') + '">'
@@ -156,8 +155,6 @@
     box.querySelector('#bfProfile').onclick = function () {
       location.href = BASE + 'users.html?name=' + encodeURIComponent(name);
     };
-    box.querySelector('#bfSkin').onclick = function () { location.href = BASE + 'avatar.html'; };
-
     var passBox = box.querySelector('#bfPassBox');
     var passErr = box.querySelector('#bfPassErr');
     box.querySelector('#bfPassBtn').onclick = function () {

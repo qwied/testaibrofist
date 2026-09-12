@@ -131,7 +131,7 @@
   var $ = function (id) { return document.getElementById(id); };
 
   var who = decodeURIComponent((location.search.match(/[?&]name=([^&]*)/) || [, ''])[1] || '');
-  var me = null, tab = 'friends', byId = {}, isMe = false;
+  var me = null, tab = 'friends', isMe = false;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -222,7 +222,6 @@
       +   (isMe ? '<div class="bfTab" data-tab="requests">' + T('requestsTxt', 'Заявки') + '</div>'
                 + '<div class="bfTab" data-tab="pending">' + T('pendingTxt', 'Отправленные') + '</div>' : '')
       +   '<div class="bfTab" data-tab="maps">' + T('mapsTxt', 'Карты') + '</div>'
-      +   '<div class="bfTab" data-tab="skins">' + T('skinsTxt', 'Скины') + '</div>'
       + '</div>'
       + '<div id="upTabBody"></div>';
   }
@@ -279,28 +278,12 @@
     }).catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
   }
 
-  function drawSkins() {
-    var box = $('upTabBody');
-    box.innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
-    get('/userSkins?name=' + encodeURIComponent(who)).then(function (d) {
-      var list = d.skins || [];
-      if (!list.length) { box.innerHTML = '<div class="bfHint">' + T('noSkins', 'Скинов нет') + '</div>'; return; }
-      box.innerHTML = '<div class="upGrid">' + list.map(function (s) {
-        var art = window.BFSkin ? BFSkin.render({ img: s.img, kind: s.kind }, byId, { height: 132 }) : '';
-        return '<div class="upSkin"><div class="art">' + art + '</div>'
-          + '<div class="nm">' + esc(s.skinName) + '</div>'
-          + '<div class="rt ' + (s.rating > 0 ? 'pos' : (s.rating < 0 ? 'neg' : '')) + '">' + s.rating + '</div></div>';
-      }).join('') + '</div>';
-    }).catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
-  }
-
   function showTab(t) {
     tab = t;
     Array.prototype.forEach.call(document.querySelectorAll('#upTabs .bfTab'), function (x) {
       x.classList.toggle('on', x.dataset.tab === t);
     });
     if (t === 'maps') drawMaps();
-    else if (t === 'skins') drawSkins();
     else drawFriends(t);
   }
 
