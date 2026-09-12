@@ -387,9 +387,19 @@ function figure(w,h,col,accent,skin){
   if((pic || (gifFrame && gifDims)) && !isAcc){
     var natW = gifFrame ? gifDims.width : pic.naturalWidth;
     var natH = gifFrame ? gifDims.height : pic.naturalHeight;
-    var k = Math.min(w/natW, h/natH);
+    /* Math.max (не min) — картинка заполняет весь хитбокс игрока, а не
+       вписывается в него с полями. Раньше при min() узкий (20x60)
+       хитбокс почти всегда ограничивал по ширине, и обычное фото (шире,
+       чем высокий хитбокс) утыкалось в неё и оставалось от силы
+       четверть высоты — фигура выглядела игрушечно маленькой рядом с
+       остальными игроками. Лишнее (то, что не влезло по другой стороне)
+       обрезаем клипом — иначе съезжало бы за пределы хитбокса. */
+    var k = Math.max(w/natW, h/natH);
     var pw = natW*k, ph = natH*k;
-    ctx.drawImage(gifFrame || pic, (w-pw)/2, h-ph, pw, ph);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
+    ctx.drawImage(gifFrame || pic, (w-pw)/2, (h-ph)/2, pw, ph);
+    ctx.restore();
     return;
   }
   // «за спиной» уходит под силуэт
