@@ -257,18 +257,25 @@ function register(app, getUser, acc) {
     });
   });
 
+  // "author::mapName" в нижнем регистре — тот же составной ключ, которым
+  // карта адресуется везде (у карт нет отдельного числового id)
+  const favKey = (author, mapName) => low(author) + '::' + low(mapName);
+
   // ---------- список карт для Maps Browser ----------
   function list(req, res) {
     const me = getUser(req);
+    const myFavs = me && Array.isArray(me.favoriteMaps) ? me.favoriteMaps : [];
     const mapType = String(req.query.mapType || '');
     const author = low(req.query.author || '');
     const sortBy = String(req.query.sortBy || 'date');
+    const favoritesOnly = req.query.favoritesOnly === '1';
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const per = 10;
 
     let out = maps.slice();
     if (mapType) out = out.filter(m => m.mapType === mapType);
     if (author) out = out.filter(m => low(m.author).indexOf(author) !== -1);
+    if (favoritesOnly) out = out.filter(m => myFavs.indexOf(favKey(m.author, m.mapName)) !== -1);
 
     out.sort((a, b) => {
       if (sortBy === 'rating') return (b.rating - a.rating) || (b.date - a.date);
@@ -285,6 +292,7 @@ function register(app, getUser, acc) {
         mapName: m.mapName, rating: t.rating, likes: t.likes, dislikes: t.dislikes,
         author: m.author, date: m.date, mapType: m.mapType,
         myVote: me ? ((m.votes || {})[low(me.name)] || 0) : 0,
+        myFavorite: myFavs.indexOf(favKey(m.author, m.mapName)) !== -1,
         inGameModes: Array.isArray(m.inGameModes) ? m.inGameModes : []
       };
     });
@@ -347,6 +355,25 @@ function register(app, getUser, acc) {
     save();
     res.json({ status: 'success', rating: t.rating, likes: t.likes, dislikes: t.dislikes,
                myVote: m.votes[low(u.name)] || 0 });
+  });
+
+  /* Избранное — личный список игрока, а не свойство карты (в отличие от
+     оценок): держим его на аккаунте (u.favoriteMaps), как friends/incoming/
+     outgoing в accounts.js, а не на самой карте — так «мои избранные»
+     не требует сканировать все карты в поиске своего имени. */
+  app.post('/mapFavorite', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const m = maps.find(x => low(x.author) === low(req.body.author) &&
+                             low(x.mapName) === low(req.body.mapName));
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+    const key = favKey(m.author, m.mapName);
+    u.favoriteMaps = Array.isArray(u.favoriteMaps) ? u.favoriteMaps : [];
+    const i = u.favoriteMaps.indexOf(key);
+    if (i !== -1) u.favoriteMaps.splice(i, 1);
+    else u.favoriteMaps.push(key);
+    if (acc && typeof acc.save === 'function') acc.save();
+    res.json({ status: 'success', myFavorite: i === -1 });
   });
 
   // ---------- удаление ----------
