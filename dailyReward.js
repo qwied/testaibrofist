@@ -124,7 +124,7 @@
         var wheel = document.getElementById('drWheel');
         wheel.style.transform = 'rotate(' + target + 'deg)';
         setTimeout(function () {
-          box.querySelector('#drWin').textContent = '+' + d.amount + ' 🪙';
+          box.querySelector('#drWin').innerHTML = '+' + d.amount + ' ' + (window.BFCoin ? BFCoin.svg(18) : '');
           setDot(false);
           if (window.BFShell) window.BFShell.refreshCoins(d.coins);
         }, 3300);

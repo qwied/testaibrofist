@@ -350,7 +350,7 @@ function register(app, getUser, acc) {
     m.votes = m.votes || {};
     // повторный клик по той же кнопке снимает оценку
     if (m.votes[low(u.name)] === v) delete m.votes[low(u.name)];
-    else m.votes[low(u.name)] = v;
+    else { m.votes[low(u.name)] = v; require('./quests.js').track(u.name, 'map_vote'); }
     const t = retally(m);
     save();
     res.json({ status: 'success', rating: t.rating, likes: t.likes, dislikes: t.dislikes,
