@@ -847,13 +847,12 @@ function drawParts(){
    прыжке игрок ощутимо «скользил по воздуху», как на льду. 0.85 держит
    тот же смысл (не рубить движение мёртвым тормозом ровно как на земле),
    но гасит скорость почти вдвое быстрее (~0.5 сек). */
-/* Прыжок поднимает на 168 px против прежних 122. На телефоне короткое
-   касание JUMP длится 3-5 кадров, а подъём — больше двадцати, поэтому
-   раньше тап давал всего ~80 px и до соседнего ряда полок (83-104 px)
-   игрок просто не долетал. Теперь тап берёт 133 px, зажатая кнопка — 161. */
+/* Прыжок всегда одной и той же высоты (152 px), не зависит от того,
+   тапнули JUMP или зажали — раньше короткое отпускание подрезало подъём,
+   и один и тот же прыжок получался то слабее, то сильнее в зависимости
+   от длительности нажатия, что игрок воспринимал как баг. */
 var JUMP_H = 152, MOVE_A = 0.9, MAX_VX = 5.2, FRIC = 0, AIR = 0.85,
-    COYOTE = 6, BUFFER = 7, WALL_SLIDE = 2.6, WALL_VX = 6.2, STEP_UP = 16,
-    MIN_HOLD = 7;   // столько кадров прыжок не подрезается, даже если кнопку отпустили
+    COYOTE = 6, BUFFER = 7, WALL_SLIDE = 2.6, WALL_VX = 6.2, STEP_UP = 16;
 function G(){ return gravityScale * 0.062; }          // 9 → 0.558 px/кадр²
 function jumpV(){ return -Math.sqrt(2 * Math.max(0.02, G()) * JUMP_H); }  // constant hop height
 /* Heavier gravity shortens airtime, so speed scales with it — otherwise a map
@@ -868,7 +867,7 @@ var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,self
   rideOn:null,
 };
 var keys = {l:false,r:false,u:false};
-var coy = 0, buf = 0, hold = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
+var coy = 0, buf = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
 var deaths = 0, timeMs = 0, shake = 0, acc = 0, last = 0, lastStepAt = -9999;
 
 /* Где игрок относительно воды: верхняя кромка, под водой ли голова
@@ -1305,16 +1304,11 @@ function step(){
       /* Карабканья по стенам нет: от стены не оттолкнуться и по ней
          не забраться. Остаётся только скольжение — см. WALL_SLIDE ниже. */
       if(coy > 0 || pl.ground){
-        pl.vy = jumpV(); buf = 0; coy = 0; hold = 0; pl.ground = false; pl.selfJump = true;
+        pl.vy = jumpV(); buf = 0; coy = 0; pl.ground = false; pl.selfJump = true;
         if(window.BFSound) BFSound.jump();
         puff(pl.x+pl.w/2, pl.y+pl.h, 5);
       }
     }
-    if(hold < 1000) hold++;
-    /* Низкий прыжок при раннем отпускании остаётся, но первые MIN_HOLD
-       кадров подъём не режется — иначе быстрый тап на телефоне превращался
-       в подскок вдвое ниже нормального прыжка. */
-    if(!keys.u && pl.vy < 0 && pl.selfJump && hold > MIN_HOLD) pl.vy += G()*0.5;
 
     pl.vy += G();
     // трение о стену — только в воздухе

@@ -55,8 +55,8 @@ ok('то же в игре',          /var spX = spanX\(P, pl\.y \+ 2, pl\.y \+ p
                                 !/<= 32\)/.test(game));
 ok('глубокий провал всё ещё ставит сверху', /pl\.y = sp\[0\] - pl\.h; pl\.ground = true; coy = COYOTE; pl\.vy = 0; pl\.selfJump = false;/.test(src) &&
                                 /pl\.y = sp\[0\] - pl\.h; pl\.ground = true; coy = COYOTE; pl\.vy = 0; pl\.selfJump = false;/.test(game));
-ok('прыжок не режется сразу', /MIN_HOLD = 7;/.test(src) && /JUMP_H = 152,/.test(src) &&
-                                /pl\.selfJump && hold > MIN_HOLD/.test(src));
+ok('прыжок одной силы всегда', /JUMP_H = 152,/.test(src) && !/MIN_HOLD/.test(src) &&
+                                !/pl\.vy \+= G\(\)\*0\.5/.test(src));
 ok('посадка по «откуда пришёл»', /var fromTop   = \(yBefore \+ pl\.h\) <= topWas \+ 2;/.test(src) &&
                                 /var yBefore = pl\.y;/.test(src));
 ok('удар головой по «откуда пришёл»', /pl\.vy < 0 && \(!o\.moves \|\| fromBelow\)/.test(src));
