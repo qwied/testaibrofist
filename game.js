@@ -11,7 +11,8 @@
   if (!GAME) return;
 
   var q      = new URLSearchParams(location.search);
-  var MODE   = q.get('mode') || 'hideAndSeek';
+  var STORY  = q.get('story') === '1';        // приватная комната по приглашению — см. story.html
+  var MODE   = STORY ? 'race' : (q.get('mode') || 'hideAndSeek');
   var ROOM   = q.get('room') || null;
   var VIEW   = q.get('view');                 // просмотр одной карты из Maps Browser
   var VAUTH  = q.get('author');
@@ -994,6 +995,13 @@
         banner(TR('roundOver', 'Раунд окончен'), TR('newMapText', 'Новая карта. До старта 30 секунд.'), true);
         setTimeout(function () { banner('', '', false); }, 3000);
       }
+    } else if (STORY) {
+      /* Одна карта на приглашение — по истечении лимита сессия просто
+         заканчивается, а не грузит случайную новую (как обычный Race).
+         phaseEnds уносим далеко вперёд, иначе таймер каждые 250мс снова
+         звал бы advance() и заново показывал баннер. */
+      phaseEnds = Date.now() + 1e12;
+      banner(TR('storyTimeUpTitle', 'Time is up'), TR('storyTimeUpText', 'This Story session has ended.'), true);
     } else {
       phaseEnds = Date.now() + ROUND_MS;
       nextMap();
@@ -1027,16 +1035,47 @@
     if (MODE === 'race' && scoresBox) { scoresBox.style.display = 'block'; scoresBox.classList.add('open'); }
     msgsSetup();
 
-    if (MODE === 'hideAndSeek') {
+    if (STORY) {
+      /* Одна конкретная карта из приглашения, не случайная — и свой лимит
+         времени вместо ROUND_MS. Пока код комнаты не подтверждён сервером,
+         держим таймер на дефолте, чтобы полоска времени не была пустой. */
+      phase = 'round'; phaseEnds = Date.now() + ROUND_MS;
+      loadStoryMap();
+    } else if (MODE === 'hideAndSeek') {
       /* Раньше тут висел свой баннер «роли распределятся через 30 секунд» —
          неверный, если в итоге играть не с кем, и всё равно почти сразу
          гас от nextMap() ниже. Реальное состояние (лобби/раунд) сервер
          пришлёт через hsPhase/hsState через мгновение после join. */
       phase = 'lobby'; phaseEnds = Date.now() + LOBBY_MS;
+      nextMap();
     } else {
       phase = 'round'; phaseEnds = Date.now() + ROUND_MS;
+      nextMap();
     }
-    nextMap();
+  }
+
+  /* Story Mode: карта и лимит времени приходят с сервера по коду комнаты
+     (сама ссылка другу несёт только код — см. story.html), а не выбираются
+     случайно, как в обычном Race через nextMap()/getRandomMap. */
+  function loadStoryMap() {
+    fetch('/story/roomInfo?room=' + encodeURIComponent(ROOM || ''))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || d.status !== 'success') {
+          showMap(null);
+          banner(TR('storyExpiredTitle', 'Story link expired'),
+                 TR('storyExpiredText', 'Ask your friend to send a new invite from the Story Mode page.'), true);
+          return;
+        }
+        phaseEnds = Date.now() + d.limitMs;
+        fetch('/getMapData?author=' + encodeURIComponent(d.author) + '&mapName=' + encodeURIComponent(d.mapName))
+          .then(function (r2) { return r2.json(); })
+          .then(function (md) {
+            showMap(md ? { mapName: d.mapName, author: d.author, mapData: md } : null);
+          })
+          .catch(function () { showMap(null); });
+      })
+      .catch(function () { showMap(null); });
   }
 
   /* ---------- монеты на аккаунт ----------
@@ -1537,6 +1576,13 @@
     for (var i = 0; i < ids.length; i++) if (!others[ids[i]].fin) return;
 
     switching = true;
+    if (STORY) {
+      // одна карта на сессию — обычная автосмена карты тут не нужна,
+      // оба друга финишировали, значит сессия успешно завершена
+      phaseEnds = Date.now() + 1e12;
+      banner(TR('storyDoneTitle', 'Finished!'), TR('storyDoneText', 'Everyone reached the finish.'), true);
+      return;
+    }
     log(ids.length ? TR('allFinished', 'Все на финише — новая карта!') : TR('finishSolo', 'Финиш! Новая карта'));
     setTimeout(function () {
       nextMap(function () {

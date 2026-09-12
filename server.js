@@ -317,6 +317,7 @@ app.use('/abusefile', express.static(require('./abuse.js').FILE_DIR,
 require('./extras.js').register(app, accounts);
 require('./dailyRewards.js').register(app, accounts);
 require('./quests.js').register(app, accounts);
+require('./story.js').register(app, accounts);
 
 // адреса, на которые ссылается шапка сайта
 // автоподбор комнаты: та, где сейчас больше всего игроков этого режима
