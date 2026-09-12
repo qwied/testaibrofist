@@ -8,7 +8,7 @@
 <script src="theme.js?v=100"></script>
 <script src="device.js?v=100"></script>
 <style>
-.mbFilters{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:9px;margin-bottom:6px}
+.mbFilters{display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:9px;margin-bottom:6px;align-items:center}
 .mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
 .mbFilters .bfBtn{margin-bottom:0;width:auto;padding:11px 22px}
 
@@ -18,7 +18,14 @@
 .mbRow{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px 124px;gap:10px 10px;
   align-items:center;border:1px solid var(--line);border-radius:13px;padding:12px 14px;background:#fff}
 .mbRow:hover{border-color:var(--blue)}
-.mbName{font-weight:700;font-size:15.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mbName{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;min-width:0}
+.mbName span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mbFav{flex:0 0 auto;border:none;background:none;padding:0;font-size:17px;line-height:1;
+  cursor:pointer;color:var(--line);}
+.mbFav:hover{color:#e2a600}
+.mbFav.on{color:#e2a600}
+.mbFavOnly{display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--muted);
+  white-space:nowrap;cursor:pointer;user-select:none}
 /* Рейтинг — одно число: лайки минус дизлайки.
    Выше нуля — зелёным, ниже нуля — красным, ноль — нейтральный. */
 .mbRate{font-weight:700;font-size:16.5px;text-align:center}
@@ -61,6 +68,7 @@
 @media (max-width:760px){
   .mbFilters{grid-template-columns:1fr 1fr}
   .mbFilters .bfBtn{grid-column:1/-1;width:100%}
+  .mbFavOnly{grid-column:1/-1}
   .mbHead{display:none}
   .mbRow{grid-template-columns:1fr auto;gap:2px 10px}
   .mbName{grid-column:1}
@@ -106,6 +114,7 @@
       <option value="dislikes" data-i18n="sortDislikes">Sort by dislikes</option>
       <option value="oldest" data-i18n="sortOldest">Sort by oldest</option>
     </select>
+    <label class="mbFavOnly"><input type="checkbox" id="mbFavOnly"> <span data-i18n="favOnly">★ Только избранные</span></label>
     <button class="bfBtn go" id="mbGo" data-i18n="refresh">Обновить</button>
   </div>
 
@@ -190,7 +199,10 @@
                String(me.name).toLowerCase() === String(m.author).toLowerCase();
     var rc = m.rating > 0 ? 'pos' : (m.rating < 0 ? 'neg' : 'zero');
     return '<div class="mbRow" data-map="' + esc(m.mapName) + '" data-author="' + esc(m.author) + '">'
-      + '<div class="mbName" title="' + esc(m.mapName) + '">' + esc(m.mapName) + '</div>'
+      + '<div class="mbName" title="' + esc(m.mapName) + '">'
+      +   '<button class="mbFav' + (m.myFavorite ? ' on' : '') + '" data-fav="1" title="'
+      +     T('favToggle', 'В избранное') + '">' + (m.myFavorite ? '★' : '☆') + '</button>'
+      +   '<span>' + esc(m.mapName) + '</span></div>'
       + '<div class="mbRate ' + rc + '">' + m.rating + '</div>'
       + '<div class="mbAuthor"><a href="users.html?name=' + encodeURIComponent(m.author) + '">'
       +   esc(m.author) + '</a></div>'
@@ -212,7 +224,8 @@
     var q = '?page=' + page
           + '&mapType=' + encodeURIComponent($('mbMode').value)
           + '&author=' + encodeURIComponent($('mbAuthor').value.trim())
-          + '&sortBy=' + $('mbSort').value;
+          + '&sortBy=' + $('mbSort').value
+          + '&favoritesOnly=' + ($('mbFavOnly').checked ? '1' : '0');
     fetch('/getMapsForList' + q, { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -239,6 +252,18 @@
 
     if (e.target.closest('[data-play]')) {
       openPlay(r.dataset.map, r.dataset.author);
+      return;
+    }
+
+    var f = e.target.closest('[data-fav]');
+    if (f) {
+      post('/mapFavorite', { author: r.dataset.author, mapName: r.dataset.map })
+        .then(function (x) {
+          if (x.status !== 'success') { msg(x.message || T('errorTxt', 'Ошибка')); return; }
+          f.classList.toggle('on', x.myFavorite);
+          f.textContent = x.myFavorite ? '★' : '☆';
+          if ($('mbFavOnly').checked && !x.myFavorite) load();
+        }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
       return;
     }
 
@@ -305,6 +330,7 @@
   $('mbNext').onclick = function () { if (page < pages) { page++; load(); } };
   $('mbMode').onchange = function () { page = 1; load(); };
   $('mbSort').onchange = function () { page = 1; load(); };
+  $('mbFavOnly').onchange = function () { page = 1; load(); };
   $('mbAuthor').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { page = 1; load(); }
   });
