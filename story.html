@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIBrofist — Story Mode</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="ui.css?v=85">
+<script src="theme.js?v=100"></script>
+<script src="device.js?v=100"></script>
+<style>
+.stForm{display:flex;flex-direction:column;gap:14px;max-width:480px}
+.stField label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:5px}
+.stMaps{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;
+  border:1px solid var(--line);border-radius:10px;padding:6px}
+.stMap{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;
+  border-radius:8px;cursor:pointer;font-size:13.5px}
+.stMap:hover{background:var(--soft)}
+.stMap.on{background:var(--blue);color:#fff}
+.stMap .a{color:var(--muted);font-size:12px}
+.stMap.on .a{color:#dbeafe}
+.stRow2{display:flex;gap:10px}
+.stRow2 .bfInput{margin-bottom:0}
+.stHint{color:var(--muted);font-size:13px;line-height:1.5}
+.stLink{display:none;border:1px dashed var(--green);border-radius:10px;padding:12px;margin-top:6px}
+.stLink.on{display:block}
+.stLinkRow{display:flex;gap:8px;align-items:center}
+.stLinkRow input{flex:1}
+</style>
+        <link rel="icon" href="/favicon.ico" sizes="32x32">
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <link rel="manifest" href="/site.webmanifest">
+        <meta name="theme-color" content="#111827">
+        <link rel="canonical" href="https://aibrofist.online/story.html">
+        <meta name="description" content="Story Mode — invite a friend to a private race on a chosen map.">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Story Mode">
+        <meta property="og:description" content="Story Mode — invite a friend to a private race on a chosen map.">
+        <meta property="og:url" content="https://aibrofist.online/story.html">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<div class="bfWrap">
+  <div class="bfTitle" data-i18n="storyTxt">Story Mode</div>
+  <div class="bfSub" data-i18n="storySub">Invite a friend to a private race on one chosen map, with your own time limit.</div>
+
+  <div class="stForm">
+    <div class="stField">
+      <label data-i18n="storyFriend">Friend to invite</label>
+      <select class="bfSelect" id="stFriend"></select>
+    </div>
+
+    <div class="stField">
+      <label data-i18n="storyMap">Map (your own Race maps)</label>
+      <div class="stMaps" id="stMaps"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
+      <div class="stHint" data-i18n="storyMapHint">Или впиши автора и название любой опубликованной карты Race:</div>
+      <div class="stRow2">
+        <input class="bfInput" id="stAuthor" data-i18n-ph="colAuthor" placeholder="Author">
+        <input class="bfInput" id="stMapName" data-i18n-ph="colName" placeholder="Map name">
+      </div>
+    </div>
+
+    <div class="stField">
+      <label data-i18n="storyLimit">Time limit (minutes)</label>
+      <input class="bfInput" id="stLimit" type="number" min="1" max="60" value="10">
+    </div>
+
+    <button class="bfBtn go" id="stGo" data-i18n="storyCreate">Create &amp; invite</button>
+    <div class="bfMsg" id="stMsg"></div>
+
+    <div class="stLink" id="stLink">
+      <div style="margin-bottom:8px" data-i18n="storyLinkSent">Invite sent! Link:</div>
+      <div class="stLinkRow">
+        <input id="stLinkUrl" readonly>
+        <button class="bfBtn ghost" id="stJoin" style="margin:0;width:auto;padding:11px 18px" data-i18n="storyJoin">Join now</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="mobile.css?v=85">
+<script src="i18n.js?v=109"></script>
+<script src="coin.js?v=101"></script>
+<script src="skinRender.js?v=104"></script>
+<script src="skinAvatar.js?v=102" defer></script>
+<script src="shell.js?v=102"></script>
+<script src="abuseShow.js?v=101" defer></script>
+<script src="account.js?v=100" defer></script>
+<script src="owner.js?v=102" defer></script>
+<script>
+(function () {
+  'use strict';
+  var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; };
+  var $ = function (id) { return document.getElementById(id); };
+  var me = null, picked = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c];
+    });
+  }
+  function msg(t, ok) {
+    var m = $('stMsg');
+    m.textContent = t; m.style.color = ok ? 'var(--green)' : 'var(--red)';
+  }
+  function post(url, data) {
+    return fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: Object.keys(data).map(function (k) {
+        return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
+      }).join('&')
+    }).then(function (r) { return r.json(); });
+  }
+
+  function loadFriends() {
+    fetch('/getFriendsList?name=' + encodeURIComponent(me.name) + '&type=friends', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var list = d.relation || [];
+        $('stFriend').innerHTML = list.length
+          ? list.map(function (f) { return '<option value="' + esc(f.name) + '">' + esc(f.name) + '</option>'; }).join('')
+          : '<option value="">' + T('storyNoFriends', 'No friends yet') + '</option>';
+      });
+  }
+
+  function loadMaps() {
+    fetch('/getMapsForList?mapType=race&author=' + encodeURIComponent(me.name), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var list = (d.maps || []);
+        $('stMaps').innerHTML = list.length
+          ? list.map(function (m) {
+              return '<div class="stMap" data-author="' + esc(m.author) + '" data-map="' + esc(m.mapName) + '">'
+                + '<span>' + esc(m.mapName) + '</span><span class="a">' + esc(m.author) + '</span></div>';
+            }).join('')
+          : '<div class="bfHint">' + T('storyNoOwnMaps', 'You have no published Race maps yet') + '</div>';
+      })
+      .catch(function () { $('stMaps').innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
+  }
+
+  document.addEventListener('click', function (e) {
+    var row = e.target.closest && e.target.closest('.stMap[data-map]');
+    if (!row) return;
+    Array.prototype.forEach.call(document.querySelectorAll('.stMap'), function (x) { x.classList.remove('on'); });
+    row.classList.add('on');
+    $('stAuthor').value = row.dataset.author;
+    $('stMapName').value = row.dataset.map;
+  });
+
+  $('stGo').onclick = function () {
+    var friend = $('stFriend').value.trim();
+    var author = $('stAuthor').value.trim();
+    var mapName = $('stMapName').value.trim();
+    var limitMin = parseInt($('stLimit').value, 10) || 10;
+    if (!friend) { msg(T('storyPickFriend', 'Pick a friend to invite')); return; }
+    if (!author || !mapName) { msg(T('storyPickMap', 'Pick or specify a map')); return; }
+
+    post('/story/create', { author: author, mapName: mapName, limitMin: limitMin }).then(function (r) {
+      if (r.status !== 'success') { msg(r.message || T('errorTxt', 'Ошибка')); return; }
+      var url = location.origin + '/game.html?mode=race&story=1&room=' + encodeURIComponent(r.room);
+      $('stLinkUrl').value = url;
+      $('stLink').classList.add('on');
+      $('stJoin').onclick = function () { location.href = url; };
+      msg('', true);
+
+      // приглашение — обычным личным сообщением другу, через уже
+      // существующие маршруты Messages (тот же путь, что и вручную
+      // отправить ссылку в чате)
+      post('/messages/start', { names: friend }).then(function (t) {
+        if (t.status !== 'success') return;
+        post('/messages/send', {
+          id: t.id,
+          text: T('storyInviteMsg', 'Let\'s play together! Join my Story Mode race: ') + url
+        });
+      });
+    }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+  };
+
+  fetch('/whoAmI', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+    me = d;
+    if (!me || me.guest) {
+      document.querySelector('.stForm').innerHTML = '<div class="bfHint">' + T('signInFirst', 'Sign in first') + '</div>';
+      return;
+    }
+    loadFriends();
+    loadMaps();
+  });
+})();
+</script>
+</body>
+</html>
