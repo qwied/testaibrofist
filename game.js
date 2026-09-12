@@ -12,7 +12,7 @@
 
   var q      = new URLSearchParams(location.search);
   var STORY  = q.get('story') === '1';        // приватная комната по приглашению — см. story.html
-  var MODE   = STORY ? 'race' : (q.get('mode') || 'hideAndSeek');
+  var MODE   = q.get('mode') || 'hideAndSeek';   // Story работает и в Race, и в Hide and Seek — режим решает сама ссылка
   var ROOM   = q.get('room') || null;
   var VIEW   = q.get('view');                 // просмотр одной карты из Maps Browser
   var VAUTH  = q.get('author');
@@ -991,7 +991,7 @@
         if (window.BFSound && me.role === 'hider' && !me.caught) BFSound.win();
         phase = 'lobby'; phaseEnds = Date.now() + LOBBY_MS;
         clearCaught();
-        nextMap();
+        if (!STORY) nextMap();   // Story держит одну карту из приглашения всю сессию
         banner(TR('roundOver', 'Раунд окончен'), TR('newMapText', 'Новая карта. До старта 30 секунд.'), true);
         setTimeout(function () { banner('', '', false); }, 3000);
       }
@@ -1035,10 +1035,18 @@
     if (MODE === 'race' && scoresBox) { scoresBox.style.display = 'block'; scoresBox.classList.add('open'); }
     msgsSetup();
 
-    if (STORY) {
-      /* Одна конкретная карта из приглашения, не случайная — и свой лимит
-         времени вместо ROUND_MS. Пока код комнаты не подтверждён сервером,
-         держим таймер на дефолте, чтобы полоска времени не была пустой. */
+    if (STORY && MODE === 'hideAndSeek') {
+      /* Одна конкретная карта из приглашения вместо случайной, но фазами
+         (лобби/рулетка/охота) по-прежнему управляет сервер — как в обычных
+         прятках. Лимит на всю сессию тоже держит сервер (hsRooms, см.
+         server.js) и присылает в конце фазой hsPhase: 'storyEnd'. */
+      phase = 'lobby'; phaseEnds = Date.now() + LOBBY_MS;
+      loadStoryMap();
+    } else if (STORY) {
+      /* Race: одна конкретная карта из приглашения, не случайная — и свой
+         лимит времени вместо ROUND_MS. Пока код комнаты не подтверждён
+         сервером, держим таймер на дефолте, чтобы полоска времени не была
+         пустой. */
       phase = 'round'; phaseEnds = Date.now() + ROUND_MS;
       loadStoryMap();
     } else if (MODE === 'hideAndSeek') {
@@ -1067,7 +1075,9 @@
                  TR('storyExpiredText', 'Ask your friend to send a new invite from the Story Mode page.'), true);
           return;
         }
-        phaseEnds = Date.now() + d.limitMs;
+        // в Hide and Seek лимит на всю сессию держит и досчитывает сервер
+        // (hsRooms) — здесь только карта; в Race таймер клиентский
+        if (MODE !== 'hideAndSeek') phaseEnds = Date.now() + d.limitMs;
         fetch('/getMapData?author=' + encodeURIComponent(d.author) + '&mapName=' + encodeURIComponent(d.mapName))
           .then(function (r2) { return r2.json(); })
           .then(function (md) {
@@ -1404,8 +1414,15 @@
         me.role = 'hider';
         $('gRoleBox').style.display = 'none';
         clearCaught();
-        // свою первую карту уже загрузили в boot — не грузим вторую подряд
-        if (Date.now() - bootAt > 5000) nextMap();
+        // свою первую карту уже загрузили в boot — не грузим вторую подряд;
+        // Story держит одну карту из приглашения всю сессию — не грузим случайную
+        if (!STORY && Date.now() - bootAt > 5000) nextMap();
+      } else if (d.phase === 'storyEnd') {
+        // общий лимит времени Story-сессии вышел — сервер обрывает цикл
+        // лобби/раунд насовсем (см. hsEndStory в server.js)
+        roulStop();
+        phaseEnds = Date.now() + 1e12;
+        banner(TR('storyTimeUpTitle', 'Time is up'), TR('storyTimeUpText', 'This Story session has ended.'), true);
       }
     });
 
@@ -1414,6 +1431,12 @@
       hsSync = true; hsEver = true;
       if (MODE !== 'hideAndSeek' || !d || !d.phase) return;
       $('gTimeBox').style.display = '';
+      // друг открыл ссылку Story уже после того, как лимит сессии вышел
+      if (d.phase === 'storyEnd') {
+        phaseEnds = Date.now() + 1e12;
+        banner(TR('storyTimeUpTitle', 'Time is up'), TR('storyTimeUpText', 'This Story session has ended.'), true);
+        return;
+      }
       phase = d.phase;
       phaseEnds = Date.now() + (Number(d.msLeft) || (d.phase === 'round' ? ROUND_MS : LOBBY_MS));
       if (d.phase === 'round') {

@@ -8,9 +8,11 @@
 <script src="theme.js?v=100"></script>
 <script src="device.js?v=100"></script>
 <style>
-.stForm{display:flex;flex-direction:column;gap:14px;max-width:480px}
+.stForm{display:flex;flex-direction:column;gap:14px;max-width:520px}
 .stField label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:5px}
-.stMaps{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;
+.stSearchRow{display:flex;gap:8px;margin-bottom:8px}
+.stSearchRow .bfInput{margin-bottom:0;flex:1}
+.stMaps{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;
   border:1px solid var(--line);border-radius:10px;padding:6px}
 .stMap{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;
   border-radius:8px;cursor:pointer;font-size:13.5px}
@@ -18,8 +20,11 @@
 .stMap.on{background:var(--blue);color:#fff}
 .stMap .a{color:var(--muted);font-size:12px}
 .stMap.on .a{color:#dbeafe}
-.stRow2{display:flex;gap:10px}
-.stRow2 .bfInput{margin-bottom:0}
+.stPager{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13px;color:var(--muted)}
+.stPager button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 10px;cursor:pointer}
+.stPager button:disabled{opacity:.4;cursor:default}
+.stPicked{margin-top:8px;font-size:13.5px;color:var(--muted)}
+.stPicked b{color:var(--ink)}
 .stHint{color:var(--muted);font-size:13px;line-height:1.5}
 .stLink{display:none;border:1px dashed var(--green);border-radius:10px;padding:12px;margin-top:6px}
 .stLink.on{display:block}
@@ -32,11 +37,11 @@
         <link rel="manifest" href="/site.webmanifest">
         <meta name="theme-color" content="#111827">
         <link rel="canonical" href="https://aibrofist.online/story.html">
-        <meta name="description" content="Story Mode — invite a friend to a private race on a chosen map.">
+        <meta name="description" content="Story Mode — invite a friend to a private match on a chosen map.">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="AIBrofist">
         <meta property="og:title" content="AIBrofist — Story Mode">
-        <meta property="og:description" content="Story Mode — invite a friend to a private race on a chosen map.">
+        <meta property="og:description" content="Story Mode — invite a friend to a private match on a chosen map.">
         <meta property="og:url" content="https://aibrofist.online/story.html">
         <meta property="og:image" content="https://aibrofist.online/preview.png">
         <meta name="twitter:card" content="summary_large_image">
@@ -46,7 +51,7 @@
 
 <div class="bfWrap">
   <div class="bfTitle" data-i18n="storyTxt">Story Mode</div>
-  <div class="bfSub" data-i18n="storySub">Invite a friend to a private race on one chosen map, with your own time limit.</div>
+  <div class="bfSub" id="stSub">Invite a friend to a private match on one chosen map, with your own time limit.</div>
 
   <div class="stForm">
     <div class="stField">
@@ -55,13 +60,16 @@
     </div>
 
     <div class="stField">
-      <label data-i18n="storyMap">Map (your own Race maps)</label>
-      <div class="stMaps" id="stMaps"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
-      <div class="stHint" data-i18n="storyMapHint">Или впиши автора и название любой опубликованной карты Race:</div>
-      <div class="stRow2">
-        <input class="bfInput" id="stAuthor" data-i18n-ph="colAuthor" placeholder="Author">
-        <input class="bfInput" id="stMapName" data-i18n-ph="colName" placeholder="Map name">
+      <label id="stMapLabel" data-i18n="storyMap">Map</label>
+      <div class="stSearchRow">
+        <input class="bfInput" id="stSearch" data-i18n-ph="colAuthor" placeholder="Author">
+        <button class="bfBtn ghost" id="stSearchGo" style="margin:0;width:auto;padding:11px 18px" data-i18n="refresh">Search</button>
       </div>
+      <div class="stMaps" id="stMaps"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
+      <div class="stPager">
+        <button id="stPrev">&lt;</button><span id="stPage">1/1</span><button id="stNext">&gt;</button>
+      </div>
+      <div class="stPicked" id="stPicked"></div>
     </div>
 
     <div class="stField">
@@ -96,7 +104,16 @@
   'use strict';
   var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; };
   var $ = function (id) { return document.getElementById(id); };
-  var me = null, picked = null;
+  var me = null;
+
+  var q = new URLSearchParams(location.search);
+  // на какой странице режима нажали «Story Mode» — из неё же и берём карты;
+  // по умолчанию Race, чтобы старые/скопированные ссылки без ?mode= не ломались
+  var MODE = q.get('mode') === 'hideAndSeek' ? 'hideAndSeek' : 'race';
+  var MODE_LABEL = MODE === 'hideAndSeek' ? 'Hide and Seek' : 'Race';
+
+  var page = 1, pages = 1;
+  var picked = null;   // { author, mapName }
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -117,6 +134,10 @@
     }).then(function (r) { return r.json(); });
   }
 
+  document.title = 'AIBrofist — Story Mode (' + MODE_LABEL + ')';
+  $('stSub').textContent = 'Invite a friend to a private ' + MODE_LABEL + ' match on one chosen map, with your own time limit.';
+  $('stMapLabel').textContent = 'Map (' + MODE_LABEL + ', from Maps Browser)';
+
   function loadFriends() {
     fetch('/getFriendsList?name=' + encodeURIComponent(me.name) + '&type=friends', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
@@ -128,17 +149,36 @@
       });
   }
 
+  function pickMap(author, mapName) {
+    picked = { author: author, mapName: mapName };
+    $('stPicked').innerHTML = T('storyPicked', 'Selected: ') + '<b>' + esc(mapName) + '</b> ('
+      + esc(author) + ')';
+    Array.prototype.forEach.call(document.querySelectorAll('.stMap'), function (x) {
+      x.classList.toggle('on', x.dataset.author === author && x.dataset.map === mapName);
+    });
+  }
+
   function loadMaps() {
-    fetch('/getMapsForList?mapType=race&author=' + encodeURIComponent(me.name), { credentials: 'same-origin' })
+    $('stMaps').innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
+    var qs = '?mapType=' + encodeURIComponent(MODE) + '&sortBy=rating&page=' + page
+          + '&author=' + encodeURIComponent($('stSearch').value.trim());
+    fetch('/getMapsForList' + qs, { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        var list = (d.maps || []);
+        var lbl = String(d.page || '1/1').split('/');
+        page = parseInt(lbl[0], 10) || 1;
+        pages = parseInt(lbl[1], 10) || d.pages || 1;
+        $('stPage').textContent = page + '/' + pages;
+        $('stPrev').disabled = page <= 1;
+        $('stNext').disabled = page >= pages;
+        var list = d.maps || [];
         $('stMaps').innerHTML = list.length
           ? list.map(function (m) {
-              return '<div class="stMap" data-author="' + esc(m.author) + '" data-map="' + esc(m.mapName) + '">'
+              var on = picked && picked.author === m.author && picked.mapName === m.mapName;
+              return '<div class="stMap' + (on ? ' on' : '') + '" data-author="' + esc(m.author) + '" data-map="' + esc(m.mapName) + '">'
                 + '<span>' + esc(m.mapName) + '</span><span class="a">' + esc(m.author) + '</span></div>';
             }).join('')
-          : '<div class="bfHint">' + T('storyNoOwnMaps', 'You have no published Race maps yet') + '</div>';
+          : '<div class="bfHint">' + T('noMaps', 'Карты не найдены') + '</div>';
       })
       .catch(function () { $('stMaps').innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
   }
@@ -146,23 +186,23 @@
   document.addEventListener('click', function (e) {
     var row = e.target.closest && e.target.closest('.stMap[data-map]');
     if (!row) return;
-    Array.prototype.forEach.call(document.querySelectorAll('.stMap'), function (x) { x.classList.remove('on'); });
-    row.classList.add('on');
-    $('stAuthor').value = row.dataset.author;
-    $('stMapName').value = row.dataset.map;
+    pickMap(row.dataset.author, row.dataset.map);
   });
+
+  $('stSearchGo').onclick = function () { page = 1; loadMaps(); };
+  $('stSearch').addEventListener('keydown', function (e) { if (e.key === 'Enter') { page = 1; loadMaps(); } });
+  $('stPrev').onclick = function () { if (page > 1) { page--; loadMaps(); } };
+  $('stNext').onclick = function () { if (page < pages) { page++; loadMaps(); } };
 
   $('stGo').onclick = function () {
     var friend = $('stFriend').value.trim();
-    var author = $('stAuthor').value.trim();
-    var mapName = $('stMapName').value.trim();
     var limitMin = parseInt($('stLimit').value, 10) || 10;
     if (!friend) { msg(T('storyPickFriend', 'Pick a friend to invite')); return; }
-    if (!author || !mapName) { msg(T('storyPickMap', 'Pick or specify a map')); return; }
+    if (!picked) { msg(T('storyPickMap', 'Pick a map from the list')); return; }
 
-    post('/story/create', { author: author, mapName: mapName, limitMin: limitMin }).then(function (r) {
+    post('/story/create', { author: picked.author, mapName: picked.mapName, mode: MODE, limitMin: limitMin }).then(function (r) {
       if (r.status !== 'success') { msg(r.message || T('errorTxt', 'Ошибка')); return; }
-      var url = location.origin + '/game.html?mode=race&story=1&room=' + encodeURIComponent(r.room);
+      var url = location.origin + '/game.html?mode=' + encodeURIComponent(MODE) + '&story=1&room=' + encodeURIComponent(r.room);
       $('stLinkUrl').value = url;
       $('stLink').classList.add('on');
       $('stJoin').onclick = function () { location.href = url; };
@@ -175,7 +215,7 @@
         if (t.status !== 'success') return;
         post('/messages/send', {
           id: t.id,
-          text: T('storyInviteMsg', 'Let\'s play together! Join my Story Mode race: ') + url
+          text: T('storyInviteMsg', "Let's play together! Join my Story Mode match: ") + url
         });
       });
     }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
