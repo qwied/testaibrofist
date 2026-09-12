@@ -316,6 +316,7 @@ app.use('/abusefile', express.static(require('./abuse.js').FILE_DIR,
         { maxAge: '1h', fallthrough: true }));
 require('./extras.js').register(app, accounts);
 require('./dailyRewards.js').register(app, accounts);
+require('./quests.js').register(app, accounts);
 
 // адреса, на которые ссылается шапка сайта
 // автоподбор комнаты: та, где сейчас больше всего игроков этого режима
@@ -520,6 +521,7 @@ function hsAwardRoundEnd(io, room, st) {
     const acct = sessionName(sock.handshake.headers.cookie);
     if (!acct) return;                    // гость
     hsCreditAndNotify(sock, acct, 1 + Math.floor(Math.random() * 5), 'hsWin');
+    require('./quests.js').track(acct, 'hs_survive_hider');
   });
 }
 
@@ -857,6 +859,7 @@ io.on('connection', (socket) => {
     st.caughtSet.add(targetId);
     if (!account) return;   // гостю монеты не копим — как и раньше в addCoins
     hsCreditAndNotify(socket, account, 1, 'hsCatch');
+    require('./quests.js').track(account, 'hs_catch');
   });
 
   /* Race: старт запоминаем, финиш проверяем на его существование, ту же
@@ -897,6 +900,7 @@ io.on('connection', (socket) => {
 
     if (!account) return;
     hsCreditAndNotify(socket, account, 1 + Math.floor(Math.random() * 5), 'raceFinish');
+    require('./quests.js').track(account, 'race_finish');
     if (points > 0) accountsRef.creditScore(account, points);
   });
 

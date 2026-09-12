@@ -18,6 +18,7 @@
   // Maps Browser, сюда не дублируются)
   var MENU = [
     { key: 'messages',    href: 'messages.html',       txt: 'Messages' },
+    { key: 'quests',      href: 'quests.html',         txt: 'Quests' },
     { key: 'themes',      href: 'themes.html',         txt: 'Themes' },
     { txt: 'Telegram', href: 'https://t.me/aibrofist', ext: true },
     { txt: 'Discord', href: 'https://discord.gg/Rah4FvcXDw', ext: true }

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIBrofist — Quests</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="ui.css?v=85">
+<script src="theme.js?v=100"></script>
+<script src="device.js?v=100"></script>
+<style>
+.qList{display:flex;flex-direction:column;gap:10px}
+.qCard{border:1px solid var(--line);border-radius:13px;padding:14px 16px;background:#fff}
+.qCard.done{border-color:var(--green)}
+.qCard.bonus{border-style:dashed}
+.qTop{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.qText{font-weight:600;font-size:14.5px}
+.qReward{flex:0 0 auto;font-weight:700;color:var(--gold);white-space:nowrap;display:flex;
+  align-items:center;gap:4px}
+.qBarWrap{background:var(--soft);border-radius:20px;height:10px;overflow:hidden;margin-bottom:8px}
+.qBar{height:100%;background:var(--blue);border-radius:20px;transition:width .3s}
+.qCard.done .qBar{background:var(--green)}
+.qBottom{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.qProg{color:var(--muted);font-size:13px}
+.qClaim{padding:8px 18px;border-radius:8px;border:1px solid var(--green);background:#fff;
+  color:var(--green);cursor:pointer;font-weight:600;font-size:13.5px}
+.qClaim:hover{background:var(--green);color:#fff}
+.qClaim:disabled{opacity:.5;cursor:default;background:#fff;color:var(--green)}
+.qClaimed{color:var(--green);font-weight:700;font-size:13.5px}
+.qReset{color:var(--muted);font-size:13px;margin-top:16px;text-align:center}
+</style>
+        <link rel="icon" href="/favicon.ico" sizes="32x32">
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <link rel="manifest" href="/site.webmanifest">
+        <meta name="theme-color" content="#111827">
+        <link rel="canonical" href="https://aibrofist.online/quests.html">
+        <meta name="description" content="Daily quests — complete objectives, earn coins.">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Quests">
+        <meta property="og:description" content="Daily quests — complete objectives, earn coins.">
+        <meta property="og:url" content="https://aibrofist.online/quests.html">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<div class="bfWrap">
+  <div class="bfTitle" data-i18n="questsTxt">Quests</div>
+  <div class="bfSub" data-i18n="questsSub">Complete a quest, get a reward. Quests refresh once a day.</div>
+  <div id="qBody"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
+</div>
+
+<link rel="stylesheet" href="mobile.css?v=85">
+<script src="i18n.js?v=109"></script>
+<script src="coin.js?v=101"></script>
+<script src="skinRender.js?v=104"></script>
+<script src="skinAvatar.js?v=102" defer></script>
+<script src="shell.js?v=102"></script>
+<script src="abuseShow.js?v=101" defer></script>
+<script src="account.js?v=100" defer></script>
+<script src="owner.js?v=102" defer></script>
+<script>
+(function () {
+  'use strict';
+  var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; };
+  var $ = function (id) { return document.getElementById(id); };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c];
+    });
+  }
+  function coinTag() { return window.BFCoin ? BFCoin.svg(15) : ''; }
+  function post(url, data) {
+    return fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: Object.keys(data).map(function (k) {
+        return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
+      }).join('&')
+    }).then(function (r) { return r.json(); });
+  }
+  function fmtLeft(ms) {
+    var h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+    return h > 0 ? (h + 'h ' + m + 'm') : (m + 'm');
+  }
+
+  function card(q) {
+    var pct = Math.round(100 * q.progress / q.target);
+    return '<div class="qCard' + (q.claimed ? ' done' : '') + '" data-id="' + esc(q.id) + '">'
+      + '<div class="qTop"><div class="qText">' + esc(q.text) + '</div>'
+      +   '<div class="qReward">+' + q.reward + ' ' + coinTag() + '</div></div>'
+      + '<div class="qBarWrap"><div class="qBar" style="width:' + pct + '%"></div></div>'
+      + '<div class="qBottom"><div class="qProg">' + q.progress + '/' + q.target + '</div>'
+      +   (q.claimed
+            ? '<div class="qClaimed">✓ ' + T('claimed', 'Claimed') + '</div>'
+            : '<button class="qClaim" data-claim="' + esc(q.id) + '"'
+              + (q.progress < q.target ? ' disabled' : '') + '>' + T('claim', 'Claim') + '</button>')
+      + '</div></div>';
+  }
+
+  function bonusCard(b) {
+    return '<div class="qCard bonus' + (b.claimed ? ' done' : '') + '">'
+      + '<div class="qTop"><div class="qText">' + T('questBonus', 'Complete all quests') + '</div>'
+      +   '<div class="qReward">+' + b.reward + ' ' + coinTag() + '</div></div>'
+      + '<div class="qBottom" style="justify-content:flex-end">'
+      +   (b.claimed
+            ? '<div class="qClaimed">✓ ' + T('claimed', 'Claimed') + '</div>'
+            : '<button class="qClaim" data-claim="bonus"' + (b.available ? '' : ' disabled') + '>'
+              + T('claim', 'Claim') + '</button>')
+      + '</div></div>';
+  }
+
+  function load() {
+    fetch('/quests', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.guest) {
+          $('qBody').innerHTML = '<div class="bfHint">' + T('signInFirst', 'Sign in first') + '</div>';
+          return;
+        }
+        $('qBody').innerHTML = '<div class="qList">'
+          + d.quests.map(card).join('')
+          + bonusCard(d.bonus)
+          + '</div>'
+          + '<div class="qReset">' + T('questsResetIn', 'New quests in') + ': ' + fmtLeft(d.msLeft) + '</div>';
+      })
+      .catch(function () {
+        $('qBody').innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>';
+      });
+  }
+
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-claim]');
+    if (!b || b.disabled) return;
+    b.disabled = true;
+    post('/quests/claim', { id: b.dataset.claim }).then(function (r) {
+      if (r.status !== 'success') { b.disabled = false; return; }
+      if (window.BFShell) window.BFShell.refreshCoins(r.coins);
+      load();
+    }).catch(function () { b.disabled = false; });
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>
