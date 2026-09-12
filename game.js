@@ -16,6 +16,12 @@
   var VIEW   = q.get('view');                 // просмотр одной карты из Maps Browser
   var VAUTH  = q.get('author');
 
+  /* Заголовок вкладки — по режиму, а не унаследованное от редактора
+     «Map Editor» (страница game.html — это сама игра, а не редактор).
+     Интерфейс сайта только на английском (см. i18n.js), поэтому здесь
+     без словаря — те же строки, что и в нём (hideAndSeek/race). */
+  document.title = 'AIBrofist — ' + (MODE === 'race' ? 'Race' : 'Hide and Seek');
+
   var ROUND_MS  = 120000;   // раунд — 2 минуты
   var LOBBY_MS  = 30000;    // ожидание в Hide and Seek — 30 секунд
 

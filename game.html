@@ -4,7 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<title>AIBrofist — Map Editor</title>
+<!-- Заголовок вкладки переставляется на конкретный режим сразу же в
+     game.js (там уже известен MODE из query-параметра) — этот вариант
+     виден только на долю секунды, пока скрипты не выполнились. Раньше
+     тут было унаследованное от editor.html «Map Editor» — неверно для
+     страницы самой игры, а после переключения режима так и оставалось. -->
+<title>AIBrofist — Game</title>
 <style>
 :root{
   --accent:#3b82f6; --accent-dark:#2563eb; --ink:#1e2530; --muted:#8b93a1;
