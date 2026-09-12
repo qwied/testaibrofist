@@ -399,9 +399,9 @@ else {
     return y0 - top;
   }
   const tapH = jumpHeight(2), holdH = jumpHeight(60);
-  check('тап поднимает на 146 px', Math.abs(tapH - 146) <= 2, tapH.toFixed(0));
-  check('зажатый прыжок — тоже 146 px', Math.abs(holdH - 146) <= 2, holdH.toFixed(0));
-  check('тап и зажатый — одна высота', Math.abs(holdH - tapH) <= 2, (holdH - tapH).toFixed(0));
+  check('тап поднимает на 121 px', Math.abs(tapH - 121) <= 2, tapH.toFixed(0));
+  check('зажатый прыжок — 146 px', Math.abs(holdH - 146) <= 2, holdH.toFixed(0));
+  check('зажатый выше тапа', holdH - tapH > 15, (holdH - tapH).toFixed(0));
 
   // 17. глубоко вдавленный в стену угол — тоже вбок, а не наверх
   //     ровно то, что оставалось после v96: платформа стыкуется с объектом
