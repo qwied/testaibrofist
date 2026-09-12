@@ -119,7 +119,9 @@
     var right = el('div', 'bfRight');
     right.innerHTML =
       '<span class="bfCoin" id="bfHeadCoins" style="display:none">' +
-        (window.BFCoin ? BFCoin.svg(17) : '') + ' <span>0</span></span>';
+        (window.BFCoin ? BFCoin.svg(17) : '') + ' <span>0</span></span>'
+      + '<button class="bfGift" id="bfGiftBtn" style="display:none" title="Daily Reward">🎁'
+      +   '<span class="bfGiftDot" id="bfGiftDot" style="display:none"></span></button>';
     var ava = el('div', 'bfAvatar');
     ava.id = 'bfHeadAvatar';
     var avaImg = document.createElement('img');
@@ -230,6 +232,8 @@
             c.style.display = 'inline-flex';
             c.querySelector('span').textContent = me.coins;
           }
+          var g = document.getElementById('bfGiftBtn');
+          if (g) g.style.display = 'inline-block';
         }
         window.dispatchEvent(new CustomEvent('bf-shell-ready', { detail: me }));
       })
@@ -273,6 +277,13 @@
     var snd = document.createElement('script');
     snd.src = 'sound.js?v=103';
     document.head.appendChild(snd);
+  }
+  // ежедневная награда — кнопка-подарок в шапке, сам виджет грузится
+  // отдельным скриптом, чтобы не раздувать shell.js разметкой модалки
+  if (!document.querySelector('script[src*="dailyReward.js"]')) {
+    var dr = document.createElement('script');
+    dr.src = 'dailyReward.js?v=100';
+    document.head.appendChild(dr);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
