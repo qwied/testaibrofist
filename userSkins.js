@@ -1,11 +1,13 @@
 // ============ СКИНЫ ИГРОКОВ: рисунки из Skin Editor, оценки, витрина Avatar ============
 /* Скин — это картинка, которую игрок рисует сам в бесплатном Skin Editor
-   (см. /skin/drawing — примерить, /skins/publish — выложить в Skins
-   Browser на оценку всем). Владелец решает, какие из выложенных рисунков
-   попадают в Avatar за монеты (/owner/skinToAvatar) и может подкрутить их
-   оценки (/owner/skinVotes) или добавить свой скин из любой картинки
-   напрямую (/owner/publishImageSkin). Старый каталог покупных деталей
-   (голова+тело из готовых картинок) убран — см. skins.js. */
+   (см. /skins/publish — выложить в Skins Browser на оценку всем). Носить
+   рисунок нельзя, пока владелец не выложит его в Avatar (/owner/skinToAvatar,
+   может ещё и оценки подкрутить — /owner/skinVotes); если скин платный, то
+   и купить, как любому игроку, — автору рисунка тут никаких особых прав,
+   публикация и ношение теперь два разных шага (см. /skins/wear). Ещё
+   владелец может добавить свой скин из любой картинки напрямую
+   (/owner/publishImageSkin). Старый каталог покупных деталей (голова+тело
+   из готовых картинок) убран — см. skins.js. */
 const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
@@ -225,37 +227,6 @@ function register(app, acc) {
     res.json({ img: (u && u.skinImg) || '', kind: (u && u.skinKind) || 'full' });
   });
 
-  // ---------- скин, нарисованный в редакторе: сразу надеваем на игрока ----------
-  // Бесплатно и без публикации — только «примерить» свежий рисунок себе.
-  app.post('/skin/drawing', (req, res) => {
-    const u = currentUser(req);
-    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
-
-    const raw = String(req.body.img || '').trim();
-    if (!raw) return res.json({ status: 'error', message: 'No image provided' });
-
-    const got = fromDataUrl(raw);
-    if (!got) return res.json({ status: 'error', message: 'Image not recognized' });
-    if (got.bad) return res.json({ status: 'error', message: got.bad });
-
-    const id = 'd' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
-    let img;
-    try { img = saveImage(got.buf, got.ext, id); }
-    catch (e) { return res.json({ status: 'error', message: 'Failed to save: ' + e.message }); }
-
-    const oldImg = u.skinImg;
-    delete u.skin;
-    u.skinImg = img;
-    // 'accessory2' — новый холст с полем вокруг фигуры (см. skinEditor.html
-    // и ACC2_* в skinRender.js). Старые скины на диске остались 'accessory'
-    // и продолжают рисоваться по-старому — так они не съезжают задним числом.
-    u.skinKind = 'accessory2';
-    u.wearing = '';
-    saveUsers();
-    if (oldImg && oldImg !== img) unlinkSkinImg(oldImg);
-    res.json({ status: 'success', img, message: 'Skin saved' });
-  });
-
   // ---------- снять надетый скин — вернуться к обычной фигуре ----------
   app.post('/skins/reset', (req, res) => {
     const u = currentUser(req);
@@ -318,14 +289,9 @@ function register(app, acc) {
     list.push(item);
     save();
 
-    const oldImg = u.skinImg;
-    delete u.skin;
-    u.skinImg = img;
-    u.skinKind = 'accessory2';
-    u.wearing = id;
-    saveUsers();
-    if (oldImg && oldImg !== img) unlinkSkinImg(oldImg);
-
+    /* Публикация больше не надевает скин сама: до того как владелец
+       выложит его в Avatar (и его купят, если он платный), носить
+       нельзя — даже автору. См. /skins/wear. */
     const left = Math.max(0, MINE_LIMIT - mineOf(u.name).length);
     res.json({
       status: 'success', id, left, limit: MINE_LIMIT,
@@ -483,17 +449,18 @@ function register(app, acc) {
     const s = list.find(x => x.id === String(req.body.id || ''));
     if (!s) return res.json({ status: 'error', message: 'Skin not found' });
 
-    // Надеть можно только свой образ, купленный или выставленный в витрине
-    // Avatar. Раньше через Skins Browser надевался любой чужой скин даром.
+    /* Надеть можно только то, что владелец выложил в витрину Avatar —
+       и купленное, если оно платное. Своё же имя автора здесь больше
+       никаких прав не даёт: опубликовать рисунок и получить скин на
+       персонажа — теперь два разных шага, между ними стоит витрина. */
     u.boughtSkins = Array.isArray(u.boughtSkins) ? u.boughtSkins : [];
-    const mine   = low(s.author) === low(u.name);
     const bought = u.boughtSkins.indexOf(s.id) !== -1;
-    if (!mine && !bought && !s.inAvatar)
+    if (!bought && !s.inAvatar)
       return res.json({ status: 'error',
-                        message: 'This isn\'t your skin — you can\'t wear it' });
+                        message: 'This skin isn\'t in Avatar yet — you can\'t wear it' });
 
     // скины из витрины Avatar с ценой нужно сначала купить
-    if (s.inAvatar && (s.price || 0) > 0 && !mine && !bought)
+    if (s.inAvatar && (s.price || 0) > 0 && !bought)
       return res.json({ status: 'error', code: 'buy', price: s.price,
                         message: 'Buy this skin first for ' + s.price + ' coins' });
 
@@ -518,7 +485,7 @@ function register(app, acc) {
         .sort((a, b) => (a.price || 0) - (b.price || 0) || b.date - a.date)
         .map(s => {
           const o = pub(s, u && u.name);
-          o.owned = bought.has(s.id) || (u && low(s.author) === low(u.name));
+          o.owned = bought.has(s.id) || !(s.price || 0);
           return o;
         })
     });
@@ -530,8 +497,9 @@ function register(app, acc) {
     const s = list.find(x => x.id === String(req.body.id || ''));
     if (!s || !s.inAvatar) return res.json({ status: 'error', message: 'This skin is not for sale' });
 
+    // автор своего скина покупает его на общих основаниях — см. /skins/wear
     u.boughtSkins = Array.isArray(u.boughtSkins) ? u.boughtSkins : [];
-    if (u.boughtSkins.indexOf(s.id) !== -1 || low(s.author) === low(u.name))
+    if (u.boughtSkins.indexOf(s.id) !== -1)
       return res.json({ status: 'error', message: 'You already own this skin' });
 
     const price = s.price || 0;

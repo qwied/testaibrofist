@@ -17,30 +17,73 @@
 <link rel="stylesheet" href="ui.css?v=85">
 <script src="device.js?v=100"></script>
 <style>
-.seLayout{display:grid;grid-template-columns:1fr 300px;gap:22px;align-items:start}
-/* без min-width:0 колонка грида не сжимается уже холста (1280px в
-   буфере) — на телефоне это раздвигало ВЕСЬ layout вширь, и всё
-   остальное (палитра, кнопки, подсказки) вместо переноса строк
-   обрезалось сбоку горизонтальной прокруткой страницы */
-.seLayout > div{min-width:0}
-.seCanvasWrap{border:1px solid var(--line);border-radius:16px;background:var(--soft);
-  padding:16px;text-align:center;overflow:auto;max-width:100%}
+/* Раньше был бокс шириной ~1080px с холстом слева и панелью инструментов
+   справа — по просьбе (жалоба "пиксельки дохуя большие" + рисунок мельче
+   реальной фигуры игрока) окно рисования теперь занимает весь экран под
+   шапкой сайта, а все инструменты/палитра/кнопки уехали в выезжающую снизу
+   шторку (.seDrawer), чтобы не отнимать место у холста — он и так уже
+   вдвое подробнее прежнего (см. GW/GH ниже в скрипте). */
+html,body{height:100%}
+.bfWrap{padding:0}
+.seWrap{position:fixed;top:var(--hdr);left:0;right:0;bottom:0;
+  display:flex;flex-direction:column;overflow:hidden;background:var(--soft)}
+.seTopBar{flex:0 0 auto;padding:6px 14px;text-align:center;
+  border-bottom:1px solid var(--line);background:var(--panel,#fff)}
+.seTopBar .bfTitle{margin:0;font-size:16px}
+.seTopBar .bfSub{display:none}
+.seCanvasArea{flex:1 1 auto;min-height:0;position:relative;overflow:auto;
+  display:flex;align-items:center;justify-content:center;padding:16px}
+.seCanvasWrap{display:inline-block;line-height:0}
 .seCanvasWrap canvas{image-rendering:pixelated;image-rendering:crisp-edges;
   touch-action:none;cursor:crosshair;border-radius:4px;
-  box-shadow:0 0 0 1px var(--line)}
-.seTools{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:14px 0}
+  box-shadow:0 0 0 1px var(--line);background:var(--soft)}
+.seZoom{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:5;
+  display:flex;align-items:center;gap:10px;background:var(--panel,#fff);
+  border:1px solid var(--line);border-radius:999px;padding:5px 14px;
+  box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.seZoom button{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);
+  background:var(--soft);cursor:pointer;font-size:16px;padding:0;line-height:1;color:var(--ink)}
+.seZoom span{font-size:12.5px;color:var(--muted);min-width:38px;text-align:center}
+/* плавающая кнопка открывает/закрывает шторку с инструментами —
+   на телефоне держим её закрытой по умолчанию, чтобы под холст
+   отдавалось максимум экрана; на широком экране она открыта сразу
+   (см. setDrawer() в скрипте) */
+.seFab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));
+  width:54px;height:54px;border-radius:50%;border:none;background:var(--blue);color:#fff;
+  font-size:22px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3);z-index:20;
+  display:flex;align-items:center;justify-content:center}
+.seDrawer{position:fixed;left:0;right:0;bottom:0;max-height:72vh;z-index:19;
+  background:var(--panel,#fff);border-top:1px solid var(--line);
+  border-radius:16px 16px 0 0;box-shadow:0 -6px 22px rgba(0,0,0,.2);
+  transform:translateY(100%);transition:transform .22s ease;
+  display:flex;flex-direction:column}
+.seDrawer.open{transform:translateY(0)}
+.seDrawerHandle{flex:0 0 auto;display:flex;justify-content:center;padding:10px 0 2px;cursor:pointer}
+.seDrawerHandle i{width:36px;height:4px;border-radius:2px;background:var(--line)}
+.seDrawerBody{overflow-y:auto;padding:6px 16px calc(18px + env(safe-area-inset-bottom,0px));
+  max-width:760px;margin:0 auto;width:100%}
+/* На широком экране высоты и так мало не бывает, а вот ширина простаивает —
+   шторка снизу там съедала бы под инструменты добрую половину экрана.
+   Вместо неё — панель сбоку на всю высоту, холст остаётся на полную
+   высоту экрана, а по ширине просто немного ужимается. */
+@media (min-width:900px){
+  .seDrawer{left:auto;top:0;bottom:0;width:340px;max-height:none;
+    border-top:none;border-left:1px solid var(--line);border-radius:0;
+    box-shadow:-6px 0 22px rgba(0,0,0,.15);transform:translateX(100%)}
+  .seDrawer.open{transform:translateX(0)}
+  .seDrawerHandle{display:none}
+  .seDrawerBody{max-width:none;height:100%}
+  body.seDrawerOpen .seFab{right:356px}
+}
+.seTools{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0}
 .seTool{width:44px;height:44px;border-radius:10px;border:1px solid var(--line);
-  background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  background:var(--soft);cursor:pointer;display:flex;align-items:center;justify-content:center;
   font-size:19px;padding:0}
 .seTool.on{border-color:var(--blue);background:#eef7ff;box-shadow:inset 0 0 0 2px var(--blue)}
 .seTool:disabled{opacity:.35;cursor:default}
-.seZoom{display:flex;align-items:center;justify-content:center;gap:10px;margin:2px 0 12px}
-.seZoom button{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);
-  background:#fff;cursor:pointer;font-size:16px;padding:0;line-height:1}
-.seZoom span{font-size:12.5px;color:var(--muted);min-width:38px;text-align:center}
 .seSizes{display:flex;gap:6px;justify-content:center;margin:0 0 4px}
 .seSizeBtn{min-width:38px;height:32px;padding:0 8px;border-radius:8px;border:1px solid var(--line);
-  background:#fff;cursor:pointer;font-size:12.5px;font-weight:700;color:var(--ink)}
+  background:var(--soft);cursor:pointer;font-size:12.5px;font-weight:700;color:var(--ink)}
 .seSizeBtn.on{border-color:var(--blue);background:#eef7ff;box-shadow:inset 0 0 0 2px var(--blue)}
 .seLabel{font-size:11.5px;color:var(--muted);text-align:center;text-transform:uppercase;
   letter-spacing:.4px;margin:10px 0 4px}
@@ -54,15 +97,11 @@
 .seSwatch.on{box-shadow:0 0 0 2px var(--blue)}
 .seCustom{display:flex;align-items:center;gap:8px;margin:10px 0}
 .seCustom input[type=color]{width:44px;height:34px;border:1px solid var(--line);
-  border-radius:8px;padding:2px;background:#fff;cursor:pointer}
-.seSide{display:flex;flex-direction:column;gap:6px}
+  border-radius:8px;padding:2px;background:var(--soft);cursor:pointer}
 .seNick{width:100%;text-align:center;font-size:15px;padding:9px 0;border:1px solid var(--line);
   border-radius:10px;background:var(--soft);color:var(--muted);margin-bottom:6px}
 .seLimit{font-size:12.5px;color:var(--muted);text-align:center;margin-top:2px}
 .seHint{font-size:12.5px;color:var(--muted);text-align:center;margin:6px 0}
-@media (max-width:820px){
-  .seLayout{grid-template-columns:1fr;gap:16px}
-}
 </style>
         <script src="theme.js?v=100"></script>
         <link rel="icon" href="/favicon.ico" sizes="32x32">
@@ -74,43 +113,50 @@
 <body>
 
 <div class="bfWrap">
-  <div class="bfTitle" data-i18n="skinTitle">Skin Editor</div>
-  <div class="bfSub" data-i18n="skinSub">Draw accessories for your character — the body color is set by the game.</div>
+  <div class="seWrap">
+    <div class="seTopBar">
+      <div class="bfTitle" data-i18n="skinTitle">Skin Editor</div>
+      <div class="bfSub" data-i18n="skinSub">Draw accessories for your character — the body color is set by the game.</div>
+    </div>
 
-  <div class="seLayout">
-    <div>
+    <div class="seCanvasArea" id="seCanvasArea">
       <div class="seCanvasWrap"><canvas id="seCanvas"></canvas></div>
       <div class="seZoom">
         <button id="seZoomOut" aria-label="Zoom out">−</button>
         <span id="seZoomLabel">50%</span>
         <button id="seZoomIn" aria-label="Zoom in">+</button>
       </div>
-      <div class="seTools" id="seTools"></div>
-      <div class="seLabel" data-i18n="skinBrushSize">Brush size</div>
-      <div class="seSizes" id="seSizes"></div>
-      <div class="seHint" data-i18n="skinBodyHint">The greyed-out silhouette just shows where the head and body land — you can draw on it too, not only around it.</div>
-      <div class="seHint" data-i18n="skinMarginHint">There's room above, left and right of the head for tall hats, ears, wide shoulders and the like.</div>
-      <div class="seHint" data-i18n="skinMirrorHint">Left/right mirror is on by default — turn it off with the ⇋ button.</div>
-      <div class="seHint" data-i18n="skinKeysHint">Shortcuts: B/L/R/G/E/I for tools, [ ] for brush size, Ctrl+Z / Ctrl+Shift+Z to undo/redo.</div>
     </div>
 
-    <div class="seSide">
-      <input class="seNick" id="seNick" readonly>
-      <div class="sePalette" id="sePalette"></div>
-      <div class="seCustom">
-        <input type="color" id="seCustom" value="#2196f3">
-        <span data-i18n="skinCustomColor">Custom color</span>
+    <button class="seFab" id="seToolsFab" aria-label="Tools">🎨</button>
+
+    <div class="seDrawer" id="seDrawer">
+      <div class="seDrawerHandle" id="seDrawerHandle"><i></i></div>
+      <div class="seDrawerBody">
+        <input class="seNick" id="seNick" readonly>
+        <div class="seTools" id="seTools"></div>
+        <div class="seLabel" data-i18n="skinBrushSize">Brush size</div>
+        <div class="seSizes" id="seSizes"></div>
+        <div class="sePalette" id="sePalette"></div>
+        <div class="seCustom">
+          <input type="color" id="seCustom" value="#2196f3">
+          <span data-i18n="skinCustomColor">Custom color</span>
+        </div>
+        <div class="seHistBtns">
+          <button class="bfBtn ghost" id="seUndo" data-i18n="skinUndo">Undo</button>
+          <button class="bfBtn ghost" id="seRedo" data-i18n="skinRedo">Redo</button>
+        </div>
+        <div class="seHint" data-i18n="skinBodyHint">The greyed-out silhouette just shows where the head and body land — you can draw on it too, not only around it.</div>
+        <div class="seHint" data-i18n="skinMarginHint">There's room above, left and right of the head for tall hats, ears, wide shoulders and the like.</div>
+        <div class="seHint" data-i18n="skinMirrorHint">Left/right mirror is on by default — turn it off with the ⇋ button.</div>
+        <div class="seHint" data-i18n="skinKeysHint">Shortcuts: B/L/R/G/E/I for tools, [ ] for brush size, Ctrl+Z / Ctrl+Shift+Z to undo/redo.</div>
+        <button class="bfBtn go" id="sePublish" data-i18n="publishSkin">Publish to Skins Browser</button>
+        <div class="seHint" data-i18n="skinWearHint">Publishing sends it to Skins Browser for rating — you (and everyone else) can wear it once the owner adds it to Avatar.</div>
+        <div class="seLimit" id="seLimit"></div>
+        <button class="bfBtn ghost" id="seClear" data-i18n="skinClear">Clear canvas</button>
+        <button class="bfBtn ghost" id="seDefault" data-i18n="skinResetToDefault">Reset to default look</button>
+        <div class="bfMsg" id="seMsg"></div>
       </div>
-      <div class="seHistBtns">
-        <button class="bfBtn ghost" id="seUndo" data-i18n="skinUndo">Undo</button>
-        <button class="bfBtn ghost" id="seRedo" data-i18n="skinRedo">Redo</button>
-      </div>
-      <button class="bfBtn go" id="seWear" data-i18n="skinWear">Wear it</button>
-      <button class="bfBtn" id="sePublish" data-i18n="publishSkin">Publish to Skins Browser</button>
-      <div class="seLimit" id="seLimit"></div>
-      <button class="bfBtn ghost" id="seClear" data-i18n="skinClear">Clear canvas</button>
-      <button class="bfBtn ghost" id="seDefault" data-i18n="skinResetToDefault">Reset to default look</button>
-      <div class="bfMsg" id="seMsg"></div>
     </div>
   </div>
 </div>
@@ -141,10 +187,16 @@
      упирались в край рисунка. Эти же числа (и то, что снизу поля нет —
      там только ноги) знает рендер сайта и игры: ACC2_* в skinRender.js
      и acc2Box() в game.html/editor.html — менять только вместе. */
-  var BASE_W = 28, BASE_H = 92;
-  var MARGIN_T = 50, MARGIN_L = 50, MARGIN_R = 50;
-  var GW = MARGIN_L + BASE_W + MARGIN_R;    // 128
-  var GH = MARGIN_T + BASE_H;               // 142
+  /* Вдвое чаще, чем раньше (было 28x92 + поле 50): жалоба была ровно
+     на то, что рисунок получается крупными пикселями рядом с гладкой
+     фигурой игрока. skinRender.js/game.html/editor.html знают только
+     ОТНОШЕНИЕ поля к фигуре (ACC2_BOX считает через MARGIN_L/BASE_W и
+     т.п., не абсолютные числа) — можно смело умножать всё на одно и то
+     же число, ничего больше не трогая. */
+  var BASE_W = 56, BASE_H = 184;
+  var MARGIN_T = 100, MARGIN_L = 100, MARGIN_R = 100;
+  var GW = MARGIN_L + BASE_W + MARGIN_R;    // 256
+  var GH = MARGIN_T + BASE_H;               // 284
   var CELL = 10;
   var grid = new Array(GW * GH).fill(null);   // null — прозрачный пиксель
   var idx = function (x, y) { return y * GW + x; };
@@ -429,14 +481,50 @@
   }
   $('seZoomOut').onclick = function () { zoomBy(-ZOOM_STEP); };
   $('seZoomIn').onclick = function () { zoomBy(ZOOM_STEP); };
-  /* На узком экране 50% всё ещё шире вьюпорта — первый экран после
-     открытия редактора выглядел как один квадратный пиксель, пока не
-     сообразишь отжать «−». Меряем реально доступную ширину и по ней
-     сразу выставляем зум, чтобы весь холст было видно целиком; на
-     desktop (где 640px и так помещаются) ничего не меняется. */
-  var availW = cv.parentElement.clientWidth - 32;
-  if (availW > 40 && availW < GW * CELL * zoom) {
-    zoom = Math.max(ZOOM_MIN, Math.floor((availW / (GW * CELL)) * 100) / 100);
+  /* Область холста теперь на весь экран (см. .seCanvasArea) и в высоту,
+     и в ширину — раньше мерили только ширину, но при фулскрине сетка
+     (256x284 клеток) на телефоне в портрете легко упирается в высоту
+     раньше, чем в ширину. Меряем сам контейнер #seCanvasArea, а не
+     родителя канваса (.seCanvasWrap — он inline-block и растягивается
+     под фактический размер канваса, а не под видимую область). */
+  /* ---------- шторка с инструментами ----------
+     Раньше палитра/инструменты/кнопки жили в постоянной правой колонке;
+     теперь холст на весь экран, а всё это — в выезжающей панели, чтобы
+     не отнимать место у рисунка. На широком экране (см. DESKTOP_BP) это
+     панель сбоку на всю высоту и открыта сразу — там всё равно простаивала
+     бы одна лишь ширина; на телефоне — шторка снизу и по умолчанию
+     закрыта, чтобы сразу видеть холст целиком (см. @media в styles). */
+  var DESKTOP_BP = 900;
+  var isDesktop = window.innerWidth >= DESKTOP_BP;
+  var drawer = $('seDrawer'), fab = $('seToolsFab');
+  function setDrawer(open) {
+    drawer.classList.toggle('open', open);
+    document.body.classList.toggle('seDrawerOpen', open);
+    fab.textContent = open ? '✕' : '🎨';
+    fab.setAttribute('aria-label', T(open ? 'skinToolsClose' : 'skinTools', open ? 'Close' : 'Tools'));
+  }
+  fab.onclick = function () { setDrawer(!drawer.classList.contains('open')); };
+  $('seDrawerHandle').onclick = function () { setDrawer(false); };
+  setDrawer(isDesktop);
+
+  /* Область холста теперь на весь экран (см. .seCanvasArea) и в высоту,
+     и в ширину — раньше мерили только ширину, но при фулскрине сетка
+     (256x284 клеток) на телефоне в портрете легко упирается в высоту
+     раньше, чем в ширину. Меряем сам контейнер #seCanvasArea, а не
+     родителя канваса (.seCanvasWrap — он inline-block и растягивается
+     под фактический размер канваса, а не под видимую область). На
+     десктопе шторка открыта сразу и стоит сбоку (см. выше) — вычитаем
+     её ширину, иначе автозум решил бы, что места больше, чем есть на
+     самом деле, и часть холста легла бы под панель. */
+  var stage = $('seCanvasArea');
+  var reserveRight = isDesktop ? 356 : 0;
+  var availW = stage.clientWidth - 32 - reserveRight, availH = stage.clientHeight - 70;
+  var fitZoom = Math.min(
+    availW > 40 ? availW / (GW * CELL) : Infinity,
+    availH > 40 ? availH / (GH * CELL) : Infinity
+  );
+  if (isFinite(fitZoom) && fitZoom < zoom) {
+    zoom = Math.max(ZOOM_MIN, Math.floor(fitZoom * 100) / 100);
   }
   applyZoom();
 
@@ -558,15 +646,6 @@
       }).catch(function () {});
   }
   limitLine();
-
-  $('seWear').onclick = function () {
-    if (isEmpty()) { msg(T('skinEmpty', 'Draw something first')); return; }
-    post('/skin/drawing', { img: exportPng() })
-      .then(function (r) {
-        if (r.status !== 'success') { msg(r.message || T('errorTxt')); return; }
-        msg(r.message, true);
-      }).catch(function () { msg(T('serverDown')); });
-  };
 
   $('sePublish').onclick = function () {
     if (isEmpty()) { msg(T('skinEmpty', 'Draw something first')); return; }
