@@ -8,15 +8,8 @@
 
   var LINKS = [
     { key: 'leaderboard',  href: 'leaderboard.html',  txt: 'Leaderboard' },
-    { key: 'mapEditor',    href: 'editor.html',       txt: 'Map Editor', sub: [
-        { key: 'mapEditor',  href: 'editor.html',     txt: 'Map Editor' },
-        { key: 'skinEditor', href: 'skinEditor.html', txt: 'Skin Editor' }
-      ] },
-    { key: 'avatar',       href: 'avatar.html',       txt: 'Avatar' },
-    { key: 'mapsBrowser',  href: 'mapsBrowser.html',  txt: 'Maps Browser', sub: [
-        { key: 'mapsBrowser',  href: 'mapsBrowser.html',  txt: 'Maps Browser' },
-        { key: 'skinsBrowser', href: 'skinsBrowser.html', txt: 'Skins Browser' }
-      ] },
+    { key: 'mapEditor',    href: 'editor.html',       txt: 'Map Editor' },
+    { key: 'mapsBrowser',  href: 'mapsBrowser.html',  txt: 'Maps Browser' },
     { key: 'logs',         href: 'logs.html',         txt: 'Logs' }
   ];
 

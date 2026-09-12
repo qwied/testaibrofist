@@ -136,13 +136,7 @@
       +   '<div class="ow-b" id="owBkRs" style="margin:0">Restore</div>'
       + '</div>'
       + '<div class="ow-m" id="owBkMsg"></div>'
-      + '<input type="file" id="owBkFile" accept=".json,application/json" style="display:none">'
-
-      + '<div class="ow-sub">' + T('avatar', 'Avatar') + '</div>'
-      + '<div class="ow-m" style="text-align:left;color:#6b7280">'
-      +   'Boosting votes, setting a price, and uploading a skin from an image — on the Avatar page.'
-      + '</div>'
-      + '<div class="ow-b" id="owGoSkins">' + T('openAvatar', 'Открыть Avatar') + '</div>';
+      + '<input type="file" id="owBkFile" accept=".json,application/json" style="display:none">';
 
     box.querySelector('.ow-x').onclick = close;
 
@@ -171,10 +165,6 @@
           ? '👍 ' + r.likes + '   👎 ' + r.dislikes + '   → ' + r.rating
           : (r.message || T('errorTxt', 'Ошибка'));
       }).catch(function () { m.style.color = 'red'; m.textContent = T('serverDown', 'Сервер недоступен'); });
-    };
-
-    box.querySelector('#owGoSkins').onclick = function () {
-      location.href = '/avatar.html';
     };
 
     /* ---------- резервная копия: скачать / восстановить ---------- */
@@ -350,240 +340,6 @@
     window.addEventListener('bf-maps-drawn', function () { setTimeout(scan, 0); });
   }
 
-  /* ══════════════════════════════════════════════
-     SKINS BROWSER — только для владельца
-     Накрутка оценок, цена и выкладывание в Avatar, а также
-     загрузка скина из любой картинки: файлом или по ссылке.
-     Этот код приходит только владельцу — сервер отдаёт owner.js
-     остальным пустым файлом.
-     ══════════════════════════════════════════════ */
-  var skinsCss = ''
-    + '.ow-bar{border:1px dashed #cbd5e1;border-radius:12px;padding:12px;margin:12px 0;background:#fbfcfd}'
-    + '.ow-bar h4{margin:0 0 9px;font-size:14px;color:#6b7280}'
-    + '.ow-bar-row{display:grid;grid-template-columns:1fr 1.4fr auto auto;gap:8px;align-items:start}'
-    + '.ow-bar input{font-size:15px;padding:11px 12px;border:1px solid #cfd6de;border-radius:10px;width:100%;box-sizing:border-box}'
-    + '.ow-bar button{font-size:15px;padding:11px 16px;border-radius:10px;border:1px solid #2196F3;'
-    + 'background:#fff;color:#2196F3;cursor:pointer;white-space:nowrap}'
-    + '.ow-bar button.go{background:#2196F3;color:#fff}'
-    + '.ow-bar button.picked{background:#2196F3;color:#fff;border-color:#2196F3}'
-    + '.ow-bar .ow-note{font-size:12.5px;color:#6b7280;margin-top:8px}'
-    + '.ow-bar .ow-note.ok{color:#2e9b2e}'
-    + '.ow-bar button:active{transform:translateY(1px)}'
-    + '.ow-sk{border-top:1px dashed #e5e7eb;margin-top:9px;padding-top:9px;display:flex;'
-    + 'flex-direction:column;gap:6px}'
-    + '.ow-sk input{width:100%;box-sizing:border-box;font-size:13px;padding:7px 9px;'
-    + 'border:1px solid #cfd6de;border-radius:8px}'
-    + '.ow-sk .pair{display:grid;grid-template-columns:1fr 1fr;gap:6px}'
-    + '.ow-sk button{font-size:13px;padding:8px 0;border-radius:8px;border:1px solid #2196F3;'
-    + 'background:#fff;color:#2196F3;cursor:pointer;min-height:38px}'
-    + '.ow-sk button.on{border-color:#2e9b2e;background:#2e9b2e;color:#fff}'
-    + '@media(max-width:640px){'
-    + '.ow-bar-row{grid-template-columns:1fr 1fr}'
-    + '.ow-bar-row input{grid-column:1/-1}'
-    + '.ow-bar button{width:100%}}';
-
-  function page() { return window.BFSkinsPage; }
-  function say(t, ok) { var P = page(); if (P) P.msg(t, ok); }
-  function reload() { var P = page(); if (P) P.reload(); }
-
-  function buildBar() {
-    if (document.getElementById('owSkinBar')) return;
-    var host = document.getElementById('sbList');
-    if (!host) return;
-
-    if (!document.getElementById('owSkinsCss')) {
-      var st = document.createElement('style');
-      st.id = 'owSkinsCss';
-      st.textContent = skinsCss;
-      document.head.appendChild(st);
-    }
-
-    var bar = document.createElement('div');
-    bar.className = 'ow-bar';
-    bar.id = 'owSkinBar';
-    bar.innerHTML =
-        '<h4>' + T('ownerTools', 'Инструменты владельца') + '</h4>'
-      + '<div class="ow-bar-row">'
-      +   '<input id="owSkName" placeholder="' + T('colName', 'Название скина') + '">'
-      +   '<input id="owSkUrl" placeholder="https://… image URL">'
-      +   '<button class="go" id="owSkUrlGo">' + T('addFromUrl', 'Из ссылки') + '</button>'
-      +   '<button id="owSkFileGo">' + T('addFromFile', 'Из файла') + '</button>'
-      + '</div>'
-      + '<input type="file" id="owSkFile" accept="image/*" style="display:none">'
-      + '<div class="ow-bar-row">'
-      +   '<button id="owSkRescan">' + T('rescanSkins', 'Пересканировать все скины (модерация)') + '</button>'
-      + '</div>';
-    host.parentNode.insertBefore(bar, host);
-
-    bar.querySelector('#owSkUrlGo').onclick = function () {
-      var u = bar.querySelector('#owSkUrl').value.trim();
-      if (!u) { say(T('needUrl', 'Вставьте ссылку на картинку')); return; }
-      publish(u);
-    };
-    bar.querySelector('#owSkFileGo').onclick = function () {
-      bar.querySelector('#owSkFile').click();
-    };
-    bar.querySelector('#owSkFile').onchange = function (e) {
-      var f = e.target.files[0];
-      e.target.value = '';
-      if (f) shrink(f, publish);
-    };
-    /* Разовая прогонка: догоняет автомодерацией всё, что было опубликовано
-       ДО последнего ужесточения порогов и с тех пор просто лежит
-       непроверенным (пороги режут только новые загрузки). Может занять
-       время на большом каталоге — сканирует по одной картинке. */
-    bar.querySelector('#owSkRescan').onclick = function () {
-      var btn = bar.querySelector('#owSkRescan');
-      btn.disabled = true;
-      var was = btn.textContent;
-      btn.textContent = T('rescanning', 'Сканирую…');
-      post('/owner/rescanSkins', {})
-        .then(function (r) {
-          btn.disabled = false; btn.textContent = was;
-          if (r.status !== 'success') { say(r.message || T('errorTxt')); return; }
-          say(r.message, true);
-          if (r.removed) reload();
-        })
-        .catch(function () {
-          btn.disabled = false; btn.textContent = was;
-          say(T('serverDown', 'Сервер недоступен'));
-        });
-    };
-  }
-
-  // Уменьшаем картинку прямо в браузере: на сервер не должна лететь
-  // фотография на несколько мегабайт.
-  function shrink(file, done) {
-    var rd = new FileReader();
-    rd.onload = function () {
-      var im = new Image();
-      im.onload = function () {
-        var MAX_W = 300, MAX_H = 450;
-        var k = Math.min(MAX_W / im.width, MAX_H / im.height, 1);
-        var cv = document.createElement('canvas');
-        cv.width = Math.max(1, Math.round(im.width * k));
-        cv.height = Math.max(1, Math.round(im.height * k));
-        cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
-        var out = cv.toDataURL('image/png');
-        if (out.length > 700 * 1024) out = cv.toDataURL('image/jpeg', 0.82);
-        if (out.length > 900 * 1024) { say(T('imgTooBig', 'Картинка слишком тяжёлая')); return; }
-        done(out);
-      };
-      im.onerror = function () { say(T('imgBad', 'Не удалось прочитать картинку')); };
-      im.src = rd.result;
-    };
-    rd.onerror = function () { say(T('imgBad', 'Не удалось прочитать файл')); };
-    rd.readAsDataURL(file);
-  }
-
-  function publish(src) {
-    var nameEl = document.getElementById('owSkName');
-    var name = nameEl ? nameEl.value.trim() : '';
-    if (name.length < 2) { say(T('skinNameShort', 'Слишком короткое название')); return; }
-    post('/owner/publishImageSkin', { skinName: name, img: src })
-      .then(function (r) {
-        if (r.status !== 'success') { say(r.message || T('errorTxt')); return; }
-        say(r.message, true);
-        nameEl.value = '';
-        var u = document.getElementById('owSkUrl'); if (u) u.value = '';
-        reload();
-      })
-      .catch(function () { say(T('serverDown', 'Сервер недоступен')); });
-  }
-
-  // кнопки владельца на каждой карточке скина
-  function decorateSkins(skins) {
-    buildBar();
-    var map = {};
-    (skins || []).forEach(function (s) { map[s.id] = s; });
-
-    var cards = document.querySelectorAll('.sbCard');
-    for (var i = 0; i < cards.length; i++) {
-      var card = cards[i];
-      if (card.querySelector('.ow-sk')) continue;
-      var id = card.dataset.id;
-      var s = map[id];
-      if (!s) continue;
-
-      var box = document.createElement('div');
-      box.className = 'ow-sk';
-      box.innerHTML =
-          '<div class="pair">'
-        +   '<input type="number" min="0" placeholder="' + T('likes','Лайки') + '" data-lk value="' + s.likes + '">'
-        +   '<input type="number" min="0" placeholder="' + T('dislikes','Дизлайки') + '" data-dk value="' + s.dislikes + '">'
-        + '</div>'
-        + '<button data-votes>' + T('boostVotes', 'Накрутка оценок') + '</button>'
-        + '<input type="number" min="0" placeholder="' + T('priceCoins', 'Цена в монетах') +
-          '" data-price value="' + (s.price || 0) + '">'
-        + '<button data-avatar' + (s.inAvatar ? ' class="on"' : '') + '>'
-        +   (s.inAvatar ? T('removeAvatar', 'Убрать из Avatar') : T('toAvatar', 'В Avatar'))
-        + '</button>'
-        + '<button data-img>' +
-            (s.img ? T('changeImage', 'Сменить картинку') : T('setImage', 'Задать картинку')) +
-          '</button>'
-        + '<button data-drop>' + T('removeTxt', 'Удалить') + '</button>';
-      card.appendChild(box);
-
-      (function (card, id) {
-        var q = function (sel) { return card.querySelector(sel); };
-
-        q('[data-votes]').onclick = function () {
-          post('/owner/skinVotes', {
-            id: id, likes: q('[data-lk]').value, dislikes: q('[data-dk]').value
-          }).then(function (r) {
-            if (r.status !== 'success') { say(r.message || T('errorTxt')); return; }
-            say('👍 ' + r.likes + '   👎 ' + r.dislikes + '   → ' + r.rating, true);
-            reload();
-          }).catch(function () { say(T('serverDown', 'Сервер недоступен')); });
-        };
-
-        q('[data-avatar]').onclick = function () {
-          var on = this.classList.contains('on') ? 'false' : 'true';
-          post('/owner/skinToAvatar', { id: id, on: on, price: q('[data-price]').value })
-            .then(function (r) {
-              if (r.status !== 'success') { say(r.message); return; }
-              say(r.message, true); reload();
-            }).catch(function () { say(T('serverDown', 'Сервер недоступен')); });
-        };
-
-        q('[data-img]').onclick = function () {
-          var inp = document.createElement('input');
-          inp.type = 'file'; inp.accept = 'image/*';
-          inp.onchange = function () {
-            var f = inp.files[0];
-            if (!f) return;
-            shrink(f, function (src) {
-              post('/owner/skinImage', { id: id, img: src })
-                .then(function (r) { r.status === 'success' ? reload() : say(r.message); })
-                .catch(function () { say(T('serverDown', 'Сервер недоступен')); });
-            });
-          };
-          inp.click();
-        };
-
-        q('[data-drop]').onclick = function () {
-          post('/skins/remove', { id: id })
-            .then(function (r) { r.status === 'success' ? reload() : say(r.message); })
-            .catch(function () { say(T('serverDown', 'Сервер недоступен')); });
-        };
-      })(card, id);
-    }
-  }
-
-  /* Скин из произвольной картинки владелец теперь загружает прямо в
-     Skins Browser — там же, где остальные его инструменты (см.
-     buildBar/decorateSkins ниже): отдельная панель на Skin Editor была
-     не нужна, раз Skin Editor у всех один и тот же — рисовать пиксели. */
-
-  function watchSkins() {
-    window.addEventListener('bf-skins-drawn', function (e) {
-      decorateSkins(e.detail && e.detail.skins);
-    });
-    // если список успел отрисоваться до загрузки owner.js
-    if (document.querySelector('.sbCard')) decorateSkins([]);
-    buildBar();
-  }
-
   /* ---------- старт ---------- */
   get('/whoAmI').then(function (r) {
     if (!r || !r.owner) return;      // не владелец — ничего не показываем
@@ -591,7 +347,6 @@
     injectCss();
     buildPanel();
     if (/mapsBrowser/i.test(location.pathname)) watchBrowser();
-    if (/skinsBrowser/i.test(location.pathname)) watchSkins();
   }).catch(function () {});
 
   /* Панель Admin Abuse подключаем отсюда. В разметке страниц её тега нет

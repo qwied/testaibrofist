@@ -236,8 +236,7 @@ app.get('/robots.txt', (req, res) => {
 app.get('/sitemap.xml', (req, res) => {
   const base = siteOrigin(req);
   const pages = ['/', '/hide-and-seek.html', '/race.html', '/mapsBrowser.html',
-                 '/avatar.html', '/skinEditor.html', '/skinsBrowser.html', '/editor.html',
-                 '/leaderboard.html', '/logs.html', '/themes.html', '/users.html'];
+                 '/editor.html', '/leaderboard.html', '/logs.html', '/themes.html', '/users.html'];
   res.set('Content-Type', 'application/xml; charset=utf-8');
   res.set('Cache-Control', 'public, max-age=3600');
   res.send('<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -377,11 +376,6 @@ app.get('/api/online', (req, res) => {
 });
 
 app.get('/editor/index.html', (req, res) => res.redirect('/editor.html'));
-app.get('/skinEditor/index.html', (req, res) => res.redirect('/skinEditor.html'));
-app.get('/skinsBrowser/index.html', (req, res) => res.redirect('/skinsBrowser.html'));
-app.get('/shop/index.html', (req, res) => res.redirect('/avatar.html'));
-app.get('/avatar/index.html', (req, res) => res.redirect('/avatar.html'));
-app.get('/settings/index.html', (req, res) => res.redirect('/avatar.html'));
 app.get('/supporters/index.html', (req, res) => res.redirect('/leaderboard.html'));
 app.get('/users/index.html', (req, res) => res.redirect('/users.html' + (req.originalUrl.split('?')[1] ? '?' + req.originalUrl.split('?')[1] : '')));
 app.get('/mapsBrowser/index.html', (req, res) => res.redirect('/mapsBrowser.html'));
