@@ -206,6 +206,8 @@ body{background:#eef2f8;overflow:hidden}
         <script src="sound.js?v=103"></script>
         <script src="skinRender.js?v=104"></script>
         <script src="skinCanvas.js?v=101"></script>
+        <script src="gifuct.bundle.js?v=100"></script>
+        <script src="gifPlayer.js?v=100"></script>
         <script src="coin.js?v=101"></script>
         <link rel="stylesheet" type="text/css" href="mobile.css?v=85">
         <script src="theme.js?v=100"></script>
@@ -366,17 +368,27 @@ function acc2Box(w, h){
   };
 }
 
+// .gif грузится и рисуется совсем иначе, чем обычная картинка (см. gifPlayer.js) —
+// ctx.drawImage() для неё всегда рисует только первый кадр, анимация мимо canvas не идёт
+function isGifUrl(url) { return /\.gif(\?|#|$)/i.test(url || ''); }
+
 function figure(w,h,col,accent,skin){
   var d = w, top = d + h*FIG_GAP, bodyH = Math.max(0, h - top);
-  var pic = (skin && skin.img) ? skinImage(skin.img) : null;
+  var isGif = !!skin && !!skin.img && isGifUrl(skin.img);
+  var pic = (skin && skin.img && !isGif) ? skinImage(skin.img) : null;
+  var gifFrame = (isGif && window.GifPlayer) ? GifPlayer.frameAt(skin.img, performance.now()) : null;
+  var gifDims = isGif && window.GifPlayer ? GifPlayer.dims(skin.img) : null;
   var isAcc = !!skin && (window.BFSkin ? window.BFSkin.isAccessoryKind(skin.kind)
                                         : (skin.kind === 'accessory' || skin.kind === 'accessory2'));
   // готовая картинка от владельца (не рисунок из Skin Editor) по-прежнему
-  // заменяет фигуру целиком
-  if(pic && !isAcc){
-    var k = Math.min(w/pic.naturalWidth, h/pic.naturalHeight);
-    var pw = pic.naturalWidth*k, ph = pic.naturalHeight*k;
-    ctx.drawImage(pic, (w-pw)/2, h-ph, pw, ph);
+  // заменяет фигуру целиком — пока GIF ещё не декодирован, gifFrame будет
+  // null и ниже нарисуется обычный силуэт, как и для ещё не загруженной pic
+  if((pic || (gifFrame && gifDims)) && !isAcc){
+    var natW = gifFrame ? gifDims.width : pic.naturalWidth;
+    var natH = gifFrame ? gifDims.height : pic.naturalHeight;
+    var k = Math.min(w/natW, h/natH);
+    var pw = natW*k, ph = natH*k;
+    ctx.drawImage(gifFrame || pic, (w-pw)/2, h-ph, pw, ph);
     return;
   }
   if(skin && window.BFSkinCanvas) BFSkinCanvas.behind(ctx, w, h, skin);

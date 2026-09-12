@@ -54,10 +54,10 @@
   <div class="bfSub" data-i18n="skinSub">Upload a picture to use as your character — the owner reviews the best for Avatar.</div>
 
   <div class="seCard">
-    <div class="seReq"><b data-i18n="skinReqTitle">Requirements</b>: <span data-i18n="skinReqText">PNG or JPEG only. We resize large photos automatically — final image between 48×48 and 2000×2000 pixels, up to 6 MB. Uploads are screened automatically; explicit or graphic images are blocked and never published.</span></div>
+    <div class="seReq"><b data-i18n="skinReqTitle">Requirements</b>: <span data-i18n="skinReqText">PNG, JPEG or GIF (animated GIFs play in-game). We resize large photos automatically — final image between 48×48 and 2000×2000 pixels (GIF: up to 600×600, 50 frames), up to 6 MB. Uploads are screened automatically; explicit or graphic images are blocked and never published.</span></div>
 
     <label class="seDrop" id="seDrop">
-      <input type="file" id="seFile" accept="image/png,image/jpeg">
+      <input type="file" id="seFile" accept="image/png,image/jpeg,image/gif">
       <svg class="seDropIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
         <polyline points="17 8 12 3 7 8"/>
@@ -97,11 +97,13 @@
   var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : (f || k); };
   var $ = function (id) { return document.getElementById(id); };
 
-  // тот же порядок величин, что MIN_DIM/MAX_DIM в imgModeration.js и
-  // IMG_MAX в userSkins.js — сервер всё равно проверяет сам, это только
-  // для того, чтобы не гонять картинку туда-сюда впустую
+  // тот же порядок величин, что MIN_DIM/MAX_DIM/MAX_GIF_DIM в
+  // imgModeration.js и IMG_MAX в userSkins.js — сервер всё равно
+  // проверяет сам, это только для того, чтобы не гонять картинку
+  // туда-сюда впустую и сразу сказать игроку, что не так
   var MAX_SIDE = 1000;         // до какой стороны ужимаем большое фото на клиенте
   var MIN_DIM = 48;
+  var MAX_GIF_DIM = 600;
   var MAX_BYTES = 6 * 1024 * 1024;
 
   var chosen = null;           // { dataUrl, width, height, sizeBytes }
@@ -153,6 +155,31 @@
     });
   }
 
+  /* GIF нельзя прогонять через canvas, как обычное фото (loadAndFit
+     выше) — canvas.drawImage() рисует только первый кадр GIF, canvas не
+     умеет отдать анимацию обратно, а toDataURL() тогда сохранил бы
+     единственный кадр без анимации. Поэтому GIF просто читаем как есть
+     и шлём на сервер оригинальными байтами — сервер сам проверит и
+     разрешение, и число кадров (см. MAX_GIF_DIM/MAX_GIF_FRAMES). */
+  function loadGifAsIs(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error('read failed')); };
+      reader.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error('decode failed')); };
+        img.onload = function () {
+          var w = img.naturalWidth, h = img.naturalHeight;
+          if (w < MIN_DIM || h < MIN_DIM) { reject(new Error('too-small')); return; }
+          if (w > MAX_GIF_DIM || h > MAX_GIF_DIM) { reject(new Error('too-big-gif')); return; }
+          resolve({ dataUrl: reader.result, width: w, height: h, sizeBytes: file.size });
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   function showPreview(fit) {
     $('sePreview').src = fit.dataUrl;
     $('sePreviewMeta').textContent = fit.width + '×' + fit.height + '  ·  ' +
@@ -163,19 +190,22 @@
 
   function handleFile(file) {
     if (!file) return;
-    if (!/^image\/(png|jpeg)$/i.test(file.type)) {
-      msg(T('skinFormatBad', 'Please choose a PNG or JPEG image'));
+    var isGif = /^image\/gif$/i.test(file.type);
+    if (!isGif && !/^image\/(png|jpeg)$/i.test(file.type)) {
+      msg(T('skinFormatBad', 'Please choose a PNG, JPEG or GIF image'));
       return;
     }
     if (file.size > MAX_BYTES) {
       msg(T('skinTooBig', 'That file is too large'));
       return;
     }
-    loadAndFit(file).then(function (fit) {
+    (isGif ? loadGifAsIs(file) : loadAndFit(file)).then(function (fit) {
       chosen = fit;
       showPreview(fit);
-    }).catch(function () {
-      msg(T('skinFormatBad', 'Please choose a PNG or JPEG image'));
+    }).catch(function (e) {
+      msg(e && e.message === 'too-big-gif'
+        ? T('skinGifTooBig', 'GIF is too large — at most 600×600 pixels')
+        : T('skinFormatBad', 'Please choose a PNG, JPEG or GIF image'));
     });
   }
 
