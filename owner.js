@@ -409,7 +409,10 @@
       +   '<button class="go" id="owSkUrlGo">' + T('addFromUrl', 'Из ссылки') + '</button>'
       +   '<button id="owSkFileGo">' + T('addFromFile', 'Из файла') + '</button>'
       + '</div>'
-      + '<input type="file" id="owSkFile" accept="image/*" style="display:none">';
+      + '<input type="file" id="owSkFile" accept="image/*" style="display:none">'
+      + '<div class="ow-bar-row">'
+      +   '<button id="owSkRescan">' + T('rescanSkins', 'Пересканировать все скины (модерация)') + '</button>'
+      + '</div>';
     host.parentNode.insertBefore(bar, host);
 
     bar.querySelector('#owSkUrlGo').onclick = function () {
@@ -424,6 +427,27 @@
       var f = e.target.files[0];
       e.target.value = '';
       if (f) shrink(f, publish);
+    };
+    /* Разовая прогонка: догоняет автомодерацией всё, что было опубликовано
+       ДО последнего ужесточения порогов и с тех пор просто лежит
+       непроверенным (пороги режут только новые загрузки). Может занять
+       время на большом каталоге — сканирует по одной картинке. */
+    bar.querySelector('#owSkRescan').onclick = function () {
+      var btn = bar.querySelector('#owSkRescan');
+      btn.disabled = true;
+      var was = btn.textContent;
+      btn.textContent = T('rescanning', 'Сканирую…');
+      post('/owner/rescanSkins', {})
+        .then(function (r) {
+          btn.disabled = false; btn.textContent = was;
+          if (r.status !== 'success') { say(r.message || T('errorTxt')); return; }
+          say(r.message, true);
+          if (r.removed) reload();
+        })
+        .catch(function () {
+          btn.disabled = false; btn.textContent = was;
+          say(T('serverDown', 'Сервер недоступен'));
+        });
     };
   }
 

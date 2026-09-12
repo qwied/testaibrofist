@@ -545,6 +545,47 @@ function register(app, acc) {
     res.json({ status: 'success' });
   });
 
+  /* Ужесточение порогов imgModeration.js защищает только НОВЫЕ публикации —
+     всё, что уже прошло проверку раньше (под старыми, мягче порогами) и
+     лежит на диске, так и остаётся висеть, потому что ничего его заново
+     не сканирует. Этот инструмент — разовая (запускает владелец вручную из
+     Skins Browser) прогонка ВСЕХ уже опубликованных картиночных скинов
+     через текущую (самую свежую и строгую) автомодерацию и удаление тех,
+     что теперь не проходят. Скины владельца (/owner/publishImageSkin,
+     WEBP и прочее, что imgModeration.js в принципе не умеет декодировать)
+     пропускаются — они и раньше не проверялись автомодерацией, это
+     осознанно доверенный владельцем канал. */
+  app.post('/owner/rescanSkins', async (req, res) => {
+    if (!ownerOnly(req, res)) return;
+    const removed = [];
+    let scanned = 0, errors = 0;
+    for (const s of list.slice()) {
+      const m = /^\/skinimg\/([a-z0-9]+)\.(png|jpg|gif)$/.exec(String(s.img || ''));
+      if (!m) continue;   // нет картинки, или формат (webp) imgModeration.js декодировать не умеет
+      let buf;
+      try { buf = fs.readFileSync(path.join(IMG_DIR, m[1] + '.' + m[2])); }
+      catch (e) { continue; }   // файла уже нет на диске — нечего сканировать
+      const decoded = decodeImage(buf, m[2]);
+      if (!decoded || !decoded.frames) continue;
+      scanned++;
+      let flagged;
+      try { flagged = await scanForBlockedContent(decoded); }
+      catch (e) { errors++; continue; }   // модель недоступна — пропускаем, не роняем всю прогонку
+      if (flagged) {
+        unlinkSkinImg(s.img);
+        const idx = list.indexOf(s);
+        if (idx !== -1) list.splice(idx, 1);
+        removed.push({ id: s.id, skinName: s.skinName, author: s.author, reason: flagged.reason });
+      }
+    }
+    if (removed.length) save();
+    res.json({
+      status: 'success', scanned, removed: removed.length, errors, items: removed,
+      message: 'Rescanned ' + scanned + ' skin' + (scanned === 1 ? '' : 's') + ' — removed ' + removed.length +
+               (errors ? '  ·  ' + errors + ' skipped (moderation unavailable)' : '')
+    });
+  });
+
   // ---------- примерить чужой скин ----------
   app.post('/skins/wear', (req, res) => {
     const u = currentUser(req);
