@@ -236,20 +236,23 @@
     /* --- табличка очков забега (Race), левый верхний угол: кнопка-шапка
            «Scores» раскрывает список всех в комнате прямо под собой —
            одна карточка, а не кнопка + отдельная всплывающая панель со
-           своим же повторным заголовком «SCORES». Кнопка — сплошной
-           синий овал (тот же приём, что и у активной вкладки на
-           leaderboard.html/profile — .lbTab.on/.upStatTab.on), чтобы
-           «Scores» везде, где оно есть, выглядело одинаково, а не
-           безликим белым прямоугольником. Только для режима Race, вне
-           редактора. --- */
+           своим же повторным заголовком «SCORES». Пока список закрыт,
+           кнопка — компактный синий овал (тот же приём, что и у бейджа
+           «Scores» на profile/.upScoreBadge и активной вкладки на
+           leaderboard.html — .lbTab.on/.upStatTab.on), а не во всю
+           ширину прямоугольник; при открытии овал расширяется в шапку
+           той же карточки со списком под ней. Только для режима Race,
+           вне редактора. --- */
     + '#gScoresBox{display:none;position:fixed;top:52px;left:12px;z-index:61;min-width:150px;'
-    + 'max-width:200px;background:rgba(255,255,255,.96);border-radius:12px;overflow:hidden;'
-    + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.4)}'
-    + '#gScoresBtn{display:block;width:100%;height:38px;padding:0 14px;background:#2196F3;color:#fff;'
-    + 'border:none;cursor:pointer;font:700 12.5px sans-serif;text-align:left;'
-    + 'line-height:38px;white-space:nowrap}'
+    + 'max-width:200px}'
+    + '#gScoresBtn{display:inline-block;padding:7px 16px;background:#2196F3;color:#fff;'
+    + 'border:none;border-radius:20px;cursor:pointer;font:700 12.5px sans-serif;'
+    + 'white-space:nowrap;box-shadow:0 8px 20px -12px rgba(15,23,42,.4)}'
     + '#gScoresBtn:active{background:#0d7fd4}'
-    + '#gScoresList{display:none;max-height:24vh;overflow-y:auto;padding:8px 10px;font:12px sans-serif}'
+    + '#gScoresBox.open #gScoresBtn{display:block;width:100%;border-radius:14px 14px 0 0}'
+    + '#gScoresList{display:none;max-height:24vh;overflow-y:auto;padding:8px 10px;font:12px sans-serif;'
+    + 'background:rgba(255,255,255,.96);border-radius:0 0 12px 12px;'
+    + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.4)}'
     + '#gScoresBox.open #gScoresList{display:block}'
     + '.gScoreRow{display:flex;justify-content:space-between;gap:12px;padding:3px 0;color:#191919}'
     + '.gScoreRow.me{font-weight:bold;color:#2196F3}'
