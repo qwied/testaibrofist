@@ -372,6 +372,38 @@ function acc2Box(w, h){
 // ctx.drawImage() для неё всегда рисует только первый кадр, анимация мимо canvas не идёт
 function isGifUrl(url) { return /\.gif(\?|#|$)/i.test(url || ''); }
 
+/* Те же цвета роли, что и в game.js (COLOR_SEEKER/COLOR_CAUGHT) — этот
+   файл их не импортирует (отдельный скрипт), но раз figure() получает уже
+   готовый col, сюда достаточно знать сами значения, чтобы отличить «это
+   цвет роли, нужно заметно перекрасить скин» от «это чей-то обычный цвет
+   силуэта, скин не трогаем». */
+var COLOR_SEEKER = '#1e6fe0', COLOR_CAUGHT = '#f97316';
+
+/* Раньше загруженный игроком скин (фото/GIF) заменял фигуру целиком и
+   никогда не красился в цвет роли — искателя и пойманного было не
+   отличить от обычного игрока, если у них стоит своя картинка вместо
+   силуэта. Перекрашиваем не прямо на игровом холсте (там позади фигуры
+   уже нарисована карта — заливка задела бы и её), а на отдельном
+   маленьком офскрин-канвасе: рисуем туда картинку, поверх заливаем
+   цветом с source-atop (ложится только там, где сама картинка
+   непрозрачна — форма скина не квадратом красится, а по силуэту) и
+   отдаём готовый результат одним обычным drawImage. */
+var tintCanvas = document.createElement('canvas');
+var tintCtx = tintCanvas.getContext('2d');
+function drawSkinTinted(src, dx, dy, dw, dh, tintColor){
+  var iw = Math.max(1, Math.round(dw)), ih = Math.max(1, Math.round(dh));
+  if(tintCanvas.width !== iw || tintCanvas.height !== ih){ tintCanvas.width = iw; tintCanvas.height = ih; }
+  else tintCtx.clearRect(0, 0, iw, ih);
+  tintCtx.drawImage(src, 0, 0, iw, ih);
+  tintCtx.globalCompositeOperation = "source-atop";
+  tintCtx.globalAlpha = 0.7;             // заметно, но текстуру самого фото ещё чуть видно
+  tintCtx.fillStyle = tintColor;
+  tintCtx.fillRect(0, 0, iw, ih);
+  tintCtx.globalCompositeOperation = "source-over";
+  tintCtx.globalAlpha = 1;
+  ctx.drawImage(tintCanvas, dx, dy, dw, dh);
+}
+
 function figure(w,h,col,accent,skin){
   var d = w, top = d + h*FIG_GAP, bodyH = Math.max(0, h - top);
   var isGif = !!skin && !!skin.img && isGifUrl(skin.img);
@@ -405,7 +437,9 @@ function figure(w,h,col,accent,skin){
     var pw = natW * (h / natH), ph = h;
     var maxW = w * SKIN_IMG_MAX_WIDE;
     if(pw > maxW){ ph = natH * (maxW / natW); pw = maxW; }
-    ctx.drawImage(gifFrame || pic, (w-pw)/2, h-ph, pw, ph);
+    var dx = (w-pw)/2, dy = h-ph;
+    if(col === COLOR_SEEKER || col === COLOR_CAUGHT) drawSkinTinted(gifFrame || pic, dx, dy, pw, ph, col);
+    else ctx.drawImage(gifFrame || pic, dx, dy, pw, ph);
     return;
   }
   if(skin && window.BFSkinCanvas) BFSkinCanvas.behind(ctx, w, h, skin);
