@@ -201,6 +201,30 @@ body{
     font-weight: 600;
 }
 
+.storyModeBtnWrap{
+    float: left;
+    width: 100%;
+    text-align: center;
+    margin-top: 14px;
+    box-sizing: border-box;
+}
+
+.storyModeBtn{
+    display: inline-block;
+    padding: 12px 26px;
+    border-radius: 8px;
+    border: 2px solid #2196F3;
+    color: #2196F3;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.storyModeBtn:hover{
+    background: #2196F3;
+    color: #fff;
+}
+
 
 /* Header */
 .header {
@@ -520,6 +544,12 @@ body{
                         </div>
                 </div>
 
+                <div class="storyModeBtnWrap">
+                        <a href="story.html" class="storyModeBtn" data-i18n="storyTxt">🤝 Story Mode</a>
+                </div>
+
+                <div id="bfDailyWheel" style="display:none"></div>
+
         </div>
 
 
@@ -589,7 +619,8 @@ body{
         <script src="coin.js?v=101"></script>
         <script src="skinRender.js?v=104"></script>
         <script src="skinAvatar.js?v=102" defer></script>
-        <script src="shell.js?v=102"></script>
+        <script src="shell.js?v=103"></script>
+        <script src="dailyReward.js?v=101" defer></script>
 <script src="abuseShow.js?v=101" defer></script>
         <script src="consent.js?v=100"></script>
 </body>
