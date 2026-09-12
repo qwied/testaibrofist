@@ -233,28 +233,30 @@
     + 'html.is-mobile #gRoul,html.is-tablet #gRoul{top:44px;width:130px;'
     + 'right:calc(8px + env(safe-area-inset-right,0px))}'
     + 'html.is-mobile .rName,html.is-tablet .rName{width:130px;font-size:12.5px}'
-    /* --- табличка очков забега (Race), левый верхний угол: кнопка-иконка
-           раскрывает список всех в комнате, кто выше в Scores — тот выше
-           в списке. Только для режима Race, вне редактора. --- */
-    + '#gScoresBtn{display:none;position:fixed;top:52px;left:12px;z-index:61;'
-    + 'height:38px;padding:0 14px;background:rgba(255,255,255,.92);color:#111827;'
-    + 'border:1px solid #d7dee7;border-radius:9px;cursor:pointer;font:700 12.5px sans-serif;'
-    + 'line-height:38px;white-space:nowrap;'
-    + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.35)}'
-    + '#gScoresBtn:active{background:#f2f7fd}'
-    + '#gScoresPanel{display:none;position:fixed;top:96px;left:12px;z-index:61;min-width:150px;'
-    + 'max-width:200px;max-height:27vh;overflow-y:auto;background:rgba(255,255,255,.96);'
-    + 'border:1px solid #d7dee7;border-radius:9px;padding:8px 10px;font:12px sans-serif;'
-    + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.45)}'
-    + '#gScoresPanel.on{display:block}'
-    + '#gScoresPanel h4{margin:0 0 6px;font-size:11px;color:#8b93a1;text-transform:uppercase;letter-spacing:.03em}'
+    /* --- табличка очков забега (Race), левый верхний угол: кнопка-шапка
+           «Scores» раскрывает список всех в комнате прямо под собой —
+           одна карточка, а не кнопка + отдельная всплывающая панель со
+           своим же повторным заголовком «SCORES». Кнопка — сплошной
+           синий овал (тот же приём, что и у активной вкладки на
+           leaderboard.html/profile — .lbTab.on/.upStatTab.on), чтобы
+           «Scores» везде, где оно есть, выглядело одинаково, а не
+           безликим белым прямоугольником. Только для режима Race, вне
+           редактора. --- */
+    + '#gScoresBox{display:none;position:fixed;top:52px;left:12px;z-index:61;min-width:150px;'
+    + 'max-width:200px;background:rgba(255,255,255,.96);border-radius:12px;overflow:hidden;'
+    + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.4)}'
+    + '#gScoresBtn{display:block;width:100%;height:38px;padding:0 14px;background:#2196F3;color:#fff;'
+    + 'border:none;cursor:pointer;font:700 12.5px sans-serif;text-align:left;'
+    + 'line-height:38px;white-space:nowrap}'
+    + '#gScoresBtn:active{background:#0d7fd4}'
+    + '#gScoresList{display:none;max-height:24vh;overflow-y:auto;padding:8px 10px;font:12px sans-serif}'
+    + '#gScoresBox.open #gScoresList{display:block}'
     + '.gScoreRow{display:flex;justify-content:space-between;gap:12px;padding:3px 0;color:#191919}'
     + '.gScoreRow.me{font-weight:bold;color:#2196F3}'
     + '.gScoreRow b{color:#e2a600;flex:0 0 auto}'
     + '.gScoreN{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
     + '#gScoresEmpty{color:#8b93a1}'
-    + 'html.is-mobile #gScoresBtn,html.is-tablet #gScoresBtn{top:44px}'
-    + 'html.is-mobile #gScoresPanel,html.is-tablet #gScoresPanel{top:88px}'
+    + 'html.is-mobile #gScoresBox,html.is-tablet #gScoresBox{top:44px}'
     /* --- личные сообщения (Messages) прямо в игре, левый нижний угол:
            та же переписка, что и на messages.html, чтобы не выходить
            из матча ради ответа. Во всех режимах, не только в Race. --- */
@@ -349,8 +351,8 @@
     + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     + '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 '
     + '8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>'
-    + '<button id="gScoresBtn" aria-label="Scores">Scores</button>'
-    + '<div id="gScoresPanel"><h4 id="gScoresTitle">Scores</h4><div id="gScoresList"></div></div>'
+    + '<div id="gScoresBox"><button id="gScoresBtn" aria-label="Scores">Scores</button>'
+    + '<div id="gScoresList"></div></div>'
     + '<button id="gMsgsBtn" aria-label="Messages"><svg viewBox="0 0 24 24" fill="none" '
     + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     + '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 6l10 7 10-7"/></svg></button>'
@@ -380,9 +382,7 @@
     var tk = $('gTalk');                          // кнопка чата — теперь иконка, подпись только для скринридера
     if (tk) tk.setAttribute('aria-label', TR('chatBtn', 'Чат'));
     var sb2 = $('gScoresBtn');
-    if (sb2) sb2.setAttribute('aria-label', TR('raceScoresTitle', 'Scores'));
-    var st2 = $('gScoresTitle');
-    if (st2) st2.textContent = TR('raceScoresTitle', 'Scores');
+    if (sb2) { sb2.textContent = TR('raceScoresTitle', 'Scores'); sb2.setAttribute('aria-label', TR('raceScoresTitle', 'Scores')); }
     var mb2 = $('gMsgsBtn');
     if (mb2) mb2.setAttribute('aria-label', TR('messagesTitle', 'Messages'));
     var mn2 = $('gMsgsNewBtn');
@@ -430,12 +430,12 @@
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   // ---------- табличка очков забега (Race), левый верхний угол ----------
-  var scoresBtn = $('gScoresBtn'), scoresPanel = $('gScoresPanel');
+  var scoresBox = $('gScoresBox'), scoresBtn = $('gScoresBtn');
   if (scoresBtn) scoresBtn.addEventListener('click', function () {
-    scoresPanel.classList.toggle('on');
+    scoresBox.classList.toggle('open');
   });
   function renderRaceScores(list) {
-    if (!scoresPanel) return;
+    if (!scoresBox) return;
     var box = $('gScoresList');
     box.innerHTML = (list && list.length)
       ? list.map(function (r) {
@@ -1021,7 +1021,7 @@
     connect();
 
     // сразу видна, кликать незачем — кнопка теперь только сворачивает её
-    if (MODE === 'race' && scoresBtn) { scoresBtn.style.display = 'flex'; if (scoresPanel) scoresPanel.classList.add('on'); }
+    if (MODE === 'race' && scoresBox) { scoresBox.style.display = 'block'; scoresBox.classList.add('open'); }
     msgsSetup();
 
     if (MODE === 'hideAndSeek') {

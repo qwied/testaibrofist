@@ -33,7 +33,12 @@
 .upStatTab.on{color:#fff;background:var(--blue);border-color:var(--blue)}
 .upStatRow{display:flex;gap:18px;flex-wrap:wrap}
 .upStatRow .upCoins{margin-bottom:0}
-.upScore{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--blue);font-size:16px}
+.upScore{display:inline-flex;align-items:center;gap:8px;font-weight:700;color:var(--blue);font-size:16px}
+/* тот же приём, что и у активной вкладки чуть выше (.upStatTab.on) —
+   раньше очки были просто синим числом без подписи, непонятно на глаз,
+   что это вообще такое рядом с монетами */
+.upScoreBadge{display:inline-block;padding:3px 11px;border-radius:20px;font-size:11px;
+  font-weight:700;color:#fff;background:var(--blue);text-transform:uppercase;letter-spacing:.03em}
 .upActs{display:flex;gap:8px;flex-wrap:wrap}
 .upActs button,.upActs a{padding:10px 18px;border-radius:9px;cursor:pointer;font-size:14px;
   border:1px solid var(--blue);background:#fff;color:var(--blue);text-decoration:none;
@@ -197,7 +202,7 @@
       +     '</div>'
       +     '<div class="upStatRow">'
       +       '<span class="upCoins">' + (window.BFCoin ? BFCoin.svg(18) : '') + ' <span id="upCoinsV">' + (s.coins || 0) + '</span></span>'
-      +       '<span class="upScore"><span id="upScoreV">' + (s.score || 0) + '</span></span>'
+      +       '<span class="upScore"><span class="upScoreBadge">' + T('raceScoresTitle', 'Scores') + '</span> <span id="upScoreV">' + (s.score || 0) + '</span></span>'
       +     '</div>'
       +   '</div>'
       +   '<div class="upActs">' + acts + '</div>'
