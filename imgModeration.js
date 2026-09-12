@@ -58,14 +58,21 @@ const TARGET_SAMPLES = 200000;
 // чисто цветового фильтра — нейросеть такое не распознаёт вовсе
 const RED_RATIO_LIMIT = 0.22;
 
-// пороги нейросети (вероятность класса 0..1). Porn/Hentai — явная
-// порнография/хентай, блокируем при уверенности выше половины. Sexy —
-// провокационная, но не обязательно откровенная одежда (купальники и
-// т.п.) — с ней нейросеть куда менее точна, поэтому порог намного строже,
-// иначе легко словить пляжное фото как нарушение.
-const NSFW_PORN_LIMIT = 0.5;
-const NSFW_HENTAI_LIMIT = 0.5;
-const NSFW_SEXY_LIMIT = 0.85;
+/* Пороги нейросети (вероятность класса 0..1). Изначально стояли 0.5/0.5/0.85 —
+   пропустили реальную голую фотографию, потому что снимок был любительский,
+   на бытовом фоне, не в позе/стиле типичного порно из обучающей выборки —
+   уверенность по классу Porn у сети на таких кадрах часто ниже половины,
+   хотя контент однозначно неприемлемый. Подняли строгость сильно: лучше
+   отклонить лишнее нормальное фото, чем пропустить голое тело. Sexy всё
+   ещё мягче Porn/Hentai (это провокационная, не обязательно голая, одежда —
+   купальники и т.п., там сеть менее точна), но тоже заметно строже, чем
+   было. Отдельно — суммарный счёт: даже если ни один класс поодиночке не
+   дотянул до своего порога, устойчивая совокупность (например, Porn 0.12 +
+   Hentai 0.1 + Sexy 0.3) уже подозрительна. */
+const NSFW_PORN_LIMIT = 0.15;
+const NSFW_HENTAI_LIMIT = 0.15;
+const NSFW_SEXY_LIMIT = 0.5;
+const NSFW_COMBINED_LIMIT = 0.35;   // porn + hentai + sexy*0.5
 
 // ---------- нейросеть: грузим один раз на весь процесс ----------
 let modelPromise = null;
@@ -235,7 +242,8 @@ async function classifyFrame(width, height, data) {
   const byClass = {};
   predictions.forEach((p) => { byClass[p.className] = p.probability; });
   const porn = byClass.Porn || 0, hentai = byClass.Hentai || 0, sexy = byClass.Sexy || 0;
-  if (porn > NSFW_PORN_LIMIT || hentai > NSFW_HENTAI_LIMIT || sexy > NSFW_SEXY_LIMIT)
+  if (porn > NSFW_PORN_LIMIT || hentai > NSFW_HENTAI_LIMIT || sexy > NSFW_SEXY_LIMIT ||
+      (porn + hentai + sexy * 0.5) > NSFW_COMBINED_LIMIT)
     return { reason: 'nsfw-nn', classes: byClass };
   return null;
 }
