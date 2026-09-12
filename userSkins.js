@@ -1,30 +1,59 @@
-// ============ СКИНЫ ИГРОКОВ: рисунки из Skin Editor, оценки, витрина Avatar ============
-/* Скин — это картинка, которую игрок рисует сам в бесплатном Skin Editor
-   (см. /skins/publish — выложить в Skins Browser на оценку всем). Носить
-   рисунок нельзя, пока владелец не выложит его в Avatar (/owner/skinToAvatar,
-   может ещё и оценки подкрутить — /owner/skinVotes); если скин платный, то
-   и купить, как любому игроку, — автору рисунка тут никаких особых прав,
-   публикация и ношение теперь два разных шага (см. /skins/wear). Ещё
-   владелец может добавить свой скин из любой картинки напрямую
-   (/owner/publishImageSkin). Старый каталог покупных деталей (голова+тело
-   из готовых картинок) убран — см. skins.js. */
+// ============ СКИНЫ ИГРОКОВ: загруженные картинки, оценки, витрина Avatar ============
+/* Скин — это картинка, которую игрок сам ЗАГРУЖАЕТ в Skin Editor (см.
+   /skins/publish — выложить в Skins Browser на оценку всем). Раньше тут
+   был холст, по которому рисовали пикселями; его убрали целиком —
+   рисунок по пикселям выглядел грубо рядом с гладкой фигурой персонажа,
+   и не было никакой защиты от неприемлемых картинок, потому что автор
+   рисовал их прямо в браузере. Загруженный файл вместо этого реально
+   декодируется и проверяется автомодерацией (см. imgModeration.js)
+   ДО того, как попасть на диск и в список — сама картинка целиком
+   заменяет фигуру персонажа (как раньше только у владельца через
+   /owner/publishImageSkin, теперь и у обычных игроков).
+
+   Носить загруженный скин нельзя, пока владелец не выложит его в Avatar
+   (/owner/skinToAvatar, может ещё и оценки подкрутить — /owner/skinVotes);
+   если скин платный, то и купить, как любому игроку, — автору рисунка
+   тут никаких особых прав, публикация и ношение — два разных шага (см.
+   /skins/wear). Старый каталог покупных деталей (голова+тело из готовых
+   картинок) убран — см. skins.js. */
 const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
 const dns = require('dns').promises;
+const { decodeImage, scanForBlockedContent, MIN_DIM, MAX_DIM } = require('./imgModeration.js');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const FILE = path.join(DATA_DIR, 'userskins.json');
 
-const MINE_LIMIT = 20;      // сколько своих образов можно держать в «Мои скины»
+const MINE_LIMIT = 20;      // сколько своих образов можно держать в «Мои скины» одновременно
+const SKIN_DAILY_LIMIT = 5; // сколько НОВЫХ скинов можно опубликовать за сутки
 const IMG_DIR = path.join(DATA_DIR, 'skinimg');
-const IMG_MAX = 3 * 1024 * 1024;   // 3 МБ на картинку
-/* SVG больше не принимаем: внутри него может лежать скрипт.
-   Остальные форматы безопасны — это растровые картинки. */
+const IMG_MAX = 6 * 1024 * 1024;   // 6 МБ — с запасом под фото с телефона
+/* SVG не принимаем нигде: внутри него может лежать скрипт. GIF/WEBP —
+   тоже нет, но только для игроков (см. PLAYER_IMG_TYPES ниже): их
+   декодер (imgModeration.js) не умеет разбирать, а без разбора по
+   пикселям нечего было бы прогонять через автомодерацию. У владельца
+   (/owner/publishImageSkin) её нет и не нужна — там шире, весь IMG_TYPES. */
 const IMG_TYPES = {
   'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg',
   'image/gif': 'gif', 'image/webp': 'webp'
 };
+const PLAYER_IMG_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg' };
+
+/* Тот же приём, что и в maps.js (публикация карт): считаем не по списку
+   скинов, а по счётчику в аккаунте — иначе лимит обходился бы публикацией
+   и немедленным удалением. */
+function publishedToday(u) {
+  if (!u || !u.skinDay || Date.now() - u.skinDay > 864e5) return 0;
+  return u.skinCount || 0;
+}
+function countSkinPublish(u) {
+  if (!u.skinDay || Date.now() - u.skinDay > 864e5) { u.skinDay = Date.now(); u.skinCount = 0; }
+  u.skinCount = (u.skinCount || 0) + 1;
+}
+function publishWait(u) {
+  return Math.max(0, (u.skinDay || Date.now()) + 864e5 - Date.now());
+}
 
 // управляющие и невидимые символы в названиях недопустимы
 const BAD_CHARS = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g;
@@ -102,15 +131,15 @@ function unlinkSkinImg(url) {
 }
 
 // data:image/png;base64,.... -> буфер
-function fromDataUrl(raw) {
+function fromDataUrl(raw, types) {
   const m = /^data:([\w/+.-]+);base64,([\s\S]+)$/.exec(String(raw || '').trim());
   if (!m) return null;
-  const ext = IMG_TYPES[m[1].toLowerCase()];
+  const ext = (types || IMG_TYPES)[m[1].toLowerCase()];
   if (!ext) return { bad: 'This image format is not supported' };
   let buf;
   try { buf = Buffer.from(m[2], 'base64'); } catch (e) { return { bad: 'Image cannot be read' }; }
   if (!buf.length) return { bad: 'Image is empty' };
-  if (buf.length > IMG_MAX) return { bad: 'Image is larger than 3 MB' };
+  if (buf.length > IMG_MAX) return { bad: 'Image is larger than ' + Math.round(IMG_MAX / (1024 * 1024)) + ' MB' };
   return { buf, ext };
 }
 
@@ -239,10 +268,15 @@ function register(app, acc) {
     res.json({ status: 'success' });
   });
 
-  // ---------- выложить нарисованный скин в Skins Browser ----------
-  /* Публикация снова открыта: любой рисунок из бесплатного Skin Editor
-     виден всем в Skins Browser и его можно оценивать. Владелец решает,
-     что достойно попасть в Avatar за монеты (см. /owner/skinToAvatar). */
+  // ---------- выложить загруженную картинку в Skins Browser ----------
+  /* Публикация открыта всем: загруженная картинка идёт на оценку в Skins
+     Browser. Владелец решает, что достойно попасть в Avatar за монеты
+     (см. /owner/skinToAvatar). Перед сохранением на диск картинка (1)
+     проверяется по счётчикам (сколько всего своих скинов и сколько
+     опубликовано за сутки — см. SKIN_DAILY_LIMIT), (2) реально
+     декодируется и проверяется на разрешение, (3) прогоняется через
+     эвристическую автомодерацию (imgModeration.js) — если что-то из
+     этого не пройдёт, на диск ничего не попадает вовсе. */
   app.post('/skins/publish', (req, res) => {
     const u = currentUser(req);
     if (!u) return res.json({ status: 'error', message: 'Sign in first' });
@@ -253,9 +287,6 @@ function register(app, acc) {
 
     const raw = String(req.body.img || '').trim();
     if (!raw) return res.json({ status: 'error', message: 'No image provided' });
-    const got = fromDataUrl(raw);
-    if (!got) return res.json({ status: 'error', message: 'Image not recognized' });
-    if (got.bad) return res.json({ status: 'error', message: got.bad });
 
     const mine = mineOf(u.name);
     if (mine.some(s => low(s.skinName) === low(skinName)))
@@ -265,15 +296,58 @@ function register(app, acc) {
                         message: 'The Skins Browser holds up to ' + MINE_LIMIT +
                                  ' of your skins. Delete some to make room.' });
 
+    const usedToday = publishedToday(u);
+    if (usedToday >= SKIN_DAILY_LIMIT) {
+      const mins = Math.ceil(publishWait(u) / 60000);
+      const h = Math.floor(mins / 60), mn = mins % 60;
+      return res.json({
+        status: 'error',
+        message: 'Daily limit of ' + SKIN_DAILY_LIMIT + ' skins reached. You can publish the next one in '
+                 + (h > 0 ? h + 'h ' + mn + 'm' : mn + 'm') + '.'
+      });
+    }
+
+    // только реальные PNG/JPEG — это единственные форматы, которые умеет
+    // разобрать imgModeration.js; без разбора по пикселям автомодерации
+    // было бы нечего проверять
+    const got = fromDataUrl(raw, PLAYER_IMG_TYPES);
+    if (!got) return res.json({ status: 'error', message: 'Image not recognized' });
+    if (got.bad) return res.json({ status: 'error', message: got.bad });
+
+    // настоящее декодирование (а не просто доверие заявленному
+    // Content-Type) — заодно отсекает битые файлы и переименованные
+    // не-картинки
+    const decoded = decodeImage(got.buf, got.ext);
+    if (!decoded)
+      return res.json({ status: 'error',
+                        message: 'Could not read this image — please upload a plain PNG or JPEG photo' });
+    if (decoded.width < MIN_DIM || decoded.height < MIN_DIM)
+      return res.json({ status: 'error',
+                        message: 'Image is too small — at least ' + MIN_DIM + '×' + MIN_DIM + ' pixels required' });
+    if (decoded.width > MAX_DIM || decoded.height > MAX_DIM)
+      return res.json({ status: 'error',
+                        message: 'Image is too large — at most ' + MAX_DIM + '×' + MAX_DIM + ' pixels allowed' });
+
+    const flagged = scanForBlockedContent(decoded);
+    if (flagged) {
+      console.log('[skin-moderation] blocked upload from', u.name, '- reason:', flagged.reason,
+                  'ratio:', flagged.ratio.toFixed(2));
+      return res.json({
+        status: 'error',
+        message: 'This image was blocked by automatic content moderation (looks like it may contain explicit ' +
+                 'or graphic content). If you think this is a mistake, contact the owner.'
+      });
+    }
+
     // проверяем совпадение у ВСЕХ опубликованных скинов, не только своих —
-    // иначе один и тот же рисунок можно раздать по кругу под разными именами
+    // иначе одну и ту же картинку можно раздать по кругу под разными именами
     const sig = imgSig(got.buf);
     const twin = list.find(s => s.sig === sig);
     if (twin)
       return res.json({ status: 'error',
                         message: low(twin.author) === low(u.name)
-                          ? 'This exact drawing is already published — «' + twin.skinName + '»'
-                          : 'This exact drawing is already published by «' + twin.author + '» — «' + twin.skinName + '»' });
+                          ? 'This exact image is already published — «' + twin.skinName + '»'
+                          : 'This exact image is already published by «' + twin.author + '» — «' + twin.skinName + '»' });
 
     const id = 's' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
     let img;
@@ -281,22 +355,25 @@ function register(app, acc) {
     catch (e) { return res.json({ status: 'error', message: 'Failed to save: ' + e.message }); }
 
     const item = {
-      id, skinName, author: u.name, img, sig, kind: 'accessory2',
+      id, skinName, author: u.name, img, sig,
       date: Date.now(), created: Date.now(),
       votes: {}, boostLikes: 0, boostDislikes: 0, rating: 0,
       inAvatar: false, price: 0
     };
     list.push(item);
+    countSkinPublish(u);
+    saveUsers();
     save();
 
-    /* Публикация больше не надевает скин сама: до того как владелец
-       выложит его в Avatar (и его купят, если он платный), носить
-       нельзя — даже автору. См. /skins/wear. */
+    /* Публикация не надевает скин сама: до того как владелец выложит его
+       в Avatar (и его купят, если он платный), носить нельзя — даже
+       автору. См. /skins/wear. */
     const left = Math.max(0, MINE_LIMIT - mineOf(u.name).length);
+    const leftToday = Math.max(0, SKIN_DAILY_LIMIT - publishedToday(u));
     res.json({
-      status: 'success', id, left, limit: MINE_LIMIT,
-      message: 'Skin «' + skinName + '» published to Skins Browser  ·  slots left: ' +
-               left + ' of ' + MINE_LIMIT
+      status: 'success', id, left, limit: MINE_LIMIT, leftToday, dailyLimit: SKIN_DAILY_LIMIT,
+      message: 'Skin «' + skinName + '» published to Skins Browser  ·  today: ' +
+               leftToday + ' of ' + SKIN_DAILY_LIMIT + ' left'
     });
   });
 
@@ -374,10 +451,14 @@ function register(app, acc) {
   // сколько свободных мест осталось в «Мои скины»
   app.get('/skins/limit', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ limit: MINE_LIMIT, left: MINE_LIMIT, guest: true });
+    if (!u) return res.json({
+      limit: MINE_LIMIT, left: MINE_LIMIT, dailyLimit: SKIN_DAILY_LIMIT, leftToday: SKIN_DAILY_LIMIT, guest: true
+    });
     res.json({
       limit: MINE_LIMIT, guest: false,
-      left: Math.max(0, MINE_LIMIT - mineOf(u.name).length)
+      left: Math.max(0, MINE_LIMIT - mineOf(u.name).length),
+      dailyLimit: SKIN_DAILY_LIMIT,
+      leftToday: Math.max(0, SKIN_DAILY_LIMIT - publishedToday(u))
     });
   });
 

@@ -5,11 +5,11 @@
 <title>AIBrofist — Skin Editor</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="canonical" href="https://aibrofist.online/skinEditor.html">
-<meta name="description" content="Draw your own accessories for your character — the body stays the game's color.">
+<meta name="description" content="Upload a picture to use as your character.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="AIBrofist">
 <meta property="og:title" content="AIBrofist — Skin Editor">
-<meta property="og:description" content="Draw your own accessories for your character — the body stays the game's color.">
+<meta property="og:description" content="Upload a picture to use as your character.">
 <meta property="og:url" content="https://aibrofist.online/skinEditor.html">
 <meta property="og:image" content="https://aibrofist.online/preview.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -17,91 +17,28 @@
 <link rel="stylesheet" href="ui.css?v=85">
 <script src="device.js?v=100"></script>
 <style>
-/* Раньше был бокс шириной ~1080px с холстом слева и панелью инструментов
-   справа — по просьбе (жалоба "пиксельки дохуя большие" + рисунок мельче
-   реальной фигуры игрока) окно рисования теперь занимает весь экран под
-   шапкой сайта, а все инструменты/палитра/кнопки уехали в выезжающую снизу
-   шторку (.seDrawer), чтобы не отнимать место у холста — он и так уже
-   вдвое подробнее прежнего (см. GW/GH ниже в скрипте). */
-html,body{height:100%}
-.bfWrap{padding:0}
-.seWrap{position:fixed;top:var(--hdr);left:0;right:0;bottom:0;
-  display:flex;flex-direction:column;overflow:hidden;background:var(--soft)}
-.seTopBar{flex:0 0 auto;padding:6px 14px;text-align:center;
-  border-bottom:1px solid var(--line);background:var(--panel,#fff)}
-.seTopBar .bfTitle{margin:0;font-size:16px}
-.seTopBar .bfSub{display:none}
-.seCanvasArea{flex:1 1 auto;min-height:0;position:relative;overflow:auto;
-  display:flex;align-items:center;justify-content:center;padding:16px}
-.seCanvasWrap{display:inline-block;line-height:0}
-.seCanvasWrap canvas{image-rendering:pixelated;image-rendering:crisp-edges;
-  touch-action:none;cursor:crosshair;border-radius:4px;
-  box-shadow:0 0 0 1px var(--line);background:var(--soft)}
-.seZoom{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:5;
-  display:flex;align-items:center;gap:10px;background:var(--panel,#fff);
-  border:1px solid var(--line);border-radius:999px;padding:5px 14px;
-  box-shadow:0 2px 10px rgba(0,0,0,.15)}
-.seZoom button{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);
-  background:var(--soft);cursor:pointer;font-size:16px;padding:0;line-height:1;color:var(--ink)}
-.seZoom span{font-size:12.5px;color:var(--muted);min-width:38px;text-align:center}
-/* плавающая кнопка открывает/закрывает шторку с инструментами —
-   на телефоне держим её закрытой по умолчанию, чтобы под холст
-   отдавалось максимум экрана; на широком экране она открыта сразу
-   (см. setDrawer() в скрипте) */
-.seFab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));
-  width:54px;height:54px;border-radius:50%;border:none;background:var(--blue);color:#fff;
-  font-size:22px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3);z-index:20;
-  display:flex;align-items:center;justify-content:center}
-.seDrawer{position:fixed;left:0;right:0;bottom:0;max-height:72vh;z-index:19;
-  background:var(--panel,#fff);border-top:1px solid var(--line);
-  border-radius:16px 16px 0 0;box-shadow:0 -6px 22px rgba(0,0,0,.2);
-  transform:translateY(100%);transition:transform .22s ease;
-  display:flex;flex-direction:column}
-.seDrawer.open{transform:translateY(0)}
-.seDrawerHandle{flex:0 0 auto;display:flex;justify-content:center;padding:10px 0 2px;cursor:pointer}
-.seDrawerHandle i{width:36px;height:4px;border-radius:2px;background:var(--line)}
-.seDrawerBody{overflow-y:auto;padding:6px 16px calc(18px + env(safe-area-inset-bottom,0px));
-  max-width:760px;margin:0 auto;width:100%}
-/* На широком экране высоты и так мало не бывает, а вот ширина простаивает —
-   шторка снизу там съедала бы под инструменты добрую половину экрана.
-   Вместо неё — панель сбоку на всю высоту, холст остаётся на полную
-   высоту экрана, а по ширине просто немного ужимается. */
-@media (min-width:900px){
-  .seDrawer{left:auto;top:0;bottom:0;width:340px;max-height:none;
-    border-top:none;border-left:1px solid var(--line);border-radius:0;
-    box-shadow:-6px 0 22px rgba(0,0,0,.15);transform:translateX(100%)}
-  .seDrawer.open{transform:translateX(0)}
-  .seDrawerHandle{display:none}
-  .seDrawerBody{max-width:none;height:100%}
-  body.seDrawerOpen .seFab{right:356px}
-}
-.seTools{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0}
-.seTool{width:44px;height:44px;border-radius:10px;border:1px solid var(--line);
-  background:var(--soft);cursor:pointer;display:flex;align-items:center;justify-content:center;
-  font-size:19px;padding:0}
-.seTool.on{border-color:var(--blue);background:#eef7ff;box-shadow:inset 0 0 0 2px var(--blue)}
-.seTool:disabled{opacity:.35;cursor:default}
-.seSizes{display:flex;gap:6px;justify-content:center;margin:0 0 4px}
-.seSizeBtn{min-width:38px;height:32px;padding:0 8px;border-radius:8px;border:1px solid var(--line);
-  background:var(--soft);cursor:pointer;font-size:12.5px;font-weight:700;color:var(--ink)}
-.seSizeBtn.on{border-color:var(--blue);background:#eef7ff;box-shadow:inset 0 0 0 2px var(--blue)}
-.seLabel{font-size:11.5px;color:var(--muted);text-align:center;text-transform:uppercase;
-  letter-spacing:.4px;margin:10px 0 4px}
-.seHistBtns{display:flex;gap:8px}
-.seHistBtns .bfBtn{margin-bottom:0;flex:1;width:auto;min-width:0}
-.sePalette{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin:10px 0}
-/* min-width:0 — на iOS aspect-ratio внутри grid-track 1fr иначе не
-   сжимался ниже своего «естественного» размера и распирал палитру
-   шире контейнера (тот же класс бага, что и у самого холста выше) */
-.seSwatch{aspect-ratio:1;min-width:0;border-radius:7px;border:1px solid rgba(0,0,0,.15);cursor:pointer;padding:0}
-.seSwatch.on{box-shadow:0 0 0 2px var(--blue)}
-.seCustom{display:flex;align-items:center;gap:8px;margin:10px 0}
-.seCustom input[type=color]{width:44px;height:34px;border:1px solid var(--line);
-  border-radius:8px;padding:2px;background:var(--soft);cursor:pointer}
-.seNick{width:100%;text-align:center;font-size:15px;padding:9px 0;border:1px solid var(--line);
-  border-radius:10px;background:var(--soft);color:var(--muted);margin-bottom:6px}
-.seLimit{font-size:12.5px;color:var(--muted);text-align:center;margin-top:2px}
-.seHint{font-size:12.5px;color:var(--muted);text-align:center;margin:6px 0}
+.seCard{max-width:480px;margin:0 auto;border:1px solid var(--line);border-radius:16px;
+  background:var(--panel,#fff);padding:20px}
+.seReq{font-size:12.5px;line-height:1.5;color:var(--muted);background:var(--soft);
+  border-radius:10px;padding:10px 12px;margin-bottom:16px}
+.seReq b{color:var(--ink)}
+.seDrop{border:2px dashed var(--line);border-radius:14px;padding:22px 14px;text-align:center;
+  cursor:pointer;background:var(--soft);transition:border-color .15s}
+.seDrop.drag{border-color:var(--blue)}
+.seDrop input{display:none}
+.seDropIcon{width:34px;height:34px;margin:0 auto 8px;color:var(--muted)}
+.seDropMain{font-size:14.5px;font-weight:700;color:var(--ink)}
+.seDropHint{font-size:12.5px;color:var(--muted);margin-top:2px}
+.sePreviewWrap{display:none;text-align:center;margin-top:14px}
+.sePreviewWrap.on{display:block}
+.sePreviewWrap img{max-width:100%;max-height:280px;border-radius:10px;
+  box-shadow:0 0 0 1px var(--line);object-fit:contain;background:var(--soft)}
+.sePreviewMeta{font-size:12px;color:var(--muted);margin-top:6px}
+.seChangeBtn{background:none;border:none;color:var(--blue);font-size:13px;cursor:pointer;
+  padding:4px 0;text-decoration:underline}
+.seNameInput{width:100%;font-size:15px;padding:11px 12px;border:1px solid var(--line);
+  border-radius:10px;background:var(--soft);color:var(--ink);margin:14px 0 10px;box-sizing:border-box}
+.seLimit{font-size:12.5px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.6}
 </style>
         <script src="theme.js?v=100"></script>
         <link rel="icon" href="/favicon.ico" sizes="32x32">
@@ -113,56 +50,41 @@ html,body{height:100%}
 <body>
 
 <div class="bfWrap">
-  <div class="seWrap">
-    <div class="seTopBar">
-      <div class="bfTitle" data-i18n="skinTitle">Skin Editor</div>
-      <div class="bfSub" data-i18n="skinSub">Draw accessories for your character — the body color is set by the game.</div>
+  <div class="bfTitle" data-i18n="skinTitle">Skin Editor</div>
+  <div class="bfSub" data-i18n="skinSub">Upload a picture to use as your character — the owner reviews the best for Avatar.</div>
+
+  <div class="seCard">
+    <div class="seReq"><b data-i18n="skinReqTitle">Requirements</b>: <span data-i18n="skinReqText">PNG or JPEG only. We resize large photos automatically — final image between 48×48 and 2000×2000 pixels, up to 6 MB. Uploads are screened automatically; explicit or graphic images are blocked and never published.</span></div>
+
+    <label class="seDrop" id="seDrop">
+      <input type="file" id="seFile" accept="image/png,image/jpeg">
+      <svg class="seDropIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <div class="seDropMain" data-i18n="skinChooseFile">Choose an image</div>
+      <div class="seDropHint" data-i18n="skinDropHint">or drag and drop it here</div>
+    </label>
+
+    <div class="sePreviewWrap" id="sePreviewWrap">
+      <img id="sePreview" alt="">
+      <div class="sePreviewMeta" id="sePreviewMeta"></div>
+      <button class="seChangeBtn" id="seChange" data-i18n="skinChooseFile">Choose an image</button>
     </div>
 
-    <div class="seCanvasArea" id="seCanvasArea">
-      <div class="seCanvasWrap"><canvas id="seCanvas"></canvas></div>
-      <div class="seZoom">
-        <button id="seZoomOut" aria-label="Zoom out">−</button>
-        <span id="seZoomLabel">50%</span>
-        <button id="seZoomIn" aria-label="Zoom in">+</button>
-      </div>
-    </div>
+    <input class="seNameInput" id="seName" maxlength="30" data-i18n-ph="skinNamePlaceholder" placeholder="Skin name (2–30 characters)">
 
-    <button class="seFab" id="seToolsFab" aria-label="Tools">🎨</button>
+    <button class="bfBtn go" id="sePublish" data-i18n="publishSkin">Publish to Skins Browser</button>
+    <div class="bfMsg" id="seMsg"></div>
+    <div class="seLimit" id="seLimit"></div>
 
-    <div class="seDrawer" id="seDrawer">
-      <div class="seDrawerHandle" id="seDrawerHandle"><i></i></div>
-      <div class="seDrawerBody">
-        <input class="seNick" id="seNick" readonly>
-        <div class="seTools" id="seTools"></div>
-        <div class="seLabel" data-i18n="skinBrushSize">Brush size</div>
-        <div class="seSizes" id="seSizes"></div>
-        <div class="sePalette" id="sePalette"></div>
-        <div class="seCustom">
-          <input type="color" id="seCustom" value="#2196f3">
-          <span data-i18n="skinCustomColor">Custom color</span>
-        </div>
-        <div class="seHistBtns">
-          <button class="bfBtn ghost" id="seUndo" data-i18n="skinUndo">Undo</button>
-          <button class="bfBtn ghost" id="seRedo" data-i18n="skinRedo">Redo</button>
-        </div>
-        <div class="seHint" data-i18n="skinBodyHint">The greyed-out silhouette just shows where the head and body land — you can draw on it too, not only around it.</div>
-        <div class="seHint" data-i18n="skinMarginHint">There's room above, left and right of the head for tall hats, ears, wide shoulders and the like.</div>
-        <div class="seHint" data-i18n="skinMirrorHint">Left/right mirror is on by default — turn it off with the ⇋ button.</div>
-        <div class="seHint" data-i18n="skinKeysHint">Shortcuts: B/L/R/G/E/I for tools, [ ] for brush size, Ctrl+Z / Ctrl+Shift+Z to undo/redo.</div>
-        <button class="bfBtn go" id="sePublish" data-i18n="publishSkin">Publish to Skins Browser</button>
-        <div class="seHint" data-i18n="skinWearHint">Publishing sends it to Skins Browser for rating — you (and everyone else) can wear it once the owner adds it to Avatar.</div>
-        <div class="seLimit" id="seLimit"></div>
-        <button class="bfBtn ghost" id="seClear" data-i18n="skinClear">Clear canvas</button>
-        <button class="bfBtn ghost" id="seDefault" data-i18n="skinResetToDefault">Reset to default look</button>
-        <div class="bfMsg" id="seMsg"></div>
-      </div>
-    </div>
+    <button class="bfBtn ghost" id="seDefault" data-i18n="skinResetToDefault">Reset to default look</button>
   </div>
 </div>
 
 <link rel="stylesheet" href="mobile.css?v=85">
-<script src="i18n.js?v=109"></script>
+<script src="i18n.js?v=110"></script>
 <script src="skinRender.js?v=104"></script>
 <script src="coin.js?v=101"></script>
 <script src="shell.js?v=102"></script>
@@ -175,440 +97,21 @@ html,body{height:100%}
   var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : (f || k); };
   var $ = function (id) { return document.getElementById(id); };
 
-  /* Сетка рисования: пропорции близки к фигуре игрока (BFSkin.W/H —
-     100x336, круглая голова сверху + капсула-тело), но рисуем прямо
-     по прямоугольнику — игра всё равно масштабирует картинку целиком
-     в габариты игрока, форма контура тут не обязана совпадать.
+  // тот же порядок величин, что MIN_DIM/MAX_DIM в imgModeration.js и
+  // IMG_MAX в userSkins.js — сервер всё равно проверяет сам, это только
+  // для того, чтобы не гонять картинку туда-сюда впустую
+  var MAX_SIDE = 1000;         // до какой стороны ужимаем большое фото на клиенте
+  var MIN_DIM = 48;
+  var MAX_BYTES = 6 * 1024 * 1024;
 
-     BASE_W/BASE_H — сетка точно по контуру фигуры, как было раньше.
-     Вокруг неё — поле (MARGIN_*) для деталей, которые фигуру
-     перерастают: высокие шляпы, уши, широкие плечи. Раньше поля не
-     было вовсе, и таким деталям было просто негде поместиться — они
-     упирались в край рисунка. Эти же числа (и то, что снизу поля нет —
-     там только ноги) знает рендер сайта и игры: ACC2_* в skinRender.js
-     и acc2Box() в game.html/editor.html — менять только вместе. */
-  /* Вдвое чаще, чем раньше (было 28x92 + поле 50): жалоба была ровно
-     на то, что рисунок получается крупными пикселями рядом с гладкой
-     фигурой игрока. skinRender.js/game.html/editor.html знают только
-     ОТНОШЕНИЕ поля к фигуре (ACC2_BOX считает через MARGIN_L/BASE_W и
-     т.п., не абсолютные числа) — можно смело умножать всё на одно и то
-     же число, ничего больше не трогая. */
-  var BASE_W = 56, BASE_H = 184;
-  var MARGIN_T = 100, MARGIN_L = 100, MARGIN_R = 100;
-  var GW = MARGIN_L + BASE_W + MARGIN_R;    // 256
-  var GH = MARGIN_T + BASE_H;               // 284
-  var CELL = 10;
-  var grid = new Array(GW * GH).fill(null);   // null — прозрачный пиксель
-  var idx = function (x, y) { return y * GW + x; };
-
-  var cv = $('seCanvas');
-  cv.width = GW * CELL; cv.height = GH * CELL;
-  var ctx = cv.getContext('2d');
-
-  var TOOLS = [
-    { id: 'brush', icon: '✏️', label: 'skinToolBrush' },
-    { id: 'line', icon: '📏', label: 'skinToolLine' },
-    { id: 'rect', icon: '⬜', label: 'skinToolRect' },
-    { id: 'eyedrop', icon: '💧', label: 'skinToolEyedrop' },
-    { id: 'fill', icon: '🪣', label: 'skinToolFill' },
-    { id: 'eraser', icon: '🧽', label: 'skinToolEraser' },
-    { id: 'mirror', icon: '⇋', label: 'skinToolMirror' }
-  ];
-  var tool = 'brush', mirror = true, color = '#2196f3';
-
-  var SIZES = [1, 2, 3];
-  var brushSize = 1;
-
-  var PALETTE = [
-    '#000000', '#ffffff', '#6b7280', '#9ca3af', '#d1d5db', '#7c4a2d', '#a5673f', '#e8b98a',
-    '#ffd8b3', '#f43f5e', '#ef4444', '#f97316', '#f59e0b', '#facc15', '#84cc16', '#22c55e',
-    '#10b981', '#14b8a6', '#06b6d4', '#3b82f6', '#2196f3', '#6366f1', '#8b5cf6', '#d946ef'
-  ];
-
-  /* Силуэт фигуры под сеткой — теперь просто ориентир, где на реальной
-     фигуре окажутся голова и тело: рисовать поверх него можно, как и
-     везде — раньше это было запрещено (тело же красит сама игра, роль
-     в прятках), но по просьбе решили, что своя раскраска головы/тела
-     важнее — она просто ляжет поверх игрового цвета слоем сверху (см.
-     acc2Box() в game.html/editor.html и ACC2_BOX в skinRender.js).
-     guideGeom() считает форму один раз (по BASE_W/BASE_H — без поля,
-     тем же масштабом, что и раньше), смещена на поле (MARGIN_L/MARGIN_T),
-     чтобы остаться в реальном размере на новом, большем холсте. */
-  var guide = null;
-  function guideGeom() {
-    if (guide || !window.BFSkin) return guide;
-    var S = window.BFSkin;
-    var kx = (BASE_W * CELL) / S.W, ky = (BASE_H * CELL) / S.H;
-    var ox = MARGIN_L * CELL, oy = MARGIN_T * CELL;
-    guide = {
-      hcx: ox + S.HEAD_R * kx, hcy: oy + S.HEAD_R * ky, hr: S.HEAD_R * Math.min(kx, ky),
-      bx0: ox, by0: oy + S.BODY_TOP * ky, bw: S.W * kx, bh: S.BODY_H * ky, br: S.BODY_RX * kx
-    };
-    return guide;
-  }
-
-  function drawGuide() {
-    var g = guideGeom();
-    if (!g) return;
-    ctx.save();
-    ctx.globalAlpha = .16;
-    ctx.fillStyle = '#111827';
-    ctx.beginPath();
-    ctx.arc(g.hcx, g.hcy, g.hr, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(g.bx0, g.by0, g.bw, g.bh, g.br); else ctx.rect(g.bx0, g.by0, g.bw, g.bh);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function checker(x, y) {
-    return ((x + y) % 2 === 0) ? '#e5e7eb' : '#f3f4f6';
-  }
-
-  /* Каждый нарисованный пиксель — квадрат CELLxCELL, слегка скруглённый по
-     углам: сплошные острые квадраты на крупном зуме смотрятся жёстче, чем
-     сам холст в игре. На итоговую картинку это не влияет — экспорт всё
-     равно кладёт ровно один настоящий пиксель на клетку (см. export ниже),
-     скругление только в самом редакторе, для удобства рисования. */
-  function fillCell(x, y) {
-    var px = x * CELL, py = y * CELL, r = Math.min(4, CELL * 0.22);
-    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(px, py, CELL, CELL, r); ctx.fill(); }
-    else ctx.fillRect(px, py, CELL, CELL);
-  }
-
-  // незафиксированная линия/прямоугольник — «призрак» поверх сетки,
-  // пока ведёшь мышь/палец; фиксируется в grid только на отпускании
-  var previewCells = [];
-
-  function render() {
-    ctx.clearRect(0, 0, cv.width, cv.height);
-    drawGuide();
-    for (var y = 0; y < GH; y++) {
-      for (var x = 0; x < GW; x++) {
-        var c = grid[idx(x, y)];
-        if (!c) continue;
-        ctx.fillStyle = c;
-        fillCell(x, y);
-      }
-    }
-    if (previewCells.length) {
-      ctx.fillStyle = color;
-      previewCells.forEach(function (c) {
-        if (c.x >= 0 && c.x < GW && c.y >= 0 && c.y < GH) fillCell(c.x, c.y);
-      });
-    }
-    // тонкая сетка — только пока рисуем в разумном зуме
-    ctx.strokeStyle = 'rgba(0,0,0,.06)';
-    ctx.lineWidth = 1;
-    for (var gx = 0; gx <= GW; gx++) {
-      ctx.beginPath(); ctx.moveTo(gx * CELL + .5, 0); ctx.lineTo(gx * CELL + .5, cv.height); ctx.stroke();
-    }
-    for (var gy = 0; gy <= GH; gy++) {
-      ctx.beginPath(); ctx.moveTo(0, gy * CELL + .5); ctx.lineTo(cv.width, gy * CELL + .5); ctx.stroke();
-    }
-  }
-
-  // прозрачные клетки рисуем шахматкой, чтобы отличать от белого цвета —
-  // делаем это отдельным низким слоем один раз перед основной отрисовкой
-  function drawTransparencyBg() {
-    for (var y = 0; y < GH; y++)
-      for (var x = 0; x < GW; x++)
-        if (!grid[idx(x, y)]) { ctx.fillStyle = checker(x, y); ctx.fillRect(x * CELL, y * CELL, CELL, CELL); }
-  }
-  var _render = render;
-  render = function () { drawTransparencyBg(); _render(); };
-
-  function setPixel(x, y, val) {
-    if (x < 0 || x >= GW || y < 0 || y >= GH) return;
-    grid[idx(x, y)] = val;
-    if (mirror) {
-      var mx = GW - 1 - x;
-      if (mx !== x) grid[idx(mx, y)] = val;
-    }
-  }
-
-  // штамп кисти/ластика size x size клеток, центр — под курсором
-  function stampCells(cx, cy, size) {
-    var cells = [], half = Math.floor((size - 1) / 2);
-    for (var dy = 0; dy < size; dy++)
-      for (var dx = 0; dx < size; dx++)
-        cells.push({ x: cx - half + dx, y: cy - half + dy });
-    return cells;
-  }
-
-  // прямая линия между двумя клетками (алгоритм Брезенхэма)
-  function lineCells(x0, y0, x1, y1) {
-    var cells = [];
-    var dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
-    var sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-    var err = dx - dy, x = x0, y = y0;
-    while (true) {
-      cells.push({ x: x, y: y });
-      if (x === x1 && y === y1) break;
-      var e2 = 2 * err;
-      if (e2 > -dy) { err -= dy; x += sx; }
-      if (e2 < dx) { err += dx; y += sy; }
-    }
-    return cells;
-  }
-
-  // контур прямоугольника между двумя противоположными углами
-  function rectCells(x0, y0, x1, y1) {
-    var cells = [];
-    var xa = Math.min(x0, x1), xb = Math.max(x0, x1);
-    var ya = Math.min(y0, y1), yb = Math.max(y0, y1);
-    for (var x = xa; x <= xb; x++) { cells.push({ x: x, y: ya }); cells.push({ x: x, y: yb }); }
-    for (var y = ya; y <= yb; y++) { cells.push({ x: xa, y: y }); cells.push({ x: xb, y: y }); }
-    return cells;
-  }
-
-  function floodFill(x, y, val) {
-    var start = grid[idx(x, y)];
-    if (start === val) return;
-    var stack = [[x, y]], seen = {};
-    while (stack.length) {
-      var p = stack.pop(), px = p[0], py = p[1];
-      if (px < 0 || px >= GW || py < 0 || py >= GH) continue;
-      var k = px + ',' + py;
-      if (seen[k]) continue;
-      seen[k] = 1;
-      if (grid[idx(px, py)] !== start) continue;
-      setPixel(px, py, val);
-      stack.push([px + 1, py], [px - 1, py], [px, py + 1], [px, py - 1]);
-    }
-  }
-
-  function cellAt(clientX, clientY) {
-    var r = cv.getBoundingClientRect();
-    var x = Math.floor((clientX - r.left) / (r.width / GW));
-    var y = Math.floor((clientY - r.top) / (r.height / GH));
-    return { x: x, y: y };
-  }
-
-  /* ---------- отмена/повтор ----------
-     Снимок всей сетки (не diff — она умещается в памяти без проблем,
-     а код от этого проще и без крайних случаев) кладём в стек ОДИН раз,
-     перед началом мазка/фигуры/очистки — не на каждый пиксель, иначе
-     один мазок откатывался бы по пикселю за раз. */
-  var undoStack = [], redoStack = [];
-  var MAX_HISTORY = 50;
-  function pushHistory() {
-    undoStack.push(grid.slice());
-    if (undoStack.length > MAX_HISTORY) undoStack.shift();
-    redoStack.length = 0;
-  }
-  function undo() {
-    if (!undoStack.length) return;
-    redoStack.push(grid.slice());
-    grid = undoStack.pop();
-    render();
-  }
-  function redo() {
-    if (!redoStack.length) return;
-    undoStack.push(grid.slice());
-    grid = redoStack.pop();
-    render();
-  }
-
-  var painting = false;
-  function act(x, y) {
-    if (x < 0 || x >= GW || y < 0 || y >= GH) return;
-    if (tool === 'brush') stampCells(x, y, brushSize).forEach(function (c) { setPixel(c.x, c.y, color); });
-    else if (tool === 'eraser') stampCells(x, y, brushSize).forEach(function (c) { setPixel(c.x, c.y, null); });
-    else if (tool === 'fill') floodFill(x, y, color);
-    else if (tool === 'eyedrop') {
-      var got = grid[idx(x, y)];
-      if (got) { color = got; $('seCustom').value = got; drawSwatches(); }
-      tool = 'brush'; drawTools();
-    }
-    render();
-  }
-
-  // линия/прямоугольник ведутся отдельно от act(): фигура держится
-  // «призраком» (previewCells), пока не отпустили палец/кнопку мыши
-  var shapeStart = null;
-  function commitShape() {
-    if (!shapeStart) return;
-    previewCells.forEach(function (c) { setPixel(c.x, c.y, color); });
-    shapeStart = null; previewCells = [];
-    render();
-  }
-
-  cv.addEventListener('pointerdown', function (e) {
-    var c = cellAt(e.clientX, e.clientY);
-    cv.setPointerCapture(e.pointerId);
-    if (tool === 'line' || tool === 'rect') {
-      pushHistory();
-      shapeStart = c;
-      previewCells = [c];
-      render();
-      return;
-    }
-    painting = true;
-    pushHistory();
-    act(c.x, c.y);
-  });
-  cv.addEventListener('pointermove', function (e) {
-    var c = cellAt(e.clientX, e.clientY);
-    if (shapeStart) {
-      previewCells = tool === 'line' ? lineCells(shapeStart.x, shapeStart.y, c.x, c.y)
-                                      : rectCells(shapeStart.x, shapeStart.y, c.x, c.y);
-      render();
-      return;
-    }
-    if (!painting || tool === 'fill' || tool === 'eyedrop') return;
-    act(c.x, c.y);
-  });
-  cv.addEventListener('pointerup', function () { painting = false; commitShape(); });
-  cv.addEventListener('pointerleave', function () { painting = false; commitShape(); });
-
-  /* ---------- зум ----------
-     Холст всегда рисуется в полном разрешении (GW*CELL px) — зум просто
-     растягивает/сжимает его показ через CSS, поэтому пиксели остаются
-     чёткими (image-rendering: pixelated), а расчёт клетки под курсором
-     (cellAt) не меняется — он уже мерит в долях от текущего showing-размера. */
-  var ZOOM_MIN = 0.2, ZOOM_MAX = 2, ZOOM_STEP = 0.15;
-  var zoom = 0.5;
-  function applyZoom() {
-    cv.style.width = Math.round(GW * CELL * zoom) + 'px';
-    cv.style.height = Math.round(GH * CELL * zoom) + 'px';
-    $('seZoomLabel').textContent = Math.round(zoom * 100) + '%';
-  }
-  function zoomBy(delta) {
-    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((zoom + delta) * 100) / 100));
-    applyZoom();
-  }
-  $('seZoomOut').onclick = function () { zoomBy(-ZOOM_STEP); };
-  $('seZoomIn').onclick = function () { zoomBy(ZOOM_STEP); };
-  /* Область холста теперь на весь экран (см. .seCanvasArea) и в высоту,
-     и в ширину — раньше мерили только ширину, но при фулскрине сетка
-     (256x284 клеток) на телефоне в портрете легко упирается в высоту
-     раньше, чем в ширину. Меряем сам контейнер #seCanvasArea, а не
-     родителя канваса (.seCanvasWrap — он inline-block и растягивается
-     под фактический размер канваса, а не под видимую область). */
-  /* ---------- шторка с инструментами ----------
-     Раньше палитра/инструменты/кнопки жили в постоянной правой колонке;
-     теперь холст на весь экран, а всё это — в выезжающей панели, чтобы
-     не отнимать место у рисунка. На широком экране (см. DESKTOP_BP) это
-     панель сбоку на всю высоту и открыта сразу — там всё равно простаивала
-     бы одна лишь ширина; на телефоне — шторка снизу и по умолчанию
-     закрыта, чтобы сразу видеть холст целиком (см. @media в styles). */
-  var DESKTOP_BP = 900;
-  var isDesktop = window.innerWidth >= DESKTOP_BP;
-  var drawer = $('seDrawer'), fab = $('seToolsFab');
-  function setDrawer(open) {
-    drawer.classList.toggle('open', open);
-    document.body.classList.toggle('seDrawerOpen', open);
-    fab.textContent = open ? '✕' : '🎨';
-    fab.setAttribute('aria-label', T(open ? 'skinToolsClose' : 'skinTools', open ? 'Close' : 'Tools'));
-  }
-  fab.onclick = function () { setDrawer(!drawer.classList.contains('open')); };
-  $('seDrawerHandle').onclick = function () { setDrawer(false); };
-  setDrawer(isDesktop);
-
-  /* Область холста теперь на весь экран (см. .seCanvasArea) и в высоту,
-     и в ширину — раньше мерили только ширину, но при фулскрине сетка
-     (256x284 клеток) на телефоне в портрете легко упирается в высоту
-     раньше, чем в ширину. Меряем сам контейнер #seCanvasArea, а не
-     родителя канваса (.seCanvasWrap — он inline-block и растягивается
-     под фактический размер канваса, а не под видимую область). На
-     десктопе шторка открыта сразу и стоит сбоку (см. выше) — вычитаем
-     её ширину, иначе автозум решил бы, что места больше, чем есть на
-     самом деле, и часть холста легла бы под панель. */
-  var stage = $('seCanvasArea');
-  var reserveRight = isDesktop ? 356 : 0;
-  var availW = stage.clientWidth - 32 - reserveRight, availH = stage.clientHeight - 70;
-  var fitZoom = Math.min(
-    availW > 40 ? availW / (GW * CELL) : Infinity,
-    availH > 40 ? availH / (GH * CELL) : Infinity
-  );
-  if (isFinite(fitZoom) && fitZoom < zoom) {
-    zoom = Math.max(ZOOM_MIN, Math.floor(fitZoom * 100) / 100);
-  }
-  applyZoom();
-
-  function setTool(id) {
-    // смена инструмента посреди незавершённой фигуры — отменяем призрак,
-    // а не бросаем его недорисованным на холсте
-    shapeStart = null; previewCells = [];
-    tool = id;
-    drawTools();
-    render();
-  }
-
-  function drawTools() {
-    var box = $('seTools'); box.innerHTML = '';
-    TOOLS.forEach(function (t) {
-      var b = document.createElement('button');
-      b.className = 'seTool' + ((t.id === 'mirror' ? mirror : tool === t.id) ? ' on' : '');
-      b.textContent = t.icon;
-      b.title = T(t.label);
-      b.onclick = function () {
-        if (t.id === 'mirror') { mirror = !mirror; drawTools(); }
-        else setTool(t.id);
-      };
-      box.appendChild(b);
-    });
-  }
-
-  function setBrushSize(n) { brushSize = n; drawSizes(); }
-  function drawSizes() {
-    var box = $('seSizes'); box.innerHTML = '';
-    SIZES.forEach(function (n) {
-      var b = document.createElement('button');
-      b.className = 'seSizeBtn' + (n === brushSize ? ' on' : '');
-      b.textContent = n + '×' + n;
-      b.title = T('skinBrushSize', 'Brush size') + ': ' + n;
-      b.onclick = function () { setBrushSize(n); };
-      box.appendChild(b);
-    });
-  }
-
-  function drawSwatches() {
-    var box = $('sePalette'); box.innerHTML = '';
-    PALETTE.forEach(function (c) {
-      var b = document.createElement('button');
-      b.className = 'seSwatch' + (c === color ? ' on' : '');
-      b.style.background = c;
-      b.onclick = function () { color = c; setTool('brush'); $('seCustom').value = c; drawSwatches(); };
-      box.appendChild(b);
-    });
-  }
-  $('seCustom').oninput = function () { color = this.value; setTool('brush'); drawSwatches(); };
-
-  $('seUndo').onclick = function () { undo(); };
-  $('seRedo').onclick = function () { redo(); };
-
-  // клавиатурные сокращения — не трогаем, пока фокус в текстовом поле
-  // (например, при выборе цвета через нативный color-picker)
-  var TOOL_KEYS = { b: 'brush', l: 'line', r: 'rect', g: 'fill', e: 'eraser', i: 'eyedrop' };
-  document.addEventListener('keydown', function (e) {
-    var tag = e.target && e.target.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-    var k = e.key.toLowerCase();
-    if ((e.ctrlKey || e.metaKey) && k === 'z') {
-      e.preventDefault();
-      if (e.shiftKey) redo(); else undo();
-      return;
-    }
-    if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
-    if (TOOL_KEYS[k]) { setTool(TOOL_KEYS[k]); return; }
-    if (k === 'm') { mirror = !mirror; drawTools(); return; }
-    if (k === '[') { setBrushSize(Math.max(SIZES[0], brushSize - 1)); return; }
-    if (k === ']') { setBrushSize(Math.min(SIZES[SIZES.length - 1], brushSize + 1)); return; }
-    if (k === '=' || k === '+') { zoomBy(ZOOM_STEP); return; }
-    if (k === '-') { zoomBy(-ZOOM_STEP); return; }
-  });
-
-  drawTools(); drawSwatches(); drawSizes(); render();
+  var chosen = null;           // { dataUrl, width, height, sizeBytes }
 
   function msg(text, ok) {
     var m = $('seMsg');
     m.textContent = text;
     m.style.color = ok ? 'var(--green)' : 'var(--red)';
     clearTimeout(msg._t);
-    msg._t = setTimeout(function () { m.textContent = ''; }, 4000);
+    msg._t = setTimeout(function () { m.textContent = ''; }, 5000);
   }
 
   function post(url, data) {
@@ -620,40 +123,99 @@ html,body{height:100%}
       .then(function (r) { return r.json(); });
   }
 
-  // экспорт: чистая картинка без прозрачной шахматки и без ориентира-силуэта
-  function exportPng() {
-    var out = document.createElement('canvas');
-    out.width = GW; out.height = GH;
-    var octx = out.getContext('2d');
-    for (var y = 0; y < GH; y++)
-      for (var x = 0; x < GW; x++) {
-        var c = grid[idx(x, y)];
-        if (!c) continue;
-        octx.fillStyle = c;
-        octx.fillRect(x, y, 1, 1);
-      }
-    return out.toDataURL('image/png');
+  /* Большое фото с телефона (часто 3000-4000px по стороне) ужимаем сами
+     ДО отправки: иначе почти любое реальное фото упиралось бы в лимит
+     разрешения на сервере, а пользователь видел бы отказ вместо
+     публикации. Маленькая/нормальная картинка проходит как есть. */
+  function loadAndFit(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error('read failed')); };
+      reader.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error('decode failed')); };
+        img.onload = function () {
+          var w = img.naturalWidth, h = img.naturalHeight;
+          if (w < MIN_DIM || h < MIN_DIM) { reject(new Error('too-small')); return; }
+          var scale = Math.min(1, MAX_SIDE / Math.max(w, h));
+          var outW = Math.max(1, Math.round(w * scale)), outH = Math.max(1, Math.round(h * scale));
+          var canvas = document.createElement('canvas');
+          canvas.width = outW; canvas.height = outH;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, outW, outH);
+          var isPng = /^image\/png$/i.test(file.type);
+          var dataUrl = isPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.9);
+          resolve({ dataUrl: dataUrl, width: outW, height: outH, sizeBytes: Math.round(dataUrl.length * 0.75) });
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
   }
 
-  function isEmpty() { return grid.every(function (c) { return !c; }); }
+  function showPreview(fit) {
+    $('sePreview').src = fit.dataUrl;
+    $('sePreviewMeta').textContent = fit.width + '×' + fit.height + '  ·  ' +
+      (fit.sizeBytes / 1024).toFixed(0) + ' KB';
+    $('sePreviewWrap').classList.add('on');
+    $('seDrop').style.display = 'none';
+  }
+
+  function handleFile(file) {
+    if (!file) return;
+    if (!/^image\/(png|jpeg)$/i.test(file.type)) {
+      msg(T('skinFormatBad', 'Please choose a PNG or JPEG image'));
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      msg(T('skinTooBig', 'That file is too large'));
+      return;
+    }
+    loadAndFit(file).then(function (fit) {
+      chosen = fit;
+      showPreview(fit);
+    }).catch(function () {
+      msg(T('skinFormatBad', 'Please choose a PNG or JPEG image'));
+    });
+  }
+
+  $('seFile').addEventListener('change', function () { handleFile(this.files && this.files[0]); });
+  $('seChange').addEventListener('click', function () {
+    chosen = null;
+    $('sePreviewWrap').classList.remove('on');
+    $('seDrop').style.display = '';
+    $('seFile').value = '';
+  });
+
+  var drop = $('seDrop');
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('drag'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('drag'); });
+  });
+  drop.addEventListener('drop', function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    handleFile(f);
+  });
 
   function limitLine() {
     fetch('/skins/limit', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d || d.guest) { $('seLimit').textContent = ''; return; }
-        $('seLimit').textContent = T('skinsLeft', 'Slots left in Skins Browser') + ': ' + d.left + ' / ' + d.limit;
+        $('seLimit').textContent =
+          T('skinTodayLeft', 'New skins left today') + ': ' + d.leftToday + '/' + d.dailyLimit +
+          '   ·   ' + T('skinTotalLeft', 'Total skin slots left') + ': ' + d.left + '/' + d.limit;
       }).catch(function () {});
   }
   limitLine();
 
   $('sePublish').onclick = function () {
-    if (isEmpty()) { msg(T('skinEmpty', 'Draw something first')); return; }
-    var name = prompt(T('skinNameAsk', 'Skin name (2-30 characters):'), '');
-    if (name === null) return;
-    name = name.trim();
-    if (name.length < 2) { msg(T('skinNameShort', 'Name too short')); return; }
-    post('/skins/publish', { skinName: name, img: exportPng() })
+    if (!chosen) { msg(T('skinEmpty', 'Choose an image first')); return; }
+    var name = $('seName').value.trim();
+    if (name.length < 2 || name.length > 30) { msg(T('skinNameShort', 'Name is too short')); return; }
+    post('/skins/publish', { skinName: name, img: chosen.dataUrl })
       .then(function (r) {
         if (r.status !== 'success') { msg(r.message || T('errorTxt')); return; }
         msg(r.message, true);
@@ -663,24 +225,11 @@ html,body{height:100%}
       }).catch(function () { msg(T('serverDown')); });
   };
 
-  $('seClear').onclick = function () {
-    pushHistory();
-    grid = new Array(GW * GH).fill(null);
-    render();
-  };
-
   $('seDefault').onclick = function () {
     post('/skins/reset', {})
       .then(function (r) { r.status === 'success' ? msg(T('saved', 'Saved'), true) : msg(r.message || T('errorTxt')); })
       .catch(function () { msg(T('serverDown')); });
   };
-
-  fetch('/getMyBio', { credentials: 'same-origin' })
-    .then(function (r) { return r.json(); })
-    .then(function (d) { $('seNick').value = d.name || T('guest'); })
-    .catch(function () { $('seNick').value = T('guest'); });
-
-  window.addEventListener('bf-lang', function () { drawTools(); drawSizes(); });
 })();
 </script>
         <script src="skinAvatar.js?v=102" defer></script>
