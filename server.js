@@ -526,7 +526,20 @@ function hsAwardRoundEnd(io, room, st) {
   });
 }
 
+/* Story-сессия Hide and Seek: у комнаты есть общий лимит времени на всю
+   игру (а не на раунд), выставленный владельцем приглашения в story.html.
+   Таймер st.storyTimer стоит отдельно от обычного st.timer (лобби/раунд)
+   и по истечении лимита обрывает цикл лобби↔раунд насовсем — комната не
+   удаляется (это делает hsOnLeave), просто больше не переключает фазы. */
+function hsEndStory(io, room, st) {
+  if (st.phase === 'storyEnd') return;
+  clearTimeout(st.timer);
+  st.phase = 'storyEnd';
+  io.to(room).emit('hsPhase', { phase: 'storyEnd' });
+}
+
 function hsStartLobby(io, room, st) {
+  if (st.phase === 'storyEnd') return;   // лимит Story уже вышел — новый раунд не начинаем
   if (st.phase === 'round') hsAwardRoundEnd(io, room, st);
   // Одному тоже можно: hsPick/hsChances сами ставят единственного игрока
   // искателем без жеребьёвки. Ловить в комнате некого — монеты за поимку
@@ -543,6 +556,7 @@ function hsStartLobby(io, room, st) {
 }
 
 function hsStartRound(io, room, st) {
+  if (st.phase === 'storyEnd') return;
   st.phase = 'round';
   st.endsAt = Date.now() + HS_ROUND_MS;
   // снимок пряток на момент старта — только они и только если не пойманы, получат награду в конце
@@ -575,6 +589,7 @@ function hsOnLeave(io, room, leftId) {
   const set = gameState.rooms.get(room);
   if (!set || set.size === 0) {
     clearTimeout(st.timer);
+    clearTimeout(st.storyTimer);
     hsRooms.delete(room);
     return;
   }
@@ -734,7 +749,14 @@ io.on('connection', (socket) => {
       if (!st) {
         st = { phase: 'lobby', roundNum: 0, endsAt: 0, timer: null,
                lastSeeker: null, prevSeeker: null,
-               seekerId: null, seekerName: '', caughtSent: false };
+               seekerId: null, seekerName: '', caughtSent: false, storyTimer: null };
+        // Story-приглашение: лимит времени на всю сессию, а не на раунд —
+        // отдельный таймер, обрывающий цикл лобби/раунд (см. hsEndStory)
+        if (roomName.indexOf('story_') === 0) {
+          const storyInfo = require('./story.js').getRoom(roomName);
+          if (storyInfo && storyInfo.limitMs)
+            st.storyTimer = setTimeout(() => hsEndStory(io, room, st), storyInfo.limitMs);
+        }
         hsRooms.set(room, st);
         hsStartLobby(io, room, st);
       } else {

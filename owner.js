@@ -162,7 +162,7 @@
       }).then(function (r) {
         m.style.color = r.status === 'success' ? '#2e9b2e' : 'red';
         m.textContent = r.status === 'success'
-          ? '👍 ' + r.likes + '   👎 ' + r.dislikes + '   → ' + r.rating
+          ? 'Likes: ' + r.likes + '   Dislikes: ' + r.dislikes + '   Rating: ' + r.rating
           : (r.message || T('errorTxt', 'Ошибка'));
       }).catch(function () { m.style.color = 'red'; m.textContent = T('serverDown', 'Сервер недоступен'); });
     };
