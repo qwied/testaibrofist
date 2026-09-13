@@ -42,14 +42,15 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
   font:inherit;color:var(--sb-ink);padding:10px 10px;border-radius:9px;cursor:pointer;
   text-decoration:none;white-space:nowrap;font-size:14.5px}
 .bfNavItem svg{flex:0 0 auto;opacity:.85}
+/* Discord/Telegram — единственные иконки, что остались (см. shell.js);
+   мельче .85 их мелкие детали (глаза, лапки у Discord) смазываются */
+.bfSocial svg{opacity:1}
 .bfNavItem:hover{background:var(--sb-hover)}
 .bfNavItem.on{background:var(--blue);color:#fff}
 .bfNavItem.on svg{opacity:1}
 .bfDailyCard{display:flex;align-items:center;gap:10px;margin:12px 2px;padding:10px 11px;
   border-radius:11px;background:var(--sb-bg2);text-decoration:none;color:var(--sb-ink)}
 .bfDailyCard:hover{filter:brightness(1.15)}
-.bfDailyIcon{flex:0 0 auto;width:30px;height:30px;border-radius:8px;background:rgba(255,150,60,.18);
-  color:#ff9c3c;display:flex;align-items:center;justify-content:center}
 .bfDailyText{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1 1 auto}
 .bfDailyText b{font-size:13.5px;font-weight:700;color:#fff}
 .bfDailyText small{font-size:11.5px;color:var(--sb-muted);white-space:nowrap;
@@ -184,8 +185,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
   .bfHead{left:calc(-1 * var(--sbw) - 20px);transition:left .22s ease;box-shadow:0 0 30px rgba(0,0,0,.35)}
   .bfHead.open{left:0}
   .bfMenuBtn{display:inline-flex;align-items:center;justify-content:center}
-  .bfMsgFab span{display:none}
-  .bfMsgFab{padding:14px;border-radius:50%}
+  .bfMsgFab{padding:11px 16px;font-size:13.5px}
   .bfDrop{left:8px;right:8px;min-width:0;bottom:auto;top:70px}
 }
 /* гамбургер должен быть виден и кликабелен ДО открытия сайдбара — своя
