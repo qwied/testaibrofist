@@ -56,18 +56,53 @@ app.use((req, res, next) => {
   res.redirect(301, 'https://' + PRIMARY_HOST + req.originalUrl);
 });
 
-/* Служебные файлы наружу не отдаём. Список был поимённым и отставал от
-   репозитория: новый тест или свежий readme оказывались доступны по
-   прямой ссылке. Теперь закрыты и целые семейства по префиксу. */
-const PRIVATE = ['/server.js','/accounts.js','/maps.js','/skins.js','/userskins.js','/updatetimer.js','/abuse.js',
-                 '/themes.js','/extras.js','/check-domain.js','/backup.js',
-                 '/package.json','/package-lock.json'];
-const PRIVATE_PREFIX = ['/test-', '/audit-', '/readme', '/domain', '/patch_', '/data', '/node_modules'];
+/* Служебные файлы наружу не отдаём.
+
+   Раньше здесь был СПИСОК ЗАПРЕЩЁННОГО, и он неизбежно отставал от
+   репозитория: каждый новый серверный модуль по умолчанию оказывался
+   в интернете, пока кто-нибудь не вспомнит дописать его сюда. Так
+   наружу утекли story.js, quests.js, dailyRewards.js, messages.js,
+   imgModeration.js, mapGen.js и прочие — то есть ровно та логика, по
+   которой удобно писать читы: пороги поимки, веса призов, крючки
+   квестов.
+
+   Теперь наоборот — СПИСОК РАЗРЕШЁННОГО: наружу уходят только те .js,
+   которые действительно грузит браузер. Ошибиться в безопасную сторону
+   так нельзя: забыл вписать новый КЛИЕНТСКИЙ скрипт — страница сразу
+   не работает и это видно на первой же проверке; добавил новый
+   СЕРВЕРНЫЙ модуль — он закрыт сам, без единой правки здесь. */
+const PUBLIC_JS = new Set([
+  'abuseshow.js', 'account.js', 'adminabuse.js', 'coin.js', 'consent.js',
+  'dailyreward.js', 'device.js', 'editorai.js', 'editorhelp.js', 'game.js',
+  'gifplayer.js', 'gifuct.bundle.js', 'i18n.js', 'nav.js', 'owner.js',
+  'shell.js', 'skinavatar.js', 'skincanvas.js', 'skinrender.js', 'sound.js',
+  'theme.js'
+]);
+// owner.js и adminAbuse.js разрешены здесь только затем, чтобы запрос дошёл
+// до своих маршрутов выше — там они проверяют права владельца отдельно.
+
+// исходники и конфиги: в вебе им делать нечего ни под каким именем
+const PRIVATE_EXT = /\.(md|py|json|lock|ya?ml|sh|bat|ps1|ini|conf|log|db|sqlite3?|pem|key|crt|env)$/;
+// /skinparts сюда НЕ ходит — оттуда клиент грузит детали скинов (skinRender.js)
+const PRIVATE_PREFIX = ['/data', '/node_modules'];
 app.use((req, res, next) => {
   const p = req.path.toLowerCase();
-  if (PRIVATE.indexOf(p) !== -1) return res.status(404).send('Not found');
+
+  /* Точки в начале ЛЮБОГО сегмента пути. Без этого express.static отдавал
+     весь каталог .git — /.git/index плюс pack-файлы это полный исходник
+     сервера со всей историей, включая каждый «приватный» файл из списка
+     выше. (Сам express прячет только dot-ФАЙЛ, dot-КАТАЛОГ проходил
+     насквозь: /.gitignore давал 404, а /.git/config — 200.) */
+  if (p.indexOf('/.') !== -1) return res.status(404).send('Not found');
+
+  if (PRIVATE_EXT.test(p)) return res.status(404).send('Not found');
   for (let i = 0; i < PRIVATE_PREFIX.length; i++)
     if (p.indexOf(PRIVATE_PREFIX[i]) === 0) return res.status(404).send('Not found');
+
+  // .js только из белого списка и только из корня сайта
+  if (p.slice(-3) === '.js' && !PUBLIC_JS.has(p.slice(1)))
+    return res.status(404).send('Not found');
+
   next();
 });
 
@@ -415,6 +450,10 @@ const gameState = {
 const HS_LOBBY_MS    = 30000;   // рулетка + время спрятаться
 const HS_ROUND_MS    = Number(process.env.HS_ROUND_MS) || 120000;  // охота — 2 минуты
 const HS_ROULETTE_MS = 6800;    // клиентская анимация укладывается в 10 секунд
+/* Сколько пикселей надо реально пройти, чтобы награда за раунд/поимку
+   засчиталась. Порог символический — любой играющий человек набирает
+   его за секунды, а стоящий на месте скрипт не наберёт никогда. */
+const HS_MIN_DIST = 200;
 const hsRooms = new Map();      // 'hideAndSeek:roomN' -> состояние раунда
 
 /* Начислить монеты игроку (по аккаунту) и уведомить его сокет, если он
@@ -519,6 +558,13 @@ function hsAwardRoundEnd(io, room, st) {
     if (caught.has(m.id)) return;
     const sock = io.sockets.sockets.get(m.id);
     if (!sock) return;                    // отключился — эту сессию уже не найти
+    /* «Дожил до конца раунда» само по себе наградой быть не может: зайти
+       в комнату и не трогать клавиатуру две минуты умеет и скрипт, и это
+       была самая дешёвая ферма монет в игре — раунд за раундом, без
+       единого действия. Платим только тому, кто по серверному одометру
+       (см. movePlayer) действительно двигался в этом раунде. */
+    const p = gameState.players.get(m.id);
+    if (!p || (p.odo || 0) - (m.odo || 0) < HS_MIN_DIST) return;
     const acct = sessionName(sock.handshake.headers.cookie);
     if (!acct) return;                    // гость
     hsCreditAndNotify(sock, acct, 1 + Math.floor(Math.random() * 5), 'hsWin');
@@ -560,7 +606,9 @@ function hsStartRound(io, room, st) {
   st.phase = 'round';
   st.endsAt = Date.now() + HS_ROUND_MS;
   // снимок пряток на момент старта — только они и только если не пойманы, получат награду в конце
-  st.roundMembers = hsMembers(room).filter((m) => m.id !== st.seekerId);
+  // odo — показание одометра на старте раунда, по нему в конце видно, кто вообще играл
+  st.roundMembers = hsMembers(room).filter((m) => m.id !== st.seekerId)
+    .map((m) => { const p = gameState.players.get(m.id); m.odo = p ? (p.odo || 0) : 0; return m; });
   st.caughtSet = new Set();
   io.to(room).emit('hsPhase', { phase: 'round', msLeft: HS_ROUND_MS,
     seekerId: st.seekerId, seekerName: st.seekerName });
@@ -617,6 +665,13 @@ function sessionName(cookieHeader) {
     return out.sid ? accountsRef.sessionNameBySid(out.sid) : null;
   } catch (e) { return null; }
 }
+
+/* Потолок одного шага для одометра (см. movePlayer). С запасом: пакет
+   движения уходит раз в 33–50 мс, а игрок в одиночной комнате — раз в
+   секунду, и за эту секунду он честно успевает пролететь несколько
+   сотен пикселей. Всё, что длиннее, — это телепорт или подставленная
+   координата: в путь не засчитываем, но и не блокируем. */
+const MAX_STEP = 600;
 
 // простые лимиты событий на соединение: чат-флуд и спам позицией невозможны
 function socketLimiter(perSecond, perTenSec) {
@@ -798,6 +853,22 @@ io.on('connection', (socket) => {
       };
       if (p.sk !== undefined) pos.sk = cleanText(p.sk, 120);
       else if (player.position) pos.sk = player.position.sk;   // не прислали — значит не менялся
+
+      /* Одометр: сколько игрок реально прошёл по мнению СЕРВЕРА. Награды
+         (финиш забега, поимка в прятках) сверяются с ним — иначе скрипт,
+         который не двигается вообще, а только шлёт «я финишировал» или
+         «я поймал», получает то же, что и играющий человек.
+
+         Один шаг длиннее MAX_STEP в счёт не идёт: так подставленный
+         прыжок через полкарты не накручивает одометр, но и не ломает
+         телепорты — сам телепорт работает как работал, просто не
+         засчитывается как пройденный путь. */
+      const prev = player.position;
+      if (prev) {
+        const d = Math.hypot(pos.x - prev.x, pos.y - prev.y);
+        if (d <= MAX_STEP) player.odo = (player.odo || 0) + d;
+      }
+      player.moves = (player.moves || 0) + 1;
       player.position = pos;
       /* Ничего не рассылаем прямо здесь. Раньше каждый пакет движения
          уходил каждому в комнате отдельным сообщением: 40 игроков по
@@ -879,6 +950,12 @@ io.on('connection', (socket) => {
     if (!sp || !tp) return;
     // запас сверх клиентского порога (34x60) — под сетевую задержку между кадрами
     if (Math.abs(sp.x - tp.x) > 80 || Math.abs(sp.y - tp.y) > 120) return;
+    /* Близость считается по координатам, которые прислал сам искатель, —
+       значит скрипт мог просто подставлять себе координаты жертвы и
+       «ловить» всех, не сходя с места. Чтобы дойти до жертвы по-честному,
+       надо пройти путь: требуем ненулевой одометр за эту сессию (сам
+       телепорт в счёт не идёт, см. MAX_STEP в movePlayer). */
+    if ((player.odo || 0) < HS_MIN_DIST) return;
     st.caughtSet.add(targetId);
     if (!account) return;   // гостю монеты не копим — как и раньше в addCoins
     hsCreditAndNotify(socket, account, 1, 'hsCatch');
@@ -890,6 +967,15 @@ io.on('connection', (socket) => {
      raceFinish без единого движения и получать монеты по кругу. Сумму
      монет (1–5) и очки за скорость решает сервер, а не клиент. */
   const RACE_MIN_MS = 1500;
+  /* Одного лишь времени мало: пары «raceStart, через 1.5 сек raceFinish»
+     хватало, чтобы качать монеты и очки, ни разу не сдвинувшись с места —
+     сервер не смотрел, играл ли отправитель вообще. Теперь между стартом
+     и финишем он должен и прислать движение, и реально проехать путь по
+     серверному одометру (см. movePlayer). Пороги заведомо ниже любого
+     настоящего забега: за 1.5 секунды честный игрок шлёт 30–45 пакетов и
+     проходит сотни пикселей. */
+  const RACE_MIN_MOVES = 8;
+  const RACE_MIN_DIST = 200;
   // очки за забег: чем быстрее финиш, тем больше — 120 сек и дольше не
   // приносят ничего, секунда почти сразу после старта — почти максимум
   const RACE_SCORE_CAP_S = 120;
@@ -900,7 +986,9 @@ io.on('connection', (socket) => {
     const author = cleanText(data && data.author, 40);
     const mapName = cleanText(data && data.mapName, 40);
     if (!author || !mapName) return;
-    player.raceStart = { key: author + '|' + mapName, at: Date.now() };
+    // снимок одометра на старте — на финише сверяем, сколько набежало
+    player.raceStart = { key: author + '|' + mapName, at: Date.now(),
+                         odo: player.odo || 0, moves: player.moves || 0 };
   });
   socket.on('raceFinish', (data) => {
     if (limRace()) return;
@@ -914,6 +1002,9 @@ io.on('connection', (socket) => {
     if (rs.key !== author + '|' + mapName) return;
     const elapsedMs = Date.now() - rs.at;
     if (elapsedMs < RACE_MIN_MS) return;
+    // забег без единого движения — не забег
+    if ((player.moves || 0) - rs.moves < RACE_MIN_MOVES) return;
+    if ((player.odo || 0) - rs.odo < RACE_MIN_DIST) return;
 
     // табличка «Scores» в углу — снимок комнаты, видна и гостям, копится
     // за все забеги подряд, пока игрок в комнате (см. raceScoreboard)
