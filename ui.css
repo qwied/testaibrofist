@@ -5,6 +5,8 @@
   --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --soft:#f6f8fa;
   --blue:#2196F3; --green:#22a45d; --red:#e04141; --gold:#b8860b;
   --hdr:56px; --sbw:248px;
+  /* на телефоне сайдбар не прячется, а сужается — см. медиа-запрос ниже */
+  --sbw-m:158px;
   /* поверхность карточки/панели: в тёмной теме её переопределяет theme.js.
      Страницам стоит писать var(--panel), а не #fff, — тогда карточка сама
      станет тёмной в тёмной теме и не окажется белым пятном. */
@@ -46,9 +48,6 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
   display:flex !important;flex-direction:column;gap:2px;
   padding:16px 12px;box-sizing:border-box;overflow-y:auto}
 .bfHead > *{float:none !important}
-.bfMenuBtn{display:none;background:none;border:none;color:var(--sb-ink);
-  padding:8px;border-radius:8px;cursor:pointer;align-self:flex-start;margin-bottom:6px}
-.bfMenuBtn:hover{background:var(--sb-hover)}
 .bfBrand{display:flex !important;align-items:center;gap:8px;text-decoration:none;
   color:var(--sb-ink);flex:0 0 auto;white-space:nowrap;padding:4px 8px 14px}
 .bfBrand b{font-size:19px;letter-spacing:.5px;color:var(--sb-brand)}
@@ -93,12 +92,6 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 .bfProfileName{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;flex:1 1 auto;min-width:0}
 
-/* выезжающая панель на мобильном перекрывает страницу, а не сдвигает её —
-   плюс тёмная подложка, гасящая контент под ней */
-.bfSideOverlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:65;
-  display:none}
-.bfSideOverlay.open{display:block}
-
 /* плавающая кнопка «Messages» — на каждой странице, в правом нижнем углу */
 .bfMsgFab{position:fixed;right:16px;bottom:16px;z-index:55;display:flex;align-items:center;
   gap:8px;padding:12px 18px;border-radius:14px;background:var(--sb-bg2);color:var(--sb-on2);
@@ -106,10 +99,9 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
   box-shadow:0 10px 24px -10px rgba(15,23,42,.45)}
 .bfMsgFab:hover{background:var(--sb-bg)}
 
-/* сдвигаем содержимое страниц под неподвижный сайдбар на десктопе */
-@media (min-width:861px){
-  body.bfHasSidebar{padding-left:var(--sbw)}
-}
+/* сдвигаем содержимое страниц под неподвижный сайдбар (на мобильном
+   ширина другая — её переопределяет медиа-запрос ниже) */
+body.bfHasSidebar{padding-left:var(--sbw)}
 
 /* ---------- каркас страницы ---------- */
 .bfWrap{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
@@ -198,25 +190,47 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 .bfDropName{padding:10px 18px 6px;font-weight:700;font-size:13px;color:var(--muted)}
 .bfDropOut{color:#dc2626}
 
-/* ---------- сайдбар на мобильном: скрыт за экраном, выезжает по гамбургеру ---------- */
+/* ---------- сайдбар на мобильном: та же колонка, только уже ----------
+   Раньше он уезжал за край экрана и открывался гамбургером. Кнопка
+   прятала за собой все разделы игры: чтобы попасть в Quests или Maps
+   Browser, надо было сначала догадаться нажать три полоски. Теперь
+   панель стоит на месте и видна сразу, как на компьютере, — за счёт
+   уменьшенной ширины, отступов и шрифта, чтобы странице оставалось
+   место. Гамбургера нет вовсе. */
 @media (max-width:860px){
-  body.bfHasSidebar{padding-top:60px}
-  .bfHead{left:calc(-1 * var(--sbw) - 20px);transition:left .22s ease;box-shadow:0 0 30px rgba(0,0,0,.35)}
-  .bfHead.open{left:0}
-  .bfMenuBtn{display:inline-flex;align-items:center;justify-content:center}
+  .bfHead{width:var(--sbw-m);padding:10px 7px;gap:1px}
+  body.bfHasSidebar{padding-left:var(--sbw-m)}
+  .bfBrand{padding:2px 5px 10px;gap:6px}
+  .bfBrand b{font-size:15px;letter-spacing:.3px}
+  .bfBrandMark{width:11px;height:20px}
+  .bfBrandMark i:nth-child(1){width:11px;height:11px}
+  .bfBrandMark i:nth-child(2){top:13px;width:11px;height:7px}
+  .bfNavItem{padding:8px 7px;font-size:12.5px;gap:8px;border-radius:7px}
+  .bfSocial{margin-top:7px;padding-top:7px}
+  .bfBottom{padding-top:8px}
+  .bfCoin{padding:6px 7px;font-size:13px;gap:5px}
+  .bfProfileRow{padding:6px 7px;gap:6px}
+  .bfProfileName{font-size:12.5px}
+  .bfProfileRow .bfAvatar{width:26px;height:26px}
+  /* меню профиля не должно уезжать под сайдбар */
+  .bfDrop{left:calc(var(--sbw-m) + 8px);right:8px;min-width:0}
   .bfMsgFab{padding:11px 16px;font-size:13.5px}
-  .bfDrop{left:8px;right:8px;min-width:0;bottom:auto;top:70px}
 }
-/* гамбургер должен быть виден и кликабелен ДО открытия сайдбара — своя
-   плавающая кнопка поверх страницы, а не внутри уезжающей панели */
-.bfMenuBtn{position:fixed;top:12px;left:12px;z-index:71;background:var(--sb-bg);
-  color:var(--sb-ink);border:1px solid var(--sb-line);
-  width:40px;height:40px;border-radius:10px}
-@media (min-width:861px){ .bfMenuBtn{display:none !important} }
+/* Узкая колонка при совсем маленькой ширине съедала бы уже больше
+   половины экрана — там ужимаем ещё раз. */
+@media (max-width:370px){
+  :root{--sbw-m:132px}
+  .bfNavItem{font-size:11.5px;padding:7px 6px}
+  .bfBrand b{font-size:13px}
+}
+/* Кнопки-гамбургера в разметке больше нет (см. shell.js). Правило
+   оставлено на случай, если элемент придёт из старого кэша страницы. */
+.bfMenuBtn{display:none !important}
 
 #bfUpd{position:fixed;left:14px;bottom:14px;z-index:56;padding:7px 11px;
   border-radius:10px;background:var(--sb-bg2);color:var(--sb-on2);
   border:1px solid var(--sb-line);
   font:600 12px system-ui,sans-serif;letter-spacing:.2px;pointer-events:none;
   box-shadow:0 4px 14px rgba(15,23,42,.18)}
+#bfUpd{left:calc(var(--sbw-m) + 10px)}
 @media (min-width:861px){ #bfUpd{left:calc(var(--sbw) + 14px)} }
