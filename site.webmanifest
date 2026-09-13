@@ -1,7 +1,7 @@
 {
   "name": "AIBROFIST",
   "short_name": "AIBrofist",
-  "description": "Карты, скины и режимы AIBrofist",
+  "description": "Free multiplayer browser game: player-made maps, Hide and Seek and Race.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

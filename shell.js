@@ -272,7 +272,7 @@
      явно (как на game.html/editor.html). */
   if (!document.querySelector('script[src*="sound.js"]')) {
     var snd = document.createElement('script');
-    snd.src = 'sound.js?v=121';
+    snd.src = 'sound.js?v=122';
     document.head.appendChild(snd);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
