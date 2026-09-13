@@ -7,21 +7,21 @@
 
   var css = ''
     + '.bf-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:none}'
-    + '.bf-box{position:fixed;inset:0;margin:auto;width:320px;height:max-content;max-height:90vh;background:#fff;'
-    + 'border:3px solid #c5c5c5;border-radius:8px;padding:26px 30px 22px;color:#2d2d2d;z-index:9999;display:none;'
+    + '.bf-box{position:fixed;inset:0;margin:auto;width:320px;height:max-content;max-height:90vh;background:var(--panel);'
+    + 'border:3px solid var(--line);border-radius:8px;padding:26px 30px 22px;color:var(--ink);z-index:9999;display:none;'
     + 'font-family:sans-serif;box-sizing:border-box}'
     + '.bf-x{position:absolute;right:5px;top:4px;border:1px solid;border-radius:31px;font-size:14px;'
-    + 'padding:4px 8px;color:red;background:#fff;cursor:pointer;line-height:1}'
-    + '.bf-t{text-align:center;font-size:16px;color:#5b5b5b;margin-bottom:6px}'
+    + 'padding:4px 8px;color:red;background:var(--panel);cursor:pointer;line-height:1}'
+    + '.bf-t{text-align:center;font-size:16px;color:var(--muted);margin-bottom:6px}'
     + '.bf-b{border:1px solid #2196F3;border-radius:3px;text-align:center;font-size:17px;padding:11px 0;'
-    + 'margin:11px 0;box-shadow:0 6px 1px -5px #ccc;display:block;color:#000;background:#fff;cursor:pointer}'
+    + 'margin:11px 0;box-shadow:0 6px 1px -5px rgba(15,23,42,.18);display:block;color:var(--ink);background:var(--panel);cursor:pointer}'
     + '.bf-b:hover{background:#2196F3;color:#fff}'
-    + '.bf-i{border:1px solid #2b2b2b;border-radius:3px;text-align:center;font-size:17px;padding:11px 0;'
-    + 'margin:10px 0;display:block;color:#000;width:100%;box-sizing:border-box}'
+    + '.bf-i{border:1px solid var(--line);border-radius:3px;text-align:center;font-size:17px;padding:11px 0;'
+    + 'margin:10px 0;display:block;color:var(--ink);background:var(--panel);width:100%;box-sizing:border-box}'
     + '.bf-e{text-align:center;font-size:12px;color:red;min-height:15px;margin-bottom:4px}'
-    + '.bf-h{text-align:center;font-size:11px;color:#8a8a8a;margin-top:-4px}'
+    + '.bf-h{text-align:center;font-size:11px;color:var(--muted);margin-top:-4px}'
     + '.bf-back{position:absolute;left:5px;top:4px;border:1px solid;border-radius:28px;font-size:14px;'
-    + 'padding:4px 9px;color:#000;background:#fff;cursor:pointer;line-height:1}';
+    + 'padding:4px 9px;color:var(--ink);background:var(--panel);cursor:pointer;line-height:1}';
 
   var s = document.createElement('style');
   s.textContent = css;

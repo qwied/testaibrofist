@@ -14,26 +14,35 @@
   var slot = document.getElementById(SLOT_ID);
   if (!slot) return;   // виджет есть только на главной
 
+  /* Цвета — только через переменные темы (--panel/--ink/--line/--muted):
+     раньше карточка была жёстко светлой с тёмным текстом и в тёмной теме
+     превращалась в нечитаемый тёмный текст на тёмном фоне. */
   var css = ''
-    + '#' + SLOT_ID + '{max-width:280px;margin:18px auto 26px;padding:18px 20px 16px;'
-    + 'border:2px solid #e4e4e4;border-radius:8px;box-shadow:0 9px 11px -6px #ccc;'
-    + 'color:#2d2d2d;font-family:sans-serif;box-sizing:border-box;text-align:center}'
+    /* clear:both обязателен: карточки режимов на главной плавают
+       (.cards/.cardContainer — float:left), и без сброса блок колеса
+       начинался у самого верха страницы, обтекая карточку Race. С
+       прозрачным фоном это не бросалось в глаза, а с фоном по теме
+       превратилось в рамку вокруг чужой карточки. */
+    + '#' + SLOT_ID + '{clear:both;max-width:280px;margin:18px auto 26px;padding:18px 20px 16px;'
+    + 'background:var(--panel);border:2px solid var(--line);border-radius:8px;'
+    + 'box-shadow:0 9px 11px -6px rgba(15,23,42,.22);'
+    + 'color:var(--ink);font-family:sans-serif;box-sizing:border-box;text-align:center}'
     + '#' + SLOT_ID + ' .drT{font-size:16px;font-weight:800;margin-bottom:14px}'
     + '#' + SLOT_ID + ' .drWrap{position:relative;width:180px;height:180px;margin:0 auto 16px}'
     + '#' + SLOT_ID + ' .drWheel{width:180px;height:180px;border-radius:50%;position:relative;'
-    + 'border:5px solid #111827;box-sizing:border-box;'
+    + 'border:5px solid var(--ink);box-sizing:border-box;'
     + 'transition:transform 3.2s cubic-bezier(.17,.89,.32,1.1)}'
     + '#' + SLOT_ID + ' .drLabel{position:absolute;left:50%;top:50%;width:0;height:0}'
     + '#' + SLOT_ID + ' .drLabel b{position:absolute;left:-20px;top:-58px;width:40px;text-align:center;'
     + 'font-size:13px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35)}'
     + '#' + SLOT_ID + ' .drPointer{position:absolute;left:50%;top:-6px;transform:translateX(-50%);'
     + 'width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;'
-    + 'border-top:15px solid #111827;z-index:2}'
-    + '#' + SLOT_ID + ' .drGo{border:1px solid #2196F3;border-radius:6px;font-size:15px;padding:10px 0;'
-    + 'width:100%;background:#fff;color:#2196F3;cursor:pointer;margin-top:4px}'
-    + '#' + SLOT_ID + ' .drGo:hover{background:#2196F3;color:#fff}'
-    + '#' + SLOT_ID + ' .drGo:disabled{opacity:.5;cursor:default;background:#fff;color:#2196F3}'
-    + '#' + SLOT_ID + ' .drWait{color:#6b7280;font-size:14px;line-height:1.5}'
+    + 'border-top:15px solid var(--ink);z-index:2}'
+    + '#' + SLOT_ID + ' .drGo{border:1px solid var(--blue);border-radius:6px;font-size:15px;padding:10px 0;'
+    + 'width:100%;background:var(--panel);color:var(--blue);cursor:pointer;margin-top:4px}'
+    + '#' + SLOT_ID + ' .drGo:hover{background:var(--blue);color:#fff}'
+    + '#' + SLOT_ID + ' .drGo:disabled{opacity:.5;cursor:default;background:var(--panel);color:var(--blue)}'
+    + '#' + SLOT_ID + ' .drWait{color:var(--muted);font-size:14px;line-height:1.5}'
     + '#' + SLOT_ID + ' .drWin{font-size:17px;font-weight:800;color:#2e9b2e;margin-top:6px;min-height:22px}';
 
   var COLORS = ['#2196F3', '#111827', '#e2a600', '#2e9b2e', '#dc2626', '#7c3aed'];

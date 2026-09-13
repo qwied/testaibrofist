@@ -5,14 +5,33 @@
   --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --soft:#f6f8fa;
   --blue:#2196F3; --green:#22a45d; --red:#e04141; --gold:#b8860b;
   --hdr:56px; --sbw:248px;
+  /* поверхность карточки/панели: в тёмной теме её переопределяет theme.js.
+     Страницам стоит писать var(--panel), а не #fff, — тогда карточка сама
+     станет тёмной в тёмной теме и не окажется белым пятном. */
+  --panel:#fff;
   /* лёгкая подсветка под курсором для обычных (не залитых цветом) кнопок:
      тёмный полупрозрачный слой поверх светлой темы, светлый — поверх тёмной.
      Кнопке не нужно знать, какая сейчас тема — цвет меняет сама переменная. */
   --hover: rgba(17,24,39,.07);
-  /* сайдбар всегда тёмный, независимо от темы страницы — как боковая
-     панель в Discord/Slack, не подстраивается под Themes */
-  --sb-bg:#0f1b2e; --sb-bg2:#16233b; --sb-ink:#e7ecf3; --sb-muted:#8b98ab;
-  --sb-line: rgba(255,255,255,.08); --sb-hover: rgba(255,255,255,.07);
+
+  /* ---- боковая панель и плавающая обвязка ----
+     Раньше сайдбар был всегда тёмным независимо от темы: на светлой теме
+     получался тёмный столбец рядом со светлой страницей — две темы в одном
+     экране. Теперь это обычные токены: здесь светлый набор (тема по
+     умолчанию), тёмный — ниже, по html[data-bf-mode="dark"] (атрибут ставит
+     theme.js). Так тема всегда сквозная и ничего не смешивается. */
+  --sb-bg:#f4f6fa; --sb-bg2:#e8edf5; --sb-ink:#111827; --sb-muted:#6b7280;
+  --sb-line: rgba(17,24,39,.11); --sb-hover: rgba(17,24,39,.06);
+  --sb-brand:#111827;   /* логотип: тёмный на светлом, светлый на тёмном */
+  --sb-on2:#111827;     /* текст на --sb-bg2 (карточка награды, кнопка Messages) */
+}
+/* тёмная тема: оттенки из той же палитры, что и страница в theme.js
+   (DARK.head/raised/line/ink/muted) — иначе сайдбар «синеет» рядом с
+   графитовой страницей и опять выглядит чужеродным */
+html[data-bf-mode="dark"]{
+  --sb-bg:#1a1e26; --sb-bg2:#262b35; --sb-ink:#e7eaf0; --sb-muted:#98a1b0;
+  --sb-line:#333a46; --sb-hover: rgba(255,255,255,.07);
+  --sb-brand:#e7eaf0; --sb-on2:#e7eaf0;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -23,7 +42,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
    сдвигается вправо на её ширину (см. body.bfHasSidebar ниже). На
    мобильном превращается в выезжающую панель (см. медиа-запрос). */
 .bfHead{position:fixed;top:0;left:0;bottom:0;z-index:70;width:var(--sbw);
-  background:var(--sb-bg);color:var(--sb-ink);
+  background:var(--sb-bg);color:var(--sb-ink);border-right:1px solid var(--sb-line);
   display:flex !important;flex-direction:column;gap:2px;
   padding:16px 12px;box-sizing:border-box;overflow-y:auto}
 .bfHead > *{float:none !important}
@@ -32,9 +51,9 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 .bfMenuBtn:hover{background:var(--sb-hover)}
 .bfBrand{display:flex !important;align-items:center;gap:8px;text-decoration:none;
   color:var(--sb-ink);flex:0 0 auto;white-space:nowrap;padding:4px 8px 14px}
-.bfBrand b{font-size:19px;letter-spacing:.5px;color:#fff}
+.bfBrand b{font-size:19px;letter-spacing:.5px;color:var(--sb-brand)}
 .bfBrandMark{width:14px;height:26px;position:relative;flex:0 0 auto}
-.bfBrandMark i{position:absolute;left:0;background:#fff;display:block}
+.bfBrandMark i{position:absolute;left:0;background:var(--sb-brand);display:block}
 .bfBrandMark i:nth-child(1){top:0;width:14px;height:14px;border-radius:50%}
 .bfBrandMark i:nth-child(2){top:17px;width:14px;height:9px;border-radius:3px}
 .bfNav{display:flex !important;flex-direction:column !important;gap:2px;flex:0 0 auto}
@@ -52,7 +71,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
   border-radius:11px;background:var(--sb-bg2);text-decoration:none;color:var(--sb-ink)}
 .bfDailyCard:hover{filter:brightness(1.15)}
 .bfDailyText{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1 1 auto}
-.bfDailyText b{font-size:13.5px;font-weight:700;color:#fff}
+.bfDailyText b{font-size:13.5px;font-weight:700;color:var(--sb-on2)}
 .bfDailyText small{font-size:11.5px;color:var(--sb-muted);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 .bfChev{flex:0 0 auto;opacity:.55;display:flex}
@@ -70,7 +89,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 .bfProfileRow{display:flex;align-items:center;gap:9px;cursor:pointer;padding:8px 10px;
   border-radius:9px;color:var(--sb-ink)}
 .bfProfileRow:hover{background:var(--sb-hover)}
-.bfProfileRow .bfAvatar{border:1px solid rgba(255,255,255,.25);background:var(--sb-bg2)}
+.bfProfileRow .bfAvatar{border:1px solid var(--sb-line);background:var(--sb-bg2)}
 .bfProfileName{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;flex:1 1 auto;min-width:0}
 
@@ -82,9 +101,9 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 
 /* плавающая кнопка «Messages» — на каждой странице, в правом нижнем углу */
 .bfMsgFab{position:fixed;right:16px;bottom:16px;z-index:55;display:flex;align-items:center;
-  gap:8px;padding:12px 18px;border-radius:14px;background:var(--sb-bg2);color:#fff;
-  text-decoration:none;font-size:14.5px;font-weight:600;
-  box-shadow:0 10px 24px -8px rgba(0,0,0,.4)}
+  gap:8px;padding:12px 18px;border-radius:14px;background:var(--sb-bg2);color:var(--sb-on2);
+  border:1px solid var(--sb-line);text-decoration:none;font-size:14.5px;font-weight:600;
+  box-shadow:0 10px 24px -10px rgba(15,23,42,.45)}
 .bfMsgFab:hover{background:var(--sb-bg)}
 
 /* сдвигаем содержимое страниц под неподвижный сайдбар на десктопе */
@@ -97,28 +116,28 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 .bfTitle{font-size:24px;font-weight:800;margin:4px 0 2px}
 .bfSub{color:var(--muted);font-size:14px;margin-bottom:14px}
 
-.bfPanel{border:1px solid var(--line);border-radius:14px;background:#fff;padding:14px}
+.bfPanel{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:14px}
 .bfBtn{display:block;width:100%;font-size:16px;padding:12px 0;border-radius:10px;
-  border:1px solid var(--blue);background:#fff;color:var(--blue);cursor:pointer;margin-bottom:9px}
+  border:1px solid var(--blue);background:var(--panel);color:var(--blue);cursor:pointer;margin-bottom:9px}
 .bfBtn:hover{background:var(--blue);color:#fff}
 .bfBtn.ghost{border-color:#cfd6de;color:var(--muted)}
 .bfBtn.ghost:hover{background:var(--hover);color:var(--ink)}
 .bfBtn.go{background:var(--blue);color:#fff}
 .bfBtn.go:hover{background:#0d7fd4}
 .bfInput,.bfSelect{width:100%;font-size:15px;padding:11px 12px;border:1px solid #cfd6de;
-  border-radius:10px;background:#fff;color:var(--ink);margin-bottom:9px}
+  border-radius:10px;background:var(--panel);color:var(--ink);margin-bottom:9px}
 .bfMsg{text-align:center;font-size:14px;min-height:19px;margin-top:4px}
 
 /* ---------- сетка карточек ---------- */
 .bfGrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
-.bfCard{border:2px solid var(--line);border-radius:12px;padding:10px 8px;text-align:center;background:#fff}
+.bfCard{border:2px solid var(--line);border-radius:12px;padding:10px 8px;text-align:center;background:var(--panel)}
 .bfCard.on{border-color:var(--blue)}
 .bfCard svg{display:block;margin:0 auto}
 .bfCardName{font-size:13px;color:#374151;margin:6px 0 2px;line-height:1.2;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bfCardMeta{font-size:12px;color:var(--muted);margin-bottom:6px}
 .bfMini{font-size:13px;padding:8px 0;border-radius:8px;border:1px solid var(--blue);
-  background:#fff;color:var(--blue);cursor:pointer;width:100%}
+  background:var(--panel);color:var(--blue);cursor:pointer;width:100%}
 .bfMini:hover{background:var(--blue);color:#fff}
 .bfMini.own{border-color:var(--green);color:var(--green)}
 .bfMini.own:hover{background:var(--green);color:#fff}
@@ -127,7 +146,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 /* ---------- чипы-слоты ---------- */
 .bfChips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
 .bfChip{border:1px solid #d7dee6;border-radius:22px;padding:8px 16px;cursor:pointer;
-  font-size:14px;background:#fff;white-space:nowrap}
+  font-size:14px;background:var(--panel);white-space:nowrap}
 .bfChip.on{background:var(--blue);border-color:var(--blue);color:#fff}
 
 /* ---------- вкладки ---------- */
@@ -141,14 +160,14 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 /* ---------- оценки ---------- */
 .bfVote{display:flex;gap:6px;justify-content:center;margin-bottom:6px}
 .bfVote button{flex:1;font-size:13px;padding:6px 0;border-radius:8px;border:1px solid #d7dee6;
-  background:#fff;cursor:pointer;color:#4b5563}
+  background:var(--panel);cursor:pointer;color:#4b5563}
 .bfVote button.up.on{border-color:var(--green);color:var(--green);background:#f0fdf4}
 .bfVote button.down.on{border-color:var(--red);color:var(--red);background:#fef2f2}
 
 .bfHint{color:#8b93a1;font-size:14px;text-align:center;padding:30px 10px}
 .bfPager{display:flex;align-items:center;justify-content:center;gap:14px;margin:16px 0 4px}
 .bfPager button{width:42px;height:42px;border-radius:50%;border:1px solid var(--blue);
-  background:#fff;color:var(--blue);font-size:17px;cursor:pointer}
+  background:var(--panel);color:var(--blue);font-size:17px;cursor:pointer}
 .bfPager button[disabled]{border-color:#dbe1e8;color:#cbd5e1;cursor:default}
 
 /* ---------- телефон ---------- */
@@ -167,7 +186,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
    (все видны сразу). .bfDrop теперь используется только для попапа
    профиля (Мой профиль/Настройки/Выйти), открывается кликом по строке
    с ником внизу сайдбара — рядом с ней и всплывает. */
-.bfDrop{position:fixed;left:12px;bottom:78px;min-width:210px;background:#fff;
+.bfDrop{position:fixed;left:12px;bottom:78px;min-width:210px;background:var(--panel);
   border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 28px rgba(15,23,42,.28);
   padding:5px 0;z-index:95;display:none;max-height:calc(100vh - 100px);overflow-y:auto}
 .bfDrop.open{display:block}
@@ -190,12 +209,14 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 }
 /* гамбургер должен быть виден и кликабелен ДО открытия сайдбара — своя
    плавающая кнопка поверх страницы, а не внутри уезжающей панели */
-.bfMenuBtn{position:fixed;top:12px;left:12px;z-index:71;background:var(--sb-bg);color:#fff;
+.bfMenuBtn{position:fixed;top:12px;left:12px;z-index:71;background:var(--sb-bg);
+  color:var(--sb-ink);border:1px solid var(--sb-line);
   width:40px;height:40px;border-radius:10px}
 @media (min-width:861px){ .bfMenuBtn{display:none !important} }
 
 #bfUpd{position:fixed;left:14px;bottom:14px;z-index:56;padding:7px 11px;
-  border-radius:10px;background:rgba(15,23,42,.86);color:#fff;
+  border-radius:10px;background:var(--sb-bg2);color:var(--sb-on2);
+  border:1px solid var(--sb-line);
   font:600 12px system-ui,sans-serif;letter-spacing:.2px;pointer-events:none;
-  box-shadow:0 4px 14px rgba(0,0,0,.18)}
+  box-shadow:0 4px 14px rgba(15,23,42,.18)}
 @media (min-width:861px){ #bfUpd{left:calc(var(--sbw) + 14px)} }

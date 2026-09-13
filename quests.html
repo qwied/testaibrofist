@@ -9,7 +9,7 @@
 <script src="device.js?v=100"></script>
 <style>
 .qList{display:flex;flex-direction:column;gap:10px}
-.qCard{border:1px solid var(--line);border-radius:13px;padding:14px 16px;background:#fff}
+.qCard{border:1px solid var(--line);border-radius:13px;padding:14px 16px;background:var(--panel)}
 .qCard.done{border-color:var(--green)}
 .qCard.bonus{border-style:dashed}
 .qTop{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
@@ -21,10 +21,10 @@
 .qCard.done .qBar{background:var(--green)}
 .qBottom{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .qProg{color:var(--muted);font-size:13px}
-.qClaim{padding:8px 18px;border-radius:8px;border:1px solid var(--green);background:#fff;
+.qClaim{padding:8px 18px;border-radius:8px;border:1px solid var(--green);background:var(--panel);
   color:var(--green);cursor:pointer;font-weight:600;font-size:13.5px}
 .qClaim:hover{background:var(--green);color:#fff}
-.qClaim:disabled{opacity:.5;cursor:default;background:#fff;color:var(--green)}
+.qClaim:disabled{opacity:.5;cursor:default;background:var(--panel);color:var(--green)}
 .qClaimed{color:var(--green);font-weight:700;font-size:13.5px}
 .qReset{color:var(--muted);font-size:13px;margin-top:16px;text-align:center}
 </style>
