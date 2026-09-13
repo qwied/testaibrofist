@@ -305,6 +305,7 @@
     + 'line-height:1.3;word-break:break-word}'
     + '.gMsgsBubble.me{align-self:flex-end;background:#2196F3;color:#fff;border-bottom-right-radius:3px}'
     + '.gMsgsBubble.them{align-self:flex-start;background:#f0f3f7;color:#191919;border-bottom-left-radius:3px}'
+    + '.gMsgsWhen{display:block;margin-top:2px;font-size:10px;opacity:.65;text-align:right}'
     + '#gMsgsSend{display:flex;gap:6px;padding:8px;border-top:1px solid #eef1f5;flex:0 0 auto}'
     + '#gMsgsInput{flex:1;font-size:13px;padding:7px 9px;border:1px solid #d7dee7;border-radius:8px;min-width:0}'
     + '#gMsgsSendBtn{padding:7px 12px;border-radius:8px;border:1px solid #2196F3;background:#2196F3;'
@@ -499,11 +500,22 @@
     }).catch(function () {});
   }
 
+  // тот же формат, что на странице Messages: «Sep 13, 08:41»
+  function msgsFmtTime(ms) {
+    var d = new Date(ms);
+    return isNaN(d.getTime()) ? '' : d.toLocaleString('en-US',
+      { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
   function msgsDrawMessages(list) {
     var atBottom = msgsBody.scrollTop + msgsBody.clientHeight >= msgsBody.scrollHeight - 30;
     msgsBody.innerHTML = list.map(function (m) {
       var mine = m.from === me.name;
-      return '<div class="gMsgsBubble ' + (mine ? 'me' : 'them') + '">' + esc(m.text) + '</div>';
+      /* Время отправки было только на странице Messages, а в игровой
+         панели — нет: в переписке из нескольких реплик подряд нельзя
+         было понять, это ответ минуту назад или вчерашний. */
+      return '<div class="gMsgsBubble ' + (mine ? 'me' : 'them') + '">' + esc(m.text)
+        + '<span class="gMsgsWhen">' + msgsFmtTime(m.at) + '</span></div>';
     }).join('');
     if (atBottom || !list.length) msgsBody.scrollTop = msgsBody.scrollHeight;
   }

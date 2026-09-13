@@ -39,7 +39,8 @@
     { key: 'daily',       href: 'daily.html',       txt: 'Daily Reward' },
     { key: 'story',       href: 'story.html',       txt: 'Story Mode' },
     { key: 'themes',      href: 'themes.html',      txt: 'Themes' },
-    { key: 'logs',        href: 'logs.html',        txt: 'Logs' }
+    { key: 'logs',        href: 'logs.html',        txt: 'Logs' },
+    { key: 'messages',    href: 'messages.html',    txt: 'Messages' }
   ];
 
   var SOCIAL = [
@@ -141,10 +142,11 @@
        только уже (см. --sbw-m в ui.css). Прятать его за кнопкой значило
        прятать от игрока половину игры. */
 
-    // плавающая кнопка «Messages» — отдельно от сайдбара, видна везде
-    var msgFab = el('a', 'bfMsgFab', '<span data-i18n="messages">Messages</span>');
-    msgFab.href = 'messages.html';
-    document.body.appendChild(msgFab);
+    /* Плавающей кнопки «Messages» больше нет: она висела в правом нижнем
+       углу поверх страницы и на телефоне закрывала то, что под ней, —
+       кнопку Story Mode на странице Race, PLAY и оценки в Maps Browser,
+       стрелку листания в таблице лидеров. Раздел переехал в боковое
+       меню, которое теперь и так всегда на экране. */
 
     // ---------- меню профиля ----------
     var prof = el('div', 'bfDrop bfProf');
@@ -270,7 +272,7 @@
      явно (как на game.html/editor.html). */
   if (!document.querySelector('script[src*="sound.js"]')) {
     var snd = document.createElement('script');
-    snd.src = 'sound.js?v=119';
+    snd.src = 'sound.js?v=120';
     document.head.appendChild(snd);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

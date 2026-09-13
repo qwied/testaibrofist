@@ -5,9 +5,9 @@
 <title>AIBrofist — Hide and Seek</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Hide and Seek in AIBrofist: one seeks, the rest hide on player-made maps.">
-<link rel="stylesheet" href="ui.css?v=119">
-<script src="theme.js?v=119"></script>
-<script src="device.js?v=119"></script>
+<link rel="stylesheet" href="ui.css?v=120">
+<script src="theme.js?v=120"></script>
+<script src="device.js?v=120"></script>
         <link rel="icon" href="/favicon.ico" sizes="32x32">
         <link rel="icon" type="image/svg+xml" href="/favicon.svg">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -69,7 +69,8 @@
       <div class="mdText" data-i18n="modeHsText">Перед раундом на экране крутится рулетка: карточки игроков со скинами и никами, и серое полосатое выделение выбирает искателя. Шансы меняются каждый раунд, а недавние искатели получают шанс поменьше. Пока прячутся, искатель никого не видит — и его не видно.</div>
       <ul class="mdList">
         <li data-i18n="hsRule1">Искателя выбирает рулетка в начале каждого раунда — шансы каждый раз новые.</li>
-        <li data-i18n="hsRule2">Во время прятаний искатель не видит прячущихся, прячущиеся не видят искателя.</li>
+        <li data-i18n="hsRule2">Пока крутится рулетка, всех видно всем.</li>
+        <li data-i18n="hsRule2b">Как только выпал искатель, до начала раунда не видно никого — это и есть время прятаться.</li>
         <li data-i18n="hsRule3">После начала раунда все видят всех — начинается охота.</li>
         <li data-i18n="hsRule4">Пойманный меняет цвет и помогает искать остальных.</li>
         <li data-i18n="hsRule5">Карту выбирает сервер из тех, что добавил разработчик.</li>
@@ -85,14 +86,14 @@
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=119">
-<script src="i18n.js?v=119"></script>
-<script src="coin.js?v=119"></script>
-<script src="skinRender.js?v=119"></script>
-<script src="skinAvatar.js?v=119" defer></script>
-<script src="shell.js?v=119"></script>
-<script src="abuseShow.js?v=119" defer></script>
-<script src="account.js?v=119" defer></script>
+<link rel="stylesheet" href="mobile.css?v=120">
+<script src="i18n.js?v=120"></script>
+<script src="coin.js?v=120"></script>
+<script src="skinRender.js?v=120"></script>
+<script src="skinAvatar.js?v=120" defer></script>
+<script src="shell.js?v=120"></script>
+<script src="abuseShow.js?v=120" defer></script>
+<script src="account.js?v=120" defer></script>
 <script>
 document.getElementById('mdPlay').onclick = function () {
   location.href = 'game.html?mode=hideAndSeek';

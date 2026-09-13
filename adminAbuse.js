@@ -48,7 +48,10 @@
   }
 
   var CSS = ''
-    + '#aaFab{position:fixed;right:14px;bottom:14px;z-index:10000;display:flex;align-items:center;gap:7px;'
+    /* Выше кнопки владельца (.ow-fab, bottom:18px, высота 52): раньше обе
+       стояли в одном углу и наезжали друг на друга — на телефоне это
+       было особенно видно. */
+    + '#aaFab{position:fixed;right:14px;bottom:80px;z-index:10000;display:flex;align-items:center;gap:7px;'
     + 'padding:11px 16px;border-radius:999px;border:none;white-space:nowrap;'
     + 'background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;font:700 12.5px system-ui,sans-serif;'
     + 'letter-spacing:.3px;cursor:pointer;box-shadow:0 8px 22px rgba(185,28,28,.38);user-select:none;'
@@ -56,7 +59,9 @@
     + '#aaFab:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(185,28,28,.46)}'
     + '#aaFab svg{width:16px;height:16px;flex:none}'
     + '#aaFab.on{border-radius:12px}'
-    + '#aaPanel{position:fixed;right:14px;bottom:64px;z-index:10000;width:308px;max-width:calc(100vw - 28px);'
+    + '@media (max-width:860px){body.play.mob #aaFab{bottom:192px}'
+    +   'body.play.mob #aaPanel{bottom:242px}}'
+    + '#aaPanel{position:fixed;right:14px;bottom:130px;z-index:10000;width:308px;max-width:calc(100vw - 28px);'
     + 'max-height:78vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;'
     + 'display:none;box-shadow:0 16px 40px rgba(15,23,42,.28);font:13px system-ui,sans-serif;color:var(--ink)}'
     + '#aaPanel.on{display:block}'
