@@ -241,6 +241,8 @@
     roulSeekerIs: "Seeker: ",
     roulSpin: "Who is seeking this round?",
     roulYouSeek: "You are the seeker!",
+    hideNow: "Go hide! Nobody is visible until the round starts.",
+    hideNowSeeker: "Hiders are invisible until the round starts.",
     chanceLbl: "Your chance",
     chatBtn: "Chat",
     soundBtn: "Sound",

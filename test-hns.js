@@ -76,9 +76,14 @@ ok('checkAllFinished вне троттлинга', /checkAllFinished\(\);\s*\n\s
 ok('отправка на сервер троттлится отдельно', /if \(now - lastSent >= minGap && \(moved \|\| force\)\) \{/.test(src));
 
 console.log('\nвидимость в прятках:');
-ok('лобби: до результата никого',  /if \(!hsWinnerId\) return;/.test(src));
-ok('лобби: искатель скрыт',        /if \(id === hsWinnerId\) return;/.test(src));
-ok('лобби: искателю прячущихся не видно', /if \(me\.role === 'seeker'\) return;/.test(src));
+/* Правило лобби перевернули: пока крутится рулетка — видно всех, как
+   только выпал искатель и до конца лобби — никого (время прятаться). */
+ok('лобби делится по рулетке',     /var hsHiding = hsWait && !!hsWinnerId;/.test(src));
+ok('прячемся — не видно никого',   /if \(hsHiding\) return;/.test(src));
+ok('во время рулетки видно всех',  !/if \(!hsWinnerId\) return;/.test(src)
+                                   && !/if \(id === hsWinnerId\) return;/.test(src)
+                                   && !/if \(me\.role === 'seeker'\) return;/.test(src));
+ok('подсказка про невидимость',    /hideNow/.test(src));
 ok('в раунде видно всех',          /var hsWait = MODE === 'hideAndSeek' && !VIEW && phase === 'lobby';/.test(src));
 ok('все пойманы — сигнал серверу', /if \(hsSync\) socket\.emit\('hsCaught'\);/.test(src));
 
