@@ -348,9 +348,17 @@ function register(app, getUser, acc) {
       return res.json({ status: 'error', message: 'Unknown vote value' });
     const v = raw;
     m.votes = m.votes || {};
+    /* Квест «оцени 10 карт» засчитываем только за ПЕРВУЮ оценку карты.
+       Раньше засчитывалась любая смена мнения, а лайк/дизлайк на одной и
+       той же карте меняются как угодно часто — весь квест закрывался
+       десятью кликами по одной кнопке, не открыв ни одной карты. */
+    const fresh = m.votes[low(u.name)] === undefined;
     // повторный клик по той же кнопке снимает оценку
     if (m.votes[low(u.name)] === v) delete m.votes[low(u.name)];
-    else { m.votes[low(u.name)] = v; require('./quests.js').track(u.name, 'map_vote'); }
+    else {
+      m.votes[low(u.name)] = v;
+      if (fresh) require('./quests.js').track(u.name, 'map_vote');
+    }
     const t = retally(m);
     save();
     res.json({ status: 'success', rating: t.rating, likes: t.likes, dislikes: t.dislikes,

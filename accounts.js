@@ -301,11 +301,27 @@ function saveScoreLog() {
 loadScoreLog();
 
 /* Очки Race начисляет только сервер — по времени финиша (см. raceFinish
-   в server.js), не по заявке клиента. В отличие от монет, часового лимита
-   нет: это игровой счёт, а не разменная валюта, крутить нечего. */
+   в server.js), не по заявке клиента.
+
+   Часовой потолок здесь такой же, как у монет. Раньше его не было —
+   считалось, что «это игровой счёт, а не валюта, крутить нечего». На
+   деле крутить есть что: очки и есть таблица лидеров, а быстрый финиш
+   стоит под сотню очков, так что скрипт, гоняющий забеги по кругу,
+   забирался на первое место за считанные часы. Живой игрок в этот
+   потолок не упирается: он равен примерно двум десяткам идеальных
+   забегов подряд без единой паузы. */
+const SCORE_WINDOW = 60 * 60 * 1000;   // час
+const SCORE_MAX = 2000;                // максимум очков Race за час
 function creditScore(name, amount) {
   const u = db.users[key(name)];
   if (!u || !(amount > 0)) return 0;
+  if (!u.scoreWin || Date.now() - u.scoreWin > SCORE_WINDOW) {
+    u.scoreWin = Date.now();
+    u.scoreSum = 0;
+  }
+  if ((u.scoreSum || 0) >= SCORE_MAX) return 0;
+  amount = Math.min(amount, SCORE_MAX - (u.scoreSum || 0));
+  u.scoreSum = (u.scoreSum || 0) + amount;
   u.score = (u.score || 0) + amount;
   save();
 
