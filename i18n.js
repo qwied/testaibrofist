@@ -241,6 +241,7 @@
     roulSeekerIs: "Seeker: ",
     roulSpin: "Who is seeking this round?",
     roulYouSeek: "You are the seeker!",
+    favOnly: "\u2605 Favorites only",
     hideNow: "Go hide! Nobody is visible until the round starts.",
     hideNowSeeker: "Hiders are invisible until the round starts.",
     chanceLbl: "Your chance",
@@ -301,7 +302,8 @@
     /* ---------- страницы режимов ---------- */
     modeHsText: "Before each round a roulette spins on screen: player cards with skins and names, and a grey striped highlight picks the seeker. The odds change every round, and recent seekers get a smaller chance. While everyone hides, the seeker sees no one — and is seen by no one.",
     hsRule1: "The roulette picks the seeker at the start of each round — the odds are new every time.",
-    hsRule2: "While everyone hides, the seeker cannot see the hiders, and the hiders cannot see the seeker.",
+    hsRule2: "While the roulette spins everyone is visible to everyone.",
+    hsRule2b: "The moment the seeker is drawn nobody is visible until the round starts \u2014 that is your time to hide.",
     hsRule3: "Once the round starts everyone sees everyone — the hunt begins.",
     hsRule4: "A caught player changes colour and helps seek the rest.",
     hsRule5: "The server picks the map from the ones the developer added.",
