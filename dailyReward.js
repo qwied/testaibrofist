@@ -33,8 +33,11 @@
     + 'border:5px solid var(--ink);box-sizing:border-box;'
     + 'transition:transform 3.2s cubic-bezier(.17,.89,.32,1.1)}'
     + '#' + SLOT_ID + ' .drLabel{position:absolute;left:50%;top:50%;width:0;height:0}'
-    + '#' + SLOT_ID + ' .drLabel b{position:absolute;left:-20px;top:-58px;width:40px;text-align:center;'
-    + 'font-size:13px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35)}'
+    + '#' + SLOT_ID + ' .drLabel b{position:absolute;left:-23px;top:-58px;width:46px;text-align:center;'
+    + 'font-size:13px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35);'
+    + 'white-space:nowrap}'
+    // монета в подписи сектора: чуть отступает от числа и не тянет строку вверх
+    + '#' + SLOT_ID + ' .drLabel b .bfCoinIcon{margin-left:2px;vertical-align:-1px}'
     + '#' + SLOT_ID + ' .drPointer{position:absolute;left:50%;top:-6px;transform:translateX(-50%);'
     + 'width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;'
     + 'border-top:15px solid var(--ink);z-index:2}'
@@ -67,10 +70,15 @@
       var c = COLORS[i % COLORS.length];
       return c + ' ' + (i * slice) + 'deg ' + ((i + 1) * slice) + 'deg';
     }).join(', ');
+    /* Рядом с числом — та же монета, что и везде в игре (coin.png через
+       BFCoin). Без неё сектор говорил просто «+20», и было не очевидно,
+       что именно выпадает. Иконка мелкая (11px): сектор узкий, и вместе
+       с трёхзначным числом всё должно уместиться в 46 px. */
     var labels = prizes.map(function (p, i) {
       var angle = i * slice + slice / 2;
+      var coin = window.BFCoin ? BFCoin.svg(11) : '';
       return '<div class="drLabel" style="transform:rotate(' + angle + 'deg)">'
-        + '<b style="transform:rotate(' + (-angle) + 'deg)">+' + p.amount + '</b></div>';
+        + '<b style="transform:rotate(' + (-angle) + 'deg)">+' + p.amount + coin + '</b></div>';
     }).join('');
     return '<div class="drWrap"><div class="drPointer"></div>'
       + '<div class="drWheel" id="drWheel" style="background:conic-gradient(' + gradParts + ')">'

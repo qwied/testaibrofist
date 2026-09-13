@@ -28,8 +28,7 @@
     // чуть больше места, чем простым линиям Telegram/остальных
     discord: '<svg viewBox="0 0 24 24" width="21" height="21" fill="currentColor">'
       + '<path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>',
-    chevron: svg('<path d="m9 6 6 6-6 6"/>', ' width="14" height="14"'),
-    menuLines: svg('<path d="M4 7h16M4 12h16M4 17h16"/>')
+    chevron: svg('<path d="m9 6 6 6-6 6"/>', ' width="14" height="14"')
   };
 
   var NAV = [
@@ -49,7 +48,6 @@
 
   var MARK = '<span class="bfBrandMark"><i></i><i></i></span>';
   var me = null;
-  var dailyLeftMs = null;
 
   // пустая фигура — пока не подгрузился настоящий скин
   function defaultFace() {
@@ -90,12 +88,6 @@
     var head = el('div', 'bfHead');
     head.id = 'bfHead';
 
-    // гамбургер — виден только на мобильном, раскрывает сайдбар поверх страницы
-    var menuBtn = el('button', 'bfMenuBtn', ICONS.menuLines);
-    menuBtn.type = 'button';
-    menuBtn.setAttribute('aria-label', 'Menu');
-    head.appendChild(menuBtn);
-
     var brand = el('a', 'bfBrand', MARK + '<b>AIBROFIST</b>');
     brand.href = '/';
     head.appendChild(brand);
@@ -104,18 +96,9 @@
     NAV.forEach(function (l) { nav.appendChild(navItem(l, here)); });
     head.appendChild(nav);
 
-    // карточка ежедневной награды — само колесо теперь на главной (см.
-    // dailyReward.js), тут только напоминание с обратным отсчётом и
-    // ссылка туда; видна только вошедшим (см. loadDailyStatus)
-    var daily = el('a', 'bfDailyCard');
-    daily.id = 'bfDailyCard';
-    daily.href = '/';
-    daily.style.display = 'none';
-    daily.innerHTML =
-        '<span class="bfDailyText"><b data-i18n="dailyReward">Daily Reward</b>'
-      +   '<small id="bfDailyLeft"></small></span>'
-      + '<span class="bfChev">' + ICONS.chevron + '</span>';
-    head.appendChild(daily);
+    /* Карточки Daily Reward в меню больше нет: само колесо и так стоит на
+       главной (dailyReward.js), а напоминание с отсчётом только занимало
+       место посреди списка разделов. Сама награда никуда не делась. */
 
     var social = el('div', 'bfSocial');
     SOCIAL.forEach(function (l) {
@@ -152,22 +135,10 @@
     document.body.insertBefore(head, document.body.firstChild);
     document.body.classList.add('bfHasSidebar');
 
-    // ---------- мобильная выдвижная панель ----------
-    var overlay = el('div', 'bfSideOverlay');
-    overlay.id = 'bfSideOverlay';
-    document.body.appendChild(overlay);
-    function closeDrawer() { head.classList.remove('open'); overlay.classList.remove('open'); }
-    menuBtn.onclick = function (e) {
-      e.stopPropagation();
-      head.classList.toggle('open');
-      overlay.classList.toggle('open');
-    };
-    overlay.onclick = closeDrawer;
-    // клик по любой ссылке в панели — закрыть выезжающий сайдбар (на
-    // десктопе классы .open ни на что не влияют, лишний toggle безвреден)
-    head.addEventListener('click', function (e) {
-      if (e.target.closest && e.target.closest('a')) closeDrawer();
-    });
+    /* Выдвижной панели с гамбургером больше нет. На телефоне сайдбар
+       стоит на месте узкой колонкой и виден сразу — как на компьютере,
+       только уже (см. --sbw-m в ui.css). Прятать его за кнопкой значило
+       прятать от игрока половину игры. */
 
     // плавающая кнопка «Messages» — отдельно от сайдбара, видна везде
     var msgFab = el('a', 'bfMsgFab', '<span data-i18n="messages">Messages</span>');
@@ -243,37 +214,6 @@
     box.appendChild(out);
   }
 
-  // ---------- карточка ежедневной награды: обратный отсчёт ----------
-  function fmtLeft(ms) {
-    var h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
-    return h > 0 ? (h + 'h ' + m + 'm') : (m + 'm');
-  }
-  function paintDaily() {
-    var card = document.getElementById('bfDailyCard');
-    var lbl = document.getElementById('bfDailyLeft');
-    if (!card || !lbl || dailyLeftMs === null) return;
-    card.style.display = 'flex';
-    lbl.textContent = dailyLeftMs <= 0
-      ? T('dailyRewardReady', 'Available now')
-      : T('dailyRewardWait', 'Come back in') + ' ' + fmtLeft(dailyLeftMs);
-  }
-  function loadDailyStatus() {
-    fetch('/dailyReward/status', { credentials: 'same-origin' })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        dailyLeftMs = d.guest ? null : Math.max(0, d.msLeft || 0);
-        paintDaily();
-      })
-      .catch(function () {});
-  }
-  // между сверками с сервером просто досчитываем локально — точная
-  // сверка на каждой новой странице и так подгружает свежее значение
-  setInterval(function () {
-    if (dailyLeftMs === null) return;
-    dailyLeftMs = Math.max(0, dailyLeftMs - 60000);
-    paintDaily();
-  }, 60000);
-
   function loadMe() {
     fetch('/whoAmI', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
@@ -288,7 +228,6 @@
             c.style.display = 'flex';
             c.querySelector('span').textContent = me.coins;
           }
-          loadDailyStatus();
         }
         window.dispatchEvent(new CustomEvent('bf-shell-ready', { detail: me }));
       })
@@ -330,7 +269,7 @@
      явно (как на game.html/editor.html). */
   if (!document.querySelector('script[src*="sound.js"]')) {
     var snd = document.createElement('script');
-    snd.src = 'sound.js?v=116';
+    snd.src = 'sound.js?v=117';
     document.head.appendChild(snd);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
