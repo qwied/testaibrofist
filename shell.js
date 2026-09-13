@@ -330,7 +330,7 @@
      явно (как на game.html/editor.html). */
   if (!document.querySelector('script[src*="sound.js"]')) {
     var snd = document.createElement('script');
-    snd.src = 'sound.js?v=103';
+    snd.src = 'sound.js?v=114';
     document.head.appendChild(snd);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
