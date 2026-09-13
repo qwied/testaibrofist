@@ -1,8 +1,8 @@
-/* AIBROFIST — ежедневная награда: колесо фортуны прямо на главной.
-   Раньше это была кнопка-подарок в шапке, открывавшая колесо в модалке —
-   на практике игроки её не замечали (маленькая иконка среди прочих).
-   Теперь колесо рисуется сразу, без клика, в отведённом месте на
-   главной странице под карточками режимов (#bfDailyWheel в index.html).
+/* AIBROFIST — ежедневная награда: колесо фортуны.
+   Сначала это была кнопка-подарок в шапке (её не замечали), потом
+   карточка на главной под режимами — там колесо мешалось выбору режима
+   и было тесно. Теперь у награды своя страница, daily.html, ссылка на
+   неё стоит в боковом меню, а на главной остались только режимы.
    Приз всё так же выбирает СЕРВЕР — клиент только проигрывает анимацию
    до уже готового ответа (см. dailyRewards.js на сервере). */
 (function () {
@@ -14,41 +14,89 @@
   var slot = document.getElementById(SLOT_ID);
   if (!slot) return;   // виджет есть только на главной
 
-  /* Цвета — только через переменные темы (--panel/--ink/--line/--muted):
-     раньше карточка была жёстко светлой с тёмным текстом и в тёмной теме
-     превращалась в нечитаемый тёмный текст на тёмном фоне. */
+  /* Колесо живёт на своей странице (daily.html) и стало её главным
+     предметом, а не карточкой в углу главной: крупнее, с золотым ободом,
+     разделителями секторов, ступицей по центру и стрелкой сверху. Цвета —
+     только через переменные темы, чтобы карточка одинаково читалась и в
+     светлой, и в тёмной. */
   var css = ''
-    /* clear:both обязателен: карточки режимов на главной плавают
-       (.cards/.cardContainer — float:left), и без сброса блок колеса
-       начинался у самого верха страницы, обтекая карточку Race. С
-       прозрачным фоном это не бросалось в глаза, а с фоном по теме
-       превратилось в рамку вокруг чужой карточки. */
-    + '#' + SLOT_ID + '{clear:both;max-width:280px;margin:18px auto 26px;padding:18px 20px 16px;'
-    + 'background:var(--panel);border:2px solid var(--line);border-radius:8px;'
-    + 'box-shadow:0 9px 11px -6px rgba(15,23,42,.22);'
-    + 'color:var(--ink);font-family:sans-serif;box-sizing:border-box;text-align:center}'
-    + '#' + SLOT_ID + ' .drT{font-size:16px;font-weight:800;margin-bottom:14px}'
-    + '#' + SLOT_ID + ' .drWrap{position:relative;width:180px;height:180px;margin:0 auto 16px}'
-    + '#' + SLOT_ID + ' .drWheel{width:180px;height:180px;border-radius:50%;position:relative;'
-    + 'border:5px solid var(--ink);box-sizing:border-box;'
-    + 'transition:transform 3.2s cubic-bezier(.17,.89,.32,1.1)}'
-    + '#' + SLOT_ID + ' .drLabel{position:absolute;left:50%;top:50%;width:0;height:0}'
-    + '#' + SLOT_ID + ' .drLabel b{position:absolute;left:-23px;top:-58px;width:46px;text-align:center;'
-    + 'font-size:13px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35);'
-    + 'white-space:nowrap}'
-    // монета в подписи сектора: чуть отступает от числа и не тянет строку вверх
-    + '#' + SLOT_ID + ' .drLabel b .bfCoinIcon{margin-left:2px;vertical-align:-1px}'
-    + '#' + SLOT_ID + ' .drPointer{position:absolute;left:50%;top:-6px;transform:translateX(-50%);'
-    + 'width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;'
-    + 'border-top:15px solid var(--ink);z-index:2}'
-    + '#' + SLOT_ID + ' .drGo{border:1px solid var(--blue);border-radius:6px;font-size:15px;padding:10px 0;'
-    + 'width:100%;background:var(--panel);color:var(--blue);cursor:pointer;margin-top:4px}'
-    + '#' + SLOT_ID + ' .drGo:hover{background:var(--blue);color:#fff}'
-    + '#' + SLOT_ID + ' .drGo:disabled{opacity:.5;cursor:default;background:var(--panel);color:var(--blue)}'
-    + '#' + SLOT_ID + ' .drWait{color:var(--muted);font-size:14px;line-height:1.5}'
-    + '#' + SLOT_ID + ' .drWin{font-size:17px;font-weight:800;color:#2e9b2e;margin-top:6px;min-height:22px}';
+    + '#' + SLOT_ID + '{max-width:430px;margin:0 auto;color:var(--ink);'
+    + 'font-family:inherit;box-sizing:border-box;text-align:center}'
 
-  var COLORS = ['#2196F3', '#111827', '#e2a600', '#2e9b2e', '#dc2626', '#7c3aed'];
+    + '#' + SLOT_ID + ' .drCard{background:var(--panel);border:1px solid var(--line);'
+    + 'border-radius:20px;padding:24px 20px 22px;'
+    + 'box-shadow:0 20px 44px -26px rgba(15,23,42,.55)}'
+
+    /* Размер в процентах, а не в пикселях: место под колесо — это ширина
+       колонки рядом с боковым меню, а не ширина экрана, и медиа-запросом
+       её не угадать. min() держит потолок на больших экранах, aspect-ratio
+       делает круг круглым при любой ширине. */
+    + '#' + SLOT_ID + ' .drWrap{position:relative;width:min(272px,100%);'
+    + 'aspect-ratio:1/1;margin:0 auto 20px}'
+    /* обод: конический градиент под золото, он же держит отступ до диска */
+    + '#' + SLOT_ID + ' .drRim{position:absolute;inset:0;border-radius:50%;padding:4%;'
+    + 'container-type:inline-size;'
+    + 'box-sizing:border-box;'
+    + 'background:conic-gradient(#f6dc9a,#b0801f,#fdf0c4,#9d6f1c,#f6dc9a,#b0801f,#fdf0c4);'
+    + 'box-shadow:0 14px 30px -14px rgba(15,23,42,.6),'
+    + 'inset 0 0 0 1px rgba(255,255,255,.45),0 0 0 1px rgba(0,0,0,.18)}'
+
+    + '#' + SLOT_ID + ' .drWheel{width:100%;height:100%;border-radius:50%;position:relative;'
+    + 'overflow:hidden;box-sizing:border-box;'
+    + 'box-shadow:inset 0 0 0 3px rgba(255,255,255,.9),inset 0 0 26px rgba(0,0,0,.28);'
+    + 'transition:transform 4.8s cubic-bezier(.11,.72,.12,1)}'
+    /* тонкие лучи между секторами — поверх заливки, крутятся вместе с ней */
+    + '#' + SLOT_ID + ' .drLines{position:absolute;inset:0;border-radius:50%;pointer-events:none}'
+    /* мягкий объём: свет сверху, тень снизу */
+    + '#' + SLOT_ID + ' .drGloss{position:absolute;inset:0;border-radius:50%;pointer-events:none;'
+    + 'background:radial-gradient(circle at 32% 24%,rgba(255,255,255,.34),rgba(255,255,255,0) 46%),'
+    + 'radial-gradient(circle at 68% 88%,rgba(0,0,0,.26),rgba(0,0,0,0) 52%)}'
+
+    + '#' + SLOT_ID + ' .drLabel{position:absolute;inset:0;pointer-events:none}'
+    + '#' + SLOT_ID + ' .drLabel b{position:absolute;left:50%;top:7%;'
+    + 'text-align:center;font-size:clamp(11px,4.6cqw,14px);font-weight:800;color:#fff;'
+    + 'white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.55)}'
+    + '#' + SLOT_ID + ' .drLabel b .bfCoinIcon{margin-left:3px;vertical-align:-2px}'
+    /* Тот же ход, что у диска: подпись доворачивается ровно настолько,
+       насколько повернулось колесо, и остаётся горизонтальной всю
+       прокрутку. Без этого после остановки все подписи, кроме выигравшей,
+       оказывались завалены набок и читались боком. */
+    + '#' + SLOT_ID + ' .drLabel b{transition:transform 4.8s cubic-bezier(.11,.72,.12,1)}'
+
+    /* ступица не крутится: отдельный слой поверх диска */
+    + '#' + SLOT_ID + ' .drHub{position:absolute;left:38%;top:38%;width:24%;height:24%;'
+    + 'border-radius:50%;z-index:3;display:flex;'
+    + 'align-items:center;justify-content:center;background:var(--panel);'
+    + 'box-shadow:0 5px 16px rgba(15,23,42,.35),inset 0 0 0 3px rgba(176,128,31,.6)}'
+
+    + '#' + SLOT_ID + ' .drPointer{position:absolute;left:50%;top:-3px;'
+    + 'transform:translateX(-50%);z-index:4;width:0;height:0;'
+    + 'border-left:14px solid transparent;border-right:14px solid transparent;'
+    + 'border-top:26px solid #e8ae23;'
+    + 'filter:drop-shadow(0 3px 4px rgba(0,0,0,.45))}'
+
+    + '#' + SLOT_ID + ' .drGo{border:none;border-radius:12px;font-size:16px;font-weight:700;'
+    + 'padding:14px 0;width:100%;cursor:pointer;color:#3a2600;letter-spacing:.3px;'
+    + 'background:linear-gradient(180deg,#ffd964,#e0a020);'
+    + 'box-shadow:0 10px 22px -12px rgba(224,160,32,.95)}'
+    + '#' + SLOT_ID + ' .drGo:hover{filter:brightness(1.07)}'
+    + '#' + SLOT_ID + ' .drGo:active{transform:translateY(1px)}'
+    + '#' + SLOT_ID + ' .drGo:disabled{opacity:.55;cursor:default;transform:none;filter:none}'
+
+    + '#' + SLOT_ID + ' .drWait{color:var(--muted);font-size:14.5px;line-height:1.6}'
+    + '#' + SLOT_ID + ' .drWait b{color:var(--ink);font-size:17px}'
+    + '#' + SLOT_ID + ' .drWin{font-size:19px;font-weight:800;color:var(--gold);'
+    + 'margin-top:14px;min-height:26px}'
+    + '#' + SLOT_ID + ' .drWin.on{animation:drPop .45s cubic-bezier(.2,1.4,.4,1)}'
+    + '@keyframes drPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}'
+    /* выигрышный сектор подсвечиваем свечением по ободу */
+    + '#' + SLOT_ID + ' .drRim.won{animation:drGlow 1.1s ease-out 2}'
+    + '@keyframes drGlow{0%,100%{filter:none}50%{filter:drop-shadow(0 0 14px rgba(255,196,60,.9))}}'
+
+    + '';
+
+  // сектора: чередуем тёмные и яркие, чтобы соседние не сливались
+  var COLORS = ['#2f7ded', '#1b2130', '#e8a317', '#2f9e46', '#d63b3b', '#7d4fe0'];
 
   function injectCss() {
     var s = document.createElement('style');
@@ -70,35 +118,55 @@
       var c = COLORS[i % COLORS.length];
       return c + ' ' + (i * slice) + 'deg ' + ((i + 1) * slice) + 'deg';
     }).join(', ');
-    /* Рядом с числом — та же монета, что и везде в игре (coin.png через
-       BFCoin). Без неё сектор говорил просто «+20», и было не очевидно,
-       что именно выпадает. Иконка мелкая (11px): сектор узкий, и вместе
-       с трёхзначным числом всё должно уместиться в 46 px. */
+    /* Лучи-разделители: один повторяющийся градиент вместо N элементов.
+       Сдвиг на половину толщины линии ставит её ровно на границу
+       секторов, а не рядом с ней. */
+    var lines = 'repeating-conic-gradient(from -0.75deg,'
+      + 'rgba(255,255,255,.95) 0deg 1.5deg, rgba(255,255,255,0) 1.5deg ' + slice + 'deg)';
     var labels = prizes.map(function (p, i) {
       var angle = i * slice + slice / 2;
-      var coin = window.BFCoin ? BFCoin.svg(11) : '';
+      var coin = window.BFCoin ? BFCoin.svg(13) : '';
       return '<div class="drLabel" style="transform:rotate(' + angle + 'deg)">'
-        + '<b style="transform:rotate(' + (-angle) + 'deg)">+' + p.amount + coin + '</b></div>';
+        + '<b data-a="' + angle + '" style="transform:translateX(-50%) rotate('
+        +   (-angle) + 'deg)">+' + p.amount + coin + '</b></div>';
     }).join('');
-    return '<div class="drWrap"><div class="drPointer"></div>'
-      + '<div class="drWheel" id="drWheel" style="background:conic-gradient(' + gradParts + ')">'
-      +   labels
-      + '</div></div>';
+    return '<div class="drWrap">'
+      +   '<div class="drPointer"></div>'
+      +   '<div class="drRim" id="drRim">'
+      +     '<div class="drWheel" id="drWheel" style="background:conic-gradient(' + gradParts + ')">'
+      +       labels
+      +       '<div class="drLines" style="background:' + lines + '"></div>'
+      +       '<div class="drGloss"></div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div class="drHub">' + (window.BFCoin ? BFCoin.svg(30) : '') + '</div>'
+      + '</div>';
+  }
+
+  /* Заголовок и подпись рисует сама страница (daily.html, .bfTitle/.bfSub) —
+     как и на остальных разделах сайта. Карточка их не повторяет: два
+     одинаковых «Daily Reward» подряд выглядели как ошибка вёрстки. */
+  function card(inner) {
+    return '<div class="drCard">' + inner + '</div>';
   }
 
   function render(d) {
-    if (!d.available) {
-      slot.innerHTML =
-          '<div class="drT">' + T('dailyReward', 'Daily Reward') + '</div>'
-        + '<div class="drWait">' + T('dailyRewardWait', 'Come back in') + ' '
-        +   '<b>' + fmtLeft(d.msLeft) + '</b></div>';
+    if (d.guest) {
+      /* На своей странице пустоту показывать нельзя — гость должен
+         понимать, почему колесо не крутится и что делать. */
+      slot.innerHTML = card(buildWheel()
+        + '<div class="drWait">' + T('dailyRewardGuest', 'Sign in to spin the wheel.') + '</div>');
       return;
     }
-    slot.innerHTML =
-        '<div class="drT">' + T('dailyReward', 'Daily Reward') + '</div>'
-      + buildWheel()
+    if (!d.available) {
+      slot.innerHTML = card(buildWheel()
+        + '<div class="drWait">' + T('dailyRewardWait', 'Come back in') + '<br>'
+        +   '<b>' + fmtLeft(d.msLeft) + '</b></div>');
+      return;
+    }
+    slot.innerHTML = card(buildWheel()
       + '<button class="drGo" id="drGo">' + T('spin', 'Spin') + '</button>'
-      + '<div class="drWin" id="drWin"></div>';
+      + '<div class="drWin" id="drWin"></div>');
     slot.querySelector('#drGo').onclick = spin;
   }
 
@@ -119,13 +187,24 @@
         var slice = 360 / n;
         // центр нужного сектора приводим под неподвижный указатель сверху;
         // несколько полных оборотов — только ради самой анимации
-        var target = 360 * 5 - (d.index * slice + slice / 2);
+        var target = 360 * 7 - (d.index * slice + slice / 2);
         var wheel = document.getElementById('drWheel');
         wheel.style.transform = 'rotate(' + target + 'deg)';
+        // подписи доворачиваем на тот же угол в другую сторону — остаются прямыми
+        var labels = slot.querySelectorAll('.drLabel b');
+        for (var li = 0; li < labels.length; li++) {
+          var a = Number(labels[li].getAttribute('data-a')) || 0;
+          labels[li].style.transform = 'translateX(-50%) rotate(' + (-(a + target)) + 'deg)';
+        }
+        // ждём конца прокрутки (4.8s по transition) и только тогда объявляем приз
         setTimeout(function () {
-          slot.querySelector('#drWin').innerHTML = '+' + d.amount + ' ' + (window.BFCoin ? BFCoin.svg(18) : '');
+          var win = slot.querySelector('#drWin');
+          win.innerHTML = '+' + d.amount + ' ' + (window.BFCoin ? BFCoin.svg(20) : '');
+          win.classList.add('on');
+          var rim = document.getElementById('drRim');
+          if (rim) rim.classList.add('won');
           if (window.BFShell) window.BFShell.refreshCoins(d.coins);
-        }, 3300);
+        }, 4900);
       })
       .catch(function () {
         slot.querySelector('#drWin').textContent = T('serverDown', 'Server unavailable');
@@ -138,7 +217,7 @@
     fetch('/dailyReward/status', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        if (d.guest) { slot.style.display = 'none'; return; }
+        // гостю тоже показываем страницу — но с подсказкой войти
         slot.style.display = 'block';
         prizes = d.prizes || [];
         render(d);

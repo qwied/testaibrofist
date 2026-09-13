@@ -271,7 +271,8 @@ app.get('/robots.txt', (req, res) => {
 app.get('/sitemap.xml', (req, res) => {
   const base = siteOrigin(req);
   const pages = ['/', '/hide-and-seek.html', '/race.html', '/mapsBrowser.html',
-                 '/editor.html', '/leaderboard.html', '/logs.html', '/themes.html', '/users.html'];
+                 '/editor.html', '/leaderboard.html', '/logs.html', '/themes.html',
+                 '/users.html', '/quests.html', '/daily.html'];
   res.set('Content-Type', 'application/xml; charset=utf-8');
   res.set('Cache-Control', 'public, max-age=3600');
   res.send('<?xml version="1.0" encoding="UTF-8"?>\n'
