@@ -6,7 +6,7 @@
   --blue:#2196F3; --green:#22a45d; --red:#e04141; --gold:#b8860b;
   --hdr:56px; --sbw:248px;
   /* на телефоне сайдбар не прячется, а сужается — см. медиа-запрос ниже */
-  --sbw-m:158px;
+  --sbw-m:118px;
   /* поверхность карточки/панели: в тёмной теме её переопределяет theme.js.
      Страницам стоит писать var(--panel), а не #fff, — тогда карточка сама
      станет тёмной в тёмной теме и не окажется белым пятном. */
@@ -200,30 +200,48 @@ body.bfHasSidebar{padding-left:var(--sbw)}
    уменьшенной ширины, отступов и шрифта, чтобы странице оставалось
    место. Гамбургера нет вовсе. */
 @media (max-width:860px){
-  .bfHead{width:var(--sbw-m);padding:10px 7px;gap:1px}
+  .bfHead{width:var(--sbw-m);padding:10px 5px;gap:1px}
   body.bfHasSidebar{padding-left:var(--sbw-m)}
-  .bfBrand{padding:2px 5px 10px;gap:6px}
-  .bfBrand b{font-size:15px;letter-spacing:.3px}
-  .bfBrandMark{width:11px;height:20px}
-  .bfBrandMark i:nth-child(1){width:11px;height:11px}
-  .bfBrandMark i:nth-child(2){top:13px;width:11px;height:7px}
-  .bfNavItem{padding:8px 7px;font-size:12.5px;gap:8px;border-radius:7px}
+  .bfBrand{padding:2px 4px 10px;gap:5px}
+  /* Ширину панели задаёт не длина пунктов, а логотип: «AIBROFIST» — 81px
+     против 71px у самого длинного слова «Leaderboard». Поэтому на
+     телефоне уменьшаем именно его, иначе панель нельзя сузить, ничего
+     не выбрасывая. */
+  .bfBrand b{font-size:13px;letter-spacing:.2px}
+  .bfBrandMark{width:10px;height:18px}
+  .bfBrandMark i:nth-child(1){width:10px;height:10px}
+  .bfBrandMark i:nth-child(2){top:12px;width:10px;height:6px}
+  /* Подписи переносятся на вторую строку вместо обрезания: «Maps
+     Browser» и «Daily Reward» длиннее любого отдельного слова, и без
+     переноса панель пришлось бы держать под них широкой. Пункт остаётся
+     ростом с палец даже в одну строку. */
+  .bfNavItem{padding:8px 6px;font-size:12.5px;gap:7px;border-radius:7px;
+    white-space:normal;line-height:1.25;min-height:36px}
   .bfSocial{margin-top:7px;padding-top:7px}
   .bfBottom{padding-top:8px}
-  .bfCoin{padding:6px 7px;font-size:13px;gap:5px}
-  .bfProfileRow{padding:6px 7px;gap:6px}
+  .bfCoin{padding:6px 6px;font-size:13px;gap:5px}
+  /* Строка профиля — самая тесная в панели: аватар, ник и стрелка в один
+     ряд. Ужимаем аватар и промежуток, иначе даже «Sign in» у гостя не
+     помещается целиком (ник подлиннее по-прежнему обрезается многоточием
+     — так и задумано). */
+  .bfProfileRow{padding:6px 6px;gap:5px}
   .bfProfileName{font-size:12.5px}
-  .bfProfileRow .bfAvatar{width:26px;height:26px}
+  .bfProfileRow .bfAvatar{width:22px;height:22px}
   /* меню профиля не должно уезжать под сайдбар */
   .bfDrop{left:calc(var(--sbw-m) + 8px);right:8px;min-width:0}
-  .bfMsgFab{padding:11px 16px;font-size:13.5px}
+  /* каждый пиксель по краям — это ширина карточек рядом с панелью */
+  .bfWrap{padding-left:9px;padding-right:9px}
 }
 /* Узкая колонка при совсем маленькой ширине съедала бы уже больше
    половины экрана — там ужимаем ещё раз. */
 @media (max-width:370px){
-  :root{--sbw-m:132px}
-  .bfNavItem{font-size:11.5px;padding:7px 6px}
-  .bfBrand b{font-size:13px}
+  :root{--sbw-m:106px}
+  .bfNavItem{font-size:11px;padding:7px 5px}
+  .bfBrand b{font-size:12px}
+  .bfProfileName{font-size:11.5px}
+  /* Стрелка-шеврон здесь только украшение: строки и так нажимаются
+     целиком, а её 14px — это разница между «Sign in» и «Sign i…». */
+  .bfProfileRow .bfChev,.bfCoin svg:last-child{display:none}
 }
 /* Кнопки-гамбургера в разметке больше нет (см. shell.js). Правило
    оставлено на случай, если элемент придёт из старого кэша страницы. */
