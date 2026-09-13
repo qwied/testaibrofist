@@ -17,42 +17,29 @@
       + paths + '</svg>';
   }
 
+  // иконки — только у Telegram/Discord (внешние ссылки на соцсети,
+  // не эмодзи); у пунктов меню и карточки награды иконок больше нет,
+  // просто подписи
   var ICONS = {
-    leaderboard: svg('<path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4Z"/>'
-      + '<path d="M7 5H4a1 1 0 0 0-1 1c0 2 1 4 4 4M17 5h3a1 1 0 0 1 1 1c0 2-1 4-4 4"/>'),
-    mapEditor: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
-    mapsBrowser: svg('<path d="M9 3 3 5v16l6-2 6 2 6-2V3l-6 2-6-2Z"/><path d="M9 3v16M15 5v16"/>'),
-    quests: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.2"/>'
-      + '<circle cx="12" cy="12" r=".6" fill="currentColor" stroke="none"/>'),
-    story: svg('<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5Z"/>'
-      + '<path d="M4 20.5V5.5"/><path d="M20 18H6.5A2.5 2.5 0 0 0 4 20.5"/>'),
-    themes: svg('<path d="M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.8-.5-1.3 '
-      + '0-1.1.9-2 2-2h2.3c1.5 0 2.7-1.2 2.7-2.7C20 6.6 16.4 3 12 3Z"/>'
-      + '<circle cx="7.6" cy="10.6" r="1.1" fill="currentColor" stroke="none"/>'
-      + '<circle cx="11" cy="7.2" r="1.1" fill="currentColor" stroke="none"/>'
-      + '<circle cx="15.4" cy="8.6" r="1.1" fill="currentColor" stroke="none"/>'),
-    logs: svg('<path d="M7 3h7l5 5v13H7Z"/><path d="M14 3v5h5"/><path d="M9.5 13h6M9.5 16.5h6"/>'),
-    gift: svg('<rect x="4" y="9" width="16" height="11" rx="1.2"/><path d="M4 13h16M12 9v11"/>'
-      + '<path d="M12 9C9.5 9 8 7.8 8 6.2 8 4.9 9 4 10.2 4 11.6 4 12 6 12 9Z'
-      + 'M12 9c2.5 0 4-1.2 4-2.8C16 4.9 15 4 13.8 4 12.4 4 12 6 12 9Z"/>'),
     telegram: svg('<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>'),
-    discord: svg('<rect x="2" y="8" width="20" height="10" rx="5"/><path d="M7 11.2v3.6M5.2 13h3.6"/>'
-      + '<circle cx="16" cy="11.6" r="1" fill="currentColor" stroke="none"/>'
-      + '<circle cx="18.4" cy="14" r="1" fill="currentColor" stroke="none"/>'),
-    messages: svg('<path d="M21 12c0 4.4-4 8-9 8-1.1 0-2.2-.2-3.2-.5L4 21l1.4-3.8C4.5 15.9 4 14 4 12'
-      + 'c0-4.4 4-8 9-8s8 3.6 8 8Z"/>'),
+    // официальный знак Discord (заливка, не обводка) — узнаваемый «блоб»
+    // с лапками и глазами, а не абстрактная фигура, как раньше
+    // мелкая деталировка (глаза/лапки) смазывается при 18px — иконке нужно
+    // чуть больше места, чем простым линиям Telegram/остальных
+    discord: '<svg viewBox="0 0 24 24" width="21" height="21" fill="currentColor">'
+      + '<path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>',
     chevron: svg('<path d="m9 6 6 6-6 6"/>', ' width="14" height="14"'),
     menuLines: svg('<path d="M4 7h16M4 12h16M4 17h16"/>')
   };
 
   var NAV = [
-    { key: 'leaderboard', href: 'leaderboard.html', txt: 'Leaderboard',  icon: ICONS.leaderboard },
-    { key: 'mapEditor',   href: 'editor.html',      txt: 'Map Editor',   icon: ICONS.mapEditor },
-    { key: 'mapsBrowser', href: 'mapsBrowser.html', txt: 'Maps Browser', icon: ICONS.mapsBrowser },
-    { key: 'quests',      href: 'quests.html',      txt: 'Quests',       icon: ICONS.quests },
-    { key: 'story',       href: 'story.html',       txt: 'Story Mode',   icon: ICONS.story },
-    { key: 'themes',      href: 'themes.html',      txt: 'Themes',       icon: ICONS.themes },
-    { key: 'logs',        href: 'logs.html',        txt: 'Logs',         icon: ICONS.logs }
+    { key: 'leaderboard', href: 'leaderboard.html', txt: 'Leaderboard' },
+    { key: 'mapEditor',   href: 'editor.html',      txt: 'Map Editor' },
+    { key: 'mapsBrowser', href: 'mapsBrowser.html', txt: 'Maps Browser' },
+    { key: 'quests',      href: 'quests.html',      txt: 'Quests' },
+    { key: 'story',       href: 'story.html',       txt: 'Story Mode' },
+    { key: 'themes',      href: 'themes.html',      txt: 'Themes' },
+    { key: 'logs',        href: 'logs.html',        txt: 'Logs' }
   ];
 
   var SOCIAL = [
@@ -88,7 +75,7 @@
     var label = document.createElement('span');
     label.textContent = l.txt;
     if (l.key) label.setAttribute('data-i18n', l.key);
-    a.innerHTML = l.icon;
+    if (l.icon) a.innerHTML = l.icon;
     a.appendChild(label);
     return a;
   }
@@ -125,8 +112,7 @@
     daily.href = '/';
     daily.style.display = 'none';
     daily.innerHTML =
-        '<span class="bfDailyIcon">' + ICONS.gift + '</span>'
-      + '<span class="bfDailyText"><b data-i18n="dailyReward">Daily Reward</b>'
+        '<span class="bfDailyText"><b data-i18n="dailyReward">Daily Reward</b>'
       +   '<small id="bfDailyLeft"></small></span>'
       + '<span class="bfChev">' + ICONS.chevron + '</span>';
     head.appendChild(daily);
@@ -184,7 +170,7 @@
     });
 
     // плавающая кнопка «Messages» — отдельно от сайдбара, видна везде
-    var msgFab = el('a', 'bfMsgFab', ICONS.messages + '<span data-i18n="messages">Messages</span>');
+    var msgFab = el('a', 'bfMsgFab', '<span data-i18n="messages">Messages</span>');
     msgFab.href = 'messages.html';
     document.body.appendChild(msgFab);
 

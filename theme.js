@@ -244,8 +244,14 @@
       '.mbPlay:hover,.mdPlay{background:', grad, ';color:', onA, ';border-color:transparent}',
       'a{color:', B, '}',
 
-      /* --- карточки и панели: третий цвет --- */
-      '.bfCard,.mbRow,.sbCard,.upRow,.upSkin,.thSet,.mdArt{',
+      /* --- карточки и панели: третий цвет ---
+         Список селекторов должен расти вместе с новыми страницами —
+         иначе такая карточка остаётся жёстко белой (background:#fff в
+         разметке) и в тёмной теме на ней оказывается светлый текст body,
+         нечитаемый на белом фоне. .qCard (quests.html) добавлена сюда
+         именно по этой причине (.msThreads/.msPane уже покрыты ниже,
+         в блоке dark ? [...]). */
+      '.bfCard,.mbRow,.sbCard,.upRow,.upSkin,.thSet,.mdArt,.qCard{',
       'background:', cardBg, ';border-color:', mix('#e5e7eb', C, 0.42), '}',
       '.bfPanel{background:', panelBg, ';border-color:', mix('#e5e7eb', C, 0.42), '}',
       '.ow-box{background:', raised, ';color:', ink, ';border-color:', line, '}',
@@ -259,7 +265,9 @@
 
       /* --- выделения и вкладки: четвёртый цвет --- */
       '.bfChip.on{background:', D, ';border-color:transparent;color:', onD, '}',
-      '.bfTab.on{color:', p.ink, ';border-bottom-color:', D, '}',
+      /* ink (не p.ink!) — иначе активная вкладка в тёмной теме остаётся
+         тёмным текстом на тёмном фоне и попросту не видна */
+      '.bfTab.on{color:', ink, ';border-bottom-color:', D, '}',
       '.bfLangItem.on,.thSet.on{border-color:', D, '}',
       '.bfLangItem.on{background:', D, ';color:', onD, '}',
       '.bfPager button{border-color:', D, ';color:', D, '}',
@@ -313,7 +321,7 @@
            панели с фоном белым по умолчанию, тема их не задевала */
         '.msThreads,.msPane{background:', raised, ';border-color:', line, '}',
         '.msRow{border-color:', line, '}',
-        '.msRow.on{background:', mix(DARK.panel, A, 0.14), '}',
+        '.msRow.on,.lbRow.me{background:', mix(DARK.panel, A, 0.14), '}',
         '.msHead{border-color:', line, '}',
         '.msSend{border-color:', line, '}',
         '.msSend input{background:', DARK.bg, ';color:', ink, ';border-color:', line, '}',
