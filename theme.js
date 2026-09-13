@@ -201,7 +201,6 @@
     var ink     = dark ? DARK.ink   : p.ink;
     var muted   = dark ? DARK.muted : p.muted;
     var line    = dark ? mix(DARK.line, C, 0.14) : mix('#e5e7eb', C, 0.3);
-    var headBg  = dark ? mix(DARK.head, A, 0.08) : mix('#f5f5f5', A, 0.12);
 
     return [
       ':root{',
@@ -210,7 +209,7 @@
       '--on-brand:', onA, ';',
       '--ink:', ink, ';--muted:', muted, ';--line:', line, ';',
       '--soft:', dark ? mix(DARK.raised, C, 0.06) : mix('#ffffff', C, 0.07), ';',
-      '--panel:', raised, ';--hdr-bg:', headBg, ';',
+      '--panel:', raised, ';',
       '--bf-grad:', grad, ';',
       /* обычные (не залитые цветом) кнопки на тёмном фоне светлеют
          полупрозрачным слоем вместо плашки — так они не выглядят чужеродным
@@ -227,13 +226,10 @@
       /* белые полотна внутри страниц тоже подкрашиваем */
       '.container,.bfPanel{background:transparent}',
 
-      /* --- шапка: первый цвет --- */
-      '.bfHead{background:', headBg, ';border-bottom:3px solid transparent;',
-      'border-image:', stripe, ' 1}',
-      /* фон при наведении задаёт переменная --hover (см. :root выше) —
-         так текст остаётся читаемым независимо от того, какая именно
-         кнопка это и какая тема сейчас активна */
-      '.bfNav a,.bfMenuBtn{color:', ink, '}',
+      /* --- сайдбар: активный пункт подсвечивается первым цветом ---
+         Сама панель теперь всегда тёмная (как в Discord/Slack) и не
+         зависит от Themes — только подсветка текущего пункта меню
+         берёт акцент темы, логотип (.bfBrand/.bfBrandMark) не трогаем. */
       '.bfNav a.on{background:', grad, ';color:', onA, '}',
       '.bfBrand b{color:', dark ? ink : p.dark, ';background:none}',
       '.bfBrandMark i{background:', dark ? ink : p.dark, '}',

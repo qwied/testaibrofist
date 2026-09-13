@@ -533,8 +533,7 @@ html[data-page="editor"] #c { touch-action: none; }
   /* игровые кнопки управления ниже и компактнее */
   #pad { bottom: 6px !important; }
 
-  /* собственные страницы: шапка и отступы тоньше */
-  :root { --hdr: 46px; }
+  /* собственные страницы: отступы тоньше */
   .bfWrap { padding: 10px 12px 60px !important; }
   .bfTitle { font-size: 18px !important; margin-bottom: 0 !important; }
   .bfSub { margin-bottom: 8px !important; }
@@ -622,7 +621,6 @@ html[data-page="editor"] #c { touch-action: none; }
 @media (max-height: 560px) and (orientation: landscape) {
   /* Высоты почти нет: ужимаем шапку и отступы, иначе на контент
      остаётся полоска в два пальца. */
-  :root { --hdr: 44px; }
   .header { height: 44px !important; }
   .header-link-item-button, .header-link-a { padding: 7px 10px !important; font-size: 14px; }
   .profile-icon { width: 30px !important; height: 30px !important; }

@@ -1,40 +1,76 @@
-/* AIBROFIST — единая верхняя панель для всех страниц.
+/* AIBROFIST — единая боковая панель для всех страниц.
    Раньше шапок было две: собственная на моих страницах и вендорная на
    остальных. Они выглядели по-разному, а на части страниц ещё и
    дорисовывались скриптами — оттого меню то появлялось, то исчезало.
-   Теперь панель одна и строится здесь, а вендорная прячется. */
+   Теперь панель одна и строится здесь, а вендорная прячется.
+
+   С этой правки панель — не верхняя строка, а левый сайдбар (по образцу
+   присланного пользователем макета): пункты меню видны сразу, без
+   выпадающего «More». На мобильном сайдбар прячется за гамбургер и
+   выезжает поверх страницы. */
 (function () {
   'use strict';
 
-  var LINKS = [
-    { key: 'leaderboard',  href: 'leaderboard.html',  txt: 'Leaderboard' },
-    { key: 'mapEditor',    href: 'editor.html',       txt: 'Map Editor' },
-    { key: 'mapsBrowser',  href: 'mapsBrowser.html',  txt: 'Maps Browser' },
-    { key: 'logs',         href: 'logs.html',         txt: 'Logs' }
+  function svg(paths, extra) {
+    return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" '
+      + 'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"' + (extra || '') + '>'
+      + paths + '</svg>';
+  }
+
+  var ICONS = {
+    leaderboard: svg('<path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4Z"/>'
+      + '<path d="M7 5H4a1 1 0 0 0-1 1c0 2 1 4 4 4M17 5h3a1 1 0 0 1 1 1c0 2-1 4-4 4"/>'),
+    mapEditor: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
+    mapsBrowser: svg('<path d="M9 3 3 5v16l6-2 6 2 6-2V3l-6 2-6-2Z"/><path d="M9 3v16M15 5v16"/>'),
+    quests: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.2"/>'
+      + '<circle cx="12" cy="12" r=".6" fill="currentColor" stroke="none"/>'),
+    story: svg('<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5Z"/>'
+      + '<path d="M4 20.5V5.5"/><path d="M20 18H6.5A2.5 2.5 0 0 0 4 20.5"/>'),
+    themes: svg('<path d="M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.8-.5-1.3 '
+      + '0-1.1.9-2 2-2h2.3c1.5 0 2.7-1.2 2.7-2.7C20 6.6 16.4 3 12 3Z"/>'
+      + '<circle cx="7.6" cy="10.6" r="1.1" fill="currentColor" stroke="none"/>'
+      + '<circle cx="11" cy="7.2" r="1.1" fill="currentColor" stroke="none"/>'
+      + '<circle cx="15.4" cy="8.6" r="1.1" fill="currentColor" stroke="none"/>'),
+    logs: svg('<path d="M7 3h7l5 5v13H7Z"/><path d="M14 3v5h5"/><path d="M9.5 13h6M9.5 16.5h6"/>'),
+    gift: svg('<rect x="4" y="9" width="16" height="11" rx="1.2"/><path d="M4 13h16M12 9v11"/>'
+      + '<path d="M12 9C9.5 9 8 7.8 8 6.2 8 4.9 9 4 10.2 4 11.6 4 12 6 12 9Z'
+      + 'M12 9c2.5 0 4-1.2 4-2.8C16 4.9 15 4 13.8 4 12.4 4 12 6 12 9Z"/>'),
+    telegram: svg('<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>'),
+    discord: svg('<rect x="2" y="8" width="20" height="10" rx="5"/><path d="M7 11.2v3.6M5.2 13h3.6"/>'
+      + '<circle cx="16" cy="11.6" r="1" fill="currentColor" stroke="none"/>'
+      + '<circle cx="18.4" cy="14" r="1" fill="currentColor" stroke="none"/>'),
+    messages: svg('<path d="M21 12c0 4.4-4 8-9 8-1.1 0-2.2-.2-3.2-.5L4 21l1.4-3.8C4.5 15.9 4 14 4 12'
+      + 'c0-4.4 4-8 9-8s8 3.6 8 8Z"/>'),
+    chevron: svg('<path d="m9 6 6 6-6 6"/>', ' width="14" height="14"'),
+    menuLines: svg('<path d="M4 7h16M4 12h16M4 17h16"/>')
+  };
+
+  var NAV = [
+    { key: 'leaderboard', href: 'leaderboard.html', txt: 'Leaderboard',  icon: ICONS.leaderboard },
+    { key: 'mapEditor',   href: 'editor.html',      txt: 'Map Editor',   icon: ICONS.mapEditor },
+    { key: 'mapsBrowser', href: 'mapsBrowser.html', txt: 'Maps Browser', icon: ICONS.mapsBrowser },
+    { key: 'quests',      href: 'quests.html',      txt: 'Quests',       icon: ICONS.quests },
+    { key: 'story',       href: 'story.html',       txt: 'Story Mode',   icon: ICONS.story },
+    { key: 'themes',      href: 'themes.html',      txt: 'Themes',       icon: ICONS.themes },
+    { key: 'logs',        href: 'logs.html',        txt: 'Logs',         icon: ICONS.logs }
   ];
 
-  // то, что не помещается в строку, уходит в «More» (пункты, уже видные
-  // в верхней панели или доступные через выпадающий выбор Map Editor /
-  // Maps Browser, сюда не дублируются)
-  var MENU = [
-    { key: 'messages',    href: 'messages.html',       txt: 'Messages' },
-    { key: 'quests',      href: 'quests.html',         txt: 'Quests' },
-    { key: 'story',       href: 'story.html',          txt: 'Story Mode' },
-    { key: 'themes',      href: 'themes.html',         txt: 'Themes' },
-    { txt: 'Telegram', href: 'https://t.me/aibrofist', ext: true },
-    { txt: 'Discord', href: 'https://discord.gg/Rah4FvcXDw', ext: true }
+  var SOCIAL = [
+    { txt: 'Telegram', href: 'https://t.me/aibrofist',           icon: ICONS.telegram },
+    { txt: 'Discord',  href: 'https://discord.gg/Rah4FvcXDw',    icon: ICONS.discord }
   ];
 
   var MARK = '<span class="bfBrandMark"><i></i><i></i></span>';
   var me = null;
+  var dailyLeftMs = null;
 
   // пустая фигура — пока не подгрузился настоящий скин
   function defaultFace() {
     if (!window.BFSkin) return 'data:image/svg+xml;charset=utf-8,' +
       encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>');
-    var svg = window.BFSkin.svg({ head: 'h_none', body: 'b_none' },
+    var svgFace = window.BFSkin.svg({ head: 'h_none', body: 'b_none' },
                          {}, { height: 300 });
-    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgFace);
   }
 
   function el(tag, cls, html) {
@@ -44,52 +80,17 @@
     return e;
   }
 
-  function link(l, cls) {
-    var a = el('a', cls || '');
-    a.href = l.href;
-    a.textContent = l.txt;
-    if (l.key) a.setAttribute('data-i18n', l.key);
-    if (l.ext) { a.target = '_blank'; a.rel = 'noopener'; }
-    return a;
-  }
-
-  // пункт верхней панели: обычная ссылка, либо — если есть l.sub —
-  // кнопка, раскрывающая под собой маленький выбор (напр. Map Editor
-  // показывает Map Editor + Skin Editor)
   function navItem(l, here) {
-    if (!l.sub) {
-      var a = link(l);
-      if (l.href.toLowerCase() === here) a.className = 'on';
-      return a;
-    }
-    // на своей странице подпункта кнопка показывает его название
-    // (напр. «Skin Editor» вместо «Map Editor»), а не название группы
-    var activeSub = l.sub.find(function (s) { return s.href.toLowerCase() === here; });
-    var labelSrc = activeSub || l;
-    var trig = el('button');
-    trig.type = 'button';
-    trig.textContent = labelSrc.txt;
-    if (labelSrc.key) trig.setAttribute('data-i18n', labelSrc.key);
-    if (l.href.toLowerCase() === here || activeSub) trig.className = 'on';
-
-    var drop = el('div', 'bfDrop bfNavDrop');
-    l.sub.forEach(function (s) {
-      var sa = link(s, 'bfDropItem');
-      if (s.href.toLowerCase() === here) sa.classList.add('on');
-      drop.appendChild(sa);
-    });
-    document.body.appendChild(drop);
-
-    trig.onclick = function (e) {
-      e.stopPropagation();
-      var r = trig.getBoundingClientRect();
-      var w = Math.min(220, window.innerWidth - 16);
-      drop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
-      closeAll(drop);
-      drop.classList.toggle('open');
-    };
-    drop.addEventListener('click', function (e) { e.stopPropagation(); });
-    return trig;
+    var a = el('a', 'bfNavItem');
+    a.href = l.href;
+    if (l.ext) { a.target = '_blank'; a.rel = 'noopener'; }
+    if (l.href.toLowerCase() === here) a.classList.add('on');
+    var label = document.createElement('span');
+    label.textContent = l.txt;
+    if (l.key) label.setAttribute('data-i18n', l.key);
+    a.innerHTML = l.icon;
+    a.appendChild(label);
+    return a;
   }
 
   function build() {
@@ -102,53 +103,90 @@
     var head = el('div', 'bfHead');
     head.id = 'bfHead';
 
+    // гамбургер — виден только на мобильном, раскрывает сайдбар поверх страницы
+    var menuBtn = el('button', 'bfMenuBtn', ICONS.menuLines);
+    menuBtn.type = 'button';
+    menuBtn.setAttribute('aria-label', 'Menu');
+    head.appendChild(menuBtn);
+
     var brand = el('a', 'bfBrand', MARK + '<b>AIBROFIST</b>');
     brand.href = '/';
     head.appendChild(brand);
 
     var nav = el('nav', 'bfNav');
-    LINKS.forEach(function (l) {
-      nav.appendChild(navItem(l, here));
-    });
-
-    var menuBtn = el('button', 'bfMenuBtn');
-    menuBtn.type = 'button';
-    menuBtn.textContent = 'More';
-    menuBtn.setAttribute('data-i18n', 'moreOptions');
-    nav.appendChild(menuBtn);
+    NAV.forEach(function (l) { nav.appendChild(navItem(l, here)); });
     head.appendChild(nav);
 
-    var right = el('div', 'bfRight');
-    right.innerHTML =
-      '<span class="bfCoin" id="bfHeadCoins" style="display:none">' +
-        (window.BFCoin ? BFCoin.svg(17) : '') + ' <span>0</span></span>';
-    var ava = el('div', 'bfAvatar');
+    // карточка ежедневной награды — само колесо теперь на главной (см.
+    // dailyReward.js), тут только напоминание с обратным отсчётом и
+    // ссылка туда; видна только вошедшим (см. loadDailyStatus)
+    var daily = el('a', 'bfDailyCard');
+    daily.id = 'bfDailyCard';
+    daily.href = '/';
+    daily.style.display = 'none';
+    daily.innerHTML =
+        '<span class="bfDailyIcon">' + ICONS.gift + '</span>'
+      + '<span class="bfDailyText"><b data-i18n="dailyReward">Daily Reward</b>'
+      +   '<small id="bfDailyLeft"></small></span>'
+      + '<span class="bfChev">' + ICONS.chevron + '</span>';
+    head.appendChild(daily);
+
+    var social = el('div', 'bfSocial');
+    SOCIAL.forEach(function (l) {
+      social.appendChild(navItem({ href: l.href, txt: l.txt, icon: l.icon, ext: true }, here));
+    });
+    head.appendChild(social);
+
+    var bottom = el('div', 'bfBottom');
+    bottom.innerHTML =
+      '<div class="bfCoin" id="bfHeadCoins" style="display:none">'
+        + (window.BFCoin ? BFCoin.svg(16) : '') + ' <span>0</span>' + ICONS.chevron
+      + '</div>';
+    var ava = el('div', 'bfProfileRow');
     ava.id = 'bfHeadAvatar';
+    // .bfAvatar остаётся отдельным вложенным кружком — этот класс уже
+    // означает «маленький круглый аватар» по всему сайту (mobile.css),
+    // а bfProfileRow — только раскладка всей строки (аватар+ник+стрелка)
+    var avaBox = el('div', 'bfAvatar');
     var avaImg = document.createElement('img');
     avaImg.className = 'bfAva';
     avaImg.alt = '';
     avaImg.src = defaultFace();
-    ava.appendChild(avaImg);
-    right.appendChild(ava);
-    head.appendChild(right);
+    avaBox.appendChild(avaImg);
+    ava.appendChild(avaBox);
+    var nameSpan = document.createElement('span');
+    nameSpan.className = 'bfProfileName';
+    nameSpan.id = 'bfProfileName';
+    nameSpan.textContent = T('signin', 'Sign in');
+    ava.appendChild(nameSpan);
+    ava.insertAdjacentHTML('beforeend', '<span class="bfChev">' + ICONS.chevron + '</span>');
+    bottom.appendChild(ava);
+    head.appendChild(bottom);
 
     document.body.insertBefore(head, document.body.firstChild);
+    document.body.classList.add('bfHasSidebar');
 
-    // ---------- выпадающее «Меню» ----------
-    var drop = el('div', 'bfDrop');
-    drop.id = 'bfDrop';
-    MENU.forEach(function (l) {
-      if (l.sep) { drop.appendChild(el('div', 'bfDropSep')); return; }
-      drop.appendChild(link(l, 'bfDropItem'));
-    });
-
-    document.body.appendChild(drop);
-
+    // ---------- мобильная выдвижная панель ----------
+    var overlay = el('div', 'bfSideOverlay');
+    overlay.id = 'bfSideOverlay';
+    document.body.appendChild(overlay);
+    function closeDrawer() { head.classList.remove('open'); overlay.classList.remove('open'); }
     menuBtn.onclick = function (e) {
       e.stopPropagation();
-      closeAll(drop);
-      drop.classList.toggle('open');
+      head.classList.toggle('open');
+      overlay.classList.toggle('open');
     };
+    overlay.onclick = closeDrawer;
+    // клик по любой ссылке в панели — закрыть выезжающий сайдбар (на
+    // десктопе классы .open ни на что не влияют, лишний toggle безвреден)
+    head.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('a')) closeDrawer();
+    });
+
+    // плавающая кнопка «Messages» — отдельно от сайдбара, видна везде
+    var msgFab = el('a', 'bfMsgFab', ICONS.messages + '<span data-i18n="messages">Messages</span>');
+    msgFab.href = 'messages.html';
+    document.body.appendChild(msgFab);
 
     // ---------- меню профиля ----------
     var prof = el('div', 'bfDrop bfProf');
@@ -163,7 +201,6 @@
     };
 
     document.addEventListener('click', function () { closeAll(null); });
-    drop.addEventListener('click', function (e) { e.stopPropagation(); });
     prof.addEventListener('click', function (e) { e.stopPropagation(); });
 
     return head;
@@ -220,18 +257,52 @@
     box.appendChild(out);
   }
 
+  // ---------- карточка ежедневной награды: обратный отсчёт ----------
+  function fmtLeft(ms) {
+    var h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+    return h > 0 ? (h + 'h ' + m + 'm') : (m + 'm');
+  }
+  function paintDaily() {
+    var card = document.getElementById('bfDailyCard');
+    var lbl = document.getElementById('bfDailyLeft');
+    if (!card || !lbl || dailyLeftMs === null) return;
+    card.style.display = 'flex';
+    lbl.textContent = dailyLeftMs <= 0
+      ? T('dailyRewardReady', 'Available now')
+      : T('dailyRewardWait', 'Come back in') + ' ' + fmtLeft(dailyLeftMs);
+  }
+  function loadDailyStatus() {
+    fetch('/dailyReward/status', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        dailyLeftMs = d.guest ? null : Math.max(0, d.msLeft || 0);
+        paintDaily();
+      })
+      .catch(function () {});
+  }
+  // между сверками с сервером просто досчитываем локально — точная
+  // сверка на каждой новой странице и так подгружает свежее значение
+  setInterval(function () {
+    if (dailyLeftMs === null) return;
+    dailyLeftMs = Math.max(0, dailyLeftMs - 60000);
+    paintDaily();
+  }, 60000);
+
   function loadMe() {
     fetch('/whoAmI', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         me = d || { guest: true };
         window.BF_ME = me;
+        var nameEl = document.getElementById('bfProfileName');
+        if (nameEl) nameEl.textContent = me.guest ? T('signin', 'Sign in') : me.name;
         if (!me.guest) {
           var c = document.getElementById('bfHeadCoins');
           if (c) {
-            c.style.display = 'inline-flex';
+            c.style.display = 'flex';
             c.querySelector('span').textContent = me.coins;
           }
+          loadDailyStatus();
         }
         window.dispatchEvent(new CustomEvent('bf-shell-ready', { detail: me }));
       })
@@ -263,7 +334,7 @@
   window.BFShell = {
     refreshCoins: function (n) {
       var c = document.getElementById('bfHeadCoins');
-      if (c) { c.style.display = 'inline-flex'; c.querySelector('span').textContent = n; }
+      if (c) { c.style.display = 'flex'; c.querySelector('span').textContent = n; }
     }
   };
 
@@ -292,10 +363,6 @@
     if (box) return box;
     box = document.createElement('div');
     box.id = 'bfUpd';
-    box.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:60;padding:7px 11px;'
-      + 'border-radius:10px;background:rgba(15,23,42,.86);color:#fff;'
-      + 'font:600 12px system-ui,sans-serif;letter-spacing:.2px;pointer-events:none;'
-      + 'box-shadow:0 4px 14px rgba(0,0,0,.18)';
     document.body.appendChild(box);
     return box;
   }
