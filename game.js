@@ -268,18 +268,18 @@
     /* --- личные сообщения (Messages) прямо в игре, левый нижний угол:
            та же переписка, что и на messages.html, чтобы не выходить
            из матча ради ответа. Во всех режимах, не только в Race. --- */
-    + '#gMsgsBtn{display:none;position:fixed;bottom:14px;right:78px;z-index:61;'
+    + '#gMsgsBtn{display:none;position:fixed;bottom:14px;left:12px;z-index:61;'
     + 'width:44px;height:44px;padding:0;background:rgba(255,255,255,.92);color:#2196F3;'
     + 'border:1px solid #d7dee7;border-radius:50%;cursor:pointer;line-height:1;'
     + 'align-items:center;justify-content:center;'
     + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.4)}'
     + '#gMsgsBtn svg{width:20px;height:20px;display:block;pointer-events:none}'
     + '#gMsgsBtn:active{background:#f2f7fd}'
-    + '#gMsgsBadge{display:none;position:fixed;bottom:41px;right:78px;z-index:62;min-width:16px;'
+    + '#gMsgsBadge{display:none;position:fixed;bottom:41px;left:39px;z-index:62;min-width:16px;'
     + 'height:16px;padding:0 3px;border-radius:9px;background:#ef4444;color:#fff;'
     + 'font:700 10px/16px sans-serif;text-align:center;pointer-events:none}'
     + '#gMsgsBadge.on{display:block}'
-    + '#gMsgsPanel{display:none;flex-direction:column;position:fixed;bottom:64px;right:12px;z-index:61;'
+    + '#gMsgsPanel{display:none;flex-direction:column;position:fixed;bottom:64px;left:12px;z-index:61;'
     + 'width:280px;max-width:calc(100vw - 24px);height:360px;max-height:60vh;'
     + 'background:rgba(255,255,255,.98);border:1px solid #d7dee7;border-radius:12px;overflow:hidden;'
     + 'box-shadow:0 10px 30px -12px rgba(15,23,42,.5);font:13px sans-serif}'
@@ -325,20 +325,21 @@
        вьюпорте: пэд был больше 100px, и конверт частично перекрывал
        кнопку ◀). 150px даёт запас даже на телефонах с домашней чертой.
 
-       Обе кнопки стоят в правом нижнем углу над пэдом: чат прижат к
-       краю, Messages — сразу слева от него. На мобильном чат 58px
-       шириной, значит конверту нужно 58 + 14 (отступ чата от края) + 6
-       (зазор) = 78px от правого края. */
+       Чат стоит в правом нижнем углу над пэдом — под большим пальцем,
+       который и так лежит там ради JUMP. Messages живёт в ЛЕВОМ нижнем
+       углу: справа над пэдом и без него тесно — туда же приходят кнопки
+       владельца (Edit и Admin Abuse), и вчетвером они налезали друг на
+       друга. */
     + 'html.is-mobile #gTalk,html.is-tablet #gTalk{'
     + 'bottom:calc(150px + env(safe-area-inset-bottom,0px));'
     + 'right:calc(14px + env(safe-area-inset-right,0px))}'
     + 'html.is-mobile #gMsgsBtn,html.is-tablet #gMsgsBtn{'
-    + 'bottom:calc(150px + env(safe-area-inset-bottom,0px));right:calc(78px + env(safe-area-inset-right,0px))}'
+    + 'bottom:calc(150px + env(safe-area-inset-bottom,0px));left:calc(12px + env(safe-area-inset-left,0px))}'
     + 'html.is-mobile #gMsgsBadge,html.is-tablet #gMsgsBadge{'
-    + 'bottom:calc(177px + env(safe-area-inset-bottom,0px));right:calc(78px + env(safe-area-inset-right,0px))}'
+    + 'bottom:calc(177px + env(safe-area-inset-bottom,0px));left:calc(39px + env(safe-area-inset-left,0px))}'
     + 'html.is-mobile #gMsgsPanel,html.is-tablet #gMsgsPanel{'
-    + 'bottom:calc(214px + env(safe-area-inset-bottom,0px));right:calc(12px + env(safe-area-inset-right,0px));'
-    + 'left:calc(12px + env(safe-area-inset-left,0px));width:auto}'
+    + 'bottom:calc(200px + env(safe-area-inset-bottom,0px));left:calc(12px + env(safe-area-inset-left,0px));'
+    + 'width:calc(100vw - 24px)}'
     ;
 
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
