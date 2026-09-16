@@ -40,13 +40,19 @@ function register(app, acc) {
     const u = currentUser(req);
     if (!u) return res.json({ status: 'error', message: 'Sign in first' });
 
-    const mode = ALLOWED_MODES.indexOf(req.body.mode) !== -1 ? req.body.mode : 'race';
     const author = String(req.body.author || '').trim();
     const mapName = String(req.body.mapName || '').trim();
     const m = maps.find(author, mapName);
     if (!m) return res.json({ status: 'error', message: 'Map not found' });
-    if (m.mapType !== mode)
-      return res.json({ status: 'error', message: 'This map does not match the selected mode' });
+    /* Режим берём у самой карты, а не из запроса. Раньше режим приходил
+       с той страницы, откуда нажали «Story Mode», и карты показывались
+       только его типа: зашёл из Hide and Seek — видишь лишь карты
+       пряток, а их может быть всего несколько. Теперь выбирать можно
+       ЛЮБУЮ карту из Maps Browser, а режим сессии определяет она сама —
+       так и рассинхрона «карта не того режима» больше не бывает. */
+    const mode = m.mapType;
+    if (ALLOWED_MODES.indexOf(mode) === -1)
+      return res.json({ status: 'error', message: 'This map is not playable in Story Mode' });
 
     let limitMin = parseInt(req.body.limitMin, 10);
     if (!Number.isFinite(limitMin)) limitMin = 10;
@@ -57,7 +63,7 @@ function register(app, acc) {
       author: m.author, mapName: m.mapName, mode, limitMs: limitMin * 60000,
       owner: u.name, createdAt: Date.now()
     });
-    res.json({ status: 'success', room: code });
+    res.json({ status: 'success', room: code, mode: mode });
   });
 
   // читает кто угодно, у кого есть код комнаты — сам код уже секрет

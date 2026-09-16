@@ -39,8 +39,10 @@
     + '.ow-fab{position:fixed;right:18px;bottom:18px;z-index:9997;width:52px;height:52px;border-radius:50%;'
     /* В игре на телефоне внизу лежит панель управления (#pad во всю
        ширину, ~116px), и кнопка вставала ровно на JUMP — нажать прыжок
-       в правом углу было нельзя. Поднимаем её над панелью. */
-    + '@media (max-width:860px){body.play.mob .ow-fab{bottom:130px}}'
+       в правом углу было нельзя. Поднимаем её над панелью, а заодно над
+       парой «чат + Messages», которая теперь стоит в том же углу на
+       отметке 150px и занимает 58px в высоту (см. game.js). */
+    + '@media (max-width:860px){body.play.mob .ow-fab{bottom:220px}}'
     + 'background:#111827;color:#fff;border:none;font-size:22px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.32)}'
     + '.ow-fab:hover{background:#2196F3}'
     + '.ow-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:none}'
