@@ -4,13 +4,14 @@
         <title>AIBrofist — Logs</title>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="stylesheet" type="text/css" href="style.css?v=129">
-        <script src="device.js?v=129"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=129">
+        <link rel="stylesheet" type="text/css" href="style.css?v=131">
+        <script src="device.js?v=131"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=131">
         <style>
-                .logsWrap{max-width:1024px;margin:0 auto;padding:18px 14px 60px}
-                .logsWrap h1{font-size:26px;margin:12px 0 4px}
-                .logsWrap .sub{color:var(--muted,#8b93a1);font-size:13px;margin-bottom:18px}
+                /* Обёртка страницы — .bfWrap (см. разметку ниже), тот же левый
+                   край и ширина 1080px, что у остальных страниц, вместо
+                   собственных 1024px — переход между пунктами меню больше не
+                   двигает колонку контента на лишние пиксели. */
                 .logItem{border-bottom:1px solid var(--line,#e6ebf0);padding:15px 0}
                 .logItem h3{margin:0 0 5px;font-size:17px;color:var(--ink,#191919)}
                 .logItem .date{color:var(--muted,#8b93a1);font-size:12px;margin-bottom:7px}
@@ -77,8 +78,8 @@
                         .lTh{width:78px;height:78px}
                 }
         </style>
-        <link rel="stylesheet" href="ui.css?v=129">
-        <script src="theme.js?v=129"></script>
+        <link rel="stylesheet" href="ui.css?v=131">
+        <script src="theme.js?v=131"></script>
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="/favicon.svg">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -98,9 +99,9 @@
 <body>
 <div class="container"></div>
 
-<div class="logsWrap">
-        <h1 data-i18n="logs">Новости</h1>
-        <div class="sub" data-i18n="logsSub">Обновления и объявления AIBrofist</div>
+<div class="bfWrap">
+        <div class="bfTitle" data-i18n="logs">Новости</div>
+        <div class="bfSub" data-i18n="logsSub">Обновления и объявления AIBrofist</div>
 
         <div id="editor">
                 <input type="text" id="lTitle" maxlength="120" placeholder="Заголовок" data-i18n-ph="phTitle">
@@ -123,7 +124,7 @@
 
 <div id="lbox"><button id="lboxX" type="button">&times;</button><img alt=""></div>
 
-<script src="account.js?v=129" defer></script>
+<script src="account.js?v=131" defer></script>
 <script>
 (function () {
         var list = document.getElementById('list');
@@ -475,12 +476,12 @@
         window.addEventListener('bf-lang', function () { render(cache); });
 })();
 </script>
-        <script src="i18n.js?v=129"></script>
-        <script src="owner.js?v=129" defer></script>
-        <script src="coin.js?v=129"></script>
-        <script src="skinRender.js?v=129"></script>
-        <script src="skinAvatar.js?v=129" defer></script>
-        <script src="shell.js?v=129"></script>
-<script src="abuseShow.js?v=129" defer></script>
+        <script src="i18n.js?v=131"></script>
+        <script src="owner.js?v=131" defer></script>
+        <script src="coin.js?v=131"></script>
+        <script src="skinRender.js?v=131"></script>
+        <script src="skinAvatar.js?v=131" defer></script>
+        <script src="shell.js?v=131"></script>
+<script src="abuseShow.js?v=131" defer></script>
 </body>
 </html>

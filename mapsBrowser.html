@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <title>AIBrofist — Maps Browser</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=129">
-<script src="theme.js?v=129"></script>
-<script src="device.js?v=129"></script>
+<link rel="stylesheet" href="ui.css?v=131">
+<script src="theme.js?v=131"></script>
+<script src="device.js?v=131"></script>
 <style>
 .mbFilters{display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:9px;margin-bottom:6px;align-items:center}
 .mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
@@ -20,12 +20,18 @@
 .mbRow:hover{border-color:var(--blue)}
 .mbName{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;min-width:0}
 .mbName span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Звезда и чекбокс — единственные два элемента на странице без своего
+   текста рядом, поэтому у них меньше всего места под палец. min-width/
+   min-height держат площадь нажатия 28px и больше, а сам глиф остаётся
+   того же размера — визуально страница не меняется. */
 .mbFav{flex:0 0 auto;border:none;background:none;padding:0;font-size:17px;line-height:1;
-  cursor:pointer;color:var(--line);}
+  cursor:pointer;color:var(--line);min-width:28px;min-height:28px;
+  display:flex;align-items:center;justify-content:center}
 .mbFav:hover{color:#e2a600}
 .mbFav.on{color:#e2a600}
-.mbFavOnly{display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--muted);
+.mbFavOnly{display:flex;align-items:center;gap:7px;font-size:13.5px;color:var(--muted);
   white-space:nowrap;cursor:pointer;user-select:none}
+.mbFavOnly input{width:19px;height:19px;cursor:pointer;accent-color:var(--blue)}
 /* Рейтинг — одно число: лайки минус дизлайки.
    Выше нуля — зелёным, ниже нуля — красным, ноль — нейтральный. */
 .mbRate{font-weight:700;font-size:16.5px;text-align:center}
@@ -142,7 +148,7 @@
     <div data-i18n="colRating" style="text-align:center">Рейтинг</div>
     <div data-i18n="colAuthor">Автор</div>
     <div data-i18n="colDate">Дата</div>
-    <div data-i18n="colRating">Оценка</div>
+    <div data-i18n="colVote">Голос</div>
     <div></div>
   </div>
   <div id="mbList"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
@@ -160,15 +166,15 @@
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=129">
-<script src="i18n.js?v=129"></script>
-<script src="coin.js?v=129"></script>
-<script src="skinRender.js?v=129"></script>
-<script src="skinAvatar.js?v=129" defer></script>
-<script src="shell.js?v=129"></script>
-<script src="abuseShow.js?v=129" defer></script>
-<script src="account.js?v=129" defer></script>
-<script src="owner.js?v=129" defer></script>
+<link rel="stylesheet" href="mobile.css?v=131">
+<script src="i18n.js?v=131"></script>
+<script src="coin.js?v=131"></script>
+<script src="skinRender.js?v=131"></script>
+<script src="skinAvatar.js?v=131" defer></script>
+<script src="shell.js?v=131"></script>
+<script src="abuseShow.js?v=131" defer></script>
+<script src="account.js?v=131" defer></script>
+<script src="owner.js?v=131" defer></script>
 <script>
 (function () {
   'use strict';
