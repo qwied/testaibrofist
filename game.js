@@ -508,6 +508,8 @@
       var unread = msgsThreads.reduce(function (s, t) { return s + (t.unread || 0); }, 0);
       msgsBadge.textContent = unread > 9 ? '9+' : String(unread);
       msgsBadge.classList.toggle('on', unread > 0);
+      // тот же счётчик держит и значок в боковом меню на остальных страницах
+      if (window.BFShell && BFShell.refreshNotifications) BFShell.refreshNotifications();
       if (!msgsActiveId) msgsRenderList();
     }).catch(function () {});
   }
@@ -1023,7 +1025,7 @@
         if (window.BFSound && me.role === 'hider' && !me.caught) BFSound.win();
         phase = 'lobby'; phaseEnds = Date.now() + LOBBY_MS;
         clearCaught();
-        if (!STORY) nextMap();   // Story держит одну карту из приглашения всю сессию
+        // карту сменит сервер и пришлёт всем разом (hsPhase) — сами не тянем
         banner(TR('roundOver', 'Раунд окончен'), TR('newMapText', 'Новая карта. До старта 30 секунд.'), true);
         setTimeout(function () { banner('', '', false); }, 3000);
       }
@@ -1086,8 +1088,9 @@
          неверный, если в итоге играть не с кем, и всё равно почти сразу
          гас от nextMap() ниже. Реальное состояние (лобби/раунд) сервер
          пришлёт через hsPhase/hsState через мгновение после join. */
+      /* Карту не выбираем сами: её назначит сервер и пришлёт в
+         hsPhase/hsState сразу после join (см. loadServerMap). */
       phase = 'lobby'; phaseEnds = Date.now() + LOBBY_MS;
-      nextMap();
     } else {
       phase = 'round'; phaseEnds = Date.now() + ROUND_MS;
       nextMap();
@@ -1097,6 +1100,29 @@
   /* Story Mode: карта и лимит времени приходят с сервера по коду комнаты
      (сама ссылка другу несёт только код — см. story.html), а не выбираются
      случайно, как в обычном Race через nextMap()/getRandomMap. */
+  /* Карта, назначенная сервером комнате (прятки). Раньше каждый клиент
+     звал nextMap() -> /getRandomMap сам, и игроки одной комнаты могли
+     оказаться на РАЗНЫХ картах: чужие координаты приходили верные, но
+     ложились на другую геометрию — у одного игрока персонаж стоял на
+     платформе, у другого «парил в воздухе» посреди пустоты. Теперь
+     карту выбирает сервер и присылает её в hsPhase/hsState. */
+  function loadServerMap(m) {
+    /* Карты режима на сервере может не быть вовсе (владелец ни одной не
+       добавил в игру). Показываем то же «нет карты», что показывал
+       nextMap() раньше, а не оставляем вечное «Loading map…». */
+    if (!m || !m.mapName) { if (!currentMap) showMap(null); return; }
+    if (currentMap && currentMap.mapName === m.mapName && currentMap.author === m.author) return;
+    fetch('/getMapData?author=' + encodeURIComponent(m.author || '')
+        + '&mapName=' + encodeURIComponent(m.mapName))
+      .then(function (r) { return r.json(); })
+      .then(function (md) {
+        showMap(md ? { mapName: m.mapName, author: m.author, mapData: md } : null);
+        if (md) log(TR('mapLog', 'Карта: ') + '<b>' + esc(m.mapName) + '</b>'
+                    + TR('byWord', ' от ') + esc(m.author), 's');
+      })
+      .catch(function () {});
+  }
+
   function loadStoryMap() {
     fetch('/story/roomInfo?room=' + encodeURIComponent(ROOM || ''))
       .then(function (r) { return r.json(); })
@@ -1432,6 +1458,7 @@
         phase = 'round';
         phaseEnds = Date.now() + (Number(d.msLeft) || ROUND_MS);
         clearCaught();
+        if (!STORY) loadServerMap(d.map);
         if (d.seekerId) applySeeker(d.seekerId);
         log(TR('roundStart', 'Раунд начался! 2 минуты'));
         if (window.BFSound) BFSound.go();
@@ -1446,9 +1473,8 @@
         me.role = 'hider';
         $('gRoleBox').style.display = 'none';
         clearCaught();
-        // свою первую карту уже загрузили в boot — не грузим вторую подряд;
-        // Story держит одну карту из приглашения всю сессию — не грузим случайную
-        if (!STORY && Date.now() - bootAt > 5000) nextMap();
+        // карту комнаты назначает сервер: у всех в комнате она одна
+        if (!STORY) loadServerMap(d.map);
       } else if (d.phase === 'storyEnd') {
         // общий лимит времени Story-сессии вышел — сервер обрывает цикл
         // лобби/раунд насовсем (см. hsEndStory в server.js)
@@ -1471,6 +1497,8 @@
       }
       phase = d.phase;
       phaseEnds = Date.now() + (Number(d.msLeft) || (d.phase === 'round' ? ROUND_MS : LOBBY_MS));
+      // зашли посреди игры — сразу на ту же карту, что у остальных
+      if (!STORY) loadServerMap(d.map);
       if (d.phase === 'round') {
         roulStop();
         if (d.seekerId) applySeeker(d.seekerId);

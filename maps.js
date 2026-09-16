@@ -125,6 +125,34 @@ load();
 
 const low = s => String(s || '').toLowerCase();
 
+/* Случайная карта режима. Вынесено из обработчика /getRandomMap, потому
+   что теперь её зовёт и server.js: в прятках карту комнаты выбирает
+   СЕРВЕР и рассылает всем, иначе каждый клиент дёргал /getRandomMap сам
+   и игроки одной комнаты оказывались на разных картах — чужой персонаж
+   при этом честно приходил с правильными координатами, но падал на
+   другую геометрию и выглядел «парящим в воздухе». */
+function randomFor(mapType, not) {
+  const t = mapType;
+  // без указания режима берём любую карту, иначе — карты владельца
+  // плюс те, что он добавил кнопкой «Добавить в игру» в Maps Browser
+  const pool = !t
+    ? maps.slice()
+    : maps.filter(m => {
+        if (isOwnerName(m.author) && m.mapType === t) return true;
+        // владелец мог вручную добавить чужую карту в конкретный режим
+        return Array.isArray(m.inGameModes) && m.inGameModes.indexOf(t) !== -1;
+      });
+  if (!pool.length) return null;
+  let m = pool[Math.floor(Math.random() * pool.length)];
+  // не повторяем ту же карту подряд, если есть выбор
+  if (pool.length > 1 && not) {
+    let guard = 0;
+    while (m.mapName === not && guard++ < 8)
+      m = pool[Math.floor(Math.random() * pool.length)];
+  }
+  return m;
+}
+
 function register(app, getUser, acc) {
   // ---------- публикация карты из редактора ----------
   app.post('/uploadMap', (req, res) => {
@@ -312,24 +340,8 @@ function register(app, getUser, acc) {
 
   // ---------- случайная карта режима ----------
   app.get('/getRandomMap', (req, res) => {
-    const t = req.query.mapType;
-    // без указания режима берём любую карту, иначе — карты владельца
-    // плюс те, что он добавил кнопкой «Добавить в игру» в Maps Browser
-    const pool = !t
-      ? maps.slice()
-      : maps.filter(m => {
-          if (isOwnerName(m.author) && m.mapType === t) return true;
-          // владелец мог вручную добавить чужую карту в конкретный режим
-          return Array.isArray(m.inGameModes) && m.inGameModes.indexOf(t) !== -1;
-        });
-    if (!pool.length) return res.json(null);
-    let m = pool[Math.floor(Math.random() * pool.length)];
-    // не повторяем ту же карту подряд, если есть выбор
-    if (pool.length > 1 && req.query.not) {
-      let guard = 0;
-      while (m.mapName === req.query.not && guard++ < 8)
-        m = pool[Math.floor(Math.random() * pool.length)];
-    }
+    const m = randomFor(req.query.mapType, req.query.not);
+    if (!m) return res.json(null);
     res.json({ mapName: m.mapName, author: m.author, mapType: m.mapType, mapData: m.mapData });
   });
 
@@ -486,4 +498,24 @@ function inGameList() {
                           mapType: m.mapType, modes: m.inGameModes.slice() }));
 }
 
-module.exports = { register, reload: load, MODES, OWNER, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, setBoost, setInGame, inGameList, tally };
+/* Карты друзей, опубликованные после того, как игрок в последний раз
+   открывал Maps Browser (см. notifications.js). Метка времени лежит на
+   аккаунте, а не список «прочитанных карт»: карты только добавляются,
+   поэтому одного числа хватает, и оно не растёт с ростом каталога. */
+function newFromFriends(user) {
+  const out = { count: 0, authors: [], newest: 0 };
+  if (!user || !Array.isArray(user.friends) || !user.friends.length) return out;
+  const since = Number(user.mapsSeenAt) || 0;
+  // ни разу не открывал Maps Browser — не заваливаем его всем каталогом
+  if (!since) return out;
+  const friends = new Set(user.friends.map(low));
+  for (const m of maps) {
+    if (!(m.date > since) || !friends.has(low(m.author))) continue;
+    out.count++;
+    if (out.authors.indexOf(m.author) === -1) out.authors.push(m.author);
+    if (m.date > out.newest) out.newest = m.date;
+  }
+  return out;
+}
+
+module.exports = { register, reload: load, MODES, OWNER, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor };

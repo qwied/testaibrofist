@@ -345,6 +345,7 @@ require('./maps.js').register(app, accounts.currentUser, accounts);
 require('./userSkins.js').register(app, accounts);
 require('./messages.js').register(app, accounts);
 require('./themes.js').register(app, accounts);
+require('./notifications.js').register(app, accounts);
 require('./updateTimer.js').register(app, accounts);
 require('./abuse.js').register(app, accounts);
 // файлы шоу владельца отдаём как статику: сами по себе они безобидны
@@ -585,6 +586,23 @@ function hsEndStory(io, room, st) {
   io.to(room).emit('hsPhase', { phase: 'storyEnd' });
 }
 
+/* Карту комнаты выбирает сервер и рассылает всем. Раньше каждый клиент
+   сам дёргал /getRandomMap, и в одной комнате игроки оказывались на
+   РАЗНЫХ картах: чужие координаты приходили верные, но ложились на
+   другую геометрию — отсюда и «персонаж парит в воздухе» у одного, хотя
+   у себя он стоит на платформе. Story-комнаты сюда не попадают: там
+   карта задана приглашением (см. story.js) и не меняется всю сессию. */
+function hsPickMap(st) {
+  if (st.storyMap) return;                     // карта из приглашения — не трогаем
+  const prev = st.map ? st.map.mapName : '';
+  const m = require('./maps.js').randomFor('hideAndSeek', prev);
+  st.map = m ? { author: m.author, mapName: m.mapName } : null;
+}
+// одна и та же подпись карты во всех событиях комнаты
+function hsMapOf(st) {
+  return st && st.map ? { author: st.map.author, mapName: st.map.mapName } : null;
+}
+
 function hsStartLobby(io, room, st) {
   if (st.phase === 'storyEnd') return;   // лимит Story уже вышел — новый раунд не начинаем
   if (st.phase === 'round') hsAwardRoundEnd(io, room, st);
@@ -606,8 +624,9 @@ function hsStartLobby(io, room, st) {
     const p = gameState.players.get(m.id);
     st.lobbyOdo.set(m.id, p ? (p.odo || 0) : 0);
   });
+  hsPickMap(st);
   hsSpin(io, room, st);
-  io.to(room).emit('hsPhase', { phase: 'lobby', msLeft: HS_LOBBY_MS, roundNum: st.roundNum });
+  io.to(room).emit('hsPhase', { phase: 'lobby', msLeft: HS_LOBBY_MS, roundNum: st.roundNum, map: hsMapOf(st) });
   clearTimeout(st.timer);
   st.timer = setTimeout(() => hsStartRound(io, room, st), st.endsAt - Date.now());
 }
@@ -634,7 +653,7 @@ function hsStartRound(io, room, st) {
   st.seekerOdo = sp0 ? (sp0.odo || 0) : 0;
   st.caughtSet = new Set();
   io.to(room).emit('hsPhase', { phase: 'round', msLeft: HS_ROUND_MS,
-    seekerId: st.seekerId, seekerName: st.seekerName });
+    seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st) });
   clearTimeout(st.timer);
   st.timer = setTimeout(() => hsStartLobby(io, room, st), HS_ROUND_MS);
 }
@@ -834,6 +853,12 @@ io.on('connection', (socket) => {
           const storyInfo = require('./story.js').getRoom(roomName);
           if (storyInfo && storyInfo.limitMs)
             st.storyTimer = setTimeout(() => hsEndStory(io, room, st), storyInfo.limitMs);
+          /* Карта Story задана приглашением на всю сессию: помечаем её,
+             чтобы hsPickMap не подменил её случайной на каждом лобби. */
+          if (storyInfo && storyInfo.mapName) {
+            st.storyMap = true;
+            st.map = { author: storyInfo.author, mapName: storyInfo.mapName };
+          }
         }
         hsRooms.set(room, st);
         hsStartLobby(io, room, st);
@@ -847,7 +872,7 @@ io.on('connection', (socket) => {
           st.seekerOdo = player.odo || 0;
           io.to(room).emit('hsPhase', { phase: 'round',
             msLeft: Math.max(0, st.endsAt - Date.now()),
-            seekerId: st.seekerId, seekerName: st.seekerName });
+            seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st) });
         }
         /* Зашёл, пока идёт лобби, — отметку одометра ставим ему прямо
            сейчас: hsStartLobby снял её только с тех, кто уже был в
@@ -860,7 +885,7 @@ io.on('connection', (socket) => {
         socket.emit('hsState', { phase: st.phase,
           msLeft: Math.max(0, st.endsAt - Date.now()),
           roundNum: st.roundNum,
-          seekerId: st.seekerId, seekerName: st.seekerName });
+          seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st) });
       }
     }
 
