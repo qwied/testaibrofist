@@ -38,7 +38,6 @@
     { key: 'quests',      href: 'quests.html',      txt: 'Quests' },
     { key: 'daily',       href: 'daily.html',       txt: 'Daily Reward' },
     { key: 'story',       href: 'story.html',       txt: 'Story Mode' },
-    { key: 'themes',      href: 'themes.html',      txt: 'Themes' },
     { key: 'logs',        href: 'logs.html',        txt: 'Logs' },
     { key: 'messages',    href: 'messages.html',    txt: 'Messages' }
   ];
@@ -272,7 +271,7 @@
      явно (как на game.html/editor.html). */
   if (!document.querySelector('script[src*="sound.js"]')) {
     var snd = document.createElement('script');
-    snd.src = 'sound.js?v=125';
+    snd.src = 'sound.js?v=126';
     document.head.appendChild(snd);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

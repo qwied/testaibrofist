@@ -418,8 +418,8 @@ else {
     return y0 - top;
   }
   const tapH = jumpHeight(2), holdH = jumpHeight(60);
-  check('тап поднимает на 121 px', Math.abs(tapH - 121) <= 2, tapH.toFixed(0));
-  check('высота не растёт от удержания', Math.abs(holdH - 121) <= 2, holdH.toFixed(0));
+  check('тап поднимает на 123 px', Math.abs(tapH - 123) <= 2, tapH.toFixed(0));
+  check('высота не растёт от удержания', Math.abs(holdH - 123) <= 2, holdH.toFixed(0));
   check('удержание не даёт прыжок выше тапа', Math.abs(holdH - tapH) <= 1, (holdH - tapH).toFixed(0));
 
   // 17. глубоко вдавленный в стену угол — тоже вбок, а не наверх

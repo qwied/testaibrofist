@@ -21,7 +21,21 @@
     + '.bf-e{text-align:center;font-size:12px;color:red;min-height:15px;margin-bottom:4px}'
     + '.bf-h{text-align:center;font-size:11px;color:var(--muted);margin-top:-4px}'
     + '.bf-back{position:absolute;left:5px;top:4px;border:1px solid;border-radius:28px;font-size:14px;'
-    + 'padding:4px 9px;color:var(--ink);background:var(--panel);cursor:pointer;line-height:1}';
+    + 'padding:4px 9px;color:var(--ink);background:var(--panel);cursor:pointer;line-height:1}'
+    /* Тема и язык переехали сюда со страницы Themes: две настройки вида
+       в одном окне, а не в отдельных пунктах бокового меню. */
+    + '.bf-sec{font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);'
+    + 'margin:16px 0 7px;padding-top:13px;border-top:1px solid var(--line)}'
+    + '.bf-row{display:flex;gap:8px}'
+    + '.bf-opt{flex:1;border:1px solid var(--line);border-radius:6px;text-align:center;font-size:14px;'
+    + 'padding:9px 0;color:var(--ink);background:var(--panel);cursor:pointer;box-sizing:border-box}'
+    + '.bf-opt:hover{border-color:#2196F3}'
+    + '.bf-opt.on{border-color:#2196F3;background:#2196F3;color:#fff;font-weight:700}'
+    + '.bf-opt[disabled]{opacity:.5;cursor:default}'
+    + '.bf-lock{border:1px dashed var(--line);border-radius:6px;padding:10px 12px;text-align:center;'
+    + 'font-size:12px;color:var(--muted);line-height:1.45}'
+    + '.bf-lock b{display:block;color:var(--ink);font-size:13px;margin-bottom:3px}'
+    + '.bf-lock .bf-b{margin:9px 0 0;font-size:14px;padding:8px 0}';
 
   var s = document.createElement('style');
   s.textContent = css;
@@ -128,6 +142,98 @@
       .then(function (r) { return r.json(); }).then(cb).catch(function () { cb(null); });
   }
 
+  /* ---------- вид: тема и язык ----------
+     Раньше это была отдельная страница themes.html в боковом меню.
+     Настроек всего две, обе про внешний вид, и обе нужны редко — им
+     место в окне Settings рядом с остальным про аккаунт, а не
+     отдельным пунктом меню. */
+  function drawTheme() {
+    var host = box.querySelector('#bfThemeBox');
+    if (!host || !window.BFTheme) return;
+    var T = function (k, f) {
+      return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : (f || k);
+    };
+
+    function paint(st) {
+      if (!st.unlocked) {
+        /* Замок как был на странице: светлая и тёмная открываются один
+           раз за монеты, дальше переключай сколько угодно. */
+        host.innerHTML =
+            '<div class="bf-lock"><b>' + T('themesLocked', 'Темы пока закрыты') + '</b>'
+          + T('themesWhat', 'Открывает светлое и тёмное оформление всего сайта. '
+              + 'Покупка разовая — дальше переключайте темы сколько угодно.')
+          + '<div class="bf-b" id="bfThemeBuy">' + T('unlockThemes', 'Открыть темы')
+          + ' &middot; ' + st.price + '</div>'
+          + '<div class="bf-e" id="bfThemeErr"></div></div>';
+        var buy = host.querySelector('#bfThemeBuy');
+        buy.onclick = function () {
+          buy.onclick = null;
+          BFTheme.unlock().then(function (r) {
+            if (r && r.status === 'success') {
+              if (window.BFShell && BFShell.refreshCoins) BFShell.refreshCoins(r.coins);
+              paint(BFTheme.state);
+              return;
+            }
+            host.querySelector('#bfThemeErr').textContent =
+              (r && r.message) || T('errorTxt', 'Ошибка');
+            paint(st);
+          }).catch(function () { paint(st); });
+        };
+        return;
+      }
+      host.innerHTML = '<div class="bf-row">'
+        + '<div class="bf-opt" data-mode="light">' + T('lightTheme', 'Светлая') + '</div>'
+        + '<div class="bf-opt" data-mode="dark">' + T('darkTheme', 'Тёмная') + '</div></div>'
+        + '<div class="bf-e" id="bfThemeErr"></div>';
+      var opts = host.querySelectorAll('.bf-opt');
+      function mark(m) {
+        for (var i = 0; i < opts.length; i++)
+          opts[i].classList.toggle('on', opts[i].getAttribute('data-mode') === m);
+      }
+      mark(st.mode || 'light');
+      for (var i = 0; i < opts.length; i++) {
+        opts[i].onclick = function () {
+          var m = this.getAttribute('data-mode');
+          mark(m);
+          BFTheme.setMode(m).then(function (r) {
+            if (r && r.status === 'error') {
+              host.querySelector('#bfThemeErr').textContent = r.message || T('errorTxt', 'Ошибка');
+              mark(BFTheme.state.mode);
+            }
+          });
+        };
+      }
+    }
+
+    // state уже заполнен: theme.js грузит его при старте страницы
+    paint(BFTheme.state);
+    BFTheme.load().then(paint).catch(function () {});
+  }
+
+  function drawLang(name) {
+    var row = box.querySelector('#bfLangRow');
+    if (!row || !window.I18N || !I18N.langs) return;
+    var html = '';
+    for (var i = 0; i < I18N.langs.length; i++) {
+      var L = I18N.langs[i];
+      html += '<div class="bf-opt' + (L === I18N.current ? ' on' : '') + '" data-lang="' + L + '">'
+            + (I18N.names[L] || L) + '</div>';
+    }
+    row.innerHTML = html;
+    var opts = row.querySelectorAll('.bf-opt');
+    for (var j = 0; j < opts.length; j++) {
+      opts[j].onclick = function () {
+        var L = this.getAttribute('data-lang');
+        if (L === I18N.current) return;
+        I18N.set(L);
+        /* Перерисовываем само окно: его текст собран в строках через
+           T(), а не размечен data-i18n, поэтому applyTo() до него не
+           дотягивается. */
+        settings(name);
+      };
+    }
+  }
+
   // ---------- настройки аккаунта ----------
   function settings(name) {
     var T = function (k, f) {
@@ -151,7 +257,13 @@
            'Пароль хранится в зашифрованном виде — его не видно даже администратору.') + '</div>'
        + '<div class="bf-b" id="bfGoogle">Link Google account</div>'
        + '<div class="bf-h" id="bfGoogleNote"></div>'
-       + '<div id="bfOwner"></div>');
+       + '<div id="bfOwner"></div>'
+       + '<div class="bf-sec">' + T('themes', 'Темы') + '</div>'
+       + '<div id="bfThemeBox"></div>'
+       + '<div class="bf-sec">' + T('language', 'Язык') + '</div>'
+       + '<div class="bf-row" id="bfLangRow"></div>');
+    drawTheme();
+    drawLang(name);
     box.querySelector('#bfProfile').onclick = function () {
       location.href = BASE + 'users.html?name=' + encodeURIComponent(name);
     };
