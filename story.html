@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <title>AIBrofist — Story Mode</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=125">
-<script src="theme.js?v=125"></script>
-<script src="device.js?v=125"></script>
+<link rel="stylesheet" href="ui.css?v=127">
+<script src="theme.js?v=127"></script>
+<script src="device.js?v=127"></script>
 <style>
 .stForm{display:flex;flex-direction:column;gap:14px;max-width:520px}
 .stField label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:5px}
@@ -20,6 +20,15 @@
 .stMap.on{background:var(--blue);color:#fff}
 .stMap .a{color:var(--muted);font-size:12px}
 .stMap.on .a{color:#dbeafe}
+/* Режим больше не задаётся страницей, с которой пришли, — его задаёт
+   сама карта, поэтому он подписан у каждой строки списка. */
+.stMap .m{flex:none;font-size:10.5px;letter-spacing:.3px;text-transform:uppercase;
+  border:1px solid var(--line);border-radius:999px;padding:2px 7px;color:var(--muted)}
+.stMap.on .m{border-color:#dbeafe;color:#dbeafe}
+.stFilter{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.stFilter button{border:1px solid var(--line);background:var(--panel);color:var(--ink);
+  border-radius:999px;padding:6px 13px;font-size:12.5px;cursor:pointer}
+.stFilter button.on{border-color:var(--blue);background:var(--blue);color:#fff;font-weight:700}
 .stPager{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13px;color:var(--muted)}
 .stPager button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:4px 10px;cursor:pointer}
 .stPager button:disabled{opacity:.4;cursor:default}
@@ -51,7 +60,7 @@
 
 <div class="bfWrap">
   <div class="bfTitle" data-i18n="storyTxt">Story Mode</div>
-  <div class="bfSub" id="stSub">Invite a friend to a private match on one chosen map, with your own time limit.</div>
+  <div class="bfSub" id="stSub" data-i18n="storySub">Invite a friend to a private match on any map from Maps Browser, with your own time limit.</div>
 
   <div class="stForm">
     <div class="stField">
@@ -60,10 +69,15 @@
     </div>
 
     <div class="stField">
-      <label id="stMapLabel" data-i18n="storyMap">Map</label>
+      <label id="stMapLabel" data-i18n="storyMapAny">Map (any from Maps Browser)</label>
       <div class="stSearchRow">
         <input class="bfInput" id="stSearch" data-i18n-ph="colAuthor" placeholder="Author">
         <button class="bfBtn ghost" id="stSearchGo" style="margin:0;width:auto;padding:11px 18px" data-i18n="refresh">Search</button>
+      </div>
+      <div class="stFilter" id="stFilter">
+        <button data-type="" class="on" data-i18n="modeAll">Mode: All</button>
+        <button data-type="race" data-i18n="race">Race</button>
+        <button data-type="hideAndSeek" data-i18n="hideAndSeek">Hide and Seek</button>
       </div>
       <div class="stMaps" id="stMaps"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
       <div class="stPager">
@@ -90,15 +104,15 @@
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=125">
-<script src="i18n.js?v=125"></script>
-<script src="coin.js?v=125"></script>
-<script src="skinRender.js?v=125"></script>
-<script src="skinAvatar.js?v=125" defer></script>
-<script src="shell.js?v=125"></script>
-<script src="abuseShow.js?v=125" defer></script>
-<script src="account.js?v=125" defer></script>
-<script src="owner.js?v=125" defer></script>
+<link rel="stylesheet" href="mobile.css?v=127">
+<script src="i18n.js?v=127"></script>
+<script src="coin.js?v=127"></script>
+<script src="skinRender.js?v=127"></script>
+<script src="skinAvatar.js?v=127" defer></script>
+<script src="shell.js?v=127"></script>
+<script src="abuseShow.js?v=127" defer></script>
+<script src="account.js?v=127" defer></script>
+<script src="owner.js?v=127" defer></script>
 <script>
 (function () {
   'use strict';
@@ -107,10 +121,13 @@
   var me = null;
 
   var q = new URLSearchParams(location.search);
-  // на какой странице режима нажали «Story Mode» — из неё же и берём карты;
-  // по умолчанию Race, чтобы старые/скопированные ссылки без ?mode= не ломались
-  var MODE = q.get('mode') === 'hideAndSeek' ? 'hideAndSeek' : 'race';
-  var MODE_LABEL = MODE === 'hideAndSeek' ? 'Hide and Seek' : 'Race';
+  /* Режим сессии задаёт САМА выбранная карта (см. /story/create): играем
+     в том режиме, для которого её строили. ?mode= со страницы режима
+     теперь только предвыбирает фильтр списка — снять его можно кнопкой
+     «Mode: All» и взять любую карту из Maps Browser. */
+  var filterType = q.get('mode') === 'hideAndSeek' ? 'hideAndSeek'
+                 : (q.get('mode') === 'race' ? 'race' : '');
+  var MODE_NAME = { race: 'Race', hideAndSeek: 'Hide and Seek' };
 
   var page = 1, pages = 1;
   var picked = null;   // { author, mapName }
@@ -134,9 +151,7 @@
     }).then(function (r) { return r.json(); });
   }
 
-  document.title = 'AIBrofist — Story Mode (' + MODE_LABEL + ')';
-  $('stSub').textContent = 'Invite a friend to a private ' + MODE_LABEL + ' match on one chosen map, with your own time limit.';
-  $('stMapLabel').textContent = 'Map (' + MODE_LABEL + ', from Maps Browser)';
+  document.title = 'AIBrofist — Story Mode';
 
   function loadFriends() {
     fetch('/getFriendsList?name=' + encodeURIComponent(me.name) + '&type=friends', { credentials: 'same-origin' })
@@ -149,10 +164,10 @@
       });
   }
 
-  function pickMap(author, mapName) {
-    picked = { author: author, mapName: mapName };
+  function pickMap(author, mapName, mapType) {
+    picked = { author: author, mapName: mapName, mapType: mapType };
     $('stPicked').innerHTML = T('storyPicked', 'Selected: ') + '<b>' + esc(mapName) + '</b> ('
-      + esc(author) + ')';
+      + esc(author) + ') &middot; ' + esc(MODE_NAME[mapType] || mapType);
     Array.prototype.forEach.call(document.querySelectorAll('.stMap'), function (x) {
       x.classList.toggle('on', x.dataset.author === author && x.dataset.map === mapName);
     });
@@ -160,7 +175,7 @@
 
   function loadMaps() {
     $('stMaps').innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
-    var qs = '?mapType=' + encodeURIComponent(MODE) + '&sortBy=rating&page=' + page
+    var qs = '?mapType=' + encodeURIComponent(filterType) + '&sortBy=rating&page=' + page
           + '&author=' + encodeURIComponent($('stSearch').value.trim());
     fetch('/getMapsForList' + qs, { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
@@ -175,8 +190,10 @@
         $('stMaps').innerHTML = list.length
           ? list.map(function (m) {
               var on = picked && picked.author === m.author && picked.mapName === m.mapName;
-              return '<div class="stMap' + (on ? ' on' : '') + '" data-author="' + esc(m.author) + '" data-map="' + esc(m.mapName) + '">'
-                + '<span>' + esc(m.mapName) + '</span><span class="a">' + esc(m.author) + '</span></div>';
+              return '<div class="stMap' + (on ? ' on' : '') + '" data-author="' + esc(m.author) + '"'
+                + ' data-map="' + esc(m.mapName) + '" data-type="' + esc(m.mapType) + '">'
+                + '<span>' + esc(m.mapName) + '</span><span class="a">' + esc(m.author) + '</span>'
+                + '<span class="m">' + esc(MODE_NAME[m.mapType] || m.mapType) + '</span></div>';
             }).join('')
           : '<div class="bfHint">' + T('noMaps', 'Карты не найдены') + '</div>';
       })
@@ -186,7 +203,18 @@
   document.addEventListener('click', function (e) {
     var row = e.target.closest && e.target.closest('.stMap[data-map]');
     if (!row) return;
-    pickMap(row.dataset.author, row.dataset.map);
+    pickMap(row.dataset.author, row.dataset.map, row.dataset.type);
+  });
+
+  Array.prototype.forEach.call($('stFilter').querySelectorAll('button'), function (b) {
+    b.classList.toggle('on', (b.getAttribute('data-type') || '') === filterType);
+    b.onclick = function () {
+      filterType = b.getAttribute('data-type') || '';
+      Array.prototype.forEach.call($('stFilter').querySelectorAll('button'), function (o) {
+        o.classList.toggle('on', o === b);
+      });
+      page = 1; loadMaps();
+    };
   });
 
   $('stSearchGo').onclick = function () { page = 1; loadMaps(); };
@@ -200,9 +228,11 @@
     if (!friend) { msg(T('storyPickFriend', 'Pick a friend to invite')); return; }
     if (!picked) { msg(T('storyPickMap', 'Pick a map from the list')); return; }
 
-    post('/story/create', { author: picked.author, mapName: picked.mapName, mode: MODE, limitMin: limitMin }).then(function (r) {
+    post('/story/create', { author: picked.author, mapName: picked.mapName, limitMin: limitMin }).then(function (r) {
       if (r.status !== 'success') { msg(r.message || T('errorTxt', 'Ошибка')); return; }
-      var url = location.origin + '/game.html?mode=' + encodeURIComponent(MODE) + '&story=1&room=' + encodeURIComponent(r.room);
+      // режим в ссылке — тот, что вернул сервер: его определила сама карта
+      var url = location.origin + '/game.html?mode=' + encodeURIComponent(r.mode || picked.mapType)
+              + '&story=1&room=' + encodeURIComponent(r.room);
       $('stLinkUrl').value = url;
       $('stLink').classList.add('on');
       $('stJoin').onclick = function () { location.href = url; };
