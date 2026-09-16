@@ -204,15 +204,15 @@ body.mob #hint{display:none}
 body.mob #zoomBox{bottom:68px;right:8px}
 body.mob #msg h1{font-size:38px}
 </style>
-        <script src="device.js?v=123"></script>
-        <script src="sound.js?v=123"></script>
-        <script src="skinRender.js?v=123"></script>
-        <script src="skinCanvas.js?v=123"></script>
-        <script src="gifuct.bundle.js?v=123"></script>
-        <script src="gifPlayer.js?v=123"></script>
-        <script src="coin.js?v=123"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=123">
-        <script src="theme.js?v=123"></script>
+        <script src="device.js?v=124"></script>
+        <script src="sound.js?v=124"></script>
+        <script src="skinRender.js?v=124"></script>
+        <script src="skinCanvas.js?v=124"></script>
+        <script src="gifuct.bundle.js?v=124"></script>
+        <script src="gifPlayer.js?v=124"></script>
+        <script src="coin.js?v=124"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=124">
+        <script src="theme.js?v=124"></script>
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="/favicon.svg">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -841,7 +841,9 @@ function drawParts(){
 /* ══════════════════════════════════════════════════
    PHYSICS  — гравитация постоянная (9), как в оригинальном редакторе
    ══════════════════════════════════════════════════ */
-/* FRIC = 0 — на земле игрок останавливается сразу, без скольжения.
+/* FRIC = 0.82 — на земле игрок доезжает по инерции ~22 px и только
+   потом встаёт (раньше здесь стоял ноль: скорость обнулялась в тот же
+   кадр, когда отпущена кнопка, и персонаж вставал как вкопанный).
    В воздухе инерция остаётся совсем немного, иначе управление в прыжке
    ломается (отпустил кнопку чуть раньше приземления на платформу — и
    вместо мягкого долёта резким тормозом падаешь мимо). Раньше AIR был
@@ -2667,12 +2669,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=123"></script>
-<script src="abuseShow.js?v=123" defer></script>
-<script src="editorHelp.js?v=123"></script>
-<script src="editorAI.js?v=123" defer></script>
-<script src="account.js?v=123" defer></script>
-<script src="owner.js?v=123" defer></script>
+<script src="i18n.js?v=124"></script>
+<script src="abuseShow.js?v=124" defer></script>
+<script src="editorHelp.js?v=124"></script>
+<script src="editorAI.js?v=124" defer></script>
+<script src="account.js?v=124" defer></script>
+<script src="owner.js?v=124" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -2802,7 +2804,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=123" defer></script>
+        <script src="skinAvatar.js?v=124" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */
