@@ -596,6 +596,16 @@ function hsStartLobby(io, room, st) {
   st.roundNum++;
   st.caughtSent = false;
   st.endsAt = Date.now() + HS_LOBBY_MS;
+  /* Отметка одометра на входе в лобби. Прячутся именно в лобби, а сам
+     раунд хороший игрок проводит неподвижно в укрытии — если считать
+     путь только с начала раунда, награду за «дожил до конца» получал бы
+     тот, кто бегает на виду, а не тот, кто спрятался. Поэтому путь
+     считаем с начала лобби (см. hsStartRound и hsAwardRoundEnd). */
+  st.lobbyOdo = new Map();
+  hsMembers(room).forEach((m) => {
+    const p = gameState.players.get(m.id);
+    st.lobbyOdo.set(m.id, p ? (p.odo || 0) : 0);
+  });
   hsSpin(io, room, st);
   io.to(room).emit('hsPhase', { phase: 'lobby', msLeft: HS_LOBBY_MS, roundNum: st.roundNum });
   clearTimeout(st.timer);
@@ -607,9 +617,21 @@ function hsStartRound(io, room, st) {
   st.phase = 'round';
   st.endsAt = Date.now() + HS_ROUND_MS;
   // снимок пряток на момент старта — только они и только если не пойманы, получат награду в конце
-  // odo — показание одометра на старте раунда, по нему в конце видно, кто вообще играл
+  // odo — отметка одометра на старте ЛОББИ, по ней в конце видно, кто вообще играл
   st.roundMembers = hsMembers(room).filter((m) => m.id !== st.seekerId)
-    .map((m) => { const p = gameState.players.get(m.id); m.odo = p ? (p.odo || 0) : 0; return m; });
+    .map((m) => {
+      const p = gameState.players.get(m.id);
+      const now = p ? (p.odo || 0) : 0;
+      // кто был в комнате с начала лобби — считаем ему и путь до укрытия,
+      // кто зашёл посреди лобби — только с этого момента
+      m.odo = (st.lobbyOdo && st.lobbyOdo.has(m.id)) ? st.lobbyOdo.get(m.id) : now;
+      return m;
+    });
+  /* То же и для искателя: от этой отметки в hsCatch считается, сколько он
+     реально пробежал за раунд. Без неё хватало одного честного шага за всю
+     сессию, чтобы дальше ловить телепортом в каждом следующем раунде. */
+  const sp0 = gameState.players.get(st.seekerId);
+  st.seekerOdo = sp0 ? (sp0.odo || 0) : 0;
   st.caughtSet = new Set();
   io.to(room).emit('hsPhase', { phase: 'round', msLeft: HS_ROUND_MS,
     seekerId: st.seekerId, seekerName: st.seekerName });
@@ -820,9 +842,20 @@ io.on('connection', (socket) => {
         if (st.phase === 'round' && st.seekerName && st.seekerName === name
             && st.seekerId !== socket.id) {
           st.seekerId = socket.id;
+          // новый сокет — новый одометр с нуля, отметку раунда сдвигаем,
+          // иначе искатель после переподключения никого не смог бы поймать
+          st.seekerOdo = player.odo || 0;
           io.to(room).emit('hsPhase', { phase: 'round',
             msLeft: Math.max(0, st.endsAt - Date.now()),
             seekerId: st.seekerId, seekerName: st.seekerName });
+        }
+        /* Зашёл, пока идёт лобби, — отметку одометра ставим ему прямо
+           сейчас: hsStartLobby снял её только с тех, кто уже был в
+           комнате, а путь до укрытия он пробежит после этой строки
+           (см. hsStartRound и hsAwardRoundEnd). */
+        if (st.phase === 'lobby') {
+          if (!st.lobbyOdo) st.lobbyOdo = new Map();
+          st.lobbyOdo.set(socket.id, player.odo || 0);
         }
         socket.emit('hsState', { phase: st.phase,
           msLeft: Math.max(0, st.endsAt - Date.now()),
@@ -954,9 +987,11 @@ io.on('connection', (socket) => {
     /* Близость считается по координатам, которые прислал сам искатель, —
        значит скрипт мог просто подставлять себе координаты жертвы и
        «ловить» всех, не сходя с места. Чтобы дойти до жертвы по-честному,
-       надо пройти путь: требуем ненулевой одометр за эту сессию (сам
-       телепорт в счёт не идёт, см. MAX_STEP в movePlayer). */
-    if ((player.odo || 0) < HS_MIN_DIST) return;
+       надо пройти путь: требуем реально пройденное расстояние за этот
+       раунд (сам телепорт в счёт не идёт, см. MAX_STEP в movePlayer).
+       Считаем именно за раунд: по всей сессии одного честного шага
+       хватало бы, чтобы ловить телепортом во всех следующих раундах. */
+    if ((player.odo || 0) - (st.seekerOdo || 0) < HS_MIN_DIST) return;
     st.caughtSet.add(targetId);
     if (!account) return;   // гостю монеты не копим — как и раньше в addCoins
     hsCreditAndNotify(socket, account, 1, 'hsCatch');

@@ -514,8 +514,10 @@
       /* Время отправки было только на странице Messages, а в игровой
          панели — нет: в переписке из нескольких реплик подряд нельзя
          было понять, это ответ минуту назад или вчерашний. */
+      // у старых сообщений времени нет — пустую строку под текстом не рисуем
+      var when = msgsFmtTime(m.at);
       return '<div class="gMsgsBubble ' + (mine ? 'me' : 'them') + '">' + esc(m.text)
-        + '<span class="gMsgsWhen">' + msgsFmtTime(m.at) + '</span></div>';
+        + (when ? '<span class="gMsgsWhen">' + when + '</span>' : '') + '</div>';
     }).join('');
     if (atBottom || !list.length) msgsBody.scrollTop = msgsBody.scrollHeight;
   }

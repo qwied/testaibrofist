@@ -313,7 +313,6 @@
 
   /* Проверять права здесь незачем: сервер отдаёт этот файл только
      владельцу. Права на действия он проверяет отдельно, на каждый запрос. */
-  window.BFAdminAbuse = true;     // редактор по этому флагу снимает лимит монет
   if (document.readyState === 'loading')
     document.addEventListener('DOMContentLoaded', build);
   else build();

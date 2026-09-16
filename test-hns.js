@@ -87,5 +87,17 @@ ok('подсказка про невидимость',    /hideNow/.test(src));
 ok('в раунде видно всех',          /var hsWait = MODE === 'hideAndSeek' && !VIEW && phase === 'lobby';/.test(src));
 ok('все пойманы — сигнал серверу', /if \(hsSync\) socket\.emit\('hsCaught'\);/.test(src));
 
+/* Серверная часть прятки/награды: одометр. Оба правила проверялись
+   живыми клиентами (искатель-телепорт и честный прячущийся), здесь
+   держим их от молчаливого отката. */
+const srv = fs.readFileSync(__dirname + '/server.js', 'utf8');
+console.log('\nодометр в прятках (server.js):');
+ok('путь прячущегося считается с лобби', /st\.lobbyOdo = new Map\(\);/.test(srv)
+                                   && /st\.lobbyOdo\.has\(m\.id\)\) \? st\.lobbyOdo\.get\(m\.id\)/.test(srv));
+ok('путь искателя считается за раунд',   /st\.seekerOdo = sp0 \? \(sp0\.odo \|\| 0\) : 0;/.test(srv)
+                                   && /\(player\.odo \|\| 0\) - \(st\.seekerOdo \|\| 0\) < HS_MIN_DIST/.test(srv));
+ok('за всю сессию путь больше не считают', !/if \(\(player\.odo \|\| 0\) < HS_MIN_DIST\) return;/.test(srv));
+ok('переподключённому искателю отметку сдвигают', /st\.seekerOdo = player\.odo \|\| 0;/.test(srv));
+
 console.log(fails ? '\nПРОВАЛЕНО проверок: ' + fails : '\nвсе проверки пройдены ✓');
 process.exit(fails ? 1 : 0);
