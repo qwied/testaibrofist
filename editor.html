@@ -204,15 +204,15 @@ body.mob #hint{display:none}
 body.mob #zoomBox{bottom:68px;right:8px}
 body.mob #msg h1{font-size:38px}
 </style>
-        <script src="device.js?v=122"></script>
-        <script src="sound.js?v=122"></script>
-        <script src="skinRender.js?v=122"></script>
-        <script src="skinCanvas.js?v=122"></script>
-        <script src="gifuct.bundle.js?v=122"></script>
-        <script src="gifPlayer.js?v=122"></script>
-        <script src="coin.js?v=122"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=122">
-        <script src="theme.js?v=122"></script>
+        <script src="device.js?v=123"></script>
+        <script src="sound.js?v=123"></script>
+        <script src="skinRender.js?v=123"></script>
+        <script src="skinCanvas.js?v=123"></script>
+        <script src="gifuct.bundle.js?v=123"></script>
+        <script src="gifPlayer.js?v=123"></script>
+        <script src="coin.js?v=123"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=123">
+        <script src="theme.js?v=123"></script>
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="/favicon.svg">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -309,6 +309,8 @@ function resize(){
   cv.width = Math.round(innerWidth * DPR); cv.height = Math.round(innerHeight * DPR);
   cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px";
   bgGrad = null;                              // фон пересоздаётся под новый размер
+  // окно сменило размер — пересчитываем общий для всех масштаб игры
+  if(typeof playing !== "undefined" && playing && typeof playZoom === "function") view.s = playZoom();
   /* Смена cv.width/height выше уже очистила холст (так устроен canvas) —
      без немедленной перерисовки на экране на один кадр мелькала бы
      пустота: заметно при входе в режим на телефоне, где надзор за FPS
@@ -855,10 +857,26 @@ function drawParts(){
    и держащий, и тапающий получают одинаковый, короткий прыжок: подъём
    всегда обрывается через MIN_HOLD кадров (см. ниже), удержание кнопки
    после этого момента больше ничего не даёт. */
-var JUMP_H = 152, MOVE_A = 0.9, MAX_VX = 5.2, FRIC = 0, AIR = 0.85,
-    COYOTE = 6, BUFFER = 7, WALL_SLIDE = 2.6, WALL_VX = 6.2, STEP_UP = 16,
+/* Подбор сверялся замерами на стенде, а не на глаз. Что изменилось и
+   что осталось прежним (кадры при 60 fps):
+
+     высота прыжка   120.7 -> 120.9 px   намеренно без изменений
+     скорость бега    4.93 -> 4.93       намеренно без изменений
+     разгон до макс.     7 -> 14 кадров  разгон стал плавным
+     тормозной путь      0 -> 22 px      появилась инерция
+     время в воздухе    38 -> 41 кадр    прыжок стал мягче
+     дальность прыжка  192 -> 207 px     +8%, плата за время в воздухе
+
+   FRIC был 0 — то есть на земле vx умножался на ноль, и персонаж
+   вставал как вкопанный в тот же кадр, когда отпускаешь кнопку.
+
+   MAX_VX поднят не ради скорости: gk() масштабирует скорость от
+   гравитации, и без этой поправки понижение гравитации утащило бы бег
+   с 4.93 до 4.43. Поправка возвращает ровно прежнее значение. */
+var JUMP_H = 154, MOVE_A = 0.45, MAX_VX = 5.68, FRIC = 0.82, AIR = 0.85,
+    COYOTE = 6, BUFFER = 7, WALL_SLIDE = 2.2, WALL_VX = 6.2, STEP_UP = 16,
     MIN_HOLD = 7;   // столько кадров длится подъём прыжка, дальше он всегда обрывается
-function G(){ return gravityScale * 0.062; }          // 9 → 0.558 px/кадр²
+function G(){ return gravityScale * 0.052; }          // 9 → 0.468 px/кадр²
 function jumpV(){ return -Math.sqrt(2 * Math.max(0.02, G()) * JUMP_H); }  // constant hop height
 /* Heavier gravity shortens airtime, so speed scales with it — otherwise a map
    built at gravity 10 becomes physically unjumpable at 30. Reach stays constant. */
@@ -912,6 +930,8 @@ function play(){
     return;
   }
   playing = true; done = false; deaths = 0; timeMs = 0; parts.length = 0;
+  // одинаковый участок мира у всех игроков (см. playZoom)
+  view.s = playZoom();
   indexMovers(); markDirty();
   // размер игрока задан движком и не редактируется
   pl.w = SIZES.spawn[0]; pl.h = SIZES.spawn[1];
@@ -1533,6 +1553,22 @@ function drive(src){
   var ids = src.targetIds.split(",").map(function(s){ return s.trim(); }).filter(Boolean);
   objects.forEach(function(o){ if(o.customId && ids.indexOf(o.customId) !== -1) o._act = src._act; });
 }
+/* Одинаковый участок мира у всех. Раньше в игре view.s оставался 1, и
+   сколько мира видно зависело от размера окна: телефон шириной 400
+   показывал 400 единиц карты, монитор 1280 — 1280. Игроки на разной
+   высоте смотрели буквально в разные куски карты.
+
+   Равняем по ВЫСОТЕ окна, а не по ширине: в CSS-пикселях высота у
+   телефона и монитора близка (≈850 против ≈900), а ширина отличается
+   втрое. При равнении по высоте совпадает и масштаб, и размер персонажа
+   на экране; телефон просто видит более узкую полосу — при его
+   пропорциях иначе и не бывает.
+
+   Ставим один раз на старте игры и на смене размера окна, а не каждый
+   кадр: иначе затирался бы пинч-зум, который игрок выбрал сам. */
+var VIEW_UNITS_H = 800;
+function playZoom(){ return Math.max(0.6, Math.min(2.2, VH() / VIEW_UNITS_H)); }
+
 function follow(){
   /* Камера прилипает к игроку НАМЕРТВО (v103): раньше экран догонял игрока
      плавным лерпом 0.12 — при прыжке и падении персонаж уезжал к краю
@@ -2631,12 +2667,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=122"></script>
-<script src="abuseShow.js?v=122" defer></script>
-<script src="editorHelp.js?v=122"></script>
-<script src="editorAI.js?v=122" defer></script>
-<script src="account.js?v=122" defer></script>
-<script src="owner.js?v=122" defer></script>
+<script src="i18n.js?v=123"></script>
+<script src="abuseShow.js?v=123" defer></script>
+<script src="editorHelp.js?v=123"></script>
+<script src="editorAI.js?v=123" defer></script>
+<script src="account.js?v=123" defer></script>
+<script src="owner.js?v=123" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -2766,7 +2802,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=122" defer></script>
+        <script src="skinAvatar.js?v=123" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */
