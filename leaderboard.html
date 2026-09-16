@@ -4,13 +4,17 @@
         <title>AIBrofist — Leaderboards</title>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="stylesheet" type="text/css" href="style.css?v=129">
-        <script src="device.js?v=129"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=129">
+        <link rel="stylesheet" type="text/css" href="style.css?v=131">
+        <script src="device.js?v=131"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=131">
         <style>
-                .lbWrap{max-width:700px;margin:0 auto;padding:18px 14px 60px}
-                .lbWrap h1{font-size:26px;margin:12px 0 4px}
-                .lbWrap .sub{color:#8b93a1;font-size:13px;margin-bottom:20px}
+                /* Обёртка страницы теперь .bfWrap — тот же левый край и та же
+                   ширина 1080px, что у Maps Browser/Quests/Messages и т.д., иначе
+                   при переходе между пунктами меню колонка контента заметно
+                   прыгала влево-вправо. Сам список игроков в такую ширину
+                   растягивать незачем — он читается как список, а не как
+                   таблица, поэтому у него свой узкий .lbList. */
+                .lbCol{max-width:640px}
                 .lbRow{display:flex;align-items:center;gap:12px;padding:11px 12px;border-bottom:1px solid #eef1f5}
                 .lbRow.me{background:#eaf4ff;border-radius:6px}
                 .lbPlace{width:34px;text-align:center;font-weight:bold;color:#8b93a1;flex:0 0 auto}
@@ -42,8 +46,8 @@
                 .lbArrow:disabled{opacity:.35;cursor:default}
                 .lbPageLabel{color:#8b93a1;font-size:13px;min-width:40px;text-align:center}
         </style>
-        <link rel="stylesheet" href="ui.css?v=129">
-        <script src="theme.js?v=129"></script>
+        <link rel="stylesheet" href="ui.css?v=131">
+        <script src="theme.js?v=131"></script>
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="/favicon.svg">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -63,32 +67,34 @@
 <body>
 <div class="container"></div>
 
-<div class="lbWrap">
-        <h1 data-i18n="leaderboard">Таблица лидеров</h1>
-        <div class="sub" id="lbSub" data-i18n="lbSub">Обновляется автоматически</div>
+<div class="bfWrap">
+        <div class="bfTitle" data-i18n="leaderboard">Таблица лидеров</div>
+        <div class="bfSub" id="lbSub" data-i18n="lbSub">Обновляется автоматически</div>
 
-        <div class="lbTabs" id="lbMetricTabs">
-                <div class="lbTab on" data-metric="coins" data-i18n="lbTabCoins">Монеты</div>
-                <div class="lbTab" data-metric="score" data-i18n="lbTabScore">Очки</div>
+        <div class="lbCol">
+                <div class="lbTabs" id="lbMetricTabs">
+                        <div class="lbTab on" data-metric="coins" data-i18n="lbTabCoins">Монеты</div>
+                        <div class="lbTab" data-metric="score" data-i18n="lbTabScore">Очки</div>
+                </div>
+                <div class="lbTabs lbPeriodTabs" id="lbPeriodTabs">
+                        <div class="lbTab" data-period="day" data-i18n="lbPeriodDay">Сегодня</div>
+                        <div class="lbTab" data-period="week" data-i18n="lbPeriodWeek">За неделю</div>
+                        <div class="lbTab on" data-period="all" data-i18n="lbPeriodAll">За всё время</div>
+                </div>
+
+                <div id="lbList"><div class="empty" data-i18n="loading">Загрузка…</div></div>
+
+                <div class="lbPager" id="lbPager" style="display:none">
+                        <button class="lbArrow" id="lbPrev" aria-label="Previous page">‹</button>
+                        <span class="lbPageLabel" id="lbPageLabel"></span>
+                        <button class="lbArrow" id="lbNext" aria-label="Next page">›</button>
+                </div>
+
+                <div id="lbMine" class="mine" style="display:none"></div>
         </div>
-        <div class="lbTabs lbPeriodTabs" id="lbPeriodTabs">
-                <div class="lbTab" data-period="day" data-i18n="lbPeriodDay">Сегодня</div>
-                <div class="lbTab" data-period="week" data-i18n="lbPeriodWeek">За неделю</div>
-                <div class="lbTab on" data-period="all" data-i18n="lbPeriodAll">За всё время</div>
-        </div>
-
-        <div id="lbList"><div class="empty" data-i18n="loading">Загрузка…</div></div>
-
-        <div class="lbPager" id="lbPager" style="display:none">
-                <button class="lbArrow" id="lbPrev" aria-label="Previous page">‹</button>
-                <span class="lbPageLabel" id="lbPageLabel"></span>
-                <button class="lbArrow" id="lbNext" aria-label="Next page">›</button>
-        </div>
-
-        <div id="lbMine" class="mine" style="display:none"></div>
 </div>
 
-<script src="account.js?v=129" defer></script>
+<script src="account.js?v=131" defer></script>
 <script>
 (function () {
         var listEl = document.getElementById('lbList');
@@ -195,12 +201,12 @@
         setInterval(load, 15000);
 })();
 </script>
-        <script src="i18n.js?v=129"></script>
-        <script src="owner.js?v=129" defer></script>
-        <script src="coin.js?v=129"></script>
-        <script src="skinRender.js?v=129"></script>
-        <script src="skinAvatar.js?v=129" defer></script>
-        <script src="shell.js?v=129"></script>
-<script src="abuseShow.js?v=129" defer></script>
+        <script src="i18n.js?v=131"></script>
+        <script src="owner.js?v=131" defer></script>
+        <script src="coin.js?v=131"></script>
+        <script src="skinRender.js?v=131"></script>
+        <script src="skinAvatar.js?v=131" defer></script>
+        <script src="shell.js?v=131"></script>
+<script src="abuseShow.js?v=131" defer></script>
 </body>
 </html>

@@ -20,7 +20,10 @@
      только через переменные темы, чтобы карточка одинаково читалась и в
      светлой, и в тёмной. */
   var css = ''
-    + '#' + SLOT_ID + '{max-width:430px;margin:0 auto;color:var(--ink);'
+    /* Карточка выровнена по левому краю, как заголовок страницы над ней
+       (margin:0, не auto) — раньше она центрировалась в колонке контента
+       и вместе с заголовком не стояла на одной оси. */
+    + '#' + SLOT_ID + '{max-width:430px;margin:0;color:var(--ink);'
     + 'font-family:inherit;box-sizing:border-box;text-align:center}'
 
     + '#' + SLOT_ID + ' .drCard{background:var(--panel);border:1px solid var(--line);'

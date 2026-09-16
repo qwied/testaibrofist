@@ -40,16 +40,9 @@ html.is-touch .refresh-button:hover { background: inherit; }
   .menu-item { padding: 9px 26px; font-size: 15px; }
 }
 
-/* ---------- главное меню с карточками режимов ---------- */
-@media (max-width: 760px) {
-  .cards .cardContainer { width: 50% !important; }
-  .card { margin: 7%; }
-  .card div { font-size: 14px; }
-}
-@media (max-width: 430px) {
-  .cards .cardContainer { width: 100% !important; }
-  .card { margin: 5% 12%; }
-}
+/* ---------- главное меню с карточками режимов ----------
+   .cards теперь грид с auto-fit (см. index.html) — сама решает, сколько
+   карточек в ряд на любой ширине, отдельные точки перелома не нужны. */
 
 /* ---------- страница режима: превью, PLAY, описание, скриншот ---------- */
 @media (max-width: 760px) {

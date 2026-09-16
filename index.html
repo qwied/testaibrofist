@@ -161,32 +161,40 @@ body{
 
 
 /*card*/
+/* Было float:left, 33.33% на две карточки — треть экрана пустовала
+   справа на любом мониторе. Грид с auto-fit сам решает, сколько
+   карточек в ряд: две широкие на мониторе, одна на телефоне, без
+   отдельных точек перелома под конкретную ширину. max-width держит
+   карточки в разумном размере на очень широких экранах. */
 .cards{
-    float:left;
     width: 100%;
-    background: white;
-    overflow: auto;
+    max-width: 720px;
+    margin: 28px auto 0;
+    padding: 0 14px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 22px;
+    box-sizing: border-box;
 }
 
 .cards .cardContainer{
-    float: left;
-    width: 33.33%;
     text-align: center;
-    box-sizing: border-box;
 }
 
 .card{
     text-decoration: none;
     display: block;
-    margin: 11%;
     border: 2px solid #e4e4e4;
     border-radius: 5px;
     color: #191919;
     box-shadow: 0px 9px 11px -6px #ccc;
+    transition: transform .15s ease, box-shadow .15s ease, color .15s ease;
 }
 
 .card:hover{
     color:#6f6f6f;
+    transform: translateY(-3px);
+    box-shadow: 0px 16px 20px -8px #bbb;
 }
 
 .card img{
@@ -388,13 +396,7 @@ body{
 
 
 /* @media */
-@media (max-width: 700px) {
-    .cards .cardContainer{width: 50%;}
-    .card div{font-size: 13px;}
-}
-
 @media (max-width: 420px) {
-    .cards .cardContainer{width: 100%;}
     .brand-logo{display:none !important;}
 }
 
@@ -403,10 +405,10 @@ body{
 #menuButton:hover{color:#2196F3;}
 
 </style>
-        <script src="device.js?v=129"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=129">
-        <link rel="stylesheet" href="ui.css?v=129">
-        <script src="theme.js?v=129"></script>
+        <script src="device.js?v=131"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=131">
+        <link rel="stylesheet" href="ui.css?v=131">
+        <script src="theme.js?v=131"></script>
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="/favicon.svg">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -581,15 +583,15 @@ body{
                 overlay.addEventListener('click', closeSignIn);
 
         </script>
-<script src="nav.js?v=129" defer></script>
-        <script src="account.js?v=129" defer></script>
-        <script src="i18n.js?v=129"></script>
-        <script src="owner.js?v=129" defer></script>
-        <script src="coin.js?v=129"></script>
-        <script src="skinRender.js?v=129"></script>
-        <script src="skinAvatar.js?v=129" defer></script>
-        <script src="shell.js?v=129"></script>
-<script src="abuseShow.js?v=129" defer></script>
-        <script src="consent.js?v=129"></script>
+<script src="nav.js?v=131" defer></script>
+        <script src="account.js?v=131" defer></script>
+        <script src="i18n.js?v=131"></script>
+        <script src="owner.js?v=131" defer></script>
+        <script src="coin.js?v=131"></script>
+        <script src="skinRender.js?v=131"></script>
+        <script src="skinAvatar.js?v=131" defer></script>
+        <script src="shell.js?v=131"></script>
+<script src="abuseShow.js?v=131" defer></script>
+        <script src="consent.js?v=131"></script>
 </body>
 </html>
