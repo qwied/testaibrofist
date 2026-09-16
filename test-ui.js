@@ -334,6 +334,22 @@ else {
   for (let i = 0; i < 120; i++) { GAME.step(); if (GAME.pl.ground) landed = true; }
   check('где была вода — игрок свободно падает на пол', landed, GAME.pl.y.toFixed(0));
 
+  /* Выталкивание из фигуры теперь размазано по кадрам: за один кадр
+     игрока двигают не дальше его собственного шага (см. capX/capY в
+     game.html), поэтому глубокое продавливание разбирается за несколько
+     кадров. Проверяем и то, куда он в итоге вышел, и то, что ни один
+     кадр не оказался рывком. */
+  function settle(n){
+    var worst = 0;
+    for(var i=0;i<n;i++){
+      var x0 = GAME.pl.x, y0 = GAME.pl.y;
+      GAME.step();
+      worst = Math.max(worst, Math.abs(GAME.pl.x-x0), Math.abs(GAME.pl.y-y0));
+    }
+    return worst;
+  }
+  var JERK = 21;   // |vx|max 4.93 + STEP_UP 16 — законная поправка за кадр
+
   // 13. угол стены: игрока сбоку от блока отталкивает вбок, а не телепортирует наверх
   //     именно эту дыру ловил пользователь: платформа прижала игрока к стене —
   //     и его выбросило на верх соседнего объекта. Теперь угол отталкивает вбок.
@@ -345,13 +361,14 @@ else {
   clearKeys();
   // игрок заспавнен сбоку от стены, чуть внутри (15 px) — как после толчка платформой
   const yBeforeCorner = GAME.pl.y;
-  GAME.step();
+  const jerkC = settle(12);
   // без фикса: pl.y стало бы 40 (телепорт на верх стены y=100)
   // с фиксом: pl.y остаётся ~200 (игрока оттолкнуло вбок)
   check('угол стены не телепортирует наверх', GAME.pl.y > 150,
         'pl.y=' + GAME.pl.y.toFixed(0) + ' (было ' + yBeforeCorner.toFixed(0) + ')');
   check('игрока оттолкнуло вбок от стены', GAME.pl.x + GAME.pl.w <= 400,
         'pl.x=' + GAME.pl.x.toFixed(0) + ' правый край=' + (GAME.pl.x + GAME.pl.w));
+  check('и вышел он без рывка', jerkC <= JERK, 'макс сдвиг за кадр ' + jerkC.toFixed(1));
   GAME.stop();
 
   // 14. глубокий провал по-прежнему поднимает наверх — регресс на v95
@@ -362,9 +379,10 @@ else {
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floorD, spawnD] });
   GAME.startPlay();
   clearKeys();
-  GAME.step();
+  const jerkD = settle(12);
   check('глубокий провал поднимает наверх', Math.abs(GAME.pl.y + GAME.pl.h - 400) < 5,
         'pl.y=' + GAME.pl.y.toFixed(0));
+  check('и поднимает без рывка', jerkD <= JERK, 'макс сдвиг за кадр ' + jerkD.toFixed(1));
   GAME.stop();
 
   // 15. угол работает с обеих сторон: игрок зашёл справа — оттолкнёт вправо
@@ -373,9 +391,10 @@ else {
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floorC, wallE, spawnE] });
   GAME.startPlay();
   clearKeys();
-  GAME.step();
+  const jerkE = settle(12);
   check('угол с правой стороны отталкивает вправо', GAME.pl.x >= 440,
         'pl.x=' + GAME.pl.x.toFixed(0));
+  check('и вправо тоже без рывка', jerkE <= JERK, 'макс сдвиг за кадр ' + jerkE.toFixed(1));
   check('и тоже не телепортирует наверх', GAME.pl.y > 150,
         'pl.y=' + GAME.pl.y.toFixed(0));
   GAME.stop();
@@ -411,9 +430,10 @@ else {
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floorC, wideWall, spawnG] });
   GAME.startPlay();
   clearKeys();
-  GAME.step();
+  const jerkG = settle(16);
   check('вдавленного на 45 px не выбрасывает наверх', GAME.pl.y > 150,
         'pl.y=' + GAME.pl.y.toFixed(0));
+  check('вдавленного выносит без рывка', jerkG <= JERK, 'макс сдвиг за кадр ' + jerkG.toFixed(1));
   check('его отодвигает вбок к ближней грани', GAME.pl.x + GAME.pl.w <= 401,
         'правый край=' + (GAME.pl.x + GAME.pl.w).toFixed(0));
   GAME.stop();
