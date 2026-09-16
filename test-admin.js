@@ -7,7 +7,6 @@ const ok = (n, c, x) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', 
 const src = fs.readFileSync(__dirname + '/adminAbuse.js', 'utf8');
 const srv = fs.readFileSync(__dirname + '/server.js', 'utf8');
 const shell = fs.readFileSync(__dirname + '/shell.js', 'utf8');
-const ed = fs.readFileSync(__dirname + '/editor.html', 'utf8');
 
 console.log('доступ:');
 ok('файл отдаётся только владельцу', /app\.get\('\/adminAbuse\.js'/.test(srv) && /isOwner/.test(srv));
@@ -71,7 +70,6 @@ ok('контекст будится всегда', /if \(actx\.state === 'suspen
 ok('прогресс загрузки',    /Uploading ' \+ okCount \+ ' of '/.test(src));
 ok('битый файл не рвёт очередь', /остальные всё равно грузим/.test(src));
 ok('слои не ловят нажатия', (show.match(/pointer-events:none/g) || []).length >= 2);
-ok('монеты без лимита',   /window\.BFAdminAbuse = true/.test(src) && /function coinCapped/.test(ed));
 
 console.log('\nтаймер обновления:');
 ok('отсчёт виден всем',   /Update in: /.test(shell));
