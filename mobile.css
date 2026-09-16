@@ -384,6 +384,12 @@ html[data-page="editor"] .ow-fab { bottom: 96px !important; }
 /* кнопка инструментов владельца не должна закрывать игровые кнопки */
 html.is-mobile .ow-fab, html.is-tablet .ow-fab { bottom: 92px !important; right: 12px !important; }
 html[data-page="editor"].is-mobile .ow-fab { bottom: 130px !important; }
+/* В САМОЙ игре правый нижний угол занят: пэд управления (116px), над ним
+   кнопка чата (bottom 150, высота 58 — см. game.js). На отметке 130 кнопка
+   владельца садилась прямо на чат. game.html и editor.html делят
+   data-page="editor", поэтому отличаем игру по классу body.play — в
+   редакторе чата нет и там 130 остаётся верным. */
+html.is-mobile body.play .ow-fab, html.is-tablet body.play .ow-fab { bottom: 220px !important; }
 
 /* иконка монеты вместо эмодзи */
 .bfCoinIcon { display: inline-block; }

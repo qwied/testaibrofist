@@ -422,6 +422,27 @@ else {
   check('высота не растёт от удержания', Math.abs(holdH - 123) <= 2, holdH.toFixed(0));
   check('удержание не даёт прыжок выше тапа', Math.abs(holdH - tapH) <= 1, (holdH - tapH).toFixed(0));
 
+  /* Управление резкое с обоих концов: нажал — сразу максимум, отпустил —
+     сразу ноль. Плавный разгон и накат пробовали, и то и другое просили
+     убрать; держим проверкой, чтобы не вернулись молча. */
+  GAME.loadMap({ mode: 'hideAndSeek', objects: [floorJ, spawnJ] });
+  GAME.startPlay(); clearKeys();
+  for (let i = 0; i < 60; i++) GAME.step();
+  GAME.keys.r = true; GAME.step();
+  const vFirst = Math.abs(GAME.pl.vx);
+  for (let i = 0; i < 30; i++) GAME.step();
+  const vTop = Math.abs(GAME.pl.vx);
+  check('скорость берётся в первом же кадре', Math.abs(vFirst - vTop) < 0.01,
+        vFirst.toFixed(2) + ' против ' + vTop.toFixed(2));
+  GAME.keys.r = false;
+  const xRelease = GAME.pl.x;
+  GAME.step();
+  check('отпустил — встал в тот же кадр', Math.abs(GAME.pl.vx) === 0, 'vx=' + GAME.pl.vx.toFixed(3));
+  let slide = 0;
+  for (let i = 0; i < 40; i++) { GAME.step(); slide = Math.abs(GAME.pl.x - xRelease); }
+  check('наката нет совсем', slide <= vTop + 0.01, slide.toFixed(1) + ' px');
+  GAME.stop();
+
   // 17. глубоко вдавленный в стену угол — тоже вбок, а не наверх
   //     ровно то, что оставалось после v96: платформа стыкуется с объектом
   //     вплотную и успевает вдавить игрока глубже старого порога в 32 px.
