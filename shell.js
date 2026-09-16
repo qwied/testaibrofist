@@ -76,7 +76,57 @@
     if (l.key) label.setAttribute('data-i18n', l.key);
     if (l.icon) a.innerHTML = l.icon;
     a.appendChild(label);
+    /* Пустой значок держим в разметке с самого начала: он появляется и
+       исчезает через класс, поэтому счётчик не дёргает раскладку пункта,
+       когда приходит ответ сервера. */
+    if (l.key === 'messages' || l.key === 'mapsBrowser') {
+      var dot = el('span', 'bfNavDot');
+      dot.id = 'bfDot_' + l.key;
+      a.appendChild(dot);
+    }
     return a;
+  }
+
+  /* ---------- значки непрочитанного ----------
+     Один запрос на все значки (см. notifications.js), раз в 30 секунд и
+     ещё раз при возврате на вкладку. На страницах самих разделов значок
+     не показываем: игрок уже смотрит туда, где лежит новое. */
+  var notifyTimer = null;
+
+  function paintDot(key, n, title) {
+    var d = document.getElementById('bfDot_' + key);
+    if (!d) return;
+    var here = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    var mine = (key === 'messages' && here === 'messages.html')
+            || (key === 'mapsBrowser' && here === 'mapsbrowser.html');
+    if (!n || mine) { d.className = 'bfNavDot'; d.textContent = ''; d.removeAttribute('title'); return; }
+    d.className = 'bfNavDot on';
+    d.textContent = n > 99 ? '99+' : String(n);
+    if (title) d.setAttribute('title', title);
+  }
+
+  function loadNotifications() {
+    fetch('/notifications', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || d.guest) { paintDot('messages', 0); paintDot('mapsBrowser', 0); return; }
+        var m = d.messages || {}, mp = d.maps || {};
+        paintDot('messages', m.total || 0,
+                 (m.from || []).length ? T('newFrom', 'New from') + ' ' + m.from.join(', ') : '');
+        paintDot('mapsBrowser', mp.count || 0,
+                 (mp.authors || []).length ? T('newMapsFrom', 'New maps from') + ' ' + mp.authors.join(', ') : '');
+        window.dispatchEvent(new CustomEvent('bf-notify', { detail: d }));
+      })
+      .catch(function () {});
+  }
+
+  function startNotifications() {
+    loadNotifications();
+    clearInterval(notifyTimer);
+    notifyTimer = setInterval(loadNotifications, 30000);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) loadNotifications();
+    });
   }
 
   function build() {
@@ -240,6 +290,7 @@
     if (document.getElementById('bfHead')) return;
     build();
     loadMe();
+    startNotifications();
     if (window.I18N) I18N.apply(document.body);
 
     // при смене языка перевод должен лечь на всю страницу целиком,
@@ -262,7 +313,10 @@
     refreshCoins: function (n) {
       var c = document.getElementById('bfHeadCoins');
       if (c) { c.style.display = 'flex'; c.querySelector('span').textContent = n; }
-    }
+    },
+    // страницы дёргают это, когда сами разобрались с новым: Messages —
+    // открыв переписку, Maps Browser — отметив карты просмотренными
+    refreshNotifications: loadNotifications
   };
 
   /* Тихие звуки нажатий и т.п. нужны на любой странице, а не только в
@@ -271,7 +325,7 @@
      явно (как на game.html/editor.html). */
   if (!document.querySelector('script[src*="sound.js"]')) {
     var snd = document.createElement('script');
-    snd.src = 'sound.js?v=127';
+    snd.src = 'sound.js?v=128';
     document.head.appendChild(snd);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

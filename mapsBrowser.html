@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <title>AIBrofist — Maps Browser</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=127">
-<script src="theme.js?v=127"></script>
-<script src="device.js?v=127"></script>
+<link rel="stylesheet" href="ui.css?v=128">
+<script src="theme.js?v=128"></script>
+<script src="device.js?v=128"></script>
 <style>
 .mbFilters{display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:9px;margin-bottom:6px;align-items:center}
 .mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
@@ -102,9 +102,19 @@
 </head>
 <body>
 
+<style>
+/* Плашка «друзья выложили новые карты»: видна только тем, у кого такие
+   карты правда есть, и гаснет сама, как только страница отметила их
+   просмотренными (см. /maps/seen). */
+.mbNew{display:none;align-items:center;gap:9px;margin:-4px 0 14px;padding:10px 13px;
+  border:1px solid var(--green);border-radius:10px;background:var(--soft);font-size:13.5px;color:var(--ink)}
+.mbNew.on{display:flex}
+.mbNew b{color:var(--green)}
+</style>
 <div class="bfWrap">
   <div class="bfTitle" data-i18n="mapsBrowser">Maps Browser</div>
   <div class="bfSub" data-i18n="mapsSub">Карты игроков. Открывайте, играйте и оценивайте.</div>
+  <div class="mbNew" id="mbNew"></div>
 
   <div class="mbFilters">
     <select class="bfSelect" id="mbMode">
@@ -150,15 +160,15 @@
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=127">
-<script src="i18n.js?v=127"></script>
-<script src="coin.js?v=127"></script>
-<script src="skinRender.js?v=127"></script>
-<script src="skinAvatar.js?v=127" defer></script>
-<script src="shell.js?v=127"></script>
-<script src="abuseShow.js?v=127" defer></script>
-<script src="account.js?v=127" defer></script>
-<script src="owner.js?v=127" defer></script>
+<link rel="stylesheet" href="mobile.css?v=128">
+<script src="i18n.js?v=128"></script>
+<script src="coin.js?v=128"></script>
+<script src="skinRender.js?v=128"></script>
+<script src="skinAvatar.js?v=128" defer></script>
+<script src="shell.js?v=128"></script>
+<script src="abuseShow.js?v=128" defer></script>
+<script src="account.js?v=128" defer></script>
+<script src="owner.js?v=128" defer></script>
 <script>
 (function () {
   'use strict';
@@ -340,9 +350,41 @@
     if (e.key === 'Enter') { page = 1; load(); }
   });
 
+  /* Новые карты друзей. Сводку берём из того же /notifications, что
+     подсвечивает пункт меню, — чтобы плашка и значок всегда говорили
+     одно и то же. Сразу после показа отмечаем карты просмотренными:
+     игрок уже здесь, значок в меню должен погаснуть. */
+  function showNewMaps() {
+    fetch('/notifications', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var mp = (d && d.maps) || {};
+        if (mp.count) {
+          var who = (mp.authors || []).join(', ');
+          // одна карта и несколько — разные формы, иначе выходит «1 Новые карты»
+          var lbl = mp.count === 1 ? T('newMapFrom', 'New map from')
+                                   : T('newMapsFrom', 'New maps from');
+          $('mbNew').innerHTML = '<b>' + mp.count + '</b> ' + lbl + ' ' + esc(who);
+          $('mbNew').classList.add('on');
+        }
+        /* Отметку двигаем на КАЖДОМ заходе, а не только когда есть что
+           показать: именно первый заход и заводит точку отсчёта, от
+           которой считаются «новые» карты. Без этого у игрока, который
+           ещё ни разу сюда не заходил, отметки нет, и уведомление не
+           появится никогда. */
+        if (d && !d.guest) {
+          return fetch('/maps/seen', { method: 'POST', credentials: 'same-origin' })
+            .then(function () {
+              if (window.BFShell && BFShell.refreshNotifications) BFShell.refreshNotifications();
+            });
+        }
+      })
+      .catch(function () {});
+  }
+
   fetch('/whoAmI', { credentials: 'same-origin' })
     .then(function (r) { return r.json(); })
-    .then(function (d) { me = d; load(); })
+    .then(function (d) { me = d; load(); showNewMaps(); })
     .catch(load);
 
   window.addEventListener('bf-lang', load);
