@@ -1042,9 +1042,14 @@ io.on('connection', (socket) => {
     const base = st.seekerOdo ? (st.seekerOdo.get(socket.id) || 0) : 0;
     if ((player.odo || 0) - base < HS_MIN_DIST) return;
     st.caughtSet.add(targetId);
-    if (!account) return;   // гостю монеты не копим — как и раньше в addCoins
-    hsCreditAndNotify(socket, account, 1, 'hsCatch');
-    require('./quests.js').track(account, 'hs_catch');
+    // гостю монеты не копим — как и раньше в addCoins, но саму механику
+    // заражения это не должно затрагивать: гость-искатель ловит ничуть не
+    // хуже, просто без награды (раньше return тут обрывал ВЕСЬ catch —
+    // заражение и досрочный конец раунда для гостей-искателей не работали)
+    if (account) {
+      hsCreditAndNotify(socket, account, 1, 'hsCatch');
+      require('./quests.js').track(account, 'hs_catch');
+    }
 
     /* Заражение: пойманный не выбывает, а сам становится искателем и
        дальше охотится вместе с остальными. Отметку одометра снимаем

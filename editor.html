@@ -1506,7 +1506,6 @@ function step(){
       }
       // едем вместе с платформой — сдвиг применится в начале следующего шага
       if(o.moves || o.pushable) pl.rideOn = o;
-      pl.standPlat = o;   // бустер скорости платформы (см. platBoost) — любая, не только подвижная
     } else if(pl.vy < 0 && (!o.moves || fromBelow)){
       // удар головой снизу
       var upTo = Math.min(sp[1] - pl.y, capY);
@@ -1555,7 +1554,7 @@ function step(){
         // ближе крышка — игрока продавили в блок сверху, ставим на него
         pl.y -= Math.min(uPen, capY);
         if(pl.y + pl.h <= sp[0] + 0.01){
-          pl.ground = true; coy = COYOTE; pl.vy = 0; pl.selfJump = false; pl.standPlat = o;
+          pl.ground = true; coy = COYOTE; pl.vy = 0; pl.selfJump = false;
         }
       } else {
         // ближе низ — выпускаем вниз, а не выдёргиваем через весь блок наверх
@@ -1570,7 +1569,7 @@ function step(){
       if(up <= dn){
         pl.y -= Math.min(limY, up);
         if(pl.y + pl.h <= sp[0] + 0.01){
-          pl.ground = true; coy = COYOTE; pl.vy = 0; pl.selfJump = false; pl.rideOn = o; pl.standPlat = o;
+          pl.ground = true; coy = COYOTE; pl.vy = 0; pl.selfJump = false; pl.rideOn = o;
         }
       } else {
         pl.y += Math.min(limY, dn);
@@ -1581,6 +1580,34 @@ function step(){
        разбирает горизонтальный проход, наверх игрока не выдёргиваем. */
   });
   if(pl.ground) pl.wall = 0;
+
+  /* Кто именно сейчас несёт игрока (для «едем вместе» и для бустера
+     скорости — см. platBoost) решаем ПОСЛЕ всего цикла выше, а не внутри
+     него. Если пол собран из двух платформ, наложенных ровно друг на
+     друга (например, буст-полоса поверх обычного пола — обычный способ
+     сделать «бустер» в редакторе, не вырезая дыру в полу), то первая же
+     из них, какую цикл выше обработает, ставит ноги игрока вплотную к
+     общей грани — и проверка пересечения в начале следующей итерации
+     (pl.y+pl.h <= bb[1]) видит уже НЕ пересекающиеся хитбоксы у второй
+     платформы с той же гранью, хотя игрок стоит на ней точно так же.
+     Она просто не доходила до pl.rideOn/pl.standPlat, и побеждала всегда
+     только та платформа, что стоит раньше в sol — а не та, что реально
+     на виду. Здесь пересматриваем всех кандидатов заново по УЖЕ решённой
+     позиции ног и берём одного — с наибольшим индексом в objects[], то
+     есть верхнюю по z-порядку (см. кнопки «На зад»/«Вперёд» в редакторе:
+     они двигают объект именно в этом массиве, а не меняют id). */
+  if(pl.ground){
+    var footY = pl.y + pl.h, bestPlat = null, bestZ = -1;
+    sol.forEach(function(o){
+      var op = polyOf(o);
+      var osp = spanY(op, pl.x + 2, pl.x + pl.w - 2);
+      if(!osp || Math.abs(osp[0] - footY) > 1.5) return;
+      var z = objects.indexOf(o);
+      if(z > bestZ){ bestZ = z; bestPlat = o; }
+    });
+    pl.rideOn = (bestPlat && (bestPlat.moves || bestPlat.pushable)) ? bestPlat : null;
+    pl.standPlat = bestPlat;
+  }
 
   pl.hidden = false;
   near.forEach(function(o){
