@@ -2392,8 +2392,15 @@ function speedMul(l, v, fn){
   var i = document.createElement("input"); i.type = "text"; i.inputMode = "decimal";
   function fmt(n){ n = +n || 0; return (n < 0 ? "-x" : "x") + Math.abs(n); }
   function sanitize(s){
-    var neg = s.charAt(0) === "-";
-    var rest = neg ? s.slice(1) : s;
+    /* Минус ищем по всей строке, а не только в самом начале: курсор
+       после programmatic i.value= встаёт в конец поля, и печатая минус
+       обычным способом (после уже стоящих цифр) пользователь на самом
+       деле дописывает его В КОНЕЦ строки ("x5-"), а не перед x. Проверка
+       только charAt(0) тихо теряла такой минус — набрать замедление с
+       клавиатуры было попросту нечем, кроме как кликать в самое начало
+       поля. */
+    var neg = s.indexOf("-") !== -1;
+    var rest = s.replace(/-/g, "");
     if(rest.charAt(0) !== "x") rest = "x" + rest.replace(/x/g, "");
     var digits = rest.slice(1).replace(/[^0-9.]/g, "");
     var dot = digits.indexOf(".");

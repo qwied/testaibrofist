@@ -1493,6 +1493,9 @@
       $('gTimeBox').style.display = '';
       if (d.phase === 'round') {
         roulStop();
+        // «Твой шанс» был про уже прошедшую рулетку — весь раунд эта
+        // цифра ничего не значит и не должна висеть поверх охоты
+        hideChance();
         phase = 'round';
         phaseEnds = Date.now() + (Number(d.msLeft) || ROUND_MS);
         clearCaught();
@@ -1526,6 +1529,7 @@
         // общий лимит времени Story-сессии вышел — сервер обрывает цикл
         // лобби/раунд насовсем (см. hsEndStory в server.js)
         roulStop();
+        hideChance();
         phaseEnds = Date.now() + 1e12;
         banner(TR('storyTimeUpTitle', 'Time is up'), TR('storyTimeUpText', 'This Story session has ended.'), true);
       }
@@ -1548,6 +1552,9 @@
       if (!STORY) loadServerMap(d.map);
       if (d.phase === 'round') {
         roulStop();
+        // зашли посреди уже идущей охоты — рулетку не видели и не увидим,
+        // шансу тут показывать нечего
+        hideChance();
         if (d.seekerId) applySeeker(d.seekerId);
         // догоняем заражённых, добавленных уже после старта раунда —
         // applySeeker выше знает только про исходного искателя рулетки
