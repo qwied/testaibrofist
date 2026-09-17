@@ -27,8 +27,10 @@ ok('сбрасывается функцией', /function clearCaught/.test(src)
 ok('сброс в начале раунда', /clearCaught\(\);\s*\/\/ новый раунд/.test(src));
 ok('сброс при уходе в лобби', (src.match(/clearCaught\(\);/g) || []).length >= 2);
 ok('чужие тоже сбрасываются', /others\[id\]\.caught = false/.test(src));
-ok('чужие поимки слышны',   /if \(others\[id\]\.name === who\) others\[id\]\.caught = true;/.test(src));
-ok('имя сверяется целиком',  /\^\(\.\+\?\) caught/.test(src));
+// заражение теперь подтверждает только сервер (hsInfected), не разбор
+// чата — чужой не может подделать чужую поимку, отправив '<имя> caught!'
+ok('заражение только от сервера, не из чата', /socket\.on\('hsInfected'/.test(src) && !/function watchCaught/.test(src));
+ok('заражённый добавляется в общий список охотящихся', /hsSeekerIds\[id\] = true;/.test(src));
 
 console.log('\nконец раунда:');
 ok('проверка «все пойманы»', /function checkAllCaught/.test(src));
@@ -94,10 +96,18 @@ const srv = fs.readFileSync(__dirname + '/server.js', 'utf8');
 console.log('\nодометр в прятках (server.js):');
 ok('путь прячущегося считается с лобби', /st\.lobbyOdo = new Map\(\);/.test(srv)
                                    && /st\.lobbyOdo\.has\(m\.id\)\) \? st\.lobbyOdo\.get\(m\.id\)/.test(srv));
-ok('путь искателя считается за раунд',   /st\.seekerOdo = sp0 \? \(sp0\.odo \|\| 0\) : 0;/.test(srv)
-                                   && /\(player\.odo \|\| 0\) - \(st\.seekerOdo \|\| 0\) < HS_MIN_DIST/.test(srv));
+// seekerOdo теперь Map — своя отметка на каждого охотящегося (заражение
+// добавляет новых по ходу раунда, у каждого путь считается с момента
+// заражения, а не с чужого старта)
+ok('путь каждого искателя считается за раунд от своей отметки',
+    /st\.seekerOdo = new Map\(\[\[st\.seekerId, sp0 \? \(sp0\.odo \|\| 0\) : 0\]\]\);/.test(srv)
+    && /const base = st\.seekerOdo \? \(st\.seekerOdo\.get\(socket\.id\) \|\| 0\) : 0;/.test(srv)
+    && /\(player\.odo \|\| 0\) - base < HS_MIN_DIST/.test(srv));
 ok('за всю сессию путь больше не считают', !/if \(\(player\.odo \|\| 0\) < HS_MIN_DIST\) return;/.test(srv));
-ok('переподключённому искателю отметку сдвигают', /st\.seekerOdo = player\.odo \|\| 0;/.test(srv));
+ok('переподключённому искателю отметку сдвигают', /st\.seekerOdo\.set\(socket\.id, player\.odo \|\| 0\);/.test(srv));
+ok('заражённому отметку тоже ставят с нуля', /st\.seekerOdo\.set\(targetId, target\.odo \|\| 0\);/.test(srv));
+ok('гость-искатель тоже заражает (не только с монетами)',
+    /st\.seekerIds\.add\(targetId\);/.test(srv) && /io\.to\(room\)\.emit\('hsInfected'/.test(srv));
 
 console.log(fails ? '\nПРОВАЛЕНО проверок: ' + fails : '\nвсе проверки пройдены ✓');
 process.exit(fails ? 1 : 0);
