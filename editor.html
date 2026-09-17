@@ -1289,6 +1289,43 @@ function stepPushables(){
   }
 }
 
+/* Сколько из (dx,dy) поездки на платформе реально можно проехать, прежде
+   чем игрок влетит в объект, которого не касался до начала этого сдвига.
+   Режем путь на мелкие шаги вместо одного присваивания — иначе быстрая
+   платформа переносит игрока сквозь тонкую стену на пути, ни разу не
+   пересёкшись с ней ни в позиции «до», ни в позиции «после» (обычный
+   разбор столкновений сравнивает только эти две точки). Шаг 5px меньше
+   толщины любой разумной стены, а 200 шагов с запасом хватает даже на
+   самую размашистую платформу без ощутимой просадки кадра — это разовая
+   проверка, только пока игрок реально едет на чём-то. */
+function clampRideDelta(dx, dy, ride){
+  if(!dx && !dy) return {dx:0, dy:0};
+  var STEP = 5, MAX_STEPS = 200;
+  var dist = Math.max(Math.abs(dx), Math.abs(dy));
+  var steps = Math.min(MAX_STEPS, Math.max(1, Math.ceil(dist / STEP)));
+  var stepX = dx / steps, stepY = dy / steps;
+  var x0 = pl.x, y0 = pl.y, movedX = 0, movedY = 0;
+  for(var s = 0; s < steps; s++){
+    var nx = x0 + movedX + stepX, ny = y0 + movedY + stepY;
+    var near2 = nearby(Math.min(x0, nx) - 4, Math.min(y0, ny) - 4,
+                        Math.abs(nx - x0) + pl.w + 8, Math.abs(ny - y0) + pl.h + 8);
+    var blocked = false;
+    for(var i = 0; i < near2.length; i++){
+      var o = near2[i];
+      if(o === ride || !solid(o)) continue;
+      var bb = bbox(o);
+      if(nx >= bb[2] || nx+pl.w <= bb[0] || ny >= bb[3] || ny+pl.h <= bb[1]) continue;
+      // уже пересекались с этим объектом до сдвига — не наша забота здесь,
+      // это разберёт обычный разбор столкновений ниже
+      if(x0 < bb[2] && x0+pl.w > bb[0] && y0 < bb[3] && y0+pl.h > bb[1]) continue;
+      blocked = true; break;
+    }
+    if(blocked) break;
+    movedX += stepX; movedY += stepY;
+  }
+  return {dx: movedX, dy: movedY};
+}
+
 function step(){
   anim++;
   objects.forEach(function(o){
@@ -1319,9 +1356,18 @@ function step(){
      к верхней грани, — сдвиг накладывался дважды: платформа шла вниз
      и вжимала игрока внутрь, шла вверх — отрывала от себя и он парил
      в воздухе. Теперь игрок и платформа едут синхронно, а прижим к
-     грани только доводит его до места. */
+     грани только доводит его до места.
+
+     Сам сдвиг — разовое приращение позиции, а не пошаговое движение:
+     обычный разбор столкновений ниже видит только итог, а не путь до
+     него. Быстрая или размашистая платформа перепрыгивала тонкую стену
+     на пути насквозь, ни разу не пересёкшись с ней ни в кадре «до», ни
+     в кадре «после» — clampRideDelta режет сдвиг на мелкие шаги и
+     останавливает игрока у первого препятствия, которого там не было
+     до начала сдвига. */
   if(pl.ground && pl.rideOn && (pl.rideOn.moves || pl.rideOn.pushable)){
-    pl.x += pl.rideOn._dx||0; pl.y += pl.rideOn._dy||0;
+    var rideD = clampRideDelta(pl.rideOn._dx||0, pl.rideOn._dy||0, pl.rideOn);
+    pl.x += rideD.dx; pl.y += rideD.dy;
   }
   pl.rideOn = null;
 
