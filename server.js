@@ -648,9 +648,15 @@ function hsStartRound(io, room, st) {
     });
   /* То же и для искателя: от этой отметки в hsCatch считается, сколько он
      реально пробежал за раунд. Без неё хватало одного честного шага за всю
-     сессию, чтобы дальше ловить телепортом в каждом следующем раунде. */
+     сессию, чтобы дальше ловить телепортом в каждом следующем раунде.
+
+     seekerOdo — теперь Map, а не число: заражение (см. hsCatch) добавляет
+     в неё нового искателя со своей отметкой в момент заражения, поэтому
+     каждому нужно набрать честный путь заново, а не с чужого старта. */
   const sp0 = gameState.players.get(st.seekerId);
-  st.seekerOdo = sp0 ? (sp0.odo || 0) : 0;
+  st.seekerOdo = new Map([[st.seekerId, sp0 ? (sp0.odo || 0) : 0]]);
+  // заражение: кто сейчас охотится — сначала только тот, кого выбрала рулетка
+  st.seekerIds = new Set([st.seekerId]);
   st.caughtSet = new Set();
   io.to(room).emit('hsPhase', { phase: 'round', msLeft: HS_ROUND_MS,
     seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st) });
@@ -658,16 +664,27 @@ function hsStartRound(io, room, st) {
   st.timer = setTimeout(() => hsStartLobby(io, room, st), HS_ROUND_MS);
 }
 
-/* Досрочный конец раунда: искатель сообщил, что все пойманы. Верим только
-   текущему искателю и не больше одного раза за раунд — иначе спамом
+/* Досрочный конец раунда — общий путь для двух источников: сервер сам
+   замечает, что последнего прячущегося только что заразили (см. hsCatch),
+   и это основной путь теперь; клиентский hsCaught (искатель сообщил, что
+   все пойманы) остался подстраховкой на случай рассинхрона и просто
+   не сработает второй раз — caughtSent уже стоит. */
+function hsEndRoundEarly(room, st) {
+  if (st.caughtSent) return;
+  st.caughtSent = true;
+  clearTimeout(st.timer);
+  st.timer = setTimeout(() => hsStartLobby(io, room, st), 1400);
+}
+
+/* Клиентский отчёт «все пойманы». Верим только тому, кто сейчас реально
+   охотится (искателю или уже заражённому — заражение делает сикером
+   наравне с исходным), и не больше одного раза за раунд — иначе спамом
    сообщений можно было бы перескакивать раунды. */
 function hsOnCaught(room, socketId) {
   const st = hsRooms.get(room);
   if (!st || st.phase !== 'round' || st.caughtSent) return;
-  if (socketId !== st.seekerId) return;
-  st.caughtSent = true;
-  clearTimeout(st.timer);
-  st.timer = setTimeout(() => hsStartLobby(io, room, st), 1400);
+  if (!st.seekerIds || !st.seekerIds.has(socketId)) return;
+  hsEndRoundEarly(room, st);
 }
 
 /* Ушёл игрок: комната опустела — состояние долой; в лобби ушёл сам
@@ -866,10 +883,12 @@ io.on('connection', (socket) => {
         // искатель мог переподключиться с новым сокетом — возвращаем ему роль
         if (st.phase === 'round' && st.seekerName && st.seekerName === name
             && st.seekerId !== socket.id) {
+          if (st.seekerIds) { st.seekerIds.delete(st.seekerId); st.seekerIds.add(socket.id); }
+          if (st.seekerOdo) st.seekerOdo.delete(st.seekerId);
           st.seekerId = socket.id;
           // новый сокет — новый одометр с нуля, отметку раунда сдвигаем,
           // иначе искатель после переподключения никого не смог бы поймать
-          st.seekerOdo = player.odo || 0;
+          if (st.seekerOdo) st.seekerOdo.set(socket.id, player.odo || 0);
           io.to(room).emit('hsPhase', { phase: 'round',
             msLeft: Math.max(0, st.endsAt - Date.now()),
             seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st) });
@@ -885,7 +904,10 @@ io.on('connection', (socket) => {
         socket.emit('hsState', { phase: st.phase,
           msLeft: Math.max(0, st.endsAt - Date.now()),
           roundNum: st.roundNum,
-          seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st) });
+          seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st),
+          // догоняющему нужен весь список охотящихся — не только исходного
+          // искателя, но и всех, кого заразили до его входа (см. hsCatch)
+          seekerIds: st.seekerIds ? Array.from(st.seekerIds) : [] });
       }
     }
 
@@ -998,9 +1020,9 @@ io.on('connection', (socket) => {
     if (!player || String(player.room).indexOf('hideAndSeek:') !== 0) return;
     const room = player.room;
     const st = hsRooms.get(room);
-    if (!st || st.phase !== 'round' || st.seekerId !== socket.id) return;
+    if (!st || st.phase !== 'round' || !st.seekerIds || !st.seekerIds.has(socket.id)) return;
     const targetId = String((data && data.targetId) || '');
-    if (!targetId || targetId === socket.id) return;
+    if (!targetId || targetId === socket.id || st.seekerIds.has(targetId)) return;
     if (!st.caughtSet) st.caughtSet = new Set();
     if (st.caughtSet.has(targetId)) return;
     const target = gameState.players.get(targetId);
@@ -1014,13 +1036,28 @@ io.on('connection', (socket) => {
        «ловить» всех, не сходя с места. Чтобы дойти до жертвы по-честному,
        надо пройти путь: требуем реально пройденное расстояние за этот
        раунд (сам телепорт в счёт не идёт, см. MAX_STEP в movePlayer).
-       Считаем именно за раунд: по всей сессии одного честного шага
-       хватало бы, чтобы ловить телепортом во всех следующих раундах. */
-    if ((player.odo || 0) - (st.seekerOdo || 0) < HS_MIN_DIST) return;
+       Считаем именно за раунд, от отметки этого конкретного искателя:
+       у заражённого она снята в момент заражения (см. ниже), поэтому
+       общий пробег за всю сессию тут ни при чём. */
+    const base = st.seekerOdo ? (st.seekerOdo.get(socket.id) || 0) : 0;
+    if ((player.odo || 0) - base < HS_MIN_DIST) return;
     st.caughtSet.add(targetId);
     if (!account) return;   // гостю монеты не копим — как и раньше в addCoins
     hsCreditAndNotify(socket, account, 1, 'hsCatch');
     require('./quests.js').track(account, 'hs_catch');
+
+    /* Заражение: пойманный не выбывает, а сам становится искателем и
+       дальше охотится вместе с остальными. Отметку одометра снимаем
+       прямо сейчас — считаем ему путь с этого момента, а не всю сессию
+       (иначе телепорт-ловля была бы доступна ему сразу же). */
+    st.seekerIds.add(targetId);
+    if (!st.seekerOdo) st.seekerOdo = new Map();
+    st.seekerOdo.set(targetId, target.odo || 0);
+    io.to(room).emit('hsInfected', { id: targetId, name: target.name });
+
+    // прячущихся не осталось — раунд можно заканчивать, не дожидаясь таймера
+    const stillHiding = (st.roundMembers || []).some(m => !st.caughtSet.has(m.id));
+    if (!stillHiding) hsEndRoundEarly(room, st);
   });
 
   /* Race: старт запоминаем, финиш проверяем на его существование, ту же
