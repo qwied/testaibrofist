@@ -27,8 +27,7 @@
   var LOBBY_MS  = 30000;    // ожидание в Hide and Seek — 30 секунд
 
   var COLOR_NORMAL = '#111827';
-  var COLOR_SEEKER = '#1e6fe0';   // искатель — синий
-  var COLOR_CAUGHT = '#f97316';   // пойманный — оранжевый
+  var COLOR_SEEKER = '#1e6fe0';   // синяя полоса под ником у искателя (не цвет модели)
 
   var me = { name: '', role: 'hider', caught: false };
 
@@ -829,20 +828,28 @@
   }
 
   // ---------- роли ----------
+  /* Роль больше не красит модель: искателя видно по синей полосе под
+     ником (см. drawTag), а не по цвету фигуры — так его силуэт ничем не
+     выдаёт себя издалека, полоса читается только вблизи, у ника. */
   function applyColor() {
-    GAME.myColor = (me.role === 'seeker') ? COLOR_SEEKER
-                 : (me.caught ? COLOR_CAUGHT : COLOR_NORMAL);
+    GAME.myColor = COLOR_NORMAL;
   }
-  /* Пойманность живёт ровно один раунд. Раньше её снимали только у себя
-     и только при уходе в лобби, поэтому чужие фигуры оставались серыми
-     навсегда, а искатель не мог поймать их снова. */
+  /* Заражение (см. applyInfected) живёт ровно один раунд — новый раунд
+     обнуляет и список охотящихся, и пометки «уже был целью». Раньше её
+     снимали только у себя и только при уходе в лобби, поэтому чужие
+     фигуры оставались помеченными навсегда, а искатель не мог поймать
+     их снова. */
   function clearCaught() {
     me.caught = false;
     Object.keys(others).forEach(function (id) { others[id].caught = false; });
     caughtNames = {};
+    hsSeekerIds = {};
     applyColor();
   }
   var caughtNames = {};
+  // все, кто сейчас охотится в этом раунде — искатель, выбранный рулеткой,
+  // плюс каждый, кого заразили по ходу охоты (см. applyInfected)
+  var hsSeekerIds = {};
 
   function setRole(role) {
     me.role = role; me.caught = false;
@@ -880,7 +887,22 @@
 
   function applySeeker(id) {
     hsWinnerId = id;
+    hsSeekerIds[id] = true;
     setRole(id === socket.id ? 'seeker' : 'hider');
+  }
+
+  /* Заражение: пойманный не выбывает, а сам становится искателем.
+     Событие приходит от сервера (hsInfected) — только он решает, кого
+     поймали (см. hsCatch в server.js), клиент тут ничего не проверяет. */
+  function applyInfected(id, name) {
+    hsSeekerIds[id] = true;
+    if (id === socket.id) {
+      setRole('seeker');
+      if (window.BFSound) BFSound.death();
+    } else if (others[id]) {
+      others[id].caught = true;
+    }
+    log(TR('hsInfected', '{n} заражён и теперь тоже охотится').replace('{n}', esc(name || nameOfId(id))));
   }
 
   /* Твой шанс стать искателем в этом раунде — плашка в правом верхнем углу.
@@ -1429,7 +1451,12 @@
         speak(m.playerName, m.text);
         if (window.BFSound) BFSound.chat();
       }
-      watchCaught(m.playerId, m.text);
+    });
+
+    // заражение подтверждает только сервер (см. hsCatch) — не чат
+    socket.on('hsInfected', function (d) {
+      if (MODE !== 'hideAndSeek' || !d || !d.id) return;
+      applyInfected(d.id, d.name);
     });
 
     /* ---------- прятки: серверные события ---------- */
@@ -1461,6 +1488,10 @@
         clearCaught();
         if (!STORY) loadServerMap(d.map);
         if (d.seekerId) applySeeker(d.seekerId);
+        /* Охота начинается — искатель стартует со своей точки старта, а
+           не там, где стоял во время подготовки (мог сам уйти прятаться
+           заранее и подсмотреть, куда бегут остальные). */
+        if (me.role === 'seeker' && window.GAME && GAME.respawn) GAME.respawn();
         log(TR('roundStart', 'Раунд начался! 2 минуты'));
         if (window.BFSound) BFSound.go();
       } else if (d.phase === 'lobby') {
@@ -1503,6 +1534,12 @@
       if (d.phase === 'round') {
         roulStop();
         if (d.seekerId) applySeeker(d.seekerId);
+        // догоняем заражённых, добавленных уже после старта раунда —
+        // applySeeker выше знает только про исходного искателя рулетки
+        (d.seekerIds || []).forEach(function (id) {
+          hsSeekerIds[id] = true;
+          if (id === socket.id) setRole('seeker');
+        });
       } else {
         clearCaught();
         if (d.seekerId) {
@@ -1584,8 +1621,10 @@
     if (MODE === 'hideAndSeek' && me.role === 'seeker' && phase === 'round') {
       Object.keys(others).forEach(function (id) {
         var o = others[id];
-        // в охоте укрытие уже не спасает — иначе поймать было бы некого
-        if (o.caught) return;
+        // в охоте укрытие уже не спасает — иначе поймать было бы некого;
+        // уже заражённых (в т.ч. исходного искателя) тоже не трогаем —
+        // они .caught не выставляют себе, но входят в hsSeekerIds
+        if (o.caught || hsSeekerIds[id]) return;
         /* Сверяем по o.tx/o.ty — последней РЕАЛЬНОЙ полученной позиции,
            а не по o.x/o.y: те нарочно отрисовываются с задержкой (interp,
            32-150мс — см. sample()), чтобы чужие двигались плавно. Пока
@@ -1614,7 +1653,8 @@
     if (switching || phase !== 'round' || VIEW) return;
     var ids = Object.keys(others);
     if (!ids.length) return;                  // один в комнате — ловить некого
-    for (var i = 0; i < ids.length; i++) if (!others[ids[i]].caught) return;
+    // заражённые (искатели) в счёт не идут — важны только оставшиеся прячущиеся
+    for (var i = 0; i < ids.length; i++) if (!hsSeekerIds[ids[i]] && !others[ids[i]].caught) return;
 
     switching = true;
     log(TR('allCaughtT', 'Everyone caught — round over!'));
@@ -1626,28 +1666,6 @@
       else socket.emit('sendChat', { text: 'Everyone caught' });
     }
     setTimeout(function () { switching = false; if (!hsSync) advance(); }, 1200);
-  }
-
-  // пойманным считает тот, кого назвали в чате
-  function watchCaught(fromId, text) {
-    if (MODE !== 'hideAndSeek' || me.role === 'seeker') return;
-    /* Сообщение о поимке — обычный чат, а чат может отправить кто угодно.
-       Раньше любой игрок мог прислать «Чужое-имя поймана!» и подделать
-       чужой статус (вплоть до подставного «Все пойманы», досрочно
-       обрывающего раунд). Доверяем только тому, кто сейчас реально
-       искатель — его id сервер уже сообщил через hsPhase/hsRoulette. */
-    if (!hsWinnerId || fromId !== hsWinnerId) return;
-    /* Сообщение о поимке имеет вид «Имя caught!». Сверяем именно эту
-       форму: искать имя подстрокой нельзя — игрока с коротким именем
-       помечало бы пойманным от любой чужой реплики. */
-    var m = /^(.+?) caught/.exec(text);
-    if (!m) return;
-    var who = m[1];
-    if (who === me.name) { me.caught = true; applyColor(); if (window.BFSound) BFSound.death(); }
-    // чужие поимки тоже слышны: у прячущихся фигуры красятся синхронно
-    Object.keys(others).forEach(function (id) {
-      if (others[id].name === who) others[id].caught = true;
-    });
   }
 
   // все дошли до финиша — не ждём таймер, ставим новую карту
@@ -1709,16 +1727,16 @@
       var w = o.w || 22, h = o.h || 74;
       ctx.save();
       ctx.translate(o.x, o.y);
-      GAME.figure(w, h, o.caught ? COLOR_CAUGHT : (o.color || COLOR_NORMAL), true, o.skin || null);
+      GAME.figure(w, h, o.color || COLOR_NORMAL, true, o.skin || null);
       ctx.restore();
-      drawTag(ctx, o.name || '', o.say, o.x + w / 2, o.y, (o.h || 74));
+      drawTag(ctx, o.name || '', o.say, o.x + w / 2, o.y, (o.h || 74), !!hsSeekerIds[id]);
     });
     var p = GAME.pl;
     if (GAME.playing && me.name) {
       // свой ник в укрытии показываем бледным — напоминание, что тебя не видно
       ctx.save();
       if (GAME.hidden) ctx.globalAlpha = 0.35;
-      drawTag(ctx, me.name, typing, p.x + p.w / 2, p.y, p.h);
+      drawTag(ctx, me.name, typing, p.x + p.w / 2, p.y, p.h, MODE === 'hideAndSeek' && me.role === 'seeker');
       ctx.restore();
     }
   };
@@ -1753,7 +1771,7 @@
     ctx.fillText(t, x, y);
   }
 
-  function drawTag(ctx, name, say, cx, topY, h) {
+  function drawTag(ctx, name, say, cx, topY, h, seeker) {
     ctx.save();
     ctx.textAlign = 'center';
     ctx.lineJoin = 'round';
@@ -1769,6 +1787,16 @@
     ctx.strokeText(name, cx, topY + h + 17 * tk);
     ctx.fillStyle = '#ffffff';
     ctx.fillText(name, cx, topY + h + 17 * tk);
+
+    /* Роль искателя — не цвет модели, а короткая синяя полоса прямо под
+       ником (см. applyColor/applySeeker/applyInfected). У обычных игроков
+       её нет вовсе. */
+    if (seeker) {
+      var barW = Math.max(24, ctx.measureText(name).width) * tk;
+      var barY = topY + h + 21 * tk;
+      ctx.fillStyle = COLOR_SEEKER;
+      ctx.fillRect(cx - barW / 2, barY, barW, 3 * tk);
+    }
 
     // отправленная реплика плавно уплывает вверх и тает —
     // и не пропадает от того, что игрок уже набирает следующую
