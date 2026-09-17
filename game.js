@@ -753,6 +753,9 @@
   var SAY_FADE = 2600;
   var SAY_MAX = 4;
   var SAY_OUT = 500;            // сколько миллисекунд длится растворение
+  /* Отступ реплики от темени — облачко текста должно стоять отдельно над
+     головой, не приклеиваясь к ней (было 14-16px, вплотную к модели). */
+  var SAY_GAP = 38;
   /* Реплики копятся стопкой: новая не стирает предыдущую, а встаёт под
      ней. Раньше здесь лежала одна запись на игрока, поэтому второе
      сообщение затирало первое ещё до того, как его успевали прочитать. */
@@ -1129,12 +1132,18 @@
      ложились на другую геометрию — у одного игрока персонаж стоял на
      платформе, у другого «парил в воздухе» посреди пустоты. Теперь
      карту выбирает сервер и присылает её в hsPhase/hsState. */
-  function loadServerMap(m) {
+  /* cb зовётся, как только карта точно готова (и spawnPt в ней настоящий) —
+     синхронно, если карта уже та же самая, и после fetch, если пришлось
+     грузить новую. Без этого «телепорт сикера на спавн» в hsPhase иногда
+     стрелял ДО того, как первая карта комнаты вообще успевала прийти по
+     сети: GAME.respawn() отрабатывал по ещё пустому/старому spawnPt, и
+     сикер оставался на месте как ни в чём не бывало. */
+  function loadServerMap(m, cb) {
     /* Карты режима на сервере может не быть вовсе (владелец ни одной не
        добавил в игру). Показываем то же «нет карты», что показывал
        nextMap() раньше, а не оставляем вечное «Loading map…». */
-    if (!m || !m.mapName) { if (!currentMap) showMap(null); return; }
-    if (currentMap && currentMap.mapName === m.mapName && currentMap.author === m.author) return;
+    if (!m || !m.mapName) { if (!currentMap) showMap(null); if (cb) cb(); return; }
+    if (currentMap && currentMap.mapName === m.mapName && currentMap.author === m.author) { if (cb) cb(); return; }
     fetch('/getMapData?author=' + encodeURIComponent(m.author || '')
         + '&mapName=' + encodeURIComponent(m.mapName))
       .then(function (r) { return r.json(); })
@@ -1142,8 +1151,9 @@
         showMap(md ? { mapName: m.mapName, author: m.author, mapData: md } : null);
         if (md) log(TR('mapLog', 'Карта: ') + '<b>' + esc(m.mapName) + '</b>'
                     + TR('byWord', ' от ') + esc(m.author), 's');
+        if (cb) cb();
       })
-      .catch(function () {});
+      .catch(function () { if (cb) cb(); });
   }
 
   function loadStoryMap() {
@@ -1486,12 +1496,17 @@
         phase = 'round';
         phaseEnds = Date.now() + (Number(d.msLeft) || ROUND_MS);
         clearCaught();
-        if (!STORY) loadServerMap(d.map);
         if (d.seekerId) applySeeker(d.seekerId);
         /* Охота начинается — искатель стартует со своей точки старта, а
            не там, где стоял во время подготовки (мог сам уйти прятаться
-           заранее и подсмотреть, куда бегут остальные). */
-        if (me.role === 'seeker' && window.GAME && GAME.respawn) GAME.respawn();
+           заранее и подсмотреть, куда бегут остальные). Ждём, пока карта
+           точно готова (см. loadServerMap) — на первом раунде свежей
+           комнаты она ещё грузится по сети, и respawn() до этого момента
+           работал по пустому/старому spawnPt и никуда не телепортировал. */
+        var teleportSeeker = function () {
+          if (me.role === 'seeker' && window.GAME && GAME.respawn) GAME.respawn();
+        };
+        if (!STORY) loadServerMap(d.map, teleportSeeker); else teleportSeeker();
         log(TR('roundStart', 'Раунд начался! 2 минуты'));
         if (window.BFSound) BFSound.go();
       } else if (d.phase === 'lobby') {
@@ -1812,14 +1827,17 @@
         // каждая следующая реплика висит ниже предыдущей и не наезжает
         var lift = (list.length - 1 - si) * 15 * tk;
         /* Растворение занимает последние полсекунды жизни, а не четверть
-           срока: так оно одинаково плавное и у долгих, и у состаренных
-           досрочно реплик. */
+           срока: так оно одинаково плавное и у состаренных досрочно реплик. */
         var outFrom = 1 - SAY_OUT / SAY_FADE;
         ctx.globalAlpha = k < outFrom ? 1 : Math.max(0, 1 - (k - outFrom) / (1 - outFrom));
         ctx.font = (15 * tk) + 'px sans-serif';
         var lines = wrapSay(sp.text, touch ? 24 : 34);
         for (var li = 0; li < lines.length; li++) {
-          var ly = topY - (16 + (lines.length - 1 - li) * 16) * tk - lift - k * 46 * tk;
+          /* SAY_GAP — облачко реплики стоит отдельно над головой, а не
+             сразу над теменем: раньше оно рисовалось впритык (16px) и
+             читалось как ярлык, приклеенный к модели. Всплытие при
+             растворении (k*46) добавляется поверх этого базового отступа. */
+          var ly = topY - (SAY_GAP + (lines.length - 1 - li) * 16) * tk - lift - k * 46 * tk;
           paintSay(ctx, lines[li], cx, ly, tk);
         }
       }
@@ -1829,7 +1847,7 @@
     // то, что печатают прямо сейчас — ниже уплывающей реплики, чтобы не наложились
     if (say) {
       ctx.font = (15 * tk) + 'px sans-serif';
-      paintSay(ctx, cleanSay(say), cx, topY - 14 * tk, tk, '#6b7280');
+      paintSay(ctx, cleanSay(say), cx, topY - SAY_GAP * tk, tk, '#6b7280');
     }
     ctx.restore();
   }
