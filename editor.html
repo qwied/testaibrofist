@@ -2721,6 +2721,15 @@ window.GAME = BRIDGE = {
     if(mode === "sandbox" || mode === "twoPlayer") mode = "hideAndSeek";
     // объекты чужого режима в карту не пускаем
     objects = objects.filter(function(o){ return allowedIn(o.type, mode); });
+    /* Самодельные/очень старые карты не всегда проставляют id. nearby()
+       различает объекты именно по id — два объекта без id схлопывались в
+       один ключ, и один из них (например, весь пол) пропадал из физики
+       целиком при тестовом запуске карты кнопкой «▶». */
+    (function(){
+      var nextId = objects.reduce(function(m, o){ return Math.max(m, (o.id||0)+1); }, 1);
+      objects.forEach(function(o){ if(!o.id) o.id = nextId++; });
+      uid = Math.max(uid || 1, nextId);
+    })();
     // в старых картах галочки не было — восстанавливаем прежнее поведение
     objects.forEach(function(o){
       if(o.deadly === undefined && DEADLY_BY_DEFAULT.indexOf(o.type) !== -1) o.deadly = true;

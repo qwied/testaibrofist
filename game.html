@@ -2516,12 +2516,31 @@ window.GAME = BRIDGE = {
   loadMap: function(json){
     var d = (typeof json === "string") ? JSON.parse(json) : json;
     if(playing) stop();
-    objects = (d.objects || []).map(function(o){ return Object.assign({}, o); });
+    // Object.assign копирует через обычное присваивание — ключ "__proto__"
+    // в объекте из чужой карты через него подменяет прототип именно этой
+    // копии (карту играют все, кто зашёл в комнату — не только автор).
+    // Копируем ключи вручную и этот один пропускаем, как в редакторе.
+    objects = (d.objects || []).map(function(o){
+      var out = {};
+      Object.keys(o).forEach(function(k){
+        if (k !== "__proto__" && k !== "constructor" && k !== "prototype") out[k] = o[k];
+      });
+      return out;
+    });
     if(d.mode) mode = d.mode;
     // режимы sandbox и twoPlayer убраны — старые карты открываем как прятки
     if(mode === "sandbox" || mode === "twoPlayer") mode = "hideAndSeek";
     // объекты чужого режима в карту не пускаем
     objects = objects.filter(function(o){ return allowedIn(o.type, mode); });
+    /* Самодельные/очень старые карты не всегда проставляют id. nearby()
+       различает объекты именно по id (see комментарий там про телепорт
+       на статичной геометрии) — два объекта без id схлопывались в один
+       ключ, и один из них (например, весь пол) пропадал из физики
+       целиком: игрок падал сквозь карту насквозь. */
+    (function(){
+      var nextId = objects.reduce(function(m, o){ return Math.max(m, (o.id||0)+1); }, 1);
+      objects.forEach(function(o){ if(!o.id) o.id = nextId++; });
+    })();
     // в старых картах галочки не было — восстанавливаем прежнее поведение
     objects.forEach(function(o){
       if(o.deadly === undefined && DEADLY_BY_DEFAULT.indexOf(o.type) !== -1) o.deadly = true;
