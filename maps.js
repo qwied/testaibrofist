@@ -31,6 +31,7 @@ const TOOL_MODES = {
   button:null, lever:null, water:null,
   cover:['hideAndSeek'],
   checkpoint:['race'],
+  superGate:['race'],
   // устаревшие типы — принимаем, но в палитре их больше нет
   poison:null, spike:null, bounce:null, platform:null, rotator:null,
   door:null, seeker:null, liquid:null, box:null
@@ -38,6 +39,7 @@ const TOOL_MODES = {
 const TOOL_RU = {
   cover:'Cover', seeker:'Seeker', door:'Door', button:'Button',
   lever:'Lever', checkpoint:'Checkpoint', finishline:'Finish', water:'Water',
+  superGate:'SUPER BRO gate',
   liquid:'Liquid'
 };
 
