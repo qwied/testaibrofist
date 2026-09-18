@@ -257,6 +257,7 @@ body{background:#eef2f8;overflow:hidden}
   <div id="exitBtn" data-i18n="edExit">Выйти</div>
   <div class="stat"><i>⏱</i><span id="sTime">0.0</span></div>
   <div class="stat" data-i18n-title="edDeathTip" title="смертей"><i data-i18n="hudDeathLabel">Смерти</i><span id="sDeath">0</span></div>
+  <div class="stat" id="sSuperBox" style="display:none"><i>⚡</i><span>SUPER BRO</span> <span id="sSuper">0</span>s</div>
 </div>
 <div id="msg"><h1 id="msgT"></h1><p id="msgS"></p></div>
 
@@ -614,6 +615,24 @@ var PAINT = {
     }
     ctx.strokeStyle = C.stone3; ctx.lineWidth = 1.6; ctx.strokeRect(.8,.8,o.w-1.6,o.h-1.6);
   },
+  superGate: function(o){
+    var pulse = (Math.sin(anim*0.08)+1)/2;   // дыхание свечения — как волна у чекпоинта
+    ctx.fillStyle = C.gate2;
+    rr(0, 0, o.w, o.h, Math.min(10, o.w*0.22)); ctx.fill();
+    ctx.fillStyle = C.gate1;
+    rr(o.w*0.12, o.h*0.06, o.w*0.76, o.h*0.88, Math.min(8, o.w*0.18)); ctx.fill();
+    ctx.fillStyle = C.gold1;
+    ctx.globalAlpha = 0.55 + pulse*0.45;
+    ctx.beginPath();
+    ctx.moveTo(o.w*0.56, o.h*0.1);
+    ctx.lineTo(o.w*0.34, o.h*0.52);
+    ctx.lineTo(o.w*0.48, o.h*0.52);
+    ctx.lineTo(o.w*0.4, o.h*0.9);
+    ctx.lineTo(o.w*0.66, o.h*0.42);
+    ctx.lineTo(o.w*0.5, o.h*0.42);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+  },
 };
 
 /* ══════════════════════════════════════════════════
@@ -635,7 +654,13 @@ var TOOLS = [
   {t:"lever",      n:"Рычаг",       k:"toolLever",      m:ALL},
   // только гонка
   {t:"checkpoint", n:"Чекпоинт",    k:"toolCheckpoint", m:"race"},
-  {t:"finishline", n:"Финиш",       k:"toolFinish",     m:"race"}
+  {t:"finishline", n:"Финиш",       k:"toolFinish",     m:"race"},
+  /* Идея из старой обратной связи: «дотронулся до ворот — стал SUPER BRO»
+     (см. TOOL_MODES.superGate в maps.js и обработку в step()). Только
+     полёт (пониженная гравитация) и иммунитет к опасностям, ограниченные
+     по времени — оживление «призраков» не переносим: в Race нет самого
+     понятия призрака/заражения, которое есть в прятках. */
+  {t:"superGate",  n:"Ворота SUPER BRO", k:"toolSuperGate", m:"race"}
 ];
 var MODE_OF = {};
 TOOLS.forEach(function(T){ MODE_OF[T.t] = T.m; });
@@ -657,14 +682,14 @@ var INK = "#111827";
 var COLORS = {
   rect:INK, circle:INK, triangle:INK, text:INK,
   button:INK, lever:INK,
-  checkpoint:"", finishline:"", spawn:INK
+  checkpoint:"", finishline:"", spawn:INK, superGate:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
    Игрок 20x60, ровно три клетки в высоту. */
 var SIZES = {
   rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24],
   button:[34,18], lever:[22,42],
-  checkpoint:[30,64], finishline:[42,86], spawn:[20,60]
+  checkpoint:[30,64], finishline:[42,86], spawn:[20,60], superGate:[44,90]
 };
 var SOLID  = ["rect","circle","triangle"];
 /* Раньше яд, шипы и ротатор убивали просто потому, что так называются.
@@ -923,6 +948,8 @@ var JUMP_H = 155, MAX_VX = 5.2, FRIC = 0, AIR = 0.85,
     COYOTE = 6, BUFFER = 7, WALL_SLIDE = 2.2, WALL_VX = 6.2, STEP_UP = 16,
     MIN_HOLD = 7,   // столько кадров длится подъём прыжка, дальше он всегда обрывается
     STUCK_WINDOW = 150;   // окно сторожа застревания в прятках — см. respawn()/step()
+// SUPER BRO (ворота superGate, только Race) — длительность бафа полёта/иммунитета, мс
+var SUPER_MS = 8000, SUPER_GRAVITY = 0.32;
 function G(){ return gravityScale * 0.062; }          // 9 → 0.558 px/кадр²
 function jumpV(){ return -Math.sqrt(2 * Math.max(0.02, G()) * JUMP_H); }  // constant hop height
 /* Heavier gravity shortens airtime, so speed scales with it — otherwise a map
@@ -936,7 +963,7 @@ function maxFall(){ return 12 + gravityScale * 0.8; }
 function platBoost(o){ return (o && o.speedMul) ? Math.max(0.05, 1 + (+o.speedMul || 0)) : 1; }
 
 var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,selfJump:false,hidden:false,
-  rideOn:null, standPlat:null,
+  rideOn:null, standPlat:null, superUntil:0,
 };
 var keys = {l:false,r:false,u:false};
 var coy = 0, buf = 0, hold = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
@@ -989,7 +1016,7 @@ function restartRun(){
 
 function respawn(){
   pl.x = spawnPt.x; pl.y = spawnPt.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
-  pl.rideOn = null;
+  pl.rideOn = null; pl.superUntil = 0;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
 }
 function die(){
@@ -1337,6 +1364,11 @@ function step(){
 
   timeMs += 16.67;
   document.getElementById("sTime").textContent = (timeMs/1000).toFixed(1);
+  var superOn = mode === "race" && pl.superUntil > timeMs, superBox = document.getElementById("sSuperBox");
+  if(superBox){
+    superBox.style.display = superOn ? "" : "none";
+    if(superOn) document.getElementById("sSuper").textContent = Math.ceil((pl.superUntil - timeMs)/1000);
+  }
 
   /* Поездка на движущейся платформе.
      Смещение платформы применяется ОДИН раз и ДО собственной физики
@@ -1414,7 +1446,8 @@ function step(){
        зависит от удержания. */
     if(pl.vy < 0 && pl.selfJump && hold > MIN_HOLD) pl.vy += G()*0.5;
 
-    pl.vy += G();
+    // SUPER BRO (см. superGate ниже): пониженная гравитация — эффект полёта
+    pl.vy += G() * ((mode === "race" && pl.superUntil > timeMs) ? SUPER_GRAVITY : 1);
     // трение о стену — только в воздухе
     if(pl.wall !== 0 && pl.vy > WALL_SLIDE) pl.vy -= (pl.vy - WALL_SLIDE) * 0.55;
     var fallCap = maxFall();
@@ -1658,7 +1691,19 @@ function step(){
       if(o.type === "lever") o._latch = false;
       return;
     }
-    if(hazard(o)){ die(); return; }
+    if(hazard(o)){
+      // SUPER BRO: пока баф активен, опасности не убивают (только Race — см. superGate)
+      if(!(mode === "race" && pl.superUntil > timeMs)){ die(); return; }
+    }
+    if(o.type === "superGate" && mode === "race"){
+      // не спамим звук/частицы каждый кадр, пока игрок стоит в воротах —
+      // только когда касание реально продлевает баф
+      if(pl.superUntil < timeMs + SUPER_MS - 200){
+        burst(o.x+o.w/2, o.y+o.h/2, 18, C.gate1, 3.4, 36);
+        if(window.BFSound) BFSound.checkpoint();
+      }
+      pl.superUntil = timeMs + SUPER_MS;
+    }
     if(o.type === "checkpoint" && !o._reached){
       o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h};
       burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
@@ -2396,7 +2441,7 @@ function inspect(){
   grp(TR("grpGameProps","Игровые свойства"));
   /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Яд»
      там бы включала свойство, которое физика всё равно игнорирует. */
-  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline"].indexOf(sel.type) === -1)
+  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline","superGate"].indexOf(sel.type) === -1)
     chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
   if(SOLID.indexOf(sel.type) !== -1)
     chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; });
