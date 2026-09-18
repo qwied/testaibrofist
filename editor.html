@@ -927,7 +927,7 @@ var keys = {l:false,r:false,u:false};
 var coy = 0, buf = 0, hold = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
 var deaths = 0, timeMs = 0, shake = 0, acc = 0, last = 0, lastStepAt = -9999;
 /* Сторож застревания в прятках — см. комментарий у STUCK_WINDOW ниже. */
-var stuckFrames = 0, stuckAir = 0, stuckMinX = 0, stuckMaxX = 0, stuckMinY = 0, stuckMaxY = 0;
+var stuckFrames = 0, stuckAir = 0, stuckHeld = 0, stuckMinX = 0, stuckMaxX = 0, stuckMinY = 0, stuckMaxY = 0;
 
 /* Где игрок относительно воды: верхняя кромка, под водой ли голова
    и не кислота ли это. Считается по тем же объектам, что и коллизии. */
@@ -1005,7 +1005,7 @@ function restartRun(){
 function respawn(){
   pl.x = spawnPt.x; pl.y = spawnPt.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
   pl.rideOn = null;
-  stuckFrames = 0; stuckAir = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
+  stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
 }
 function die(){
   // в прятках умереть нельзя вообще — единая точка входа для любой смерти
@@ -1711,29 +1711,41 @@ function step(){
      падение за карту — но держа прыжок над неполным уступом без бокового
      движения, игрок никуда не падает вовсе: приземление тут же снимается
      held-буфером на новый прыжок, а высоты хватает ровно чтобы упасть
-     обратно на тот же уступ, кадр в кадр, сколько угодно долго. Отличаем
-     это от честного «стою и прячусь»: там pl.ground почти всё время true,
-     а у застрявшего — почти всё время false (в воздухе).
+     обратно на тот же уступ, кадр в кадр, сколько угодно долго.
 
-     Смотрим не на сдвиг между началом и концом окна (это сравнение можно
-     было обмануть чистой фазой колебания — окно из ~4 циклов подпрыгивания
-     иногда случайно начинается и заканчивается почти в одной и той же точке
-     дуги, хотя игрок всё это время никуда не продвигается), а на размах:
-     сколько всего пространства игрок занял за окно по X и по Y. */
+     Первая версия сторожа судила только по размаху (мало места + почти
+     всё время в воздухе) — и подловила честного игрока: аккуратный
+     платформинг короткими тапами прыжка в тесной шахте (частые прыжки,
+     скромное продвижение) выглядит для этих двух признаков один в один
+     как застревание, хотя человек играет нормально и постепенно
+     продвигается. Итог — игрока откидывало на спавн посреди обычной игры,
+     раз за разом, на вид неотличимо от «вообще не могу двигаться».
+
+     Настоящий баг рождается не от тесноты и не от частых прыжков самих
+     по себе, а конкретно от УДЕРЖАНИЯ кнопки прыжка: только тогда
+     срабатывает мгновенный автоповтор — приземление в тот же кадр снова
+     запускает прыжок, без единого кадра на то, чтобы игрок успел бы
+     подвинуться в сторону. Обычный тап (нажал-отпустил на каждый прыжок,
+     как и играет любой человек) такого не даёт: между прыжками всегда
+     есть кадр с отпущенной кнопкой. Поэтому теперь размах — только
+     дополнительная страховка, а решающее условие — кнопка прыжка была
+     зажата почти всё окно целиком. */
   if(mode === "hideAndSeek"){
     if(pl.x < stuckMinX) stuckMinX = pl.x; if(pl.x > stuckMaxX) stuckMaxX = pl.x;
     if(pl.y < stuckMinY) stuckMinY = pl.y; if(pl.y > stuckMaxY) stuckMaxY = pl.y;
     stuckFrames++;
     if(!pl.ground) stuckAir++;
+    if(keys.u) stuckHeld++;
     if(stuckFrames >= STUCK_WINDOW){
-      if(stuckAir / stuckFrames > 0.6 && (stuckMaxX - stuckMinX) < 200 && (stuckMaxY - stuckMinY) < 200){
+      if(stuckHeld / stuckFrames > 0.85 && stuckAir / stuckFrames > 0.6 &&
+         (stuckMaxX - stuckMinX) < 200 && (stuckMaxY - stuckMinY) < 200){
         respawn();   // respawn() сам обнуляет окно сторожа
       } else {
-        stuckFrames = 0; stuckAir = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
+        stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
       }
     }
   } else {
-    stuckFrames = 0; stuckAir = 0;
+    stuckFrames = 0; stuckAir = 0; stuckHeld = 0;
   }
 }
 function drive(src){
