@@ -1935,6 +1935,13 @@
     var move = e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' ||
                e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyD';
     if (!move) e.stopPropagation();
+    /* Держать W/A/D — это ходьба, а не печать: ОС повторяет keydown
+       десятки раз в секунду, пока клавиша зажата (e.repeat), и без этой
+       проверки за пару секунд в черновик набивалась стена из одной и той
+       же буквы под завязку maxlength — экран закрывало текстом, хотя сам
+       игрок продолжал идти нормально. Один настоящий тап всё ещё
+       печатается как обычно — блокируем только повторы. */
+    if (e.repeat && (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyD')) e.preventDefault();
     if (e.key === 'Enter') {
       e.preventDefault();
       sendTyped();                          // гасим набор, но фокус не теряем
