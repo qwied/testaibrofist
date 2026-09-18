@@ -786,6 +786,7 @@ io.on('connection', (socket) => {
   const limPing = socketLimiter(2, 12);      // замер задержки — раз в пару секунд
   const limHsCatch = socketLimiter(8, 30);   // индивидуальных поимок в комнате в раунде немного, но с запасом
   const limRace = socketLimiter(3, 10);      // старт/финиш забега — не гоночный протокол сам по себе
+  const limDraw = socketLimiter(2, 6);       // линии на карте — не спамить кистью
   let joinedAt = 0;
 
   /* Замер задержки: клиент присылает свою метку времени, сервер возвращает
@@ -856,7 +857,8 @@ io.on('connection', (socket) => {
       gameMode: mode,
       room: room,
       position: { x: Math.random() * 800, y: Math.random() * 600 },
-      joinedAt: Date.now()
+      joinedAt: Date.now(),
+      linesUsed: 0    // «нарисовать линию» — ограниченное число раз за вход, см. drawLine
     };
 
     gameState.players.set(socket.id, player);
@@ -1022,6 +1024,29 @@ io.on('connection', (socket) => {
 
       io.to(room).emit('chatMessage', message);
     }
+  });
+
+  /* Линия на карте — «покажи дорогу»: рисуется мышью/пальцем поверх игры,
+     видна всем в комнате пару секунд и сама гаснет (клиент решает, когда
+     убрать — сервер только разносит точки и ограничивает количество
+     линий за вход, чтобы не заспамили карту). */
+  const MAX_LINES_PER_JOIN = 8;
+  const MAX_LINE_POINTS = 300;
+  socket.on('drawLine', (data) => {
+    if (limDraw()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || !data || !Array.isArray(data.points)) return;
+    player.linesUsed = (player.linesUsed || 0) + 1;
+    if (player.linesUsed > MAX_LINES_PER_JOIN) {
+      socket.emit('drawLineQuota', { left: 0 });
+      return;
+    }
+    const pts = data.points.slice(0, MAX_LINE_POINTS)
+      .filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.y))
+      .map(p => ({ x: Math.max(-20000, Math.min(20000, p.x)), y: Math.max(-20000, Math.min(20000, p.y)) }));
+    if (pts.length < 2) return;
+    io.to(player.room).emit('drawLine', { playerId: socket.id, points: pts });
+    socket.emit('drawLineQuota', { left: Math.max(0, MAX_LINES_PER_JOIN - player.linesUsed) });
   });
 
   socket.on('getChatHistory', () => {

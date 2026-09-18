@@ -162,6 +162,12 @@
     + 'display:flex;align-items:center;justify-content:center}'
     + '#gSound svg{width:17px;height:17px;display:block;pointer-events:none}'
     + '#gSound:active{background:#f2f7fd}'
+    + '#gDraw{background:#fff;color:#111827;border:1px solid #d7dee7;width:32px;height:32px;'
+    + 'border-radius:8px;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center}'
+    + '#gDraw svg{width:17px;height:17px;display:block;pointer-events:none}'
+    + '#gDraw:active{background:#f2f7fd}'
+    + '#gDraw.on{background:#2196F3;color:#fff;border-color:#2196F3}'
+    + '#gDraw.limit{opacity:.4;cursor:default}'
     + '#gMap{position:fixed;right:12px;bottom:12px;z-index:60;background:rgba(255,255,255,.92);'
     + 'border:1px solid #d7dee7;border-radius:9px;padding:8px 13px;font:12.5px sans-serif;max-width:46vw}'
     + '#gMap .n{font-weight:bold;color:#111827;word-break:break-word}'
@@ -350,6 +356,9 @@
     + '<span><span id="gLblPing">Пинг</span>: <b id="gPing">—</b></span>'
     + '<span id="gTimeBox"><span id="gLblTime">Время</span>: <b id="gTime">—</b></span>'
     + '<button id="gSound" aria-label="Звук"></button>'
+    + '<button id="gDraw" aria-label="Draw" title="Draw a line for others to see"><svg viewBox="0 0 24 24" '
+    + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+    + '<path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></button>'
     + '<button id="gExit">Меню</button></div>'
     + '<div id="gMap"><div class="n" id="gMapName">Loading map…</div>'
     + '<div class="a" id="gMapAuthor"></div><div class="rate" id="gRate" style="display:none">'
@@ -437,6 +446,64 @@
     b.innerHTML = BFSound.isOn() ? SOUND_ON_SVG : SOUND_OFF_SVG;
     b.setAttribute('aria-label', TR('soundBtn', 'Sound'));
   }
+
+  /* ---------- линия на карте: показать дорогу другим ----------
+     Кнопка включает режим рисования — дальше зажатие мыши/пальца прямо
+     на канвасе ведёт линию в мировых координатах (переводим через
+     GAME.view — тот же x/y/s, которым движок сам двигает камеру).
+     Готовая линия сразу видна себе (не ждём круга через сервер — тот же
+     приём, что у своей реплики в чате), остальным — как только долетит
+     drawLine. Гаснет через DRAW_FADE мс, отдельно рисовать не нужно —
+     onDraw просто выкидывает устаревшие перед каждым кадром. */
+  var DRAW_FADE = 3000;
+  var drawMode = false, curLine = null, lines = [];
+  var canvasEl = $('c');
+  function toWorld(clientX, clientY) {
+    var r = canvasEl.getBoundingClientRect();
+    var v = GAME.view;
+    return { x: (clientX - r.left - v.x) / v.s, y: (clientY - r.top - v.y) / v.s };
+  }
+  var gDraw = $('gDraw');
+  if (gDraw && canvasEl) {
+    gDraw.onclick = function () {
+      drawMode = !drawMode;
+      gDraw.classList.toggle('on', drawMode);
+      canvasEl.style.touchAction = drawMode ? 'none' : '';
+    };
+    canvasEl.addEventListener('pointerdown', function (e) {
+      if (!drawMode || gDraw.classList.contains('limit')) return;
+      curLine = { points: [toWorld(e.clientX, e.clientY)], born: 0 };
+      e.preventDefault();
+    });
+    canvasEl.addEventListener('pointermove', function (e) {
+      if (!curLine) return;
+      var p = toWorld(e.clientX, e.clientY);
+      var last = curLine.points[curLine.points.length - 1];
+      // точка только если реально сдвинулись — иначе на медленной мыши
+      // линия превращается в сотни точек в одном месте
+      if (Math.hypot(p.x - last.x, p.y - last.y) > 4) curLine.points.push(p);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (t) {
+      canvasEl.addEventListener(t, function () {
+        if (!curLine) return;
+        if (curLine.points.length > 1) {
+          curLine.born = Date.now();
+          lines.push(curLine);
+          if (socket) socket.emit('drawLine', { points: curLine.points });
+        }
+        curLine = null;
+      });
+    });
+  }
+  // мост для автотестов — тем же приёмом, что __bfChatDebug выше.
+  // get lines() — не сырая ссылка: onDraw пересоздаёт массив на filter()
+  // каждый кадр, старая ссылка иначе тут же устареет
+  if (/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname)) {
+    window.__bfDrawDebug = { get lines() { return lines; }, toWorld: toWorld, setDrawMode: function (v) {
+      drawMode = !!v; if (gDraw) gDraw.classList.toggle('on', drawMode);
+    } };
+  }
+
   if (window.BFSound) {
     paintSoundBtn();
     $('gSound').onclick = function () { BFSound.setOn(!BFSound.isOn()); paintSoundBtn(); };
@@ -1526,6 +1593,16 @@
       }
     });
 
+    // своя линия уже нарисована локально на pointerup — этот же ID
+    // просто эхо с сервера, было бы вдвойне
+    socket.on('drawLine', function (d) {
+      if (!d || d.playerId === socket.id || !Array.isArray(d.points) || d.points.length < 2) return;
+      lines.push({ points: d.points, born: Date.now() });
+    });
+    socket.on('drawLineQuota', function (d) {
+      if (gDraw) gDraw.classList.toggle('limit', !!(d && d.left <= 0));
+    });
+
     // заражение подтверждает только сервер (см. hsCatch) — не чат
     socket.on('hsInfected', function (d) {
       if (MODE !== 'hideAndSeek' || !d || !d.id) return;
@@ -1824,7 +1901,28 @@
       drawTag(ctx, me.name, typing, p.x + p.w / 2, p.y, p.h, MODE === 'hideAndSeek' && me.role === 'seeker');
       ctx.restore();
     }
+
+    // линии от игроков — гаснут через DRAW_FADE, старые просто выкидываем
+    var now = Date.now();
+    lines = lines.filter(function (ln) { return now - ln.born < DRAW_FADE; });
+    if (curLine && curLine.points.length > 1) drawLineStroke(ctx, curLine.points, 1);
+    lines.forEach(function (ln) {
+      drawLineStroke(ctx, ln.points, Math.max(0, 1 - (now - ln.born) / DRAW_FADE));
+    });
   };
+  function drawLineStroke(ctx, points, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 4 / (GAME.view.s || 1);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (var i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   /* Ник теперь белый с лёгкой серой обводкой (просится и на светлый,
      и на тёмный фон карты). Реплики рисуются стопкой с переносом строк:
