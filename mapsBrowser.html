@@ -58,6 +58,9 @@
 .mbPractice{grid-column:1/-1;display:flex;align-items:center;gap:6px;
   font-size:12.5px;color:var(--muted,#6b7280);cursor:pointer;user-select:none}
 .mbPractice input{cursor:pointer;margin:0}
+/* Неуязвимость/полёт — подопции Practice, поэтому появляются только когда
+   она отмечена (progressive disclosure), а не отдельным пунктом наравне. */
+.mbPracticeOpts{grid-column:1/-1;display:flex;gap:14px;padding-left:20px}
 
 /* Проигрывание карты прямо в Maps Browser: страница не покидается,
    адрес остаётся прежним, игра занимает весь экран. */
@@ -244,6 +247,12 @@
       + '<button class="mbPlay" data-play="1">' + T('play', 'Играть') + '</button>'
       + '<label class="mbPractice" title="' + T('practiceHint', 'Умирая, возвращаешься туда, где умер, а не на старт')
       +   '"><input type="checkbox" data-practice="1"> ' + T('practiceTxt', 'Practice') + '</label>'
+      + '<span class="mbPracticeOpts" style="display:none">'
+      +   '<label class="mbPractice" title="' + T('godHint', 'Не умираешь от опасностей и падения за карту')
+      +     '"><input type="checkbox" data-god="1"> ' + T('godTxt', 'Неуязвимость') + '</label>'
+      +   '<label class="mbPractice" title="' + T('flyHint', 'Свободный полёт вместо прыжка и гравитации')
+      +     '"><input type="checkbox" data-fly="1"> ' + T('flyTxt', 'Полёт') + '</label>'
+      + '</span>'
       + (mine ? '<div class="mbExtra"><button class="mbDel" data-del="1">'
                 + T('removeTxt', 'Удалить') + '</button></div>' : '')
       + '</div>';
@@ -276,13 +285,29 @@
       });
   }
 
+  // Неуязвимость/полёт видны, только пока отмечена сама Practice — иначе
+  // включённые галочки простаивают, а карточка выглядит захламлённой.
+  document.addEventListener('change', function (e) {
+    if (!e.target.matches('[data-practice]')) return;
+    var r = e.target.closest('.mbRow');
+    var opts = r && r.querySelector('.mbPracticeOpts');
+    if (!opts) return;
+    opts.style.display = e.target.checked ? 'flex' : 'none';
+    if (!e.target.checked) {
+      Array.prototype.forEach.call(opts.querySelectorAll('input[type=checkbox]'), function (cb) { cb.checked = false; });
+    }
+  });
+
   document.addEventListener('click', function (e) {
     var r = e.target.closest && e.target.closest('.mbRow');
     if (!r) return;
 
     if (e.target.closest('[data-play]')) {
       var pc = r.querySelector('[data-practice]');
-      openPlay(r.dataset.map, r.dataset.author, !!(pc && pc.checked));
+      var practiceOn = !!(pc && pc.checked);
+      var gc = r.querySelector('[data-god]'), fc = r.querySelector('[data-fly]');
+      openPlay(r.dataset.map, r.dataset.author, practiceOn,
+        practiceOn && !!(gc && gc.checked), practiceOn && !!(fc && fc.checked));
       return;
     }
 
@@ -335,12 +360,14 @@
      Раньше PLAY уводил на game.html — ссылка в адресной строке менялась.
      Теперь карта открывается поверх списка на весь экран: страница
      и адрес остаются Maps Browser. */
-  function openPlay(mapName, author, practice) {
+  function openPlay(mapName, author, practice, god, fly) {
     $('mbWinName').textContent = mapName;
     $('mbWinAuthor').textContent = T('colAuthor', 'Автор') + ': ' + author;
     $('mbFrame').src = 'game.html?view=' + encodeURIComponent(mapName)
                      + '&author=' + encodeURIComponent(author)
-                     + (practice ? '&practice=1' : '');
+                     + (practice ? '&practice=1' : '')
+                     + (god ? '&god=1' : '')
+                     + (fly ? '&fly=1' : '');
     $('mbOverlay').classList.add('open');
     document.body.style.overflow = 'hidden';
   }
