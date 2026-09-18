@@ -62,6 +62,29 @@
    она отмечена (progressive disclosure), а не отдельным пунктом наравне. */
 .mbPracticeOpts{grid-column:1/-1;display:flex;gap:14px;padding-left:20px}
 
+/* Комментарии под картой — своя строка, раскрывается по клику */
+.mbCommentsToggle{grid-column:1/-1;justify-self:start;display:flex;align-items:center;gap:5px;
+  border:none;background:none;padding:2px 0;color:var(--muted,#6b7280);font-size:12.5px;cursor:pointer}
+.mbCommentsToggle:hover{color:var(--blue)}
+.mbCommentsToggle svg{width:14px;height:14px;display:block}
+.mbComments{grid-column:1/-1;border-top:1px solid var(--line);padding-top:10px;margin-top:2px}
+.mbCommentItem{padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.mbCommentItem:last-child{border-bottom:none}
+.mbCommentHead{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.mbCommentAuthor{font-weight:700;color:var(--ink,#111827)}
+.mbCommentDate{color:var(--muted,#6b7280);font-size:11.5px}
+.mbCommentDel{margin-left:auto;border:none;background:none;color:var(--red,#e74c3c);
+  cursor:pointer;font-size:11.5px;padding:0}
+.mbCommentText{white-space:pre-wrap;word-break:break-word;color:var(--ink,#111827)}
+.mbCommentForm{display:flex;gap:8px;margin-top:8px;align-items:flex-start}
+.mbCommentForm textarea{flex:1;resize:vertical;min-height:38px;max-height:120px;padding:8px 10px;
+  border:1px solid var(--line);border-radius:8px;font:13px inherit;background:var(--panel,#fff);
+  color:var(--ink,#111827)}
+.mbCommentForm button{border:1px solid var(--blue);background:#fff;color:var(--blue);
+  border-radius:8px;padding:0 14px;font-weight:600;cursor:pointer;align-self:stretch}
+.mbCommentForm button:hover{background:var(--blue);color:#fff}
+.mbCommentSignIn{color:var(--muted,#6b7280);font-size:12.5px}
+
 /* Проигрывание карты прямо в Maps Browser: страница не покидается,
    адрес остаётся прежним, игра занимает весь экран. */
 .mbOverlay{position:fixed;inset:0;z-index:1000;display:none;background:rgba(15,23,42,.72)}
@@ -184,6 +207,10 @@
   var THUMB_DOWN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
     + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">'
     + '<path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>';
+  var COMMENT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 '
+    + '8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 '
+    + '8.48 0 0 1 8 8v.5z"/></svg>';
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -239,6 +266,16 @@
       +   '<label class="mbPractice" title="' + T('flyHint', 'Свободный полёт вместо прыжка и гравитации')
       +     '"><input type="checkbox" data-fly="1"> ' + T('flyTxt', 'Полёт') + '</label>'
       + '</span>'
+      + '<button class="mbCommentsToggle" data-comments-toggle="1" data-count="' + (m.commentCount || 0) + '">' + COMMENT_ICON
+      +   ' <span>' + T('commentsTxt', 'Комментарии') + ' (' + (m.commentCount || 0) + ')</span></button>'
+      + '<div class="mbComments" style="display:none">'
+      +   '<div class="mbCommentsList"></div>'
+      +   (me && !me.guest
+            ? '<div class="mbCommentForm"><textarea maxlength="300" placeholder="'
+              + T('commentPh', 'Написать комментарий…') + '"></textarea>'
+              + '<button data-comment-send="1">' + T('send', 'Отправить') + '</button></div>'
+            : '<div class="mbCommentSignIn">' + T('signInToComment', 'Войдите, чтобы оставить комментарий') + '</div>')
+      + '</div>'
       + (mine ? '<div class="mbExtra"><button class="mbDel" data-del="1">'
                 + T('removeTxt', 'Удалить') + '</button></div>' : '')
       + '</div>';
@@ -339,8 +376,83 @@
           else msg(x.message || T('errorTxt', 'Ошибка'));
         })
         .catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var ct = e.target.closest('[data-comments-toggle]');
+    if (ct) {
+      var panel = r.querySelector('.mbComments');
+      var open = panel.style.display !== 'none';
+      panel.style.display = open ? 'none' : 'block';
+      if (!open && !panel.dataset.loaded) loadComments(r, panel);
+      return;
+    }
+
+    var send = e.target.closest('[data-comment-send]');
+    if (send) {
+      var ta = r.querySelector('.mbCommentForm textarea');
+      var text = (ta.value || '').trim();
+      if (!text) return;
+      send.disabled = true;
+      post('/addMapComment', { author: r.dataset.author, mapName: r.dataset.map, text: text })
+        .then(function (x) {
+          send.disabled = false;
+          if (x.status !== 'success') { msg(x.message || T('errorTxt', 'Ошибка')); return; }
+          ta.value = '';
+          var list = r.querySelector('.mbCommentsList');
+          if (!list.querySelector('.mbCommentItem')) list.innerHTML = '';
+          list.insertAdjacentHTML('beforeend', commentHtml(x.comment));
+          bumpCommentCount(r, 1);
+        })
+        .catch(function () { send.disabled = false; msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var cdel = e.target.closest('[data-comment-del]');
+    if (cdel) {
+      post('/deleteMapComment', { author: r.dataset.author, mapName: r.dataset.map, id: cdel.dataset.id })
+        .then(function (x) {
+          if (x.status !== 'success') { msg(x.message || T('errorTxt', 'Ошибка')); return; }
+          var list = r.querySelector('.mbCommentsList');
+          cdel.closest('.mbCommentItem').remove();
+          if (!list.querySelector('.mbCommentItem')) list.innerHTML = '<div class="bfHint">' + T('noComments', 'Пока нет комментариев') + '</div>';
+          bumpCommentCount(r, -1);
+        })
+        .catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
     }
   });
+
+  function bumpCommentCount(r, delta) {
+    var btn = r.querySelector('[data-comments-toggle]');
+    var n = Math.max(0, (parseInt(btn.dataset.count, 10) || 0) + delta);
+    btn.dataset.count = n;
+    btn.querySelector('span').textContent = T('commentsTxt', 'Комментарии') + ' (' + n + ')';
+  }
+
+  function commentHtml(c) {
+    return '<div class="mbCommentItem"><div class="mbCommentHead">'
+      + '<span class="mbCommentAuthor">' + esc(c.author) + '</span>'
+      + '<span class="mbCommentDate">' + when(c.date) + '</span>'
+      + (c.canDelete ? '<button class="mbCommentDel" data-comment-del="1" data-id="' + esc(c.id) + '">'
+          + T('removeTxt', 'Удалить') + '</button>' : '')
+      + '</div><div class="mbCommentText">' + esc(c.text) + '</div></div>';
+  }
+
+  function loadComments(r, panel) {
+    var list = panel.querySelector('.mbCommentsList');
+    list.innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
+    fetch('/getMapComments?author=' + encodeURIComponent(r.dataset.author)
+        + '&mapName=' + encodeURIComponent(r.dataset.map), { credentials: 'same-origin' })
+      .then(function (resp) { return resp.json(); })
+      .then(function (d) {
+        panel.dataset.loaded = '1';
+        var comments = d.comments || [];
+        list.innerHTML = comments.length
+          ? comments.map(commentHtml).join('')
+          : '<div class="bfHint">' + T('noComments', 'Пока нет комментариев') + '</div>';
+      })
+      .catch(function () { list.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
+  }
 
   /* ---- проигрывание карты внутри Maps Browser ----
      Раньше PLAY уводил на game.html — ссылка в адресной строке менялась.

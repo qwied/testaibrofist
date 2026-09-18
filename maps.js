@@ -155,7 +155,7 @@ function randomFor(mapType, not) {
   return m;
 }
 
-function register(app, getUser, acc) {
+function register(app, getUser, acc, cleanText) {
   // ---------- публикация карты из редактора ----------
   app.post('/uploadMap', (req, res) => {
     const u = getUser(req);
@@ -323,7 +323,8 @@ function register(app, getUser, acc) {
         author: m.author, date: m.date, mapType: m.mapType,
         myVote: me ? ((m.votes || {})[low(me.name)] || 0) : 0,
         myFavorite: myFavs.indexOf(favKey(m.author, m.mapName)) !== -1,
-        inGameModes: Array.isArray(m.inGameModes) ? m.inGameModes : []
+        inGameModes: Array.isArray(m.inGameModes) ? m.inGameModes : [],
+        commentCount: Array.isArray(m.comments) ? m.comments.length : 0
       };
     });
 
@@ -377,6 +378,63 @@ function register(app, getUser, acc) {
     save();
     res.json({ status: 'success', rating: t.rating, likes: t.likes, dislikes: t.dislikes,
                myVote: m.votes[low(u.name)] || 0 });
+  });
+
+  // ---------- комментарии под картой ----------
+  const COMMENT_MAX = 300;
+  const COMMENT_COOLDOWN_MS = 8000;   // не чаще раза в 8 секунд с одного аккаунта
+  const COMMENTS_PER_MAP_CAP = 200;   // старые обрезаем, чтобы maps.json не пух
+  const lastCommentAt = {};           // login (lower-case) -> timestamp, только в памяти
+
+  function findMap(author, mapName) {
+    return maps.find(x => low(x.author) === low(author) && low(x.mapName) === low(mapName));
+  }
+  function canModerateComment(u, m, c) {
+    return low(u.name) === low(c.author) || low(u.name) === low(m.author) || isOwnerName(u.name);
+  }
+
+  app.get('/getMapComments', (req, res) => {
+    const m = findMap(req.query.author, req.query.mapName);
+    if (!m) return res.json({ comments: [] });
+    const u = getUser(req);
+    const list = (m.comments || []).map(c => ({
+      id: c.id, author: c.author, text: c.text, date: c.date,
+      canDelete: !!u && canModerateComment(u, m, c)
+    }));
+    res.json({ comments: list });
+  });
+
+  app.post('/addMapComment', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const m = findMap(req.body.author, req.body.mapName);
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+    const text = cleanText(req.body.text, COMMENT_MAX).trim();
+    if (!text) return res.json({ status: 'error', message: 'Comment is empty' });
+    const key = low(u.name);
+    const now = Date.now();
+    if (lastCommentAt[key] && now - lastCommentAt[key] < COMMENT_COOLDOWN_MS)
+      return res.json({ status: 'error', message: 'Slow down a bit before commenting again' });
+    lastCommentAt[key] = now;
+    if (!Array.isArray(m.comments)) m.comments = [];
+    const comment = { id: now + '_' + Math.random().toString(36).slice(2, 8), author: u.name, text, date: now };
+    m.comments.push(comment);
+    if (m.comments.length > COMMENTS_PER_MAP_CAP) m.comments.splice(0, m.comments.length - COMMENTS_PER_MAP_CAP);
+    save();
+    res.json({ status: 'success', comment: { id: comment.id, author: comment.author, text: comment.text, date: comment.date, canDelete: true } });
+  });
+
+  app.post('/deleteMapComment', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const m = findMap(req.body.author, req.body.mapName);
+    if (!m || !Array.isArray(m.comments)) return res.json({ status: 'error', message: 'Not found' });
+    const i = m.comments.findIndex(c => c.id === req.body.id);
+    if (i === -1) return res.json({ status: 'error', message: 'Not found' });
+    if (!canModerateComment(u, m, m.comments[i])) return res.json({ status: 'error', message: 'Not allowed' });
+    m.comments.splice(i, 1);
+    save();
+    res.json({ status: 'success' });
   });
 
   /* Избранное — личный список игрока, а не свойство карты (в отличие от
