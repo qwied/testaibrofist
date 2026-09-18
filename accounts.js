@@ -39,6 +39,9 @@ load();
 
 const key = n => String(n || '').toLowerCase();
 
+// самостоятельная смена ника — фиксированная цена в монетах
+const NICK_CHANGE_PRICE = 1000;
+
 /* Пароли: scrypt с повышенной стойкостью (N=2^15). Старые хеши
    проверяются по прежним параметрам и молча пересохраняются новыми
    при первом же удачном входе — никто не разлогинивается. */
@@ -423,6 +426,48 @@ function register(app) {
     res.json({ status: 'success', message: 'Password changed' });
   });
 
+  // ---------- смена ника самим игроком: за монеты ----------
+  app.post('/changeNickname', (req, res) => {
+    const u = currentUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const to = String(req.body.name || '').trim();
+    const err = checkName(to);
+    if (err) return res.json({ status: 'error', message: err });
+    if (key(to) === key(u.name))
+      return res.json({ status: 'error', message: 'This is already your username' });
+    if (OWNER_ALIASES.indexOf(key(to)) !== -1)
+      return res.json({ status: 'error', message: 'This username is reserved' });
+    if (db.users[key(to)])
+      return res.json({ status: 'error', message: 'Username «' + to + '» is already taken' });
+
+    const coins = u.coins || 0;
+    if (coins < NICK_CHANGE_PRICE)
+      return res.json({
+        status: 'error',
+        message: 'You need ' + (NICK_CHANGE_PRICE - coins) + ' more of ' + NICK_CHANGE_PRICE + ' coins'
+      });
+
+    const old = u.name;
+    u.coins = coins - NICK_CHANGE_PRICE;
+    u.name = to;
+    delete db.users[key(old)];
+    db.users[key(to)] = u;
+    // чиним связи в друзьях/сессиях — тот же приём, что и в /renameUser (extras.js)
+    const fix = list => (list || []).map(n => (key(n) === key(old) ? to : n));
+    Object.values(db.users).forEach(x => {
+      x.friends = fix(x.friends); x.incoming = fix(x.incoming); x.outgoing = fix(x.outgoing);
+    });
+    Object.keys(db.sessions).forEach(sid => {
+      const s = db.sessions[sid];
+      const n = typeof s === 'string' ? s : (s && s.name);
+      if (key(n) !== key(old)) return;
+      if (typeof s === 'string') db.sessions[sid] = to;
+      else s.name = to;
+    });
+    save();
+    res.json({ status: 'success', message: 'Nickname changed to «' + to + '»', name: to, coins: u.coins });
+  });
+
   app.post('/logOut', (req, res) => {
     const sid = parseCookies(req).sid;
     if (sid) delete db.sessions[sid];
@@ -648,4 +693,4 @@ function register(app) {
   app.get('/captcha/getCaptcha', (req, res) => res.json({}));
 }
 
-module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, clientIp, creditCoins, creditScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, paginate };
+module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, clientIp, creditCoins, creditScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, paginate, NICK_CHANGE_PRICE };
