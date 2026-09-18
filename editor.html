@@ -2472,7 +2472,20 @@ function duplicate(){
 function removeSel(){
   if(!sel) return;
   commit();
+  // Удаляемый объект мог быть чьей-то целью (customId в targetIds
+  // кнопки/рычага) — без чистки эта ссылка осталась бы висеть в воздухе
+  // и, если тот же ID потом достанется другому объекту, начала бы
+  // управлять им незаметно для автора карты.
+  var deadId = sel.customId;
   objects = objects.filter(function(o){ return o !== sel; });
+  if(deadId){
+    objects.forEach(function(o){
+      if(!o.targetIds) return;
+      var left = o.targetIds.split(",").map(function(s){ return s.trim(); })
+        .filter(function(id){ return id && id !== deadId; });
+      o.targetIds = left.join(",");
+    });
+  }
   sel = null;
   inspect();
 }

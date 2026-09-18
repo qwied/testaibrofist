@@ -762,6 +762,35 @@
   // Object.create(null): игрок по имени "__proto__" не должен получать
   // унаследованный Object.prototype вместо своего личного массива реплик
   var spoken = Object.create(null);
+  /* Мьют чата — только локально у себя: сам заглушённый ничего не
+     замечает, его сообщения как ни в чём не бывало доходят до всех
+     остальных, просто эта вкладка их не рисует. Живёт в localStorage,
+     как и тема (см. theme.js) — чисто клиентская настройка. */
+  var MUTE_KEY = 'bfMutedPlayers';
+  var muted = (function () {
+    try { return JSON.parse(localStorage.getItem(MUTE_KEY) || '[]'); } catch (e) { return []; }
+  })();
+  function saveMuted() {
+    try { localStorage.setItem(MUTE_KEY, JSON.stringify(muted)); } catch (e) {}
+  }
+  function isMuted(name) { return muted.indexOf(String(name || '').toLowerCase()) !== -1; }
+  function muteName(name) {
+    var k = String(name || '').trim().toLowerCase();
+    if (!k || isMuted(k)) return false;
+    muted.push(k); saveMuted(); return true;
+  }
+  function unmuteName(name) {
+    var k = String(name || '').trim().toLowerCase();
+    var i = muted.indexOf(k);
+    if (i === -1) return false;
+    muted.splice(i, 1); saveMuted(); return true;
+  }
+  // мост для автотестов — тем же приёмом, что window.GAME в game.html
+  // (см. hideBridge() там): реплики рисуются на canvas, без него снаружи
+  // нечем проверить, что заглушённый действительно не долетает до экрана
+  if (/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname)) {
+    window.__bfChatDebug = { spoken: spoken, isMuted: isMuted };
+  }
   function speak(who, text) {
     if (!text) return;
     text = cleanSay(text);   // невидимые bidi-символы не переворачивают слова на экране
@@ -1489,7 +1518,7 @@
     });
 
     socket.on('chatMessage', function (m) {
-      if (m.playerName !== me.name) {
+      if (m.playerName !== me.name && !isMuted(m.playerName)) {
         speak(m.playerName, m.text);
         if (window.BFSound) BFSound.chat();
       }
@@ -1910,10 +1939,26 @@
   /* Одна дорога для всех способов отправки: Enter, кнопка и «Готово» на
      клавиатуре айфона. Раньше «Готово» просто снимало фокус, текст молча
      пропадал, а поле после этого не принимало ввод. */
+  /* /mute и /unmute — локальные команды, никуда не отправляются: заглушённый
+     игрок про это не узнаёт, остальные видят его сообщения как обычно. */
   function sendTyped() {
     var v = cleanSay(inp.value).trim();    // чистим от символов-переворотов ещё на отправке
     clearTyping();
     if (!v) return false;
+    var mm = /^\/(mute|unmute)\s+(.+)$/i.exec(v);
+    if (mm) {
+      var name = mm[2].trim();
+      if (mm[1].toLowerCase() === 'mute') {
+        speak(me.name, muteName(name)
+          ? TR('chatMutedYou', '🔇 Заглушил {n}').replace('{n}', name)
+          : TR('chatAlreadyMuted', '{n} уже заглушён у тебя').replace('{n}', name));
+      } else {
+        speak(me.name, unmuteName(name)
+          ? TR('chatUnmutedYou', '🔊 Снял заглушение с {n}').replace('{n}', name)
+          : TR('chatNotMuted', '{n} и не был заглушён').replace('{n}', name));
+      }
+      return true;
+    }
     speak(me.name, v);                      // своя реплика сразу уплывает
     if (socket) socket.emit('sendChat', { text: v });
     return true;
