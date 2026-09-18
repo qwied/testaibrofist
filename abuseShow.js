@@ -492,21 +492,9 @@
     e.start(t + 0.35); e.stop(t + len + 0.7);
   }
 
-  // короткий звонкий блик, когда поймал монету
+  // звук, когда поймал монету — тот же файл, что и за +10 монет за карту
   function coinSound() {
-    var a = audioCtx();
-    if (!a) return;
-    var t = a.currentTime;
-    var o = a.createOscillator();
-    o.type = 'triangle';
-    o.frequency.setValueAtTime(880, t);
-    o.frequency.exponentialRampToValueAtTime(1760, t + 0.09);
-    var g = a.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.25, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-    o.connect(g); g.connect(a.destination);
-    o.start(t); o.stop(t + 0.25);
+    if (window.BFSound) BFSound.coin();
   }
 
   /* ---------- звук ----------
