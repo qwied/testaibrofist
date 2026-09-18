@@ -3090,6 +3090,7 @@ requestAnimationFrame(loop);
       .then(function(r){ return r.json(); })
       .then(function(r){
         if (r.status === 'success') {
+          if (window.BFSound) BFSound.coin();
           say(TR('publishSuccessTitle','Карта опубликована'), r.message + ' Открыть Maps Browser?',
               function(){ location.href = '/mapsBrowser.html'; });
         } else if (r.status === 'exists') {

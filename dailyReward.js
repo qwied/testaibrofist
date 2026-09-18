@@ -168,7 +168,9 @@
       return;
     }
     slot.innerHTML = card(buildWheel()
-      + '<button class="drGo" id="drGo">' + T('spin', 'Spin') + '</button>'
+      // data-sfx — у кнопки свой звук клика (см. spin()), общий клик сайта
+      // (sound.js) на неё не срабатывает, чтобы не звучало сразу два клика
+      + '<button class="drGo" id="drGo" data-sfx="wheel">' + T('spin', 'Spin') + '</button>'
       + '<div class="drWin" id="drWin"></div>');
     slot.querySelector('#drGo').onclick = spin;
   }
@@ -176,6 +178,7 @@
   function spin() {
     if (spinning) return;
     spinning = true;
+    if (window.BFSound) BFSound.wheelClick();
     var btn = slot.querySelector('#drGo');
     btn.disabled = true;
     fetch('/dailyReward/claim', { method: 'POST', credentials: 'same-origin' })
@@ -193,6 +196,7 @@
         var target = 360 * 7 - (d.index * slice + slice / 2);
         var wheel = document.getElementById('drWheel');
         wheel.style.transform = 'rotate(' + target + 'deg)';
+        if (window.BFSound) BFSound.wheelSpin();
         // подписи доворачиваем на тот же угол в другую сторону — остаются прямыми
         var labels = slot.querySelectorAll('.drLabel b');
         for (var li = 0; li < labels.length; li++) {
@@ -206,6 +210,7 @@
           win.classList.add('on');
           var rim = document.getElementById('drRim');
           if (rim) rim.classList.add('won');
+          if (window.BFSound) BFSound.drWin();
           if (window.BFShell) window.BFShell.refreshCoins(d.coins);
         }, 4900);
       })
