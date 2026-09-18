@@ -54,6 +54,15 @@ ok('итог подписывается только тебе', /roulYouSeek/.te
                                  /if \(d\.winnerId === socket\.id\)/.test(src));
 ok('шанс в правом верхнем',     /#gChance\{position:fixed;top:52px/.test(src) &&
                                 /function showChance/.test(src) && /showChance\(\(d\.players\)/.test(src));
+/* Баг: showChance() вызывался только один раз, из hsRoulette, а
+   hideChance() — только на отказе входа (дубль-аккаунт). Плашка «Твой
+   шанс» продолжала висеть весь раунд после того, как рулетка уже решила,
+   кто искатель, и цифра шанса потеряла смысл. */
+ok('шанс гасится на старте раунда (hsPhase)',
+    /if \(d\.phase === 'round'\) \{\s*roulStop\(\);\s*(?:\/\/[^\n]*\n\s*)+hideChance\(\);/.test(src));
+ok('шанс гасится у опоздавшего в раунд (hsState)',
+    /socket\.on\('hsState'[\s\S]{0,900}if \(d\.phase === 'round'\) \{\s*roulStop\(\);\s*(?:\/\/[^\n]*\n\s*)+hideChance\(\);/.test(src));
+ok('шанс гасится при обрыве Story-сессии', /roulStop\(\);\s*hideChance\(\);\s*phaseEnds = Date\.now\(\) \+ 1e12;/.test(src));
 ok('плашки в углу считают отступ по факту, не угадывают числом',
                                  /function relayoutCorner/.test(src) &&
                                  /y = Math\.ceil\(top\.getBoundingClientRect\(\)\.bottom\) \+ gap;/.test(src));
