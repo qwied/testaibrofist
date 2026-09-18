@@ -762,11 +762,17 @@
   // Object.create(null): игрок по имени "__proto__" не должен получать
   // унаследованный Object.prototype вместо своего личного массива реплик
   var spoken = Object.create(null);
-  function speak(who, text) {
+  /* x/y — мировые координаты головы игрока в момент реплики. Облачко
+     всплывает и тает НА МЕСТЕ, где было сказано, а не на текущей позиции
+     игрока: раньше позиция не запоминалась, и drawTag() каждый кадр рисовал
+     уже отправленную (уплывающую) реплику там, где игрок стоит ПРЯМО
+     СЕЙЧАС — облачко буквально гналось за игроком через весь экран, если
+     он продолжал бежать после отправки сообщения. */
+  function speak(who, text, x, y) {
     if (!text) return;
     text = cleanSay(text);   // невидимые bidi-символы не переворачивают слова на экране
     var list = spoken[who] || (spoken[who] = []);
-    list.push({ text: text, born: Date.now() });
+    list.push({ text: text, born: Date.now(), x: x, y: y });
     /* Лишние не выкидываем разом: при частой отправке реплики пропадали
        рывком прямо на глазах. Вместо этого состариваем самую старую —
        она доживает свои полсекунды и растворяется как обычно. */
@@ -1490,7 +1496,10 @@
 
     socket.on('chatMessage', function (m) {
       if (m.playerName !== me.name) {
-        speak(m.playerName, m.text);
+        var sender = others[m.playerId];
+        speak(m.playerName, m.text,
+              sender ? sender.x + (sender.w || 22) / 2 : null,
+              sender ? sender.y : null);
         if (window.BFSound) BFSound.chat();
       }
     });
@@ -1862,6 +1871,11 @@
       if (!list.length) delete spoken[name];
       for (var si = 0; si < list.length; si++) {
         var sp = list[si];
+        // мировая позиция В МОМЕНТ РЕПЛИКИ — облачко тает там, где было
+        // сказано, а не там, где игрок находится в текущем кадре (см.
+        // комментарий у speak() выше)
+        var sx = sp.x != null ? sp.x : cx;
+        var sTopY = sp.y != null ? sp.y : topY;
         var k = (now - sp.born) / SAY_FADE;        // 0 → 1
         // каждая следующая реплика висит ниже предыдущей и не наезжает
         var lift = (list.length - 1 - si) * 15 * tk;
@@ -1876,8 +1890,8 @@
              сразу над теменем: раньше оно рисовалось впритык (16px) и
              читалось как ярлык, приклеенный к модели. Всплытие при
              растворении (k*46) добавляется поверх этого базового отступа. */
-          var ly = topY - (SAY_GAP + (lines.length - 1 - li) * 16) * tk - lift - k * 46 * tk;
-          paintSay(ctx, lines[li], cx, ly, tk);
+          var ly = sTopY - (SAY_GAP + (lines.length - 1 - li) * 16) * tk - lift - k * 46 * tk;
+          paintSay(ctx, lines[li], sx, ly, tk);
         }
       }
       ctx.globalAlpha = 1;
@@ -1911,7 +1925,8 @@
     var v = cleanSay(inp.value).trim();    // чистим от символов-переворотов ещё на отправке
     clearTyping();
     if (!v) return false;
-    speak(me.name, v);                      // своя реплика сразу уплывает
+    var p = GAME.pl;
+    speak(me.name, v, p.x + p.w / 2, p.y);  // своя реплика сразу уплывает — с места, где сказана
     if (socket) socket.emit('sendChat', { text: v });
     return true;
   }

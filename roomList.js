@@ -8,6 +8,7 @@
   'use strict';
 
   var POLL_MS = 4000;
+  var NAMES_SHOWN = 10;   // остальные сворачиваются в "+ ещё N"
   var COLOR = { red: '#dc2626', yellow: '#f59e0b', green: '#16a34a' };
 
   function T(k, f) {
@@ -29,6 +30,9 @@
       row.className = 'rlRow';
       row.dataset.room = r.room;
 
+      var head = document.createElement('div');
+      head.className = 'rlHead';
+
       var dot = document.createElement('span');
       dot.className = 'rlDot';
       dot.style.background = COLOR[r.status] || COLOR.green;
@@ -41,7 +45,22 @@
       count.className = 'rlCount';
       count.textContent = r.players + ' / ' + (data.limit || 40);
 
-      row.appendChild(dot); row.appendChild(name); row.appendChild(count);
+      head.appendChild(dot); head.appendChild(name); head.appendChild(count);
+      row.appendChild(head);
+
+      // кто сейчас в комнате — теми же именами, что и в самой игре над головой
+      var names = r.names || [];
+      if (names.length) {
+        var who = document.createElement('div');
+        who.className = 'rlWho';
+        var shown = names.slice(0, NAMES_SHOWN).join(', ');
+        var extra = names.length - NAMES_SHOWN;
+        who.textContent = extra > 0
+          ? shown + ' ' + T('roomListMore', '+ ещё {n}').replace('{n}', extra)
+          : shown;
+        row.appendChild(who);
+      }
+
       el.appendChild(row);
     });
   }
