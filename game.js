@@ -1935,7 +1935,7 @@
   function drawLineStroke(ctx, points, alpha) {
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.strokeStyle = '#fbbf24';
+    ctx.strokeStyle = '#ef4444';
     ctx.lineWidth = 4 / (GAME.view.s || 1);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
