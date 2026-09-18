@@ -2215,9 +2215,12 @@ cv.addEventListener("touchend", function(e){
   e.preventDefault();
 }, {passive:false});
 
-/* Пока пишешь в чат, ходить всё равно можно: стрелки остаются за игроком,
-   а буквы уходят в текст. Раньше любое поле ввода блокировало управление
-   целиком, и во время набора игрок стоял столбом. */
+/* Пока пишешь в чат, ходить всё равно можно: стрелки и WASD остаются за
+   игроком, остальные буквы уходят в текст. Раньше любое поле ввода
+   блокировало управление целиком, и во время набора игрок стоял столбом.
+   W/A/D при этом ещё и печатаются как обычно (см. inp.addEventListener
+   ('keydown', ...) в game.js) — раздельно «буква» и «шаг» не развести, а
+   терять w/a/d из обычных слов («world», «away») хуже, чем лишний шаг. */
 function typingInChat(){
   var el = document.activeElement;
   return !!(el && el.id === "gMsg");
@@ -2229,19 +2232,27 @@ function inSomeField(){
   return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
 }
 function movementKey(code){
-  return code === "ArrowLeft" || code === "ArrowRight" || code === "ArrowUp";
+  return code === "ArrowLeft" || code === "ArrowRight" || code === "ArrowUp" ||
+         code === "KeyW" || code === "KeyA" || code === "KeyD";
 }
 
 document.addEventListener("keydown", function(e){
   if(inSomeField()) return;
   if(playing){
-    // в чате слушаем только стрелки, иначе буквы не набрать
+    // в чате слушаем только стрелки и WASD, иначе остальные буквы не набрать
     if(typingInChat() && !movementKey(e.code)) return;
-    if(typingInChat()) e.preventDefault();           // курсор в поле не двигаем
+    /* Стрелками курсор в поле не двигаем — это их единственный побочный
+       эффект внутри text input, и он не нужен. У W/A/D побочный эффект —
+       вставка самой буквы, и его мы, наоборот, хотим оставить: иначе те
+       же буквы молча пропадают из обычного текста («world», «away»). */
+    if(typingInChat() && (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "ArrowUp")) e.preventDefault();
 
     if(e.code === "ArrowLeft" || e.code === "KeyA") keys.l = true;
     if(e.code === "ArrowRight"|| e.code === "KeyD") keys.r = true;
-    if(e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Space"){ keys.u = true; buf = BUFFER; e.preventDefault(); }
+    if(e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Space"){
+      keys.u = true; buf = BUFFER;
+      if(!(typingInChat() && e.code === "KeyW")) e.preventDefault();
+    }
     if(e.code === "Escape") stop();
     return;
   }
