@@ -398,6 +398,91 @@ function register(app, getUser, acc) {
     res.json({ status: 'success', myFavorite: i === -1 });
   });
 
+  /* Папки для своих карт — только у автора, живут на его же аккаунте,
+     тем же приёмом, что и избранное: u.mapFolders — список {id,name,color},
+     u.mapFolderOf — favKey карты -> id папки. Смотреть чужие папки
+     (вкладка «Карты» в профиле) может кто угодно, редактировать — только
+     сам владелец профиля (через getUser(req), не через ?name=). */
+  const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+  function findAccount(name) {
+    if (!acc || typeof acc.getDb !== 'function' || typeof acc.key !== 'function') return null;
+    return acc.getDb().users[acc.key(name)] || null;
+  }
+
+  app.get('/mapFolders', (req, res) => {
+    const u = findAccount(req.query.name);
+    const folders = (u && Array.isArray(u.mapFolders)) ? u.mapFolders : [];
+    const of = (u && u.mapFolderOf) || {};
+    res.json({ folders, mapFolderOf: of });
+  });
+
+  app.post('/mapFolders/create', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const name = String(req.body.name || '').trim().slice(0, 30);
+    if (!name) return res.json({ status: 'error', message: 'Name required' });
+    const color = HEX_COLOR.test(req.body.color) ? req.body.color : '#3b82f6';
+    u.mapFolders = Array.isArray(u.mapFolders) ? u.mapFolders : [];
+    if (u.mapFolders.length >= 30) return res.json({ status: 'error', message: 'Too many folders' });
+    const id = String(u.mapFolders.reduce((mx, f) => Math.max(mx, parseInt(f.id, 10) || 0), 0) + 1);
+    const folder = { id, name, color };
+    u.mapFolders.push(folder);
+    if (acc && typeof acc.save === 'function') acc.save();
+    res.json({ status: 'success', folder });
+  });
+
+  app.post('/mapFolders/edit', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const id = String(req.body.id || '');
+    const f = (Array.isArray(u.mapFolders) ? u.mapFolders : []).find(x => x.id === id);
+    if (!f) return res.json({ status: 'error', message: 'Folder not found' });
+    if (req.body.name !== undefined) {
+      const name = String(req.body.name || '').trim().slice(0, 30);
+      if (!name) return res.json({ status: 'error', message: 'Name required' });
+      f.name = name;
+    }
+    if (req.body.color !== undefined) {
+      if (!HEX_COLOR.test(req.body.color)) return res.json({ status: 'error', message: 'Bad color' });
+      f.color = req.body.color;
+    }
+    if (acc && typeof acc.save === 'function') acc.save();
+    res.json({ status: 'success', folder: f });
+  });
+
+  app.post('/mapFolders/delete', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const id = String(req.body.id || '');
+    u.mapFolders = (Array.isArray(u.mapFolders) ? u.mapFolders : []).filter(f => f.id !== id);
+    // карты из удалённой папки не трогаем — становятся «без папки»
+    const of = u.mapFolderOf || {};
+    Object.keys(of).forEach(k => { if (of[k] === id) delete of[k]; });
+    u.mapFolderOf = of;
+    if (acc && typeof acc.save === 'function') acc.save();
+    res.json({ status: 'success' });
+  });
+
+  // пустой/отсутствующий folderId — убрать карту из любой папки
+  app.post('/mapFolders/assign', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const m = maps.find(x => low(x.author) === low(u.name) && low(x.mapName) === low(req.body.mapName));
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+    const key = favKey(m.author, m.mapName);
+    const folderId = String(req.body.folderId || '');
+    u.mapFolderOf = u.mapFolderOf || {};
+    if (folderId) {
+      const exists = (Array.isArray(u.mapFolders) ? u.mapFolders : []).some(f => f.id === folderId);
+      if (!exists) return res.json({ status: 'error', message: 'Folder not found' });
+      u.mapFolderOf[key] = folderId;
+    } else {
+      delete u.mapFolderOf[key];
+    }
+    if (acc && typeof acc.save === 'function') acc.save();
+    res.json({ status: 'success' });
+  });
+
   // ---------- удаление ----------
   function remove(author, mapName) {
     const i = maps.findIndex(x => low(x.author) === low(author) && low(x.mapName) === low(mapName));
@@ -445,10 +530,13 @@ function register(app, getUser, acc) {
   // ---------- карты игрока (вкладка Maps в профиле) ----------
   app.get('/userMaps', (req, res) => {
     const mine = maps.filter(m => low(m.author) === low(req.query.name));
+    const owner = findAccount(req.query.name);
+    const folderOf = (owner && owner.mapFolderOf) || {};
     res.json({ count: mine.length, maps: mine.map(m => {
       const t = tally(m);
       return { mapName: m.mapName, mapType: m.mapType, rating: t.rating,
-               likes: t.likes, dislikes: t.dislikes, date: m.date, inGame: !!m.inGame };
+               likes: t.likes, dislikes: t.dislikes, date: m.date, inGame: !!m.inGame,
+               folderId: folderOf[favKey(m.author, m.mapName)] || '' };
     }) });
   });
 }

@@ -72,6 +72,23 @@
 .upRow button.bad{border-color:var(--red);color:var(--red)}
 .upRow button.bad:hover{background:var(--red);color:#fff}
 
+.upFolderBar{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.upFolderChip{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;
+  font-size:13px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--muted)}
+.upFolderChip[style*="--fc"]::before{content:'';width:8px;height:8px;border-radius:50%;
+  background:var(--fc);flex:0 0 auto}
+.upFolderChip.on{border-color:var(--blue);color:var(--blue);background:var(--soft)}
+.upFolderChip b{font-style:normal;opacity:.65;margin-left:2px}
+.upFolderChip b:hover{opacity:1}
+.upFolderNew{padding:6px 12px;border-radius:20px;font-size:13px;cursor:pointer;
+  border:1px dashed var(--line);background:none;color:var(--muted)}
+.upFolderNew:hover{border-color:var(--blue);color:var(--blue)}
+.upFolderForm{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.upFolderForm .bfInput{margin-bottom:0;flex:1 1 160px}
+.upFolderForm input[type=color]{width:36px;height:36px;padding:2px;border:1px solid var(--line);
+  border-radius:8px;cursor:pointer}
+.upFolderAssign{margin-bottom:0;width:auto;flex:0 0 auto;padding:8px 10px;font-size:12.5px}
+
 .upGrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
 .upSkin{border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;background:#fff}
 .upSkin .art{background:var(--soft);border-radius:9px;padding:8px 0;margin-bottom:8px}
@@ -259,17 +276,44 @@
       .catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
   }
 
-  var ownMaps = null;       // весь список — фильтр по режиму дальше чисто на клиенте
-  var mapModeFilter = '';
+  var ownMaps = null, ownFolders = [];   // фильтры по режиму/папке — чисто на клиенте
+  var mapModeFilter = '', folderFilter = '';   // folderFilter: '' все, '__none__' без папки, иначе id
+  var editingFolderId = null;    // null — создаём новую, иначе редактируем эту
   function renderMapsList() {
     var box = $('upTabBody');
     var list = ownMaps || [];
     if (mapModeFilter) list = list.filter(function (m) { return m.mapType === mapModeFilter; });
+    if (folderFilter === '__none__') list = list.filter(function (m) { return !m.folderId; });
+    else if (folderFilter) list = list.filter(function (m) { return m.folderId === folderFilter; });
+
     var sel = '<select class="bfSelect" id="upMapMode">'
       +   '<option value="">' + T('modeAll', 'Режим: все') + '</option>'
       +   '<option value="hideAndSeek">' + T('hideAndSeek', 'Прятки') + '</option>'
       +   '<option value="race">' + T('race', 'Гонка') + '</option>'
       + '</select>';
+
+    var folderBar = (ownFolders.length || isMe)
+      ? '<div class="upFolderBar">'
+        +   '<span class="upFolderChip' + (folderFilter === '' ? ' on' : '') + '" data-folder="">'
+        +     T('folderAll', 'Все папки') + '</span>'
+        +   '<span class="upFolderChip' + (folderFilter === '__none__' ? ' on' : '') + '" data-folder="__none__">'
+        +     T('folderNone', 'Без папки') + '</span>'
+        +   ownFolders.map(function (f) {
+              return '<span class="upFolderChip' + (folderFilter === f.id ? ' on' : '') + '" style="--fc:' + esc(f.color) + '" data-folder="' + esc(f.id) + '">'
+                +   esc(f.name) + (isMe ? '<b data-edit-folder="' + esc(f.id) + '" title="' + T('editTxt', 'Изменить') + '">&#9998;</b>' : '')
+                + '</span>';
+            }).join('')
+        +   (isMe ? '<button class="upFolderNew" id="upFolderNew">+ ' + T('folderNewTxt', 'Папка') + '</button>' : '')
+        + '</div>'
+        + (isMe ? '<div class="upFolderForm" id="upFolderForm" style="display:none">'
+            +   '<input class="bfInput" id="upFolderName" maxlength="30" placeholder="' + T('folderNamePh', 'Название папки') + '">'
+            +   '<input type="color" id="upFolderColor" value="#3b82f6">'
+            +   '<button class="go" id="upFolderSave">' + T('save', 'Сохранить') + '</button>'
+            +   '<button class="bad" id="upFolderDelete" style="display:none">' + T('removeTxt', 'Удалить') + '</button>'
+            +   '<button id="upFolderCancel">' + T('cancel', 'Отмена') + '</button>'
+            + '</div>' : '')
+      : '';
+
     var rows = !list.length
       ? '<div class="bfHint">' + T('noMaps', 'Карт нет') + '</div>'
       : list.map(function (m) {
@@ -277,26 +321,47 @@
             + '<div class="who"><a href="game.html?view=' + encodeURIComponent(m.mapName)
             +   '&author=' + encodeURIComponent(who) + '">' + esc(m.mapName) + '</a>'
             +   '<span>' + m.mapType + ' · ' + T('colRating', 'рейтинг') + ' ' + m.rating + '</span></div>'
-            + (isMe ? '<button class="go" data-edit-map="' + esc(m.mapName) + '">'
+            + (isMe ? '<select class="bfSelect upFolderAssign" data-assign-map="' + esc(m.mapName) + '">'
+                      +   '<option value="">' + T('folderNone', 'Без папки') + '</option>'
+                      +   ownFolders.map(function (f) {
+                            return '<option value="' + esc(f.id) + '"' + (m.folderId === f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>';
+                          }).join('')
+                      + '</select>'
+                      + '<button class="go" data-edit-map="' + esc(m.mapName) + '">'
                       + T('editTxt', 'Изменить') + '</button>'
                     + '<button class="bad" data-map="' + esc(m.mapName) + '">'
                       + T('removeTxt', 'Удалить') + '</button>' : '')
             + '</div>';
         }).join('');
-    box.innerHTML = (ownMaps && ownMaps.length ? sel : '') + rows;
+    box.innerHTML = folderBar + (ownMaps && ownMaps.length ? sel : '') + rows;
     var modeSel = $('upMapMode');
     if (modeSel) {
       modeSel.value = mapModeFilter;
       modeSel.onchange = function () { mapModeFilter = modeSel.value; renderMapsList(); };
     }
   }
+  function loadFoldersAndMaps() {
+    return Promise.all([
+      get('/userMaps?name=' + encodeURIComponent(who)),
+      get('/mapFolders?name=' + encodeURIComponent(who))
+    ]).then(function (res) {
+      ownMaps = res[0].maps || [];
+      ownFolders = res[1].folders || [];
+      renderMapsList();
+    });
+  }
   function drawMaps() {
     var box = $('upTabBody');
     box.innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
-    get('/userMaps?name=' + encodeURIComponent(who)).then(function (d) {
-      ownMaps = d.maps || [];
-      renderMapsList();
-    }).catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
+    loadFoldersAndMaps()
+      .catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
+  }
+  function openFolderForm(folder) {
+    editingFolderId = folder ? folder.id : null;
+    $('upFolderName').value = folder ? folder.name : '';
+    $('upFolderColor').value = folder ? folder.color : '#3b82f6';
+    $('upFolderDelete').style.display = folder ? '' : 'none';
+    $('upFolderForm').style.display = 'flex';
   }
 
   function showTab(t) {
@@ -363,6 +428,60 @@
       post('/removeMap', { mapName: dm.dataset.map, author: who }).then(function (r) {
         if (r.status === 'success') { msg(T('deleted', 'Карта удалена'), true); drawMaps(); }
         else msg(r.message || T('errorTxt', 'Ошибка'));
+      }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var ef = e.target.closest && e.target.closest('[data-edit-folder]');
+    if (ef) {
+      var found = ownFolders.filter(function (f) { return f.id === ef.dataset.editFolder; })[0];
+      if (found) openFolderForm(found);
+      return;
+    }
+
+    var fc = e.target.closest && e.target.closest('[data-folder]');
+    if (fc) {
+      folderFilter = fc.dataset.folder;
+      renderMapsList();
+      return;
+    }
+
+    if (e.target.id === 'upFolderNew') { openFolderForm(null); return; }
+    if (e.target.id === 'upFolderCancel') { $('upFolderForm').style.display = 'none'; return; }
+
+    if (e.target.id === 'upFolderSave') {
+      var name = $('upFolderName').value.trim();
+      var color = $('upFolderColor').value;
+      if (!name) return;
+      var req = editingFolderId
+        ? post('/mapFolders/edit', { id: editingFolderId, name: name, color: color })
+        : post('/mapFolders/create', { name: name, color: color });
+      req.then(function (r) {
+        if (r.status !== 'success') { msg(r.message || T('errorTxt', 'Ошибка')); return; }
+        $('upFolderForm').style.display = 'none';
+        loadFoldersAndMaps();
+      }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    if (e.target.id === 'upFolderDelete') {
+      if (!editingFolderId) return;
+      post('/mapFolders/delete', { id: editingFolderId }).then(function (r) {
+        if (r.status !== 'success') { msg(r.message || T('errorTxt', 'Ошибка')); return; }
+        $('upFolderForm').style.display = 'none';
+        if (folderFilter === editingFolderId) folderFilter = '';
+        loadFoldersAndMaps();
+      }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+  });
+
+  document.addEventListener('change', function (e) {
+    var fa = e.target.closest && e.target.closest('[data-assign-map]');
+    if (fa) {
+      post('/mapFolders/assign', { mapName: fa.dataset.assignMap, folderId: fa.value }).then(function (r) {
+        if (r.status !== 'success') { msg(r.message || T('errorTxt', 'Ошибка')); return; }
+        loadFoldersAndMaps();
       }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
     }
   });
