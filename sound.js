@@ -98,6 +98,25 @@
     tone(620, 0.11, { type: 'triangle', volume: 0.085, delay: 0.1, cutoff: 1600 });
     tone(740, 0.16, { type: 'triangle', volume: 0.09, delay: 0.2, cutoff: 1600 });
   }
+  // мягкое приземление — низкий тон под самой громкостью шага, слышен,
+  // но не спорит с ним; звучит на каждом касании земли после падения,
+  // а не только на прыжке
+  function land()  { tone(180, 0.07, { type: 'sine', endFreq: 110, volume: 0.05, cutoff: 800 }); }
+  // пружина/рикошет — короткий восходящий «бойнг» двумя нотами (терция
+  // вверх), это единственный игровой объект без собственного звука вовсе
+  function bounce() {
+    tone(420, 0.08, { type: 'triangle', endFreq: 640, volume: 0.08, cutoff: 1700 });
+    tone(560, 0.12, { type: 'triangle', endFreq: 860, volume: 0.07, delay: 0.03, cutoff: 1700 });
+  }
+  // чекпоинт — короткий двухнотный колокольчик (чистая квинта), радостнее
+  // одиночного тона и явно отличим от финиша/победы по длине и высоте
+  function checkpoint() {
+    tone(700, 0.08, { type: 'sine', volume: 0.07, cutoff: 2000 });
+    tone(1050, 0.13, { type: 'sine', volume: 0.075, delay: 0.06, cutoff: 2000 });
+  }
+  // кнопка/рычаг в игре — весомый механический щелчок, ниже и суше, чем
+  // клик по UI (click()), чтобы не путался с ним на слух
+  function toggle() { tap(0.045, 0.06, 700); }
 
   // клик по кнопке/ссылке — тёплый «тап», не писк
   function click() { tap(0.032, 0.045, 2400 + Math.random() * 400); }
@@ -148,6 +167,7 @@
   window.BFSound = {
     jump: jump, tick: tick, go: go, death: death, chat: chat, win: win,
     click: click, place: place, step: step, finish: finish, type: type,
+    land: land, bounce: bounce, checkpoint: checkpoint, toggle: toggle,
     isOn: function () { return on; }, setOn: setOn
   };
 })();
