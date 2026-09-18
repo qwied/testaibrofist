@@ -159,6 +159,11 @@
     secNote: "Your password is stored hashed — even the admin cannot see it.",
     fillBoth: "Fill in both fields",
 
+    changeNick: "Change nickname",
+    changeNickPrice: "Change nickname (1000 coins)",
+    newNick: "New nickname",
+    nickChanged: "Nickname changed",
+
     addFromUrl: "From URL",
     addFromFile: "From file",
     setImage: "Set image",
@@ -750,6 +755,11 @@
     logoutAll: "Выйти на всех устройствах",
     secNote: "Пароль хранится в зашифрованном виде — его не видно даже администратору.",
     fillBoth: "Заполните оба поля",
+
+    changeNick: "Сменить ник",
+    changeNickPrice: "Сменить ник (1000 монет)",
+    newNick: "Новый ник",
+    nickChanged: "Ник изменён",
     addFromUrl: "Из ссылки",
     addFromFile: "Из файла",
     setImage: "Задать картинку",
