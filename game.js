@@ -156,6 +156,8 @@
     + '#gTop{position:fixed;top:0;left:0;right:0;z-index:60;display:flex;gap:12px;align-items:center;'
     + 'padding:7px 12px;background:rgba(255,255,255,.9);font:13px sans-serif;flex-wrap:wrap}'
     + '#gTop b{color:#2196F3}'
+    + '#gPracticeBadge{background:#f5f3ff;color:#7c3aed;border:1px solid #ddd6fe;border-radius:14px;'
+    + 'padding:3px 10px;font-weight:700;font-size:11px;white-space:nowrap}'
     + '#gExit{margin-left:auto;background:#fff;color:#111827;border:1px solid #d7dee7;padding:7px 13px;'
     + 'border-radius:8px;cursor:pointer;font-weight:bold;box-shadow:0 8px 20px -12px rgba(15,23,42,.35)}'
     + '#gExit:active{background:#f2f7fd}'
@@ -366,7 +368,9 @@
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
   document.body.insertAdjacentHTML('beforeend',
-      '<div id="gTop"><span id="gRoleBox" style="display:none"><span id="gLblRole">Роль</span>: <b id="gRole"></b></span>'
+      '<div id="gTop">'
+    + (PRACTICE ? '<span id="gPracticeBadge"><span id="gPracticeBadgeTxt">Режим практики</span><span id="gPracticeMods"></span></span>' : '')
+    + '<span id="gRoleBox" style="display:none"><span id="gLblRole">Роль</span>: <b id="gRole"></b></span>'
     + '<span><span id="gLblPlayers">Игроков</span>: <b id="gCount">1</b></span>'
     + '<span><span id="gLblPing">Пинг</span>: <b id="gPing">—</b></span>'
     + '<span id="gTimeBox"><span id="gLblTime">Время</span>: <b id="gTime">—</b></span>'
@@ -420,6 +424,13 @@
     $('gLblTime').textContent = TR('gTimeLbl', 'Время');
     $('gLblRole').textContent = TR('roleLbl', 'Роль');
     $('gExit').textContent = TR('menu', 'Меню');
+    if (PRACTICE) {
+      $('gPracticeBadgeTxt').textContent = TR('practiceModeBadge', 'Режим практики');
+      var mods = [];
+      if (GOD) mods.push(TR('godTxt', 'Неуязвимость'));
+      if (FLY) mods.push(TR('flyTxt', 'Полёт'));
+      $('gPracticeMods').textContent = mods.length ? ' · ' + mods.join(' + ') : '';
+    }
     var cl = $('gChanceL');                      // подпись плашки шанса
     if (cl) cl.textContent = TR('chanceLbl', 'Твой шанс');
     var tk = $('gTalk');                          // кнопка чата — теперь иконка, подпись только для скринридера
@@ -447,7 +458,12 @@
   var TR = function (k, f) {
     return (window.I18N && window.I18N.t(k) !== k) ? window.I18N.t(k) : (f || k);
   };
-  $('gExit').onclick = function () { location.href = 'index.html'; };
+  $('gExit').onclick = function () {
+    // просмотр карты из Maps Browser идёt внутри её iframe (см. VIEW выше) —
+    // там некуда уходить своей навигацией, просто просим родителя закрыть окно
+    if (VIEW && window.parent !== window) { window.parent.postMessage({ type: 'bfClosePractice' }, location.origin); return; }
+    location.href = 'index.html';
+  };
 
   // ---------- звук: включён по умолчанию, состояние живёт в localStorage ----------
   var SOUND_ON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
