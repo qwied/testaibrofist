@@ -967,6 +967,11 @@ var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,self
 };
 var keys = {l:false,r:false,u:false};
 var coy = 0, buf = 0, hold = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
+/* Practice Mode (только Race, включается снаружи через GAME.practice —
+   см. game.js): смерть возвращает не на спавн/чекпоинт, а на последнюю
+   позицию, где игрок ТОЧНО не касался опасности — «где умер», но не
+   внутри самого шипа/яда, а на шаг до него. */
+var practiceMode = false, lastSafePos = {x:0,y:0};
 /* Сторож застревания в прятках — см. комментарий у STUCK_WINDOW ниже. */
 var stuckFrames = 0, stuckAir = 0, stuckHeld = 0, stuckMinX = 0, stuckMaxX = 0, stuckMinY = 0, stuckMaxY = 0;
 var deaths = 0, timeMs = 0, shake = 0, acc = 0, last = 0, lastStepAt = -9999;
@@ -984,6 +989,7 @@ function play(){
   // размер игрока задан движком и не редактируется
   pl.w = SIZES.spawn[0]; pl.h = SIZES.spawn[1];
   spawnPt = {x:sp.x, y:sp.y};
+  lastSafePos = {x:sp.x, y:sp.y};
   objects.forEach(function(o){
     o._hx = o.x; o._hy = o.y; o._t = 0; o._act = !!o.startsOpen;
     o._reached = false; o._spin = 0; o._squash = 0;
@@ -1010,12 +1016,13 @@ function restartRun(){
     o._act = !!o.startsOpen; o._latch = false;
   });
   var sp = findSpawn();
-  if(sp) spawnPt = {x:sp.x, y:sp.y};
+  if(sp){ spawnPt = {x:sp.x, y:sp.y}; lastSafePos = {x:sp.x, y:sp.y}; }
   stat(); respawn();
 }
 
 function respawn(){
-  pl.x = spawnPt.x; pl.y = spawnPt.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
+  var p = (practiceMode && mode === "race") ? lastSafePos : spawnPt;
+  pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
   pl.rideOn = null; pl.superUntil = 0;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
 }
@@ -1724,7 +1731,7 @@ function step(){
       pl.superUntil = timeMs + SUPER_MS;
     }
     if(o.type === "checkpoint" && !o._reached){
-      o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h};
+      o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h}; lastSafePos = {x:spawnPt.x, y:spawnPt.y};
       burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
       if(window.BFSound) BFSound.checkpoint();
     }
@@ -1744,6 +1751,9 @@ function step(){
     if(o.type === "button" && !o._act){ o._act = true; drive(o); if(window.BFSound) BFSound.toggle(); }
     if(o.type === "lever" && !o._latch){ o._act = !o._act; o._latch = true; drive(o); if(window.BFSound) BFSound.toggle(); }
   });
+  // не внутри опасности прямо сейчас — можно смело вернуть сюда при смерти
+  // в Practice Mode (если умер этим же кадром, pl.dead уже true — не трогаем)
+  if(!pl.dead) lastSafePos = {x:pl.x, y:pl.y};
 
   if(pl.y > 5000){
     /* В прятках die() ничего не делает («умереть нельзя», см. комментарий
@@ -2693,6 +2703,9 @@ window.GAME = BRIDGE = {
   get objects(){ return objects; },
   get mode(){ return mode; },
   get done(){ return done; },
+  // Practice Mode включается снаружи (game.js) до старта — см. respawn()
+  get practice(){ return practiceMode; },
+  set practice(v){ practiceMode = !!v; },
   loadMap: function(json){
     var d = (typeof json === "string") ? JSON.parse(json) : json;
     if(playing) stop();

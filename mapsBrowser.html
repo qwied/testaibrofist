@@ -52,6 +52,12 @@
   background:#fff;color:var(--blue);cursor:pointer;font-weight:600}
 .mbPlay:hover{background:var(--blue);color:#fff}
 .mbExtra{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* Свой ряд под остальными колонками — сетка карточки жёстко на 6 колонок,
+   чек-бокс тут лишний седьмой; проще и надёжнее вынести под низ, чем
+   пересчитывать grid-template-columns. */
+.mbPractice{grid-column:1/-1;display:flex;align-items:center;gap:6px;
+  font-size:12.5px;color:var(--muted,#6b7280);cursor:pointer;user-select:none}
+.mbPractice input{cursor:pointer;margin:0}
 
 /* Проигрывание карты прямо в Maps Browser: страница не покидается,
    адрес остаётся прежним, игра занимает весь экран. */
@@ -236,6 +242,8 @@
       +     THUMB_DOWN + ' ' + m.dislikes + '</button>'
       + '</div>'
       + '<button class="mbPlay" data-play="1">' + T('play', 'Играть') + '</button>'
+      + '<label class="mbPractice" title="' + T('practiceHint', 'Умирая, возвращаешься туда, где умер, а не на старт')
+      +   '"><input type="checkbox" data-practice="1"> ' + T('practiceTxt', 'Practice') + '</label>'
       + (mine ? '<div class="mbExtra"><button class="mbDel" data-del="1">'
                 + T('removeTxt', 'Удалить') + '</button></div>' : '')
       + '</div>';
@@ -273,7 +281,8 @@
     if (!r) return;
 
     if (e.target.closest('[data-play]')) {
-      openPlay(r.dataset.map, r.dataset.author);
+      var pc = r.querySelector('[data-practice]');
+      openPlay(r.dataset.map, r.dataset.author, !!(pc && pc.checked));
       return;
     }
 
@@ -326,11 +335,12 @@
      Раньше PLAY уводил на game.html — ссылка в адресной строке менялась.
      Теперь карта открывается поверх списка на весь экран: страница
      и адрес остаются Maps Browser. */
-  function openPlay(mapName, author) {
+  function openPlay(mapName, author, practice) {
     $('mbWinName').textContent = mapName;
     $('mbWinAuthor').textContent = T('colAuthor', 'Автор') + ': ' + author;
     $('mbFrame').src = 'game.html?view=' + encodeURIComponent(mapName)
-                     + '&author=' + encodeURIComponent(author);
+                     + '&author=' + encodeURIComponent(author)
+                     + (practice ? '&practice=1' : '');
     $('mbOverlay').classList.add('open');
     document.body.style.overflow = 'hidden';
   }
