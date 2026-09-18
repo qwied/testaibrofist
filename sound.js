@@ -141,13 +141,27 @@
      Один делегированный обработчик на весь документ: работает для любой
      кнопки или ссылки, добавленной хоть сейчас, хоть позже скриптом
      страницы — отдельный слушатель на каждую не нужен. Ссылки — тоже
-     button-like: тап должен успеть прозвучать до ухода со страницы. */
+     button-like: тап должен успеть прозвучать до ухода со страницы.
+
+     Список классов ниже — это лишь быстрый путь для самых частых виджетов;
+     страниц с собственными кастомными кнопками (карточки, вкладки, чипы,
+     ряды списков...) на сайте десятки, и перечислять каждый новый класс
+     руками — значит вечно находить очередное немое место. Настоящий сигнал
+     «это интерактивный элемент» на этом сайте один и тот же везде —
+     cursor:pointer в CSS — и второй проход по клику проверяет именно его,
+     поднимаясь на пару уровней вверх (клик обычно приходит по вложенной
+     иконке/тексту, а pointer стоит на самом виджете). */
   var CLICK_SEL = 'button, a, [role="button"], .bfDropItem, .msRow, .bfTab, .bfChip';
   if (!window.__bfSoundClickBound) {
     window.__bfSoundClickBound = true;
     document.addEventListener('click', function (e) {
       var t = e.target && e.target.closest ? e.target.closest(CLICK_SEL) : null;
-      if (t && !t.disabled) click();
+      if (t) { if (!t.disabled) click(); return; }
+      var el = e.target, depth = 0;
+      while (el && el.nodeType === 1 && el !== document.body && depth < 4) {
+        if (!el.disabled && getComputedStyle(el).cursor === 'pointer') { click(); return; }
+        el = el.parentElement; depth++;
+      }
     }, true);
   }
 

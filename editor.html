@@ -901,7 +901,8 @@ function drawParts(){
    moveA() удалены вместе с разгоном — больше их никто не звал. */
 var JUMP_H = 155, MAX_VX = 5.2, FRIC = 0, AIR = 0.85,
     COYOTE = 6, BUFFER = 7, WALL_SLIDE = 2.2, WALL_VX = 6.2, STEP_UP = 16,
-    MIN_HOLD = 7;   // столько кадров длится подъём прыжка, дальше он всегда обрывается
+    MIN_HOLD = 7,   // столько кадров длится подъём прыжка, дальше он всегда обрывается
+    STUCK_WINDOW = 150;   // окно сторожа застревания в прятках — см. respawn()/step()
 function G(){ return gravityScale * 0.062; }          // 9 → 0.558 px/кадр²
 function jumpV(){ return -Math.sqrt(2 * Math.max(0.02, G()) * JUMP_H); }  // constant hop height
 /* Heavier gravity shortens airtime, so speed scales with it — otherwise a map
@@ -925,6 +926,8 @@ var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,self
 var keys = {l:false,r:false,u:false};
 var coy = 0, buf = 0, hold = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
 var deaths = 0, timeMs = 0, shake = 0, acc = 0, last = 0, lastStepAt = -9999;
+/* Сторож застревания в прятках — см. комментарий у STUCK_WINDOW ниже. */
+var stuckFrames = 0, stuckAir = 0, stuckMinX = 0, stuckMaxX = 0, stuckMinY = 0, stuckMaxY = 0;
 
 /* Где игрок относительно воды: верхняя кромка, под водой ли голова
    и не кислота ли это. Считается по тем же объектам, что и коллизии. */
@@ -1002,6 +1005,7 @@ function restartRun(){
 function respawn(){
   pl.x = spawnPt.x; pl.y = spawnPt.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
   pl.rideOn = null;
+  stuckFrames = 0; stuckAir = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
 }
 function die(){
   // в прятках умереть нельзя вообще — единая точка входа для любой смерти
@@ -1697,6 +1701,35 @@ function step(){
        возвращают на чекпоинт, тут не было вообще никакого восстановления. */
     if(mode === "hideAndSeek") respawn();
     else die();
+  }
+
+  /* Застревание без падения. pl.y > 5000 выше ловит только сквозное
+     падение за карту — но держа прыжок над неполным уступом без бокового
+     движения, игрок никуда не падает вовсе: приземление тут же снимается
+     held-буфером на новый прыжок, а высоты хватает ровно чтобы упасть
+     обратно на тот же уступ, кадр в кадр, сколько угодно долго. Отличаем
+     это от честного «стою и прячусь»: там pl.ground почти всё время true,
+     а у застрявшего — почти всё время false (в воздухе).
+
+     Смотрим не на сдвиг между началом и концом окна (это сравнение можно
+     было обмануть чистой фазой колебания — окно из ~4 циклов подпрыгивания
+     иногда случайно начинается и заканчивается почти в одной и той же точке
+     дуги, хотя игрок всё это время никуда не продвигается), а на размах:
+     сколько всего пространства игрок занял за окно по X и по Y. */
+  if(mode === "hideAndSeek"){
+    if(pl.x < stuckMinX) stuckMinX = pl.x; if(pl.x > stuckMaxX) stuckMaxX = pl.x;
+    if(pl.y < stuckMinY) stuckMinY = pl.y; if(pl.y > stuckMaxY) stuckMaxY = pl.y;
+    stuckFrames++;
+    if(!pl.ground) stuckAir++;
+    if(stuckFrames >= STUCK_WINDOW){
+      if(stuckAir / stuckFrames > 0.6 && (stuckMaxX - stuckMinX) < 200 && (stuckMaxY - stuckMinY) < 200){
+        respawn();   // respawn() сам обнуляет окно сторожа
+      } else {
+        stuckFrames = 0; stuckAir = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
+      }
+    }
+  } else {
+    stuckFrames = 0; stuckAir = 0;
   }
 }
 function drive(src){
