@@ -170,6 +170,8 @@
     + '#gDraw.limit{opacity:.4;cursor:default}'
     + '#gDraw.spam{background:#fee2e2;color:#ef4444;border-color:#fca5a5;cursor:default;'
     + 'font:700 9.5px sans-serif;letter-spacing:-.02em}'
+    + '#gDrawTarget{height:32px;max-width:110px;border:1px solid #d7dee7;border-radius:8px;'
+    + 'background:#fff;color:#111827;font:12px sans-serif;padding:0 4px}'
     + '#gMap{position:fixed;right:12px;bottom:12px;z-index:60;background:rgba(255,255,255,.92);'
     + 'border:1px solid #d7dee7;border-radius:9px;padding:8px 13px;font:12.5px sans-serif;max-width:46vw}'
     + '#gMap .n{font-weight:bold;color:#111827;word-break:break-word}'
@@ -370,6 +372,7 @@
     + '<button id="gDraw" aria-label="Draw" title="Draw a line for others to see"><svg viewBox="0 0 24 24" '
     + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     + '<path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></button>'
+    + '<select id="gDrawTarget" title="Кому показать линию" style="display:none"><option value="all">Все</option></select>'
     + '<button id="gExit">Меню</button></div>'
     + '<div id="gMap"><div class="n" id="gMapName">Loading map…</div>'
     + '<div class="a" id="gMapAuthor"></div><div class="rate" id="gRate" style="display:none">'
@@ -476,12 +479,36 @@
   }
   var gDraw = $('gDraw');
 
+  /* кому показать линию: по умолчанию всем в комнате, но можно выбрать
+     конкретного игрока — тогда линию увидит только он (и сам рисующий,
+     тому она видна всегда локально). Список в селекте живёт от othersа,
+     который сервер обновляет через playersList/playerJoined/playerLeft. */
+  var gDrawTarget = $('gDrawTarget');
+  var drawTargetId = 'all';
+  function refreshDrawTargets() {
+    if (!gDrawTarget) return;
+    var keep = drawTargetId;
+    gDrawTarget.innerHTML = '<option value="all">' + TR('drawAll', 'Все') + '</option>';
+    Object.keys(others).forEach(function (id) {
+      var o = others[id];
+      var opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = o.name || id;
+      gDrawTarget.appendChild(opt);
+    });
+    gDrawTarget.value = (keep !== 'all' && others[keep]) ? keep : 'all';
+    drawTargetId = gDrawTarget.value;
+  }
+  if (gDrawTarget) {
+    gDrawTarget.onchange = function () { drawTargetId = gDrawTarget.value; };
+  }
+
   /* антиспам кнопки рисования: если суммарно рисовали почти без пауз
      DRAW_SPAM_LIMIT мс из последних DRAW_SPAM_WINDOW — считаем, что
      спамят, и прячем кнопку под таймер на DRAW_LOCK_MS. Переживает
      перезагрузку страницы (localStorage), как список замьюченных выше. */
-  var DRAW_SPAM_WINDOW = 10000;
-  var DRAW_SPAM_LIMIT = 7000;
+  var DRAW_SPAM_WINDOW = 5000;
+  var DRAW_SPAM_LIMIT = 5000;
   var DRAW_LOCK_MS = 5 * 60 * 1000;
   var DRAW_LOCK_KEY = 'bf_drawLockUntil';
   var drawActivity = []; // {end, dur} — завершённые штрихи за последнее окно
@@ -521,6 +548,7 @@
       gDraw.classList.add('spam');
       gDraw.title = 'Drawing locked for spamming — wait it out';
     }
+    if (gDrawTarget) gDrawTarget.style.display = 'none';
     if (canvasEl) canvasEl.style.touchAction = '';
     if (drawLockTimer) clearInterval(drawLockTimer);
     drawLockTimer = setInterval(drawLockTick, 1000);
@@ -541,6 +569,10 @@
       drawMode = !drawMode;
       gDraw.classList.toggle('on', drawMode);
       canvasEl.style.touchAction = drawMode ? 'none' : '';
+      if (gDrawTarget) {
+        gDrawTarget.style.display = drawMode ? '' : 'none';
+        if (drawMode) refreshDrawTargets();
+      }
     };
     canvasEl.addEventListener('pointerdown', function (e) {
       if (!drawMode || gDraw.classList.contains('limit') || Date.now() < drawLockUntil) return;
@@ -561,7 +593,7 @@
         if (curLine.points.length > 1) {
           curLine.born = Date.now();
           lines.push(curLine);
-          if (socket) socket.emit('drawLine', { points: curLine.points });
+          if (socket) socket.emit('drawLine', { points: curLine.points, target: drawTargetId !== 'all' ? drawTargetId : undefined });
 
           var now = curLine.born;
           drawActivity.push({ end: now, dur: now - (curLine.started || now) });
@@ -580,7 +612,9 @@
   if (/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname)) {
     window.__bfDrawDebug = { get lines() { return lines; }, toWorld: toWorld, setDrawMode: function (v) {
       drawMode = !!v; if (gDraw) gDraw.classList.toggle('on', drawMode);
-    }, get lockUntil() { return drawLockUntil; }, forceSpamLock: drawLock };
+    }, get lockUntil() { return drawLockUntil; }, forceSpamLock: drawLock,
+    get target() { return drawTargetId; }, setTarget: function (id) { drawTargetId = id; },
+    refreshTargets: refreshDrawTargets, get myId() { return socket && socket.id; } };
   }
 
   if (window.BFSound) {
@@ -1631,6 +1665,7 @@
       });
       Object.keys(others).forEach(function (id) { if (!seen[id]) delete others[id]; });
       $('gCount').textContent = Object.keys(others).length + 1;
+      if (drawMode) refreshDrawTargets();
       // роль приходит из рулетки (hsRoulette/hsState) — здесь её больше не считаем
     });
 
@@ -1648,6 +1683,7 @@
       lastForce = 0;
       log(esc(p.name) + TR('joinedWord', ' зашёл'), 's');
       $('gCount').textContent = Object.keys(others).length + 1;
+      if (drawMode) refreshDrawTargets();
     });
 
     socket.on('playerLeft', function (d) {
@@ -1658,6 +1694,7 @@
       }
       delete others[d.playerId];
       $('gCount').textContent = Object.keys(others).length + 1;
+      if (drawMode) refreshDrawTargets();
     });
 
     /* Запасной путь для старого сервера, который ещё не умеет снапшоты:

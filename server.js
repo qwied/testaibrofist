@@ -1027,9 +1027,10 @@ io.on('connection', (socket) => {
   });
 
   /* Линия на карте — «покажи дорогу»: рисуется мышью/пальцем поверх игры,
-     видна всем в комнате пару секунд и сама гаснет (клиент решает, когда
-     убрать — сервер только разносит точки и ограничивает количество
-     линий за вход, чтобы не заспамили карту). */
+     видна всем в комнате (или только одному выбранному игроку — data.target,
+     клиент даёт выбрать в селекте рядом с кнопкой) пару секунд и сама
+     гаснет (клиент решает, когда убрать — сервер только разносит точки и
+     ограничивает количество линий за вход, чтобы не заспамили карту). */
   const MAX_LINES_PER_JOIN = 8;
   const MAX_LINE_POINTS = 300;
   socket.on('drawLine', (data) => {
@@ -1045,7 +1046,14 @@ io.on('connection', (socket) => {
       .filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.y))
       .map(p => ({ x: Math.max(-20000, Math.min(20000, p.x)), y: Math.max(-20000, Math.min(20000, p.y)) }));
     if (pts.length < 2) return;
-    io.to(player.room).emit('drawLine', { playerId: socket.id, points: pts });
+    // приватная линия — только выбранному игроку из той же комнаты, иначе как раньше всей комнате
+    let recipient = io.to(player.room);
+    if (typeof data.target === 'string' && data.target !== socket.id) {
+      const targetPlayer = gameState.players.get(data.target);
+      if (targetPlayer && targetPlayer.room === player.room) recipient = io.to(data.target);
+      else return;
+    }
+    recipient.emit('drawLine', { playerId: socket.id, points: pts });
     socket.emit('drawLineQuota', { left: Math.max(0, MAX_LINES_PER_JOIN - player.linesUsed) });
   });
 
