@@ -16,6 +16,7 @@
   var ROOM   = q.get('room') || null;
   var VIEW   = q.get('view');                 // просмотр одной карты из Maps Browser
   var VAUTH  = q.get('author');
+  var PRACTICE = q.get('practice') === '1';   // Practice Mode — см. Maps Browser
 
   /* Заголовок вкладки — по режиму, а не унаследованное от редактора
      «Map Editor» (страница game.html — это сама игра, а не редактор).
@@ -828,6 +829,7 @@
     $('gMapAuthor').textContent = TR('mapBy', 'автор: ') + m.author;
     try {
       GAME.loadMap(m.mapData);
+      GAME.practice = PRACTICE;
       GAME.startPlay();
       finSent = false;
       applyColor();
