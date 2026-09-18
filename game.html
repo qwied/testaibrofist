@@ -1095,6 +1095,7 @@ function ricochet(o){
   pl.ground = false; pl.wall = 0; pl.selfJump = false; coy = 0; buf = 0;
   o._squash = 1;
   puff(px - nv[0]*pl.w*0.5, py - nv[1]*pl.h*0.5, 8);
+  if(window.BFSound) BFSound.bounce();
 }
 
 function rawPoly(o){
@@ -1530,7 +1531,7 @@ function step(){
       if(o.ricochet && pl.vy > RICO_MIN){
         ricochet(o);
       } else {
-        if(wasAir && pl.vy > 6) puff(pl.x+pl.w/2, pl.y+pl.h, 5);
+        if(wasAir && pl.vy > 6){ puff(pl.x+pl.w/2, pl.y+pl.h, 5); if(window.BFSound) BFSound.land(); }
         pl.vy = 0; pl.selfJump = false;
       }
       // едем вместе с платформой — сдвиг применится в начале следующего шага
@@ -1653,6 +1654,7 @@ function step(){
     if(o.type === "checkpoint" && !o._reached){
       o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h};
       burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
+      if(window.BFSound) BFSound.checkpoint();
     }
     // Дверь — это выход: игроку достаточно дойти до неё самому.
     if(o.type === "finishline" && !done){
@@ -1667,11 +1669,19 @@ function step(){
       clearTimeout(finishTimer);
       finishTimer = setTimeout(function(){ if(playing && done) restartRun(); }, 2200);
     }
-    if(o.type === "button" && !o._act){ o._act = true; drive(o); }
-    if(o.type === "lever" && !o._latch){ o._act = !o._act; o._latch = true; drive(o); }
+    if(o.type === "button" && !o._act){ o._act = true; drive(o); if(window.BFSound) BFSound.toggle(); }
+    if(o.type === "lever" && !o._latch){ o._act = !o._act; o._latch = true; drive(o); if(window.BFSound) BFSound.toggle(); }
   });
 
-  if(pl.y > 5000) die();
+  if(pl.y > 5000){
+    /* В прятках die() ничего не делает («умереть нельзя», см. комментарий
+       в самой die()) — а respawn() эта ветка не звала вовсе. Игрок,
+       провалившийся сквозь дыру в полу или соскользнувший за край карты,
+       падал буквально бесконечно: пока это не гонка, где die()/respawn()
+       возвращают на чекпоинт, тут не было вообще никакого восстановления. */
+    if(mode === "hideAndSeek") respawn();
+    else die();
+  }
 }
 function drive(src){
   if(!src.targetIds) return;
