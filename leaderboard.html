@@ -27,8 +27,12 @@
                 .lbName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
                         color:var(--ink);cursor:pointer}
                 .lbName:hover{text-decoration:underline}
-                .lbCoins{font-weight:bold;color:#e2a600;flex:0 0 auto}
+                .lbCoins{font-weight:bold;color:#e2a600;flex:0 0 auto;display:flex;align-items:center;gap:6px}
                 .lbCoins.score{color:#2196F3}
+                /* тот же приём, что .upScoreBadge на profile: «Scores» рядом с
+                   числом у каждой строки, а не отдельным заголовком над списком */
+                .lbScoreBadge{display:inline-block;padding:3px 10px;border-radius:16px;font-size:10.5px;
+                        font-weight:700;color:#fff;background:#2196F3;text-transform:uppercase;letter-spacing:.02em}
                 .mine{margin-top:22px;padding:13px;border:1px dashed #cfd6de;border-radius:8px;
                         color:#5b6570;font-size:14px;text-align:center}
                 .empty{color:#8b93a1;text-align:center;padding:50px 10px}
@@ -120,7 +124,7 @@
         }
         function amountHtml(n) {
                 return state.metric === 'score'
-                        ? '<div class="lbCoins score">' + n + '</div>'
+                        ? '<div class="lbCoins score"><span class="lbScoreBadge">' + T('raceScoresTitle', 'Scores') + '</span>' + n + '</div>'
                         : '<div class="lbCoins">' + n + ' ' + (window.BFCoin ? BFCoin.svg(15) : '') + '</div>';
         }
 

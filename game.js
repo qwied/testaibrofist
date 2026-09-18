@@ -265,10 +265,19 @@
     + 'background:rgba(255,255,255,.96);border-radius:0 0 12px 12px;'
     + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.4)}'
     + '#gScoresBox.open #gScoresList{display:block}'
-    + '.gScoreRow{display:flex;justify-content:space-between;gap:12px;padding:3px 0;color:#191919}'
+    + '.gScoreRow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;color:#191919}'
     + '.gScoreRow.me{font-weight:bold;color:#2196F3}'
     + '.gScoreRow b{color:#e2a600;flex:0 0 auto}'
     + '.gScoreN{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    + '.gScoreAmt{display:flex;align-items:center;gap:5px;flex:0 0 auto}'
+    /* тот же приём, что и .upScoreBadge на profile — «Scores» не отдельным
+       заголовком над списком, а прямо рядом с числом, у каждой строки и
+       у собственного счёта в самой кнопке-шапке */
+    + '.gScoreBadge{display:inline-block;padding:2px 8px;border-radius:14px;font-size:9px;'
+    + 'font-weight:700;color:#fff;background:#1670b8;text-transform:uppercase;letter-spacing:.02em}'
+    + '.gScoreRow.me .gScoreBadge{background:#2196F3}'
+    + '#gScoresBtn .gScoreBadge{background:rgba(255,255,255,.25)}'
+    + '#gScoresBtn b{color:#fff}'
     + '#gScoresEmpty{color:#8b93a1}'
     + 'html.is-mobile #gScoresBox,html.is-tablet #gScoresBox{top:44px}'
     /* --- личные сообщения (Messages) прямо в игре, левый нижний угол:
@@ -378,7 +387,7 @@
     + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     + '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 '
     + '8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>'
-    + '<div id="gScoresBox"><button id="gScoresBtn" aria-label="Scores">Scores</button>'
+    + '<div id="gScoresBox"><button id="gScoresBtn" aria-label="Scores"></button>'
     + '<div id="gScoresList"></div></div>'
     + '<button id="gMsgsBtn" aria-label="Messages"><svg viewBox="0 0 24 24" fill="none" '
     + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
@@ -409,7 +418,7 @@
     var tk = $('gTalk');                          // кнопка чата — теперь иконка, подпись только для скринридера
     if (tk) tk.setAttribute('aria-label', TR('chatBtn', 'Чат'));
     var sb2 = $('gScoresBtn');
-    if (sb2) { sb2.textContent = TR('raceScoresTitle', 'Scores'); sb2.setAttribute('aria-label', TR('raceScoresTitle', 'Scores')); }
+    if (sb2) { sb2.setAttribute('aria-label', TR('raceScoresTitle', 'Scores')); paintScoresBtn(lastMyScore); }
     var mb2 = $('gMsgsBtn');
     if (mb2) mb2.setAttribute('aria-label', TR('messagesTitle', 'Messages'));
     var mn2 = $('gMsgsNewBtn');
@@ -515,7 +524,16 @@
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   // ---------- табличка очков забега (Race), левый верхний угол ----------
+  // «Scores» — бейдж рядом с числом (тот же приём, что .upScoreBadge на
+  // profile), а не заголовок отдельной строкой над списком: у самой
+  // кнопки-шапки (свёрнутый вид) и у каждой строки списка (развёрнутый).
   var scoresBox = $('gScoresBox'), scoresBtn = $('gScoresBtn');
+  var lastMyScore = 0;
+  function paintScoresBtn(myScore) {
+    if (!scoresBtn) return;
+    scoresBtn.innerHTML = '<span class="gScoreBadge">' + TR('raceScoresTitle', 'Scores') + '</span> <b>' + (myScore || 0) + '</b>';
+  }
+  paintScoresBtn(0);
   if (scoresBtn) scoresBtn.addEventListener('click', function () {
     scoresBox.classList.toggle('open');
   });
@@ -526,9 +544,13 @@
       ? list.map(function (r) {
           var mine = r.name === me.name;
           return '<div class="gScoreRow' + (mine ? ' me' : '') + '">'
-            + '<span class="gScoreN">' + esc(r.name) + '</span><b>' + (r.score || 0) + '</b></div>';
+            + '<span class="gScoreN">' + esc(r.name) + '</span>'
+            + '<span class="gScoreAmt"><span class="gScoreBadge">' + TR('raceScoresTitle', 'Scores') + '</span><b>' + (r.score || 0) + '</b></span></div>';
         }).join('')
       : '<div id="gScoresEmpty">' + TR('topScoresEmpty', 'No scores yet') + '</div>';
+    var mine = list && list.filter(function (r) { return r.name === me.name; })[0];
+    lastMyScore = mine ? (mine.score || 0) : 0;
+    paintScoresBtn(lastMyScore);
   }
 
   /* ---------- личные сообщения (Messages) прямо в игре, левый нижний
