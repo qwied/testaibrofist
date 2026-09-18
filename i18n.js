@@ -357,6 +357,8 @@
     raceRule3: "Platforms and rotators move — sometimes it pays to wait.",
     raceRule4: "Reaching the finish pays 1-5 coins at random, every time.",
     raceRule5: "Your lap time is on screen — beat your own record on the same map.",
+    roomListTitle: "Rooms",
+    roomListEmpty: "Nobody's playing right now — hit Play, it'll open a fresh room.",
     mdBack: "Back to main",
 
     /* ---------- новости, лидеры, прочее ---------- */
@@ -934,6 +936,8 @@
     raceRule3: "Платформы и ротаторы движутся — иногда выгоднее подождать.",
     raceRule4: "За финиш всегда дают от 1 до 5 монет — случайно.",
     raceRule5: "Время круга видно на экране, свой рекорд можно побить на той же карте.",
+    roomListTitle: "Комнаты",
+    roomListEmpty: "Пока никто не играет — жми «Играть», откроется новая комната.",
     mdBack: "На главную",
     logsSub: "Обновления и объявления AIBrofist",
     addImages: "Добавить изображения",

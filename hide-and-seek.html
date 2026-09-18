@@ -40,6 +40,18 @@
   color:var(--blue);text-decoration:none;font-weight:700;font-size:15px}
 .mdStoryBtn:hover{background:var(--blue);color:#fff}
 .mdStoryHint{margin-top:8px;font-size:13px;color:var(--muted)}
+.rlTitle{font-size:13px;color:var(--muted);margin:14px 0 6px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.4px}
+.rlBox{margin-bottom:18px;border:1px solid var(--line);border-radius:12px;
+  max-height:220px;overflow-y:auto;background:var(--soft)}
+.rlRow{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;
+  border-bottom:1px solid var(--line);font-size:14px}
+.rlRow:last-child{border-bottom:none}
+.rlRow:hover{background:rgba(0,0,0,.04)}
+.rlDot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+.rlName{font-weight:600;flex:1}
+.rlCount{color:var(--muted);font-size:13px}
+.rlEmpty{padding:12px 14px;color:var(--muted);font-size:14px}
 @media (max-width:900px){
   .mdWrap{grid-template-columns:1fr;gap:20px}
   .mdName{font-size:26px}
@@ -77,6 +89,8 @@
         <li data-i18n="hsRule5">Карту выбирает сервер из тех, что добавил разработчик.</li>
         <li data-i18n="hsRule6">Хорошее укрытие — не самое дальнее, а самое неочевидное.</li>
       </ul>
+      <div class="rlTitle" data-i18n="roomListTitle">Комнаты</div>
+      <div class="rlBox" id="roomList"></div>
       <button class="mdPlay" id="mdPlay" data-i18n="play">ИГРАТЬ</button>
       <a class="mdBack" href="/" data-i18n="mdBack">На главную</a>
       <div class="mdStory">
@@ -95,10 +109,12 @@
 <script src="shell.js?v=132"></script>
 <script src="abuseShow.js?v=132" defer></script>
 <script src="account.js?v=132" defer></script>
+<script src="roomList.js?v=132"></script>
 <script>
 document.getElementById('mdPlay').onclick = function () {
   location.href = 'game.html?mode=hideAndSeek';
 };
+BFRoomList.init(document.getElementById('roomList'), 'hideAndSeek');
 </script>
 </body>
 </html>
