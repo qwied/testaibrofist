@@ -84,7 +84,7 @@
 
   // громкость поднята ещё немного (была снижена дважды по прошлым
   // жалобам «слишком громко/резко» — теперь наоборот просили погромче)
-  function jump()  { tone(560, 0.1, { type: 'sine', endFreq: 740, volume: 0.08, cutoff: 1400 }); }
+  function jumpTone() { tone(560, 0.1, { type: 'sine', endFreq: 740, volume: 0.08, cutoff: 1400 }); }
   function go()    { tone(560, 0.16, { type: 'triangle', endFreq: 740, volume: 0.1, cutoff: 1600 }); }
   function death() { tone(280, 0.3, { type: 'triangle', endFreq: 100, volume: 0.085, cutoff: 900 }); }
   function tick()  { tone(760, 0.06, { type: 'sine', volume: 0.065, cutoff: 1600 }); }
@@ -101,7 +101,7 @@
   // мягкое приземление — низкий тон под самой громкостью шага, слышен,
   // но не спорит с ним; звучит на каждом касании земли после падения,
   // а не только на прыжке
-  function land()  { tone(180, 0.07, { type: 'sine', endFreq: 110, volume: 0.05, cutoff: 800 }); }
+  function landTone() { tone(180, 0.07, { type: 'sine', endFreq: 110, volume: 0.05, cutoff: 800 }); }
   // пружина/рикошет — короткий восходящий «бойнг» двумя нотами (терция
   // вверх), это единственный игровой объект без собственного звука вовсе
   function bounce() {
@@ -133,20 +133,24 @@
   }
 
   /* ---------- звуки из настоящих файлов ----------
-     Пять коротких клипов, а не синтез: их прислали готовыми — щелчок
-     мыши, щелчок по колесу Daily Reward, сам оборот колеса, монета и
-     победный звон. Грузим один раз через decodeAudioData и потом просто
-     проигрываем декодированный буфер — тот же приём, что и с шумом для
-     tap(), только сэмпл не свой, а из файла. Пока файл не успел
-     загрузиться (доли секунды после открытия страницы), click() тихо
-     откатывается на старый синтезированный tap() — лучше не совсем
-     без звука, чем ждать. */
+     Не синтез, а короткие присланные клипы — щелчок мыши, щелчок и оборот
+     колеса Daily Reward, монета, победный звон, ходьба по бетону, два
+     разных «прыжковых» удара и стук установки блока. Грузим один раз
+     через decodeAudioData и потом просто проигрываем декодированный
+     буфер — тот же приём, что и с шумом для tap(), только сэмпл не свой,
+     а из файла. Пока файл не успел загрузиться (доли секунды после
+     открытия страницы), звук тихо откатывается на старый синтезированный
+     tone()/tap() — лучше не совсем без звука, чем ждать. */
   var SAMPLE_URLS = {
     click: 'sfxClick.mp3',
     wheelClick: 'sfxWheelClick.mp3',
     wheelSpin: 'sfxWheelSpin.mp3',
     coin: 'sfxCoin.mp3',
-    drWin: 'sfxWin.mp3'
+    drWin: 'sfxWin.mp3',
+    walk: 'sfxWalk.mp3',
+    jump: 'sfxJump.mp3',
+    land: 'sfxLand.mp3',
+    place: 'sfxPlace.mp3'
   };
   var samples = {};
   function loadSample(a, name) {
@@ -156,7 +160,10 @@
       .then(function (dec) { samples[name] = dec; })
       .catch(function () {});
   }
-  function playSample(name, vol) {
+  /* offset/dur — необязательный кусок буфера, а не весь файл целиком:
+     нужно для walk (см. step() ниже) — присланный файл — это запись
+     нескольких шагов подряд, а не один отдельный «тук». */
+  function playSample(name, vol, offset, dur) {
     if (!on) return true;   // звук выключен — считаем, что «сыграли», запасной тон не нужен
     var a = audioCtx();
     if (!a) return false;
@@ -167,7 +174,8 @@
     var g = a.createGain();
     g.gain.value = vol === undefined ? 1 : vol;
     src.connect(g); g.connect(a.destination);
-    src.start();
+    if (dur === undefined) src.start();
+    else src.start(0, offset || 0, dur);
     return true;
   }
   // грузим сразу при загрузке страницы — decodeAudioData не требует жеста
@@ -192,14 +200,32 @@
   // печать — самый тихий и короткий, лёгкая случайная вариация как у
   // настоящей клавиатуры, чтобы монотонный текст не звучал как метроном
   function type()  { tap(0.02, 0.03, 2800 + Math.random() * 900); }
-  // шаги — ниже и глуше клика, левая/правая нога чуть разной высоты
+  // шаги — левая/правая нога берут два разных момента из записи ходьбы
+  // (это цельная запись нескольких шагов подряд, а не один «тук»), тем
+  // же приёмом, что и старая альтернирующая высота тона
   var stepFoot = 0;
+  var WALK_STEP = [0.32, 1.78];   // сек внутри sfxWalk.mp3 — начало чистого шага
   function step() {
     stepFoot = 1 - stepFoot;
-    tap(0.05, 0.045, stepFoot ? 420 : 360);
+    if (playSample('walk', 0.5, WALK_STEP[stepFoot], 0.3)) return;
+    tap(0.05, 0.045, stepFoot ? 420 : 360);   // запасной звук, пока файл не загрузился
+  }
+  // прыжок — толчок вверх
+  function jump() {
+    if (playSample('jump', 0.7)) return;
+    jumpTone();
+  }
+  // приземление — звучит на каждом касании земли после падения, а не
+  // только на прыжке
+  function land() {
+    if (playSample('land', 0.6)) return;
+    landTone();
   }
   // постановка блока в Map Editor — самый низкий и весомый «тук»
-  function place() { tap(0.09, 0.065, 300); }
+  function place() {
+    if (playSample('place', 0.7)) return;
+    tap(0.09, 0.065, 300);   // запасной звук, пока файл не загрузился
+  }
 
   function setOn(v) {
     on = !!v;
