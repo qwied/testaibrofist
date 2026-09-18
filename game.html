@@ -1343,6 +1343,20 @@ function clampRideDelta(dx, dy, ride){
 
 function step(){
   anim++;
+  /* Кто из движущихся объектов на самом деле привязан к кнопке/рычагу —
+     ID любой цели из ЧЬЕГО-ЛИБО targetIds. Только у таких платформа
+     стоит на месте, пока её не «держат» (button/lever._act) — обычная
+     платформа без привязки как и раньше едет всегда, без кнопки. */
+  var drivenIds = null;
+  objects.forEach(function(o){
+    if(!o.targetIds) return;
+    o.targetIds.split(",").forEach(function(id){
+      id = id.trim();
+      if(!id) return;
+      if(!drivenIds) drivenIds = {};
+      drivenIds[id] = true;
+    });
+  });
   objects.forEach(function(o){
     // Движение и вращение — свойства объекта, а не отдельные типы.
     // Так двигаться и крутиться может любой блок, круг или треугольник.
@@ -1350,10 +1364,15 @@ function step(){
     // stepPushables), синусоида ей не нужна и конфликтовала бы с
     // падением/толчком. Инспектор не даёт включить оба свойства разом.
     if(o.moves && !o.pushable){
-      o._t += 0.012*(o.speed||1);
-      var k = (Math.sin(o._t)+1)/2;
-      var nx = o._hx + (o.moveX||0)*k, ny = o._hy + (o.moveY||0)*k;
-      o._dx = nx-o.x; o._dy = ny-o.y; o.x = nx; o.y = ny;
+      var driven = drivenIds && o.customId && drivenIds[o.customId];
+      if(driven && !o._act){
+        o._dx = 0; o._dy = 0;   // стоит, пока кнопку не держат/рычаг не включён
+      } else {
+        o._t += 0.012*(o.speed||1);
+        var k = (Math.sin(o._t)+1)/2;
+        var nx = o._hx + (o.moveX||0)*k, ny = o._hy + (o.moveY||0)*k;
+        o._dx = nx-o.x; o._dy = ny-o.y; o.x = nx; o.y = ny;
+      }
     }
     if(o.spins) o._spin += (o.spin||2)*0.02;
     if(o._squash) o._squash *= 0.82;
