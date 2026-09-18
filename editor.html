@@ -467,20 +467,32 @@ function figure(w,h,col,accent,skin){
   if(skin && window.BFSkinCanvas) BFSkinCanvas.front(ctx, w, h, skin);
 }
 
+/* Заливка прямоугольника/круга/треугольника: плоский цвет, а если
+   включён o.gradient — простой двухцветный линейный переход слева
+   направо (в локальных координатах, так что вместе с поворотом объекта
+   переход тоже поворачивается). Без бликов и глянца — именно то, что
+   когда-то сделало декоративные объекты «масляными» (см. grad() ниже,
+   он для НИХ теперь всегда просто первый цвет); тут это только сама
+   заливка, без rgba(255,255,255,..) поверх. */
+function shapeFill(o){
+  if(!o.gradient || !o.fill2) return o.fill || C.ink;
+  var g = ctx.createLinearGradient(0,0,o.w,0);
+  g.addColorStop(0, o.fill || C.ink);
+  g.addColorStop(1, o.fill2);
+  return g;
+}
 /* Each painter draws the object in its own local space (0,0 → w,h). */
 var PAINT = {
-  /* Три базовые фигуры рисуются одной плоской заливкой: без скруглений,
-     градиентов и бликов. Что нарисовано — то и считает хитбокс. */
   rect: function(o){
-    ctx.fillStyle = o.fill || C.ink;
+    ctx.fillStyle = shapeFill(o);
     ctx.fillRect(0,0,o.w,o.h);
   },
   circle: function(o){
-    ctx.fillStyle = o.fill || C.ink;
+    ctx.fillStyle = shapeFill(o);
     ctx.beginPath(); ctx.ellipse(o.w/2,o.h/2,o.w/2,o.h/2,0,0,6.2832); ctx.fill();
   },
   triangle: function(o){
-    ctx.fillStyle = o.fill || C.ink;
+    ctx.fillStyle = shapeFill(o);
     ctx.beginPath(); ctx.moveTo(o.w/2,0); ctx.lineTo(o.w,o.h); ctx.lineTo(0,o.h); ctx.closePath(); ctx.fill();
   },
   text: function(o){
@@ -2764,6 +2776,26 @@ function inspect(){
     ci.addEventListener("focus", commit);
     ci.addEventListener("input", function(){ sel.fill = ci.value; });
     r.appendChild(ci);
+  }
+  /* Только блок/круг/треугольник — своя фигура, рисуемая одной плоской
+     заливкой (см. shapeFill выше). Простой двухцветный переход, без
+     бликов и глянца — того самого «масляного» вида, который когда-то
+     специально убрали у декоративных объектов (см. grad()). */
+  if(SOLID.indexOf(sel.type) !== -1){
+    chk(TR("chkGradient","Градиент"), !!sel.gradient, function(v){
+      sel.gradient = v;
+      if(v && !sel.fill2) sel.fill2 = "#9ca3af";
+      inspect();
+    });
+    if(sel.gradient){
+      var r2 = pr();
+      r2.innerHTML = "<label>" + TR("lblColor2","Цвет 2") + "</label>";
+      var ci2 = document.createElement("input"); ci2.type = "color";
+      ci2.value = (sel.fill2 && sel.fill2[0] === "#" && sel.fill2.length === 7) ? sel.fill2 : "#9ca3af";
+      ci2.addEventListener("focus", commit);
+      ci2.addEventListener("input", function(){ sel.fill2 = ci2.value; });
+      r2.appendChild(ci2);
+    }
   }
   if(sel.type === "text") txt(TR("toolText","Текст"), sel.text, function(v){ sel.text = v; });
 
