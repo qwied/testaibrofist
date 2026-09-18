@@ -5,19 +5,48 @@
    game.html: «стрелки остаются за игроком, а буквы уходят в текст».
    Игрок на WASD вместо стрелок терял управление НАВСЕГДА первым же
    нажатием: W/A/D сами открывали чат, а дальше каждое W/A/D просто
-   печаталось в поле и физику не трогало. Живьём подтверждено: на видео
-   игрок стоял на месте, а над головой росли реплики из мусорных букв —
-   ровно то, что печатает WASD на русской раскладке (е.key врёт про
-   раскладку, e.code — нет, поэтому фикс и тест проверяют e.code). */
+   печаталось в поле и физику не трогало.
+
+   Второй заход (эта версия теста): первый фикс лишь перестал САМ открывать
+   чат от WASD. Но если чат открыт явно (Enter) — например, чтобы что-то
+   написать во время игры — W/A/D по-прежнему не двигали игрока: сначала
+   потому что movementKey() их не знал, а после первой правки — потому что
+   inp.addEventListener('keydown', ...) и document-левый обработчик оба
+   звали e.preventDefault() на них, и буквы w/a/d молча пропадали из
+   обычных слов («world», «away»). Подтверждено живьём: печать «hello
+   world» превращалась в «hello orl».
+
+   Итоговое поведение: W/A/D теперь работают как стрелки (двигают игрока,
+   пока чат открыт), но, в отличие от стрелок, ЕЩЁ И печатаются как
+   обычная буква — раздельно эти два действия не развести, а терять буквы
+   из слов хуже, чем лишний шаг во время печати. Подтверждено живьём:
+   печать «world away sad dude» во время игры выходит посимвольно точно,
+   а обычное движение (чат не открыт) не тронуто вообще. */
 'use strict';
 const fs = require('fs');
 let fails = 0;
 const ok = (n, c) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', n); };
 
-const src = fs.readFileSync(__dirname + '/game.js', 'utf8');
-ok('WASD (по e.code, не e.key — раскладка не влияет) не открывает чат',
-    /if \(e\.code === 'KeyW' \|\| e\.code === 'KeyA' \|\| e\.code === 'KeyD'\) return;\s*\n\s*inp\.focus\(\);/.test(src));
-ok('пробел по-прежнему не открывает чат (прыжок)', /if \(e\.key === ' '\) return;/.test(src));
+const gjs = fs.readFileSync(__dirname + '/game.js', 'utf8');
+console.log('game.js:');
+ok('WASD (по e.code, не e.key — раскладка не влияет) не открывает чат сам',
+    /if \(e\.code === 'KeyW' \|\| e\.code === 'KeyA' \|\| e\.code === 'KeyD'\) return;\s*\n\s*inp\.focus\(\);/.test(gjs));
+ok('пробел по-прежнему не открывает чат (прыжок)', /if \(e\.key === ' '\) return;/.test(gjs));
+ok('поле чата не глотает WASD в propagation (можно двигаться прямо во время набора)',
+    /var move = e\.key === 'ArrowLeft' \|\| e\.key === 'ArrowRight' \|\| e\.key === 'ArrowUp' \|\|\s*\n\s*e\.code === 'KeyW' \|\| e\.code === 'KeyA' \|\| e\.code === 'KeyD';\s*\n\s*if \(!move\) e\.stopPropagation\(\);/.test(gjs));
+ok('поле чата НЕ блокирует вставку буквы для W\\/A\\/D (буквы не теряются из слов)',
+    !/if \(wasd\) e\.preventDefault\(\);/.test(gjs));
+
+['game.html', 'editor.html'].forEach(f => {
+  const src = fs.readFileSync(__dirname + '/' + f, 'utf8');
+  console.log(f + ':');
+  ok('movementKey() знает про WASD, не только стрелки',
+      /function movementKey\(code\)\{\s*\n\s*return code === "ArrowLeft" \|\| code === "ArrowRight" \|\| code === "ArrowUp" \|\|\s*\n\s*code === "KeyW" \|\| code === "KeyA" \|\| code === "KeyD";/.test(src));
+  ok('preventDefault на курсор в поле — только для стрелок, не для WASD',
+      /if\(typingInChat\(\) && \(e\.code === "ArrowLeft" \|\| e\.code === "ArrowRight" \|\| e\.code === "ArrowUp"\)\) e\.preventDefault\(\);/.test(src));
+  ok('прыжковый preventDefault не глотает букву W во время печати',
+      /if\(!\(typingInChat\(\) && e\.code === "KeyW"\)\) e\.preventDefault\(\);/.test(src));
+});
 
 console.log(fails ? '\nПРОВАЛЕНО проверок: ' + fails : '\nвсе проверки пройдены ✓');
 process.exit(fails ? 1 : 0);

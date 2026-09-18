@@ -1925,8 +1925,15 @@
     inp.addEventListener(t, function (e) { e.stopPropagation(); }, true);
   });
   inp.addEventListener('keydown', function (e) {
-    // стрелки пропускаем дальше — ими игрок ходит прямо во время набора
-    var move = e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp';
+    /* Стрелки и WASD пропускаем дальше — ими игрок ходит прямо во время
+       набора (см. movementKey() в физике). W/A/D при этом — буквы, и
+       блокировать их вставку (как со стрелками, которые и так не
+       печатаются) нельзя: первая же попытка написать «world» или «away»
+       молча теряла бы w/a/d из слова. Пусть буква печатается как обычно
+       И игрок при этом шагнёт — это гораздо безобиднее, чем портить
+       обычный текст. */
+    var move = e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' ||
+               e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyD';
     if (!move) e.stopPropagation();
     if (e.key === 'Enter') {
       e.preventDefault();
