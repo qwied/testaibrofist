@@ -590,6 +590,25 @@ var PAINT = {
     ctx.beginPath(); ctx.arc(0,-o.h*0.78,Math.max(3.4,o.w*0.28),0,6.2832); ctx.fill();
     ctx.restore();
   },
+  /* Излучатель светится ярче, пока луч перекрыт игроком (o._act — тот же
+     флаг, что у кнопки/рычага, см. laserFeeds() в step()). Линза смотрит
+     вдоль локальной +x — тот же «вперёд», что и поворот объекта (o.rot). */
+  laserFeed: function(o){
+    ctx.fillStyle = C.stone3; rr(0,0,o.w,o.h,3); ctx.fill();
+    var r = Math.max(2.5, Math.min(o.w,o.h)*0.22), cx = o.w*0.82, cy = o.h/2;
+    ctx.fillStyle = o._act ? "#fca5a5" : "#7f1d1d";
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,6.2832); ctx.fill();
+    ctx.strokeStyle = o._act ? "#ef4444" : "#450a0a"; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(cx,cy,r*1.7,0,6.2832); ctx.stroke();
+  },
+  // приёмник — только ориентир для автора карты, в игровую логику не входит
+  laserReceiver: function(o){
+    ctx.fillStyle = C.stone3; rr(0,0,o.w,o.h,3); ctx.fill();
+    var r = Math.max(2.5, Math.min(o.w,o.h)*0.24), cx = o.w/2, cy = o.h/2;
+    ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,6.2832); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx-r,cy); ctx.lineTo(cx+r,cy); ctx.moveTo(cx,cy-r); ctx.lineTo(cx,cy+r); ctx.stroke();
+  },
   rotator: function(o){
     ctx.fillStyle = grad(0,0,0,o.h,"#a78bfa","#6d28d9");
     rr(0,0,o.w,o.h,o.h/2); ctx.fill();
@@ -656,6 +675,13 @@ var TOOLS = [
   {t:"spawn",      n:"Точка старта",k:"toolSpawn",      m:ALL},
   {t:"button",     n:"Кнопка",      k:"toolButton",     m:ALL},
   {t:"lever",      n:"Рычаг",       k:"toolLever",      m:ALL},
+  /* Старая идея из обратной связи: лазер, который «стреляет» в сторону
+     приёмника и включает связанные объекты, пока луч перекрыт игроком.
+     Приёмник — только ориентир для автора карты, куда целиться (сам
+     луч летит по повороту излучателя на фиксированную дальность, см.
+     laserFeeds()/step() — стены он не огибает и не проверяет). */
+  {t:"laserFeed",     n:"Лазер: излучатель", k:"toolLaserFeed",     m:ALL},
+  {t:"laserReceiver", n:"Лазер: приёмник",   k:"toolLaserReceiver", m:ALL},
   // только гонка
   {t:"checkpoint", n:"Чекпоинт",    k:"toolCheckpoint", m:"race"},
   {t:"finishline", n:"Финиш",       k:"toolFinish",     m:"race"},
@@ -685,14 +711,14 @@ var OBJ_LIMIT = 2000;   // максимум объектов в карте, од
 var INK = "#111827";
 var COLORS = {
   rect:INK, circle:INK, triangle:INK, text:INK,
-  button:INK, lever:INK,
+  button:INK, lever:INK, laserFeed:INK, laserReceiver:INK,
   checkpoint:"", finishline:"", spawn:INK, superGate:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
    Игрок 20x60, ровно три клетки в высоту. */
 var SIZES = {
   rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24],
-  button:[34,18], lever:[22,42],
+  button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
   checkpoint:[30,64], finishline:[42,86], spawn:[20,60], superGate:[44,90]
 };
 var SOLID  = ["rect","circle","triangle"];
@@ -703,7 +729,7 @@ var HAZARD = [];
 var DEADLY_BY_DEFAULT = [];
 /* Ворота и укрытие убраны, но механика связей осталась: цель кнопки или
    рычага — теперь любой обычный блок, круг или треугольник. */
-var LINKED = ["rect","circle","triangle","button","lever"];
+var LINKED = ["rect","circle","triangle","button","lever","laserFeed"];
 
 /* ══════════════════════════════════════════════════
    STATE
@@ -1233,6 +1259,25 @@ function inside(o, x, y){
        (x < (pts[j][0]-pts[i][0])*(y-pts[i][1])/(pts[j][1]-pts[i][1]) + pts[i][0])) r = !r;
   }
   return r;
+}
+
+/* Отрезок пересекает прямоугольник? Лазеру нужно это, а не «точка внутри
+   фигуры» — луч бьёт вдоль всей своей длины, а не в одной точке.
+   Стандартный parametric clip (Liang–Barsky) по четырём полуплоскостям
+   прямоугольника; rx1/ry1 — дальняя точка отрезка, попавшая в рамки,
+   нужна только чтобы обрезать луч ровно по игроку при отрисовке. */
+function segHitsRect(x0, y0, x1, y1, rx, ry, rw, rh){
+  var t0 = 0, t1 = 1, dx = x1-x0, dy = y1-y0;
+  function clip(p, q){
+    if(p === 0) return q >= 0;
+    var r = q/p;
+    if(p < 0){ if(r > t1) return false; if(r > t0) t0 = r; }
+    else { if(r < t0) return false; if(r < t1) t1 = r; }
+    return true;
+  }
+  if(clip(-dx, x0-rx) && clip(dx, rx+rw-x0) && clip(-dy, y0-ry) && clip(dy, ry+rh-y0))
+    return t0 <= t1 ? t0 : null;
+  return null;
 }
 
 /* ══════════════════════════════════════════════════
@@ -1771,6 +1816,7 @@ function step(){
     if(o.type === "button" && !o._act){ o._act = true; drive(o); if(window.BFSound) BFSound.toggle(); }
     if(o.type === "lever" && !o._latch){ o._act = !o._act; o._latch = true; drive(o); if(window.BFSound) BFSound.toggle(); }
   });
+  laserFeeds();
   // не внутри опасности прямо сейчас — можно смело вернуть сюда при смерти
   // в Practice Mode (если умер этим же кадром, pl.dead уже true — не трогаем)
   if(!pl.dead) lastSafePos = {x:pl.x, y:pl.y};
@@ -1830,6 +1876,25 @@ function drive(src){
   if(!src.targetIds) return;
   var ids = src.targetIds.split(",").map(function(s){ return s.trim(); }).filter(Boolean);
   objects.forEach(function(o){ if(o.customId && ids.indexOf(o.customId) !== -1) o._act = src._act; });
+}
+/* Лазер — тот же принцип, что и кнопка (см. drive() выше): «нажат», пока
+   игрок перекрывает луч, отпущен, как только сошёл. Луч бьёт по прямой
+   на o.range вдоль поворота объекта (0° — локальный +x, тот же «вперёд»,
+   что и у обычного поворота фигуры) и стены не огибает — приёмник лишь
+   ориентир для автора карты, куда целиться, в саму проверку не входит. */
+function laserFeeds(){
+  for(var i=0;i<objects.length;i++){
+    var o = objects[i];
+    if(o.type !== "laserFeed") continue;
+    var cx = o.x+o.w/2, cy = o.y+o.h/2, rad = (o.rot||0)*Math.PI/180;
+    var range = o.range||500;
+    var ex = cx + Math.cos(rad)*range, ey = cy + Math.sin(rad)*range;
+    var t = pl.dead ? null : segHitsRect(cx, cy, ex, ey, pl.x, pl.y, pl.w, pl.h);
+    var hit = t !== null;
+    o._beamEnd = hit ? {x: cx+(ex-cx)*t, y: cy+(ey-cy)*t} : {x: ex, y: ey};
+    if(hit && !o._act){ o._act = true; drive(o); if(window.BFSound) BFSound.toggle(); }
+    else if(!hit && o._act){ o._act = false; drive(o); }
+  }
 }
 /* Одинаковый участок мира у всех. Раньше в игре view.s оставался 1, и
    сколько мира видно зависело от размера окна: телефон шириной 400
@@ -1960,6 +2025,24 @@ function paintFrame(){
        та, что стоит на месте спавна. */
     if(playing && ro.type === "spawn") continue;
     paint(ro, !playing && ro === sel); drawn++;
+  }
+  /* Луч рисуется отдельным проходом, не в PAINT.laserFeed: его конец
+     зависит от игрока (см. laserFeeds()), а не только от самого объекта.
+     Вне игры показываем полную дальность — ориентир, куда целится. */
+  for(var lfi=0; lfi<objects.length; lfi++){
+    var lo = objects[lfi];
+    if(lo.type !== "laserFeed") continue;
+    var lcx = lo.x+lo.w/2, lcy = lo.y+lo.h/2, lend;
+    if(playing && lo._beamEnd) lend = lo._beamEnd;
+    else {
+      var lrad = (lo.rot||0)*Math.PI/180, lrange = lo.range||500;
+      lend = {x: lcx+Math.cos(lrad)*lrange, y: lcy+Math.sin(lrad)*lrange};
+    }
+    ctx.save();
+    ctx.strokeStyle = lo._act ? "rgba(239,68,68,.9)" : "rgba(239,68,68,.35)";
+    ctx.lineWidth = (lo._act ? 3 : 1.6) / view.s;
+    ctx.beginPath(); ctx.moveTo(lcx,lcy); ctx.lineTo(lend.x,lend.y); ctx.stroke();
+    ctx.restore();
   }
   if(playing && !pl.dead){
     ctx.save(); ctx.translate(pl.x, pl.y);
@@ -2560,11 +2643,14 @@ function inspect(){
   if(LINKED.indexOf(sel.type) !== -1){
     grp(TR("grpLinks","Связи"));
     txt("ID", sel.customId, function(v){ sel.customId = v; });
-    if(sel.type === "button" || sel.type === "lever") txtClear(TR("lblTargets","Цели"), sel.targetIds, function(v){ sel.targetIds = v; });
+    if(sel.type === "button" || sel.type === "lever" || sel.type === "laserFeed")
+      txtClear(TR("lblTargets","Цели"), sel.targetIds, function(v){ sel.targetIds = v; });
     if(SOLID.indexOf(sel.type) !== -1)
       chk(TR("chkStartsOpen","Открыт сначала (проходим)"), sel.startsOpen, function(v){ sel.startsOpen = v; });
     linkHelp();
   }
+  if(sel.type === "laserFeed")
+    num(TR("lblLaserRange","Дальность луча"), sel.range||500, function(v){ sel.range = Math.max(20,v); });
 
   grp(TR("grpOrder","Порядок"));
   var z = document.createElement("div"); z.className = "zBtns";
