@@ -930,6 +930,8 @@ var JUMP_H = 155, MAX_VX = 5.2, FRIC = 0, AIR = 0.85,
     STUCK_WINDOW = 150;   // окно сторожа застревания в прятках — см. respawn()/step()
 // SUPER BRO (ворота superGate, только Race) — длительность бафа полёта/иммунитета, мс
 var SUPER_MS = 8000, SUPER_GRAVITY = 0.32;
+// Practice: ручной режим полёта — вертикальная скорость вместо гравитации/прыжка
+var FLY_SPEED = 3.6;
 function G(){ return gravityScale * 0.062; }          // 9 → 0.558 px/кадр²
 function jumpV(){ return -Math.sqrt(2 * Math.max(0.02, G()) * JUMP_H); }  // constant hop height
 /* Heavier gravity shortens airtime, so speed scales with it — otherwise a map
@@ -957,6 +959,11 @@ var coy = 0, buf = 0, hold = 0, spawnPt = {x:0,y:0}, done = false, finishTimer =
    позицию, где игрок ТОЧНО не касался опасности — «где умер», но не
    внутри самого шипа/яда, а на шаг до него. */
 var practiceMode = false, lastSafePos = {x:0,y:0};
+/* Практика без риска: неуязвимость (die() вообще не срабатывает) и
+   полёт (гравитация/прыжок заменяются ручной вертикальной скоростью) —
+   оба переключаются снаружи (game.js), независимо друг от друга и от
+   самого practiceMode, но кнопки для них видны игроку только в Practice. */
+var godMode = false, flyMode = false;
 var deaths = 0, timeMs = 0, shake = 0, acc = 0, last = 0, lastStepAt = -9999;
 /* Сторож застревания в прятках — см. комментарий у STUCK_WINDOW ниже. */
 var stuckFrames = 0, stuckAir = 0, stuckHeld = 0, stuckMinX = 0, stuckMaxX = 0, stuckMinY = 0, stuckMaxY = 0;
@@ -1044,6 +1051,7 @@ function respawn(){
 function die(){
   // в прятках умереть нельзя вообще — единая точка входа для любой смерти
   if(mode === "hideAndSeek") return;
+  if(godMode) return;   // Practice: неуязвимость — та же единая точка входа
   if(pl.dead || done) return;
   pl.dead = true; deaths++; shake = 13; stat();
   if(window.BFSound) BFSound.death();
@@ -1470,7 +1478,15 @@ function step(){
   if(coy > 0) coy--;
   if(buf > 0) buf--;
 
-  {
+  if(flyMode){
+    /* Practice: полёт — вместо прыжка и гравитации вертикальная скорость
+       напрямую от зажатой кнопки прыжка (вверх), без неё — лёгкое
+       снижение, чтобы можно было и приземлиться. Столкновения ниже по
+       коду не меняются: сесть на платформу или упереться в потолок
+       всё ещё можно, просто без гравитации между ними. */
+    pl.vy = keys.u ? -FLY_SPEED : FLY_SPEED * 0.35;
+    pl.selfJump = false; buf = 0; coy = 0; hold = 0;
+  } else {
     /* Кнопку прыжка можно держать: как только игрок коснулся земли,
        он прыгает снова, без повторного нажатия. */
     if(keys.u && !pl.selfJump && (pl.ground || coy > 0)) buf = BUFFER;
@@ -2915,6 +2931,11 @@ window.GAME = BRIDGE = {
   // Practice Mode включается снаружи (game.js) до старта — см. respawn()
   get practice(){ return practiceMode; },
   set practice(v){ practiceMode = !!v; },
+  // Практика: неуязвимость и полёт — переключаются в любой момент кнопками в game.js
+  get godMode(){ return godMode; },
+  set godMode(v){ godMode = !!v; },
+  get flying(){ return flyMode; },
+  set flying(v){ flyMode = !!v; },
   loadMap: function(json){
     var d = (typeof json === "string") ? JSON.parse(json) : json;
     if(playing) stop();
