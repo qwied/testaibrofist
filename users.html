@@ -259,23 +259,43 @@
       .catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
   }
 
+  var ownMaps = null;       // весь список — фильтр по режиму дальше чисто на клиенте
+  var mapModeFilter = '';
+  function renderMapsList() {
+    var box = $('upTabBody');
+    var list = ownMaps || [];
+    if (mapModeFilter) list = list.filter(function (m) { return m.mapType === mapModeFilter; });
+    var sel = '<select class="bfSelect" id="upMapMode">'
+      +   '<option value="">' + T('modeAll', 'Режим: все') + '</option>'
+      +   '<option value="hideAndSeek">' + T('hideAndSeek', 'Прятки') + '</option>'
+      +   '<option value="race">' + T('race', 'Гонка') + '</option>'
+      + '</select>';
+    var rows = !list.length
+      ? '<div class="bfHint">' + T('noMaps', 'Карт нет') + '</div>'
+      : list.map(function (m) {
+          return '<div class="upRow">'
+            + '<div class="who"><a href="game.html?view=' + encodeURIComponent(m.mapName)
+            +   '&author=' + encodeURIComponent(who) + '">' + esc(m.mapName) + '</a>'
+            +   '<span>' + m.mapType + ' · ' + T('colRating', 'рейтинг') + ' ' + m.rating + '</span></div>'
+            + (isMe ? '<button class="go" data-edit-map="' + esc(m.mapName) + '">'
+                      + T('editTxt', 'Изменить') + '</button>'
+                    + '<button class="bad" data-map="' + esc(m.mapName) + '">'
+                      + T('removeTxt', 'Удалить') + '</button>' : '')
+            + '</div>';
+        }).join('');
+    box.innerHTML = (ownMaps && ownMaps.length ? sel : '') + rows;
+    var modeSel = $('upMapMode');
+    if (modeSel) {
+      modeSel.value = mapModeFilter;
+      modeSel.onchange = function () { mapModeFilter = modeSel.value; renderMapsList(); };
+    }
+  }
   function drawMaps() {
     var box = $('upTabBody');
     box.innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
     get('/userMaps?name=' + encodeURIComponent(who)).then(function (d) {
-      var list = d.maps || [];
-      if (!list.length) { box.innerHTML = '<div class="bfHint">' + T('noMaps', 'Карт нет') + '</div>'; return; }
-      box.innerHTML = list.map(function (m) {
-        return '<div class="upRow">'
-          + '<div class="who"><a href="game.html?view=' + encodeURIComponent(m.mapName)
-          +   '&author=' + encodeURIComponent(who) + '">' + esc(m.mapName) + '</a>'
-          +   '<span>' + m.mapType + ' · ' + T('colRating', 'рейтинг') + ' ' + m.rating + '</span></div>'
-          + (isMe ? '<button class="go" data-edit-map="' + esc(m.mapName) + '">'
-                    + T('editTxt', 'Изменить') + '</button>'
-                  + '<button class="bad" data-map="' + esc(m.mapName) + '">'
-                    + T('removeTxt', 'Удалить') + '</button>' : '')
-          + '</div>';
-      }).join('');
+      ownMaps = d.maps || [];
+      renderMapsList();
     }).catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
   }
 
