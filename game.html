@@ -1382,8 +1382,12 @@ function step(){
     if(Math.abs(pl.vx) < .05) pl.vx = 0;
   }
 
-  // шаги — только по земле и только пока реально двигается
-  if(window.BFSound && pl.ground && !pl.dead && Math.abs(pl.vx) > 30 && timeMs - lastStepAt > 250){
+  /* шаги — только по земле и только пока реально двигается. Порог был 30 —
+     мёртвый код: vx тут в пикселях НЕ на кадре игры, а на физическом шаге
+     (см. maxVX() = MAX_VX*gk(), это единицы до 5-6 даже с бустером), 30
+     не достижимо вообще ни при какой ходьбе — шагов не было слышно
+     никогда, ни на одной карте. */
+  if(window.BFSound && pl.ground && !pl.dead && Math.abs(pl.vx) > 0.5 && timeMs - lastStepAt > 250){
     lastStepAt = timeMs;
     BFSound.step();
   }
