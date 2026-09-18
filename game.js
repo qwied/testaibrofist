@@ -1977,13 +1977,21 @@
     return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
   }
 
-  // любая печатная клавиша начинает реплику
+  /* любая печатная клавиша начинает реплику — КРОМЕ W/A/D: это ходьба и
+     прыжок (см. movementKey()/"KeyA"/"KeyD"/"KeyW" в физике), не буквы.
+     Раньше первое же нажатие WASD само уводило фокус в чат — и, так как
+     внутри чата буквы (в отличие от стрелок) намеренно уходят в текст, а
+     не игроку, игрок на WASD-раскладке мгновенно и незаметно (поле шириной
+     1px) терял управление насовсем, до первого Escape или клика мышью.
+     Проверяем по e.code, а не e.key: на русской раскладке физическая W
+     даёт e.key 'ц', а не 'w' — только code не зависит от раскладки. */
   document.addEventListener('keydown', function (e) {
     if (document.activeElement === inp) return;
     if (isTypingElsewhere()) return;
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     if (e.key.length !== 1) return;
     if (e.key === ' ') return;                  // пробел — прыжок
+    if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyD') return;
     inp.focus();
   });
   document.addEventListener('keydown', function (e) {
