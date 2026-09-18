@@ -403,7 +403,9 @@ app.get('/getRoomList', (req, res) => {
     const status = n >= ROOM_FULL ? 'red'
                  : (now - (roomLeftAt.get(key) || 0) < ROOM_RECENT_LEFT_MS) ? 'yellow'
                  : 'green';
-    list.push({ room: key.slice(mode.length + 1), players: n, status });
+    // имена — как в /api/online, чтобы видно было, кто сейчас в комнате
+    const names = Array.from(set).map(id => gameState.players.get(id)).filter(Boolean).map(p => p.name);
+    list.push({ room: key.slice(mode.length + 1), players: n, status, names });
   });
   list.sort((a, b) => b.players - a.players);
   res.json({ rooms: list, limit: ROOM_FULL });

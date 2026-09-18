@@ -359,6 +359,7 @@
     raceRule5: "Your lap time is on screen — beat your own record on the same map.",
     roomListTitle: "Rooms",
     roomListEmpty: "Nobody's playing right now — hit Play, it'll open a fresh room.",
+    roomListMore: "+ {n} more",
     mdBack: "Back to main",
 
     /* ---------- новости, лидеры, прочее ---------- */
@@ -938,6 +939,7 @@
     raceRule5: "Время круга видно на экране, свой рекорд можно побить на той же карте.",
     roomListTitle: "Комнаты",
     roomListEmpty: "Пока никто не играет — жми «Играть», откроется новая комната.",
+    roomListMore: "+ ещё {n}",
     mdBack: "На главную",
     logsSub: "Обновления и объявления AIBrofist",
     addImages: "Добавить изображения",
