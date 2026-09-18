@@ -375,10 +375,10 @@
     + '<span><span id="gLblPing">Пинг</span>: <b id="gPing">—</b></span>'
     + '<span id="gTimeBox"><span id="gLblTime">Время</span>: <b id="gTime">—</b></span>'
     + '<button id="gSound" aria-label="Звук"></button>'
-    + '<button id="gDraw" aria-label="Draw" title="Draw a line for others to see"><svg viewBox="0 0 24 24" '
+    + '<button id="gDraw" aria-label="Draw" title="Draw an arrow for others to see"><svg viewBox="0 0 24 24" '
     + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-    + '<path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></button>'
-    + '<select id="gDrawTarget" title="Кому показать линию" style="display:none"><option value="all">Все</option></select>'
+    + '<line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></button>'
+    + '<select id="gDrawTarget" title="Кому показать стрелку" style="display:none"><option value="all">Все</option></select>'
     + '<button id="gExit">Меню</button></div>'
     + '<div id="gMap"><div class="n" id="gMapName">Loading map…</div>'
     + '<div class="a" id="gMapAuthor"></div><div class="rate" id="gRate" style="display:none">'
@@ -479,14 +479,16 @@
     b.setAttribute('aria-label', TR('soundBtn', 'Sound'));
   }
 
-  /* ---------- линия на карте: показать дорогу другим ----------
-     Кнопка включает режим рисования — дальше зажатие мыши/пальца прямо
-     на канвасе ведёт линию в мировых координатах (переводим через
-     GAME.view — тот же x/y/s, которым движок сам двигает камеру).
-     Готовая линия сразу видна себе (не ждём круга через сервер — тот же
-     приём, что у своей реплики в чате), остальным — как только долетит
-     drawLine. Гаснет через DRAW_FADE мс, отдельно рисовать не нужно —
-     onDraw просто выкидывает устаревшие перед каждым кадром. */
+  /* ---------- стрелка на карте: показать дорогу другим ----------
+     Кнопка включает режим рисования — зажатие мыши/пальца на канвасе
+     ставит хвост, отпускание — остриё; между ними всегда прямая линия
+     с наконечником (см. drawLineStroke), а не путь за курсором. Точки —
+     в мировых координатах (переводим через GAME.view — тот же x/y/s,
+     которым движок сам двигает камеру).
+     Готовая стрелка сразу видна себе (не ждём круга через сервер — тот
+     же приём, что у своей реплики в чате), остальным — как только
+     долетит drawLine. Гаснет через DRAW_FADE мс, отдельно рисовать не
+     нужно — onDraw просто выкидывает устаревшие перед каждым кадром. */
   var DRAW_FADE = 3000;
   var drawMode = false, curLine = null, lines = [];
   var canvasEl = $('c');
@@ -547,7 +549,7 @@
     if (gDraw) {
       gDraw.classList.remove('spam');
       gDraw.innerHTML = drawBtnHtml;
-      gDraw.title = 'Draw a line for others to see';
+      gDraw.title = 'Draw an arrow for others to see';
     }
   }
   function drawLockTick() {
@@ -594,28 +596,28 @@
     };
     canvasEl.addEventListener('pointerdown', function (e) {
       if (!drawMode || gDraw.classList.contains('limit') || Date.now() < drawLockUntil) return;
-      curLine = { points: [toWorld(e.clientX, e.clientY)], born: 0, started: Date.now() };
+      var p = toWorld(e.clientX, e.clientY);
+      // прямая стрелка: только хвост и остриё, без промежуточных точек пути
+      curLine = { points: [p, p], born: 0, started: Date.now() };
       e.preventDefault();
     });
     canvasEl.addEventListener('pointermove', function (e) {
       if (!curLine) return;
-      var p = toWorld(e.clientX, e.clientY);
-      var last = curLine.points[curLine.points.length - 1];
-      // точка только если реально сдвинулись — иначе на медленной мыши
-      // линия превращается в сотни точек в одном месте
-      if (Math.hypot(p.x - last.x, p.y - last.y) > 4) curLine.points.push(p);
+      curLine.points[1] = toWorld(e.clientX, e.clientY);
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (t) {
       canvasEl.addEventListener(t, function () {
         if (!curLine) return;
-        if (curLine.points.length > 1) {
+        var a = curLine.points[0], b = curLine.points[1];
+        // короче минимального рывка — считаем случайным тапом, не стрелка
+        if (Math.hypot(b.x - a.x, b.y - a.y) > 8) {
           curLine.born = Date.now();
           lines.push(curLine);
           if (socket) socket.emit('drawLine', { points: curLine.points, target: drawTargetId !== 'all' ? drawTargetId : undefined });
 
           var now = curLine.born;
           drawActivity.push({ end: now, dur: now - (curLine.started || now) });
-          drawActivity = drawActivity.filter(function (a) { return now - a.end < DRAW_SPAM_WINDOW; });
+          drawActivity = drawActivity.filter(function (act) { return now - act.end < DRAW_SPAM_WINDOW; });
           var total = 0;
           for (var i = 0; i < drawActivity.length; i++) total += drawActivity[i].dur;
           if (total >= DRAW_SPAM_LIMIT) drawLock();
@@ -2060,17 +2062,31 @@
       drawLineStroke(ctx, ln.points, Math.max(0, 1 - (now - ln.born) / DRAW_FADE));
     });
   };
+  // прямая стрелка: хвост points[0] -> остриё points[1], наконечник —
+  // треугольник фиксированного (в мировых координатах) размера на конце
   function drawLineStroke(ctx, points, alpha) {
+    var a = points[0], b = points[points.length - 1];
+    var s = GAME.view.s || 1;
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = '#ef4444';
-    ctx.lineWidth = 4 / (GAME.view.s || 1);
+    ctx.fillStyle = '#ef4444';
+    ctx.lineWidth = 4 / s;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (var i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
     ctx.stroke();
+
+    var ang = Math.atan2(b.y - a.y, b.x - a.x);
+    var headLen = 16 / s, headAngle = Math.PI / 7;
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(b.x - headLen * Math.cos(ang - headAngle), b.y - headLen * Math.sin(ang - headAngle));
+    ctx.lineTo(b.x - headLen * Math.cos(ang + headAngle), b.y - headLen * Math.sin(ang + headAngle));
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
   }
 
