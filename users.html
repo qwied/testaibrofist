@@ -101,6 +101,13 @@
   .upAva{width:104px;height:104px}
   .upName{font-size:21px}
   .upGrid{grid-template-columns:repeat(2,1fr)}
+  /* Узкий экран: имя карты/игрока + выбор папки + Изменить/Удалить не
+     помещаются в один ряд без переноса — раньше просто наезжали друг
+     на друга. Имя — на всю ширину сверху, остальное переносится под
+     него и растягивается по мере необходимости. */
+  .upRow{flex-wrap:wrap}
+  .upRow .who{flex:1 1 100%}
+  .upFolderAssign{flex:1 1 auto}
 }
 </style>
         <link rel="icon" href="/favicon.ico" sizes="any">
