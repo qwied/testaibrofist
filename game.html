@@ -114,6 +114,10 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 .pHelpBody code{background:#e6ebf2;border-radius:4px;padding:1px 5px;font-size:11px}
 .grp{margin:13px 0 5px;padding-top:9px;border-top:1px solid var(--line);font-size:10.5px;font-weight:700;
   letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+.pClearWrap{display:flex;align-items:center;gap:5px}
+.pClearBtn{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:6px;
+  width:24px;height:24px;line-height:1;cursor:pointer;font-size:14px;flex:0 0 auto;padding:0}
+.pClearBtn:hover{background:#ef4444;color:#fff;border-color:#ef4444}
 .zBtns{display:flex;gap:5px;margin-top:5px}
 .zBtns div{flex:1;text-align:center;padding:6px 0;border:1px solid var(--line);border-radius:7px;
   font-size:11px;cursor:pointer;background:#fafbfd}
@@ -2418,6 +2422,22 @@ function txt(l,v,fn){
   i.addEventListener("input", function(){ fn(i.value); });
   r.appendChild(a); r.appendChild(i);
 }
+/* Тот же текстовый ввод, но с кнопкой «×» рядом — разом убрать все ID
+   разом, а не выделять и стирать текст руками. Только для «Целей»
+   кнопки/рычага: у обычного текстового поля вроде «ID» такая кнопка
+   не нужна и только путала бы. */
+function txtClear(l,v,fn){
+  var r = pr(), a = document.createElement("label"); a.textContent = l;
+  var wrap = document.createElement("div"); wrap.className = "pClearWrap";
+  var i = document.createElement("input"); i.type = "text"; i.value = v||"";
+  i.addEventListener("focus", commit);
+  i.addEventListener("input", function(){ fn(i.value); });
+  var clr = document.createElement("button"); clr.type = "button"; clr.className = "pClearBtn";
+  clr.title = TR("lblClearTargets","Убрать все связи"); clr.textContent = "×";
+  clr.addEventListener("click", function(){ if(!i.value) return; commit(); i.value = ""; fn(""); });
+  wrap.appendChild(i); wrap.appendChild(clr);
+  r.appendChild(a); r.appendChild(wrap);
+}
 function chk(l,v,fn){
   var r = pr(), a = document.createElement("label"); a.textContent = l;
   var i = document.createElement("input"); i.type = "checkbox"; i.checked = !!v;
@@ -2540,7 +2560,7 @@ function inspect(){
   if(LINKED.indexOf(sel.type) !== -1){
     grp(TR("grpLinks","Связи"));
     txt("ID", sel.customId, function(v){ sel.customId = v; });
-    if(sel.type === "button" || sel.type === "lever") txt(TR("lblTargets","Цели"), sel.targetIds, function(v){ sel.targetIds = v; });
+    if(sel.type === "button" || sel.type === "lever") txtClear(TR("lblTargets","Цели"), sel.targetIds, function(v){ sel.targetIds = v; });
     if(SOLID.indexOf(sel.type) !== -1)
       chk(TR("chkStartsOpen","Открыт сначала (проходим)"), sel.startsOpen, function(v){ sel.startsOpen = v; });
     linkHelp();
