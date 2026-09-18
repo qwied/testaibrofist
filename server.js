@@ -341,7 +341,7 @@ app.use(express.json({ limit: '512kb' }));
 const accounts = require('./accounts.js');
 accountsRef = accounts;
 accounts.register(app);
-require('./maps.js').register(app, accounts.currentUser, accounts);
+require('./maps.js').register(app, accounts.currentUser, accounts, cleanText);
 require('./userSkins.js').register(app, accounts);
 require('./messages.js').register(app, accounts);
 require('./themes.js').register(app, accounts);
