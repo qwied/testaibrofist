@@ -168,6 +168,8 @@
     + '#gDraw:active{background:#f2f7fd}'
     + '#gDraw.on{background:#2196F3;color:#fff;border-color:#2196F3}'
     + '#gDraw.limit{opacity:.4;cursor:default}'
+    + '#gDraw.spam{background:#fee2e2;color:#ef4444;border-color:#fca5a5;cursor:default;'
+    + 'font:700 9.5px sans-serif;letter-spacing:-.02em}'
     + '#gMap{position:fixed;right:12px;bottom:12px;z-index:60;background:rgba(255,255,255,.92);'
     + 'border:1px solid #d7dee7;border-radius:9px;padding:8px 13px;font:12.5px sans-serif;max-width:46vw}'
     + '#gMap .n{font-weight:bold;color:#111827;word-break:break-word}'
@@ -473,15 +475,76 @@
     return { x: (clientX - r.left - v.x) / v.s, y: (clientY - r.top - v.y) / v.s };
   }
   var gDraw = $('gDraw');
+
+  /* антиспам кнопки рисования: если суммарно рисовали почти без пауз
+     DRAW_SPAM_LIMIT мс из последних DRAW_SPAM_WINDOW — считаем, что
+     спамят, и прячем кнопку под таймер на DRAW_LOCK_MS. Переживает
+     перезагрузку страницы (localStorage), как список замьюченных выше. */
+  var DRAW_SPAM_WINDOW = 10000;
+  var DRAW_SPAM_LIMIT = 7000;
+  var DRAW_LOCK_MS = 5 * 60 * 1000;
+  var DRAW_LOCK_KEY = 'bf_drawLockUntil';
+  var drawActivity = []; // {end, dur} — завершённые штрихи за последнее окно
+  var drawLockUntil = 0;
+  var drawLockTimer = null;
+  var drawBtnHtml = gDraw ? gDraw.innerHTML : '';
+  try { drawLockUntil = parseInt(localStorage.getItem(DRAW_LOCK_KEY), 10) || 0; } catch (e) {}
+
+  function fmtLockLeft(ms) {
+    var s = Math.max(0, Math.ceil(ms / 1000));
+    var m = Math.floor(s / 60); s = s % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  function drawUnlock() {
+    if (drawLockTimer) { clearInterval(drawLockTimer); drawLockTimer = null; }
+    drawLockUntil = 0;
+    try { localStorage.removeItem(DRAW_LOCK_KEY); } catch (e) {}
+    if (gDraw) {
+      gDraw.classList.remove('spam');
+      gDraw.innerHTML = drawBtnHtml;
+      gDraw.title = 'Draw a line for others to see';
+    }
+  }
+  function drawLockTick() {
+    var left = drawLockUntil - Date.now();
+    if (left <= 0) { drawUnlock(); return; }
+    if (gDraw) gDraw.textContent = fmtLockLeft(left);
+  }
+  function drawLock() {
+    drawActivity = [];
+    drawLockUntil = Date.now() + DRAW_LOCK_MS;
+    try { localStorage.setItem(DRAW_LOCK_KEY, String(drawLockUntil)); } catch (e) {}
+    drawMode = false;
+    curLine = null;
+    if (gDraw) {
+      gDraw.classList.remove('on');
+      gDraw.classList.add('spam');
+      gDraw.title = 'Drawing locked for spamming — wait it out';
+    }
+    if (canvasEl) canvasEl.style.touchAction = '';
+    if (drawLockTimer) clearInterval(drawLockTimer);
+    drawLockTimer = setInterval(drawLockTick, 1000);
+    drawLockTick();
+  }
+  if (drawLockUntil > Date.now()) {
+    if (gDraw) { gDraw.classList.add('spam'); gDraw.title = 'Drawing locked for spamming — wait it out'; }
+    drawLockTimer = setInterval(drawLockTick, 1000);
+    drawLockTick();
+  } else if (drawLockUntil) {
+    drawLockUntil = 0;
+    try { localStorage.removeItem(DRAW_LOCK_KEY); } catch (e) {}
+  }
+
   if (gDraw && canvasEl) {
     gDraw.onclick = function () {
+      if (Date.now() < drawLockUntil) return;
       drawMode = !drawMode;
       gDraw.classList.toggle('on', drawMode);
       canvasEl.style.touchAction = drawMode ? 'none' : '';
     };
     canvasEl.addEventListener('pointerdown', function (e) {
-      if (!drawMode || gDraw.classList.contains('limit')) return;
-      curLine = { points: [toWorld(e.clientX, e.clientY)], born: 0 };
+      if (!drawMode || gDraw.classList.contains('limit') || Date.now() < drawLockUntil) return;
+      curLine = { points: [toWorld(e.clientX, e.clientY)], born: 0, started: Date.now() };
       e.preventDefault();
     });
     canvasEl.addEventListener('pointermove', function (e) {
@@ -499,6 +562,13 @@
           curLine.born = Date.now();
           lines.push(curLine);
           if (socket) socket.emit('drawLine', { points: curLine.points });
+
+          var now = curLine.born;
+          drawActivity.push({ end: now, dur: now - (curLine.started || now) });
+          drawActivity = drawActivity.filter(function (a) { return now - a.end < DRAW_SPAM_WINDOW; });
+          var total = 0;
+          for (var i = 0; i < drawActivity.length; i++) total += drawActivity[i].dur;
+          if (total >= DRAW_SPAM_LIMIT) drawLock();
         }
         curLine = null;
       });
@@ -510,7 +580,7 @@
   if (/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname)) {
     window.__bfDrawDebug = { get lines() { return lines; }, toWorld: toWorld, setDrawMode: function (v) {
       drawMode = !!v; if (gDraw) gDraw.classList.toggle('on', drawMode);
-    } };
+    }, get lockUntil() { return drawLockUntil; }, forceSpamLock: drawLock };
   }
 
   if (window.BFSound) {
