@@ -17,6 +17,8 @@
   var VIEW   = q.get('view');                 // просмотр одной карты из Maps Browser
   var VAUTH  = q.get('author');
   var PRACTICE = q.get('practice') === '1';   // Practice Mode — см. Maps Browser
+  var GOD  = PRACTICE && q.get('god') === '1';   // неуязвимость — подопция Practice, ставится там же
+  var FLY  = PRACTICE && q.get('fly') === '1';   // полёт — подопция Practice, ставится там же
 
   /* Заголовок вкладки — по режиму, а не унаследованное от редактора
      «Map Editor» (страница game.html — это сама игра, а не редактор).
@@ -172,12 +174,6 @@
     + 'font:700 9.5px sans-serif;letter-spacing:-.02em}'
     + '#gDrawTarget{height:32px;max-width:110px;border:1px solid #d7dee7;border-radius:8px;'
     + 'background:#fff;color:#111827;font:12px sans-serif;padding:0 4px}'
-    + '#gGod,#gFly{background:#fff;color:#111827;border:1px solid #d7dee7;width:32px;height:32px;'
-    + 'border-radius:8px;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center}'
-    + '#gGod svg,#gFly svg{width:17px;height:17px;display:block;pointer-events:none}'
-    + '#gGod:active,#gFly:active{background:#f2f7fd}'
-    + '#gGod.on{background:#22c55e;color:#fff;border-color:#22c55e}'
-    + '#gFly.on{background:#8b5cf6;color:#fff;border-color:#8b5cf6}'
     + '#gMap{position:fixed;right:12px;bottom:12px;z-index:60;background:rgba(255,255,255,.92);'
     + 'border:1px solid #d7dee7;border-radius:9px;padding:8px 13px;font:12.5px sans-serif;max-width:46vw}'
     + '#gMap .n{font-weight:bold;color:#111827;word-break:break-word}'
@@ -379,14 +375,6 @@
     + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     + '<path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></button>'
     + '<select id="gDrawTarget" title="Кому показать линию" style="display:none"><option value="all">Все</option></select>'
-    + (PRACTICE
-      ? '<button id="gGod" aria-label="God mode" title="Неуязвимость (Practice)"><svg viewBox="0 0 24 24" '
-        + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-        + '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></button>'
-        + '<button id="gFly" aria-label="Fly mode" title="Полёт (Practice)"><svg viewBox="0 0 24 24" '
-        + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-        + '<path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9 22 2z"/></svg></button>'
-      : '')
     + '<button id="gExit">Меню</button></div>'
     + '<div id="gMap"><div class="n" id="gMapName">Loading map…</div>'
     + '<div class="a" id="gMapAuthor"></div><div class="rate" id="gRate" style="display:none">'
@@ -621,22 +609,6 @@
     });
   }
 
-  /* Practice: неуязвимость и полёт — включаются и выключаются в любой
-     момент, независимо друг от друга. Кнопки есть только когда карта
-     открыта в Practice Mode (см. PRACTICE выше — Maps Browser). */
-  if (PRACTICE) {
-    var gGod = $('gGod'), gFly = $('gFly');
-    if (gGod) gGod.onclick = function () {
-      var on = !gGod.classList.contains('on');
-      gGod.classList.toggle('on', on);
-      GAME.godMode = on;
-    };
-    if (gFly) gFly.onclick = function () {
-      var on = !gFly.classList.contains('on');
-      gFly.classList.toggle('on', on);
-      GAME.flying = on;
-    };
-  }
   // мост для автотестов — тем же приёмом, что __bfChatDebug выше.
   // get lines() — не сырая ссылка: onDraw пересоздаёт массив на filter()
   // каждый кадр, старая ссылка иначе тут же устареет
@@ -1054,6 +1026,8 @@
     try {
       GAME.loadMap(m.mapData);
       GAME.practice = PRACTICE;
+      GAME.godMode = GOD;
+      GAME.flying = FLY;
       GAME.startPlay();
       finSent = false;
       applyColor();
