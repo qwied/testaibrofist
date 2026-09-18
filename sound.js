@@ -118,6 +118,20 @@
   // клик по UI (click()), чтобы не путался с ним на слух
   function toggle() { tap(0.045, 0.06, 700); }
 
+  // рулетка искателя: разгон в начале прокрутки — короткий восходящий
+  // свист, отдельно от jump()/bounce() по тембру, чтобы не путался с ними
+  function roulSpin() { tone(320, 0.22, { type: 'sine', endFreq: 900, volume: 0.055, cutoff: 2200 }); }
+  // тик на каждое проехавшее имя в ленте — то самое «тр-р-р» рулетки;
+  // самый тихий и короткий тап на сайте: имена мелькают часто, звук не
+  // должен сливаться в кашу или заглушать всё вокруг
+  function roulTick() { tap(0.018, 0.022, 3200 + Math.random() * 500); }
+  // остановка ленты на победителе — весомый «стоп», ниже и суше тиков,
+  // с лёгким резонансом, чтобы момент чувствовался, а не терялся
+  function roulLand() {
+    tap(0.07, 0.06, 500);
+    tone(220, 0.12, { type: 'sine', endFreq: 160, volume: 0.05, delay: 0.02, cutoff: 900 });
+  }
+
   // клик по кнопке/ссылке — тёплый «тап», не писк
   function click() { tap(0.032, 0.045, 2400 + Math.random() * 400); }
   // печать — самый тихий и короткий, лёгкая случайная вариация как у
@@ -182,6 +196,7 @@
     jump: jump, tick: tick, go: go, death: death, chat: chat, win: win,
     click: click, place: place, step: step, finish: finish, type: type,
     land: land, bounce: bounce, checkpoint: checkpoint, toggle: toggle,
+    roulSpin: roulSpin, roulTick: roulTick, roulLand: roulLand,
     isOn: function () { return on; }, setOn: setOn
   };
 })();

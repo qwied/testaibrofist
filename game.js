@@ -870,14 +870,28 @@
   var hsEver = false;          // сервер уже присылал события пряток
   var hsWinnerId = null;       // кто искатель в текущем раунде
   var roulTimers = [];
+  var roulRAF = null;          // тики рулетки — см. runRoulette()
 
   function roulStop() {
     roulTimers.forEach(clearTimeout);
     roulTimers = [];
+    if (roulRAF) { cancelAnimationFrame(roulRAF); roulRAF = null; }
     var r = $('gRoul');   if (r)  r.classList.remove('on');
     var s = $('gRoulRes');   if (s) { s.classList.remove('on'); s.textContent = ''; }
     document.body.classList.remove('hasRoulette');
     relayoutCorner();
+  }
+
+  /* Живое значение translateX ленты рулетки во время CSS-transition:
+     track.style.transform хранит целевое значение, не текущее — во время
+     анимации его отдаёт только getComputedStyle(). */
+  function currentTrackX(el) {
+    var m = getComputedStyle(el).transform;
+    if (!m || m === 'none') return 0;
+    var mm = /matrix\(([^)]+)\)/.exec(m);
+    if (!mm) return 0;
+    var parts = mm[1].split(',');
+    return parseFloat(parts[4]) || 0;
   }
 
   function nameOfId(id, list) {
@@ -986,9 +1000,27 @@
     track.style.transition = 'transform ' + spin + 'ms cubic-bezier(.09,.66,.14,1)';
     track.style.transform  = 'translateX(' + posOf(target) + 'px)';
 
+    /* Тики рулетки: не пытаемся сами повторить кривую cubic-bezier
+       анимации (разгон-торможение уже считает браузер) — просто читаем
+       текущий сдвиг ленты каждый кадр и звеним, когда под центром
+       сменилось имя. Звук сам получается быстрым в начале и медленным
+       к концу, синхронно с тем, что видно на экране. */
+    if (window.BFSound) {
+      BFSound.roulSpin();
+      var tickIdx = startIdx;
+      var tickUntil = Date.now() + spin;
+      (function tickFrame() {
+        if (Date.now() >= tickUntil) { roulRAF = null; return; }
+        var idx = Math.round((W / 2 - step / 2 - currentTrackX(track)) / step);
+        if (idx !== tickIdx) { tickIdx = idx; BFSound.roulTick(); }
+        roulRAF = requestAnimationFrame(tickFrame);
+      })();
+    }
+
     roulTimers.push(setTimeout(function () {
       pills[target].classList.add('rWin');      // ник искателя становится синим
       applySeeker(d.winnerId);
+      if (window.BFSound) BFSound.roulLand();
       if (d.winnerId === socket.id) {
         res.textContent = TR('roulYouSeek', 'Ты — искатель!');
         res.classList.add('on');
