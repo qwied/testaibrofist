@@ -75,8 +75,8 @@ const PUBLIC_JS = new Set([
   'abuseshow.js', 'account.js', 'adminabuse.js', 'coin.js', 'consent.js',
   'dailyreward.js', 'device.js', 'editorai.js', 'editorhelp.js', 'game.js',
   'gifplayer.js', 'gifuct.bundle.js', 'i18n.js', 'nav.js', 'owner.js',
-  'shell.js', 'skinavatar.js', 'skincanvas.js', 'skinrender.js', 'sound.js',
-  'theme.js'
+  'roomlist.js', 'shell.js', 'skinavatar.js', 'skincanvas.js', 'skinrender.js',
+  'sound.js', 'theme.js'
 ]);
 // owner.js и adminAbuse.js разрешены здесь только затем, чтобы запрос дошёл
 // до своих маршрутов выше — там они проверяют права владельца отдельно.
@@ -369,12 +369,11 @@ app.get(/^\/avatar\//, (req, res) => {
 app.get('/getBestRoom', (req, res) => {
   // чистим как имя комнаты в join: мусор в mode не заводит лишние ключи
   const mode = cleanName(req.query.mode) || 'hideAndSeek';
-  const LIMIT = 40;                      // больше — заводим новую комнату
   let best = null, bestCount = -1;
   gameState.rooms.forEach((set, key) => {
     if (key.indexOf(mode + ':') !== 0) return;
     const n = set.size;
-    if (n >= LIMIT) return;
+    if (n >= ROOM_FULL) return;
     if (n > bestCount) { bestCount = n; best = key.slice(mode.length + 1); }
   });
   if (!best) {
@@ -385,6 +384,29 @@ app.get('/getBestRoom', (req, res) => {
     bestCount = 0;
   }
   res.json({ room: best, players: Math.max(0, bestCount) });
+});
+
+/* Список комнат режима для ручного выбора (см. hide-and-seek.html/race.html):
+   старая обратная связь просила «светофор» — красный (полна), жёлтый
+   (кто-то только что вышел — освобождается место), зелёный (свободно).
+   Пустые комнаты тут не появляются вовсе: gameState.rooms не хранит
+   комнату без единого игрока (см. join()/disconnect ниже) — свежую
+   комнату всё так же даёт кнопка «Играть» через /getBestRoom. */
+const ROOM_RECENT_LEFT_MS = 30000;
+app.get('/getRoomList', (req, res) => {
+  const mode = cleanName(req.query.mode) || 'hideAndSeek';
+  const now = Date.now();
+  const list = [];
+  gameState.rooms.forEach((set, key) => {
+    if (key.indexOf(mode + ':') !== 0) return;
+    const n = set.size;
+    const status = n >= ROOM_FULL ? 'red'
+                 : (now - (roomLeftAt.get(key) || 0) < ROOM_RECENT_LEFT_MS) ? 'yellow'
+                 : 'green';
+    list.push({ room: key.slice(mode.length + 1), players: n, status });
+  });
+  list.sort((a, b) => b.players - a.players);
+  res.json({ rooms: list, limit: ROOM_FULL });
 });
 
 /* Публичный список того, кто сейчас в игре: те же имя/режим/комната,
@@ -440,6 +462,13 @@ const gameState = {
     totalRooms: 0
   }
 };
+
+// «Ушёл только что» — для жёлтого статуса в /getRoomList. Ключ — тот же,
+// что и в gameState.rooms ("mode:room"). Старые записи не чистим: они
+// либо перекрываются следующим выходом, либо просто больше не читаются,
+// если комната опустела и удалилась из gameState.rooms.
+const roomLeftAt = new Map();
+const ROOM_FULL = 40;   // совпадает с LIMIT в /getBestRoom — комната считается полной с этого числа
 
 /* ================== ПРЯТКИ: ФАЗЫ И РУЛЕТКА ИСКАТЕЛЯ ==================
    Комнаты hideAndSeek живут по фазам, которые задаёт сервер: лобби с
@@ -812,6 +841,7 @@ io.on('connection', (socket) => {
           gameState.stats.totalRooms--;
         }
       }
+      roomLeftAt.set(prevRoom, Date.now());
       io.to(prevRoom).emit('playerLeft', { playerId: socket.id });
       if (prevRoom.indexOf('hideAndSeek:') === 0) hsOnLeave(io, prevRoom, socket.id);
       if (prevRoom.indexOf('race:') === 0) broadcastRaceScores(io, prevRoom);
@@ -1146,6 +1176,7 @@ io.on('connection', (socket) => {
         }
       }
 
+      roomLeftAt.set(room, Date.now());
       io.to(room).emit('playerLeft', { playerId: socket.id });
       if (room.indexOf('hideAndSeek:') === 0) hsOnLeave(io, room, socket.id);
       if (room.indexOf('race:') === 0) broadcastRaceScores(io, room);
@@ -1245,6 +1276,7 @@ setInterval(() => {
       rp.delete(id);
       if (!rp.size) { gameState.rooms.delete(p.room); gameState.stats.totalRooms--; }
     }
+    roomLeftAt.set(p.room, Date.now());
     io.to(p.room).emit('playerLeft', { playerId: id });
     if (String(p.room).indexOf('hideAndSeek:') === 0) hsOnLeave(io, p.room, id);
     console.log('убран зависший игрок', p.name);
