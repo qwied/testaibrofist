@@ -203,9 +203,20 @@ body.play.mob #pad{display:flex}
 #file{display:none}
 
 /* mobile */
-body.mob #modes{top:8px;bottom:auto;left:8px;right:8px;padding:3px}
+/* На телефоне панели режима и модификации стоят ПОД верхней панелью, а не
+   на ней. Раньше #modes и #scene оба висели на top:8px и просто лежали друг
+   на друге: в точке вкладок «Прятки/Гонка» оказывалась кнопка сохранения,
+   и переключить режим с телефона было физически нельзя. */
+body.mob #modes{top:66px;bottom:auto;left:8px;right:8px;padding:3px}
 body.mob .modeBtn{padding:8px 9px;font-size:11px}
-body.mob #scene{top:8px;bottom:auto;padding:3px}
+body.mob #apoc{top:110px;bottom:auto;left:8px;right:8px;padding:3px}
+body.mob .apocBtn{padding:7px 9px;font-size:11px}
+/* Верхняя панель заканчивается ДО кнопки публикации. Она стоит в правом
+   верхнем углу сама по себе (#bfPublish, position:fixed, z-index:19), а
+   панель прокручивается по горизонтали — и на телефоне прокрученная
+   панель уводила кнопку «Играть» ровно под неё: из 44px кнопки 41 был
+   перекрыт, и нажатие попадало в «Опубликовать» вместо запуска карты. */
+body.mob #scene{top:8px;bottom:auto;padding:3px;left:8px;right:62px;transform:none;max-width:none}
 body.mob .sBtn{width:38px;height:34px}
 body.mob #tools{left:0;right:0;bottom:0;top:auto;transform:none;width:100%;max-height:none;flex-direction:row;
   border-radius:16px 16px 0 0;max-height:none;height:58px;overflow-x:auto;overflow-y:hidden;padding:6px 8px;gap:4px}

@@ -175,6 +175,12 @@ body{
     grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
     gap: 22px;
     box-sizing: border-box;
+    /* Выбор режима — единственное, что есть на этой странице, поэтому он
+       стоит по центру свободной высоты, а не жмётся к верхней кромке.
+       min-height, а не height: если карточки не влезают (узкий телефон,
+       где они встают в столбик), страница просто прокручивается. */
+    min-height: calc(100vh - 170px);
+    align-content: center;
 }
 
 .cards .cardContainer{
@@ -197,9 +203,15 @@ body{
     box-shadow: 0px 16px 20px -8px #bbb;
 }
 
+/* Обложки режимов нарисованы с чуть разными пропорциями (800x723 и
+   800x733). При width:100% это давало карточкам разную высоту, и стоящие
+   рядом подписи «Hide and Seek» и «Race» не совпадали по строке. Задаём
+   обложке единые пропорции — разница в пару процентов уходит в обрез. */
 .card img{
     width: 100%;
     display: block;
+    aspect-ratio: 11 / 10;
+    object-fit: cover;
 }
 
 .card div{
