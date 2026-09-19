@@ -485,6 +485,23 @@ function shapeFill(o){
   g.addColorStop(1, o.fill2);
   return g;
 }
+/* Линза лазера — общий рисунок для старого отдельного объекта laserFeed
+   и для той же самой линзы на обычной фигуре со свойством «Лазер»
+   (см. paint()): мягкое свечение позади, пока луч перекрыт, плюс сама
+   линза с ободком. */
+function laserLens(cx, cy, r, active){
+  if(active){
+    var halo = ctx.createRadialGradient(cx,cy,0, cx,cy,r*3.4);
+    halo.addColorStop(0, "rgba(239,68,68,.55)");
+    halo.addColorStop(1, "rgba(239,68,68,0)");
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(cx,cy,r*3.4,0,6.2832); ctx.fill();
+  }
+  ctx.fillStyle = active ? "#fca5a5" : "#7f1d1d";
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,6.2832); ctx.fill();
+  ctx.strokeStyle = active ? "#ef4444" : "#450a0a"; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(cx,cy,r*1.7,0,6.2832); ctx.stroke();
+}
 /* Each painter draws the object in its own local space (0,0 → w,h). */
 var PAINT = {
   rect: function(o){
@@ -608,10 +625,7 @@ var PAINT = {
   laserFeed: function(o){
     ctx.fillStyle = C.stone3; rr(0,0,o.w,o.h,3); ctx.fill();
     var r = Math.max(2.5, Math.min(o.w,o.h)*0.22), cx = o.w*0.82, cy = o.h/2;
-    ctx.fillStyle = o._act ? "#fca5a5" : "#7f1d1d";
-    ctx.beginPath(); ctx.arc(cx,cy,r,0,6.2832); ctx.fill();
-    ctx.strokeStyle = o._act ? "#ef4444" : "#450a0a"; ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.arc(cx,cy,r*1.7,0,6.2832); ctx.stroke();
+    laserLens(cx, cy, r, !!o._act);
   },
   // приёмник — только ориентир для автора карты, в игровую логику не входит
   laserReceiver: function(o){
@@ -1293,6 +1307,74 @@ function segHitsRect(x0, y0, x1, y1, rx, ry, rw, rh){
   return null;
 }
 
+// параметр t пересечения отрезка (x1,y1)-(x2,y2) с отрезком (x3,y3)-(x4,y4), иначе null
+function segSegT(x1,y1,x2,y2, x3,y3,x4,y4){
+  var d1x = x2-x1, d1y = y2-y1, d2x = x4-x3, d2y = y4-y3;
+  var denom = d1x*d2y - d1y*d2x;
+  if(Math.abs(denom) < 1e-9) return null;
+  var t = ((x3-x1)*d2y - (y3-y1)*d2x) / denom;
+  var u = ((x3-x1)*d1y - (y3-y1)*d1x) / denom;
+  if(t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return t;
+}
+// ближайшее пересечение отрезка с настоящим (повёрнутым) многоугольником стены
+function raySegHitsPoly(x0,y0,x1,y1, poly){
+  var n = poly.length, best = null;
+  for(var i=0;i<n;i++){
+    var a = poly[i], b = poly[(i+1)%n];
+    var t = segSegT(x0,y0,x1,y1, a[0],a[1], b[0],b[1]);
+    if(t !== null && (best === null || t < best)) best = t;
+  }
+  return best;
+}
+/* Пока луч не бьёт по прямой одним отрезком, он не огибал стены и не
+   отражался — это и просил поправить фидбек. Теперь трасса строится по
+   настоящей физике: любая сплошная стена (solid(), та же проверка, что
+   и у движения игрока) её либо глушит, либо, если у неё включён
+   «Рикошет», отражает под тем же углом, под каким луч в неё влетел
+   (faceNormal — та самая нормаль грани, что и у батута). Ограничение
+   числа отскоков — только страховка от вечного цикла между двух
+   параллельных зеркал. */
+var LASER_MAX_BOUNCES = 6;
+function computeLaserPath(o){
+  var ox = o.x+o.w/2, oy = o.y+o.h/2, rad = (o.rot||0)*Math.PI/180;
+  var dx = Math.cos(rad), dy = Math.sin(rad), remaining = o.range||500;
+  var pts = [{x:ox, y:oy}], hit = false, b, i;
+  for(b=0; b<=LASER_MAX_BOUNCES; b++){
+    var ex = ox+dx*remaining, ey = oy+dy*remaining;
+    var tPlayer = (playing && !pl.dead) ? segHitsRect(ox,oy,ex,ey, pl.x,pl.y,pl.w,pl.h) : null;
+    var bestT = null, bestObj = null;
+    for(i=0;i<objects.length;i++){
+      var w = objects[i];
+      if(w === o || !solid(w)) continue;
+      var bb = bbox(w);
+      if(segHitsRect(ox,oy,ex,ey, bb[0],bb[1], bb[2]-bb[0], bb[3]-bb[1]) === null) continue;
+      var t = raySegHitsPoly(ox,oy,ex,ey, polyOf(w));
+      if(t !== null && (bestT === null || t < bestT)){ bestT = t; bestObj = w; }
+    }
+    if(tPlayer !== null && (bestT === null || tPlayer <= bestT)){
+      pts.push({x: ox+(ex-ox)*tPlayer, y: oy+(ey-oy)*tPlayer});
+      hit = true;
+      break;
+    }
+    if(bestT !== null){
+      var hx = ox+(ex-ox)*bestT, hy = oy+(ey-oy)*bestT;
+      pts.push({x:hx, y:hy});
+      if(!bestObj.ricochet || b === LASER_MAX_BOUNCES) break;
+      var nrm = faceNormal(bestObj, hx, hy);
+      var dot = dx*nrm[0] + dy*nrm[1];
+      var rx = dx-2*dot*nrm[0], ry = dy-2*dot*nrm[1], rl = Math.sqrt(rx*rx+ry*ry)||1;
+      dx = rx/rl; dy = ry/rl;
+      remaining = remaining*(1-bestT);
+      ox = hx+dx*0.05; oy = hy+dy*0.05;   // микроотступ, чтобы не отразиться от той же грани ещё раз в этой же точке
+      continue;
+    }
+    pts.push({x: ex, y: ey});
+    break;
+  }
+  return {pts: pts, hit: hit};
+}
+
 /* ══════════════════════════════════════════════════
    ТОЛКАЕМЫЕ ОБЪЕКТЫ
    «Толкается» — свойство, как «Рикошет» или «Двигается»: доступно
@@ -1891,20 +1973,15 @@ function drive(src){
   objects.forEach(function(o){ if(o.customId && ids.indexOf(o.customId) !== -1) o._act = src._act; });
 }
 /* Лазер — тот же принцип, что и кнопка (см. drive() выше): «нажат», пока
-   игрок перекрывает луч, отпущен, как только сошёл. Луч бьёт по прямой
-   на o.range вдоль поворота объекта (0° — локальный +x, тот же «вперёд»,
-   что и у обычного поворота фигуры) и стены не огибает — приёмник лишь
-   ориентир для автора карты, куда целиться, в саму проверку не входит. */
+   игрок перекрывает луч, отпущен, как только сошёл. Трасса луча (с учётом
+   отражений от стен с «Рикошетом») считается в computeLaserPath(). */
 function laserFeeds(){
   for(var i=0;i<objects.length;i++){
     var o = objects[i];
     if(o.type !== "laserFeed" && !o.laser) continue;
-    var cx = o.x+o.w/2, cy = o.y+o.h/2, rad = (o.rot||0)*Math.PI/180;
-    var range = o.range||500;
-    var ex = cx + Math.cos(rad)*range, ey = cy + Math.sin(rad)*range;
-    var t = pl.dead ? null : segHitsRect(cx, cy, ex, ey, pl.x, pl.y, pl.w, pl.h);
-    var hit = t !== null;
-    o._beamEnd = hit ? {x: cx+(ex-cx)*t, y: cy+(ey-cy)*t} : {x: ex, y: ey};
+    var path = computeLaserPath(o);
+    o._beamPts = path.pts;
+    var hit = path.hit;
     if(hit && !o._act){ o._act = true; drive(o); if(window.BFSound) BFSound.toggle(); }
     else if(!hit && o._act){ o._act = false; drive(o); }
   }
@@ -1963,10 +2040,7 @@ function paint(o, isSel){
      раньше была у laserFeed, поверх обычной фигуры. */
   if(o.laser){
     var lr = Math.max(2.5, Math.min(o.w,o.h)*0.18), lcx = o.w*0.88, lcy = o.h/2;
-    ctx.fillStyle = o._act ? "#fca5a5" : "#7f1d1d";
-    ctx.beginPath(); ctx.arc(lcx,lcy,lr,0,6.2832); ctx.fill();
-    ctx.strokeStyle = o._act ? "#ef4444" : "#450a0a"; ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.arc(lcx,lcy,lr*1.7,0,6.2832); ctx.stroke();
+    laserLens(lcx, lcy, lr, !!o._act);
   }
   if(!playing && o.deadly && DEADLY_BY_DEFAULT.indexOf(o.type) === -1){
     ctx.globalAlpha = 1; ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 2;
@@ -2048,22 +2122,38 @@ function paintFrame(){
     if(playing && ro.type === "spawn") continue;
     paint(ro, !playing && ro === sel); drawn++;
   }
-  /* Луч рисуется отдельным проходом, не в PAINT.laserFeed: его конец
-     зависит от игрока (см. laserFeeds()), а не только от самого объекта.
-     Вне игры показываем полную дальность — ориентир, куда целится. */
+  /* Луч рисуется отдельным проходом, не в PAINT.laserFeed: его трасса (с
+     отражениями от стен) зависит от игрока и от всей карты, а не только
+     от самого объекта. Во время игры путь уже посчитан в laserFeeds();
+     вне игры считаем его тут же — так автор карты сразу видит, куда луч
+     реально попадёт и от чего отскочит, ещё до нажатия «Играть». */
   for(var lfi=0; lfi<objects.length; lfi++){
     var lo = objects[lfi];
     if(lo.type !== "laserFeed" && !lo.laser) continue;
-    var lcx = lo.x+lo.w/2, lcy = lo.y+lo.h/2, lend;
-    if(playing && lo._beamEnd) lend = lo._beamEnd;
-    else {
-      var lrad = (lo.rot||0)*Math.PI/180, lrange = lo.range||500;
-      lend = {x: lcx+Math.cos(lrad)*lrange, y: lcy+Math.sin(lrad)*lrange};
-    }
+    var lpts = (playing && lo._beamPts) ? lo._beamPts : computeLaserPath(lo).pts;
+    if(lpts.length < 2) continue;
+    var lpi, lglow = lo._act ? "rgba(239,68,68,.32)" : "rgba(239,68,68,.13)";
+    var lpulse = 0.72 + 0.28*Math.sin(performance.now()/170 + lo.x*0.05 + lo.y*0.05);
+    var lcore = lo._act ? "rgba(254,226,226,.95)" : "rgba(239,68,68," + (0.5*lpulse).toFixed(2) + ")";
     ctx.save();
-    ctx.strokeStyle = lo._act ? "rgba(239,68,68,.9)" : "rgba(239,68,68,.35)";
-    ctx.lineWidth = (lo._act ? 3 : 1.6) / view.s;
-    ctx.beginPath(); ctx.moveTo(lcx,lcy); ctx.lineTo(lend.x,lend.y); ctx.stroke();
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    // мягкое свечение под лучом
+    ctx.strokeStyle = lglow; ctx.lineWidth = (lo._act ? 7.5 : 5) / view.s;
+    ctx.beginPath(); ctx.moveTo(lpts[0].x, lpts[0].y);
+    for(lpi=1; lpi<lpts.length; lpi++) ctx.lineTo(lpts[lpi].x, lpts[lpi].y);
+    ctx.stroke();
+    // яркая сердцевина, слегка пульсирующая, пока луч не перекрыт
+    ctx.strokeStyle = lcore; ctx.lineWidth = (lo._act ? 3 : 1.7) / view.s;
+    ctx.beginPath(); ctx.moveTo(lpts[0].x, lpts[0].y);
+    for(lpi=1; lpi<lpts.length; lpi++) ctx.lineTo(lpts[lpi].x, lpts[lpi].y);
+    ctx.stroke();
+    // вспышка в каждой точке отражения от стены
+    if(lpts.length > 2){
+      ctx.fillStyle = "rgba(254,242,242,.9)";
+      for(lpi=1; lpi<lpts.length-1; lpi++){
+        ctx.beginPath(); ctx.arc(lpts[lpi].x, lpts[lpi].y, 3.2/view.s, 0, 6.2832); ctx.fill();
+      }
+    }
     ctx.restore();
   }
   if(playing && !pl.dead){
