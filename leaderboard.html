@@ -33,6 +33,16 @@
                    числом у каждой строки, а не отдельным заголовком над списком */
                 .lbScoreBadge{display:inline-block;padding:3px 10px;border-radius:16px;font-size:10.5px;
                         font-weight:700;color:#fff;background:#2196F3;text-transform:uppercase;letter-spacing:.02em}
+                /* Ранг навыка рядом с именем — только в режимных таблицах:
+                   монеты о мастерстве ничего не говорят (см. /getLeaderboard). */
+                .lbRank{flex:0 0 auto;min-width:30px;text-align:center;padding:2px 7px;border-radius:7px;
+                        font-size:11px;font-weight:800;letter-spacing:.02em;border:1px solid transparent}
+                .lbRank[data-r="S"]{color:#fff;background:#f59e0b;border-color:#d97706}
+                .lbRank[data-r="A+"],.lbRank[data-r="A"]{color:#fff;background:#ef4444;border-color:#dc2626}
+                .lbRank[data-r="B+"],.lbRank[data-r="B"]{color:#fff;background:#8b5cf6;border-color:#7c3aed}
+                .lbRank[data-r="C+"],.lbRank[data-r="C"]{color:#475569;background:#e2e8f0;border-color:#cbd5e1}
+                .lbRank[data-r="Declassified"]{color:#64748b;background:transparent;border-color:#cbd5e1;
+                        font-size:9.5px;font-weight:700}
                 .mine{margin-top:22px;padding:13px;border:1px dashed #cfd6de;border-radius:8px;
                         color:#5b6570;font-size:14px;text-align:center}
                 .empty{color:#8b93a1;text-align:center;padding:50px 10px}
@@ -79,7 +89,8 @@
         <div class="lbCol">
                 <div class="lbTabs" id="lbMetricTabs">
                         <div class="lbTab on" data-metric="coins" data-i18n="lbTabCoins">Монеты</div>
-                        <div class="lbTab" data-metric="score" data-i18n="lbTabScore">Очки</div>
+                        <div class="lbTab" data-metric="score" data-i18n="race">Race</div>
+                        <div class="lbTab" data-metric="hs" data-i18n="hideAndSeek">Hide and Seek</div>
                 </div>
                 <div class="lbTabs lbPeriodTabs" id="lbPeriodTabs">
                         <div class="lbTab" data-period="day" data-i18n="lbPeriodDay">Сегодня</div>
@@ -120,12 +131,20 @@
                 return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
         function unit() {
-                return state.metric === 'score' ? T('lbScoreUnit', 'очков') : T('lbCoinsUnit', 'монет');
+                return state.metric === 'coins' ? T('lbCoinsUnit', 'монет') : T('lbScoreUnit', 'очков');
         }
         function amountHtml(n) {
-                return state.metric === 'score'
-                        ? '<div class="lbCoins score"><span class="lbScoreBadge">' + T('raceScoresTitle', 'Scores') + '</span>' + n + '</div>'
-                        : '<div class="lbCoins">' + n + ' ' + (window.BFCoin ? BFCoin.svg(15) : '') + '</div>';
+                if (state.metric === 'coins')
+                        return '<div class="lbCoins">' + n + ' ' + (window.BFCoin ? BFCoin.svg(15) : '') + '</div>';
+                var badge = state.metric === 'hs' ? T('hideAndSeek', 'Hide and Seek') : T('race', 'Race');
+                return '<div class="lbCoins score"><span class="lbScoreBadge">' + esc(badge) + '</span>' + n + '</div>';
+        }
+        // ранг приходит вместе со страницей, только для режимных таблиц
+        function rankHtml(name, ranks) {
+                var r = ranks && ranks[name];
+                if (!r) return '';
+                var short = r === 'Declassified' ? 'D' : r;
+                return '<div class="lbRank" data-r="' + esc(r) + '" title="' + esc(r) + '">' + esc(short) + '</div>';
         }
 
         function load() {
@@ -154,6 +173,7 @@
                                                         + '<div class="lbPlace">' + place + '</div>'
                                                         + '<div class="lbAva"><img src="/avatar/0.png" alt="" data-bf-name="' + esc(u2.name) + '"></div>'
                                                         + '<div class="lbName" data-n="' + esc(u2.name) + '">' + esc(u2.name) + '</div>'
+                                                        + rankHtml(u2.name, d.ranks)
                                                         + amountHtml(u2.amount) + '</div>';
                                         }).join('');
                                 }

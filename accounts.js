@@ -335,6 +335,55 @@ function creditScore(name, amount) {
   return amount;
 }
 
+/* Очки Hide and Seek — ровно тот же приём, что у Race (см. scoreLog выше):
+   всё время копится в u.hsScore, а «за сегодня/за неделю» считается по
+   журналу. Своя таблица нужна потому, что в прятках нет времени финиша, по
+   которому меряют гонку: там ценно продержаться раунд хайдером и ловить
+   сикером, и мерить это очками Race было бы бессмысленно. */
+const HSLOG_FILE = path.join(DATA_DIR, 'hslog.json');
+const HSLOG_KEEP = COINLOG_KEEP;
+let hsLog = [];
+function loadHsLog() {
+  try {
+    if (fs.existsSync(HSLOG_FILE)) hsLog = JSON.parse(fs.readFileSync(HSLOG_FILE, 'utf8'));
+  } catch (e) { console.log('hslog.json не прочитан'); }
+  if (!Array.isArray(hsLog)) hsLog = [];
+}
+let hsLogSaveTimer = null;
+function saveHsLog() {
+  clearTimeout(hsLogSaveTimer);
+  hsLogSaveTimer = setTimeout(() => {
+    try {
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.writeFileSync(HSLOG_FILE, JSON.stringify(hsLog, null, 2));
+    } catch (e) { console.log('не смог сохранить hslog.json:', e.message); }
+  }, 300);
+}
+loadHsLog();
+
+// потолок тот же, что у Race: скрипт, крутящий раунды, в таблицу не залезет
+const HS_SCORE_WINDOW = 60 * 60 * 1000;
+const HS_SCORE_MAX = 600;
+function creditHsScore(name, amount) {
+  const u = db.users[key(name)];
+  if (!u || !(amount > 0)) return 0;
+  if (!u.hsWin || Date.now() - u.hsWin > HS_SCORE_WINDOW) {
+    u.hsWin = Date.now();
+    u.hsSum = 0;
+  }
+  if ((u.hsSum || 0) >= HS_SCORE_MAX) return 0;
+  amount = Math.min(amount, HS_SCORE_MAX - (u.hsSum || 0));
+  u.hsSum = (u.hsSum || 0) + amount;
+  u.hsScore = (u.hsScore || 0) + amount;
+  save();
+
+  const now = Date.now();
+  hsLog.push({ name: u.name, amount: amount, at: now });
+  if (hsLog.length % 200 === 0) hsLog = hsLog.filter(e => now - e.at < HSLOG_KEEP);
+  saveHsLog();
+  return amount;
+}
+
 function publicUser(u) {
   return { name: u.name, avatar: u.avatar, lastSeen: u.lastSeen };
 }
@@ -516,14 +565,18 @@ function register(app) {
   });
   app.get('/getCoins', (req, res) => {
     const u = db.users[key(req.query.name)];
-    if (!u) return res.json({ coins: 0, coinsDay: 0, coinsWeek: 0, score: 0, scoreDay: 0, scoreWeek: 0 });
+    if (!u) return res.json({ coins: 0, coinsDay: 0, coinsWeek: 0, score: 0, scoreDay: 0, scoreWeek: 0,
+                              hsScore: 0, hsScoreDay: 0, hsScoreWeek: 0 });
     res.json({
       coins: u.coins || 0,
       coinsDay: sumOne(coinLog, u.name, 24 * 60 * 60 * 1000),
       coinsWeek: sumOne(coinLog, u.name, 7 * 24 * 60 * 60 * 1000),
       score: u.score || 0,
       scoreDay: sumOne(scoreLog, u.name, 24 * 60 * 60 * 1000),
-      scoreWeek: sumOne(scoreLog, u.name, 7 * 24 * 60 * 60 * 1000)
+      scoreWeek: sumOne(scoreLog, u.name, 7 * 24 * 60 * 60 * 1000),
+      hsScore: u.hsScore || 0,
+      hsScoreDay: sumOne(hsLog, u.name, 24 * 60 * 60 * 1000),
+      hsScoreWeek: sumOne(hsLog, u.name, 7 * 24 * 60 * 60 * 1000)
     });
   });
   app.get('/getAboutMe', (req, res) => {
@@ -693,4 +746,4 @@ function register(app) {
   app.get('/captcha/getCaptcha', (req, res) => res.json({}));
 }
 
-module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, clientIp, creditCoins, creditScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, paginate, NICK_CHANGE_PRICE };
+module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, clientIp, creditCoins, creditScore, creditHsScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, getHsLog: () => hsLog, paginate, NICK_CHANGE_PRICE };

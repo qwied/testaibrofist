@@ -40,6 +40,18 @@
    что это вообще такое рядом с монетами */
 .upScoreBadge{display:inline-block;padding:3px 11px;border-radius:20px;font-size:11px;
   font-weight:700;color:#fff;background:var(--blue);text-transform:uppercase;letter-spacing:.03em}
+/* Ранг навыка по режимам — отдельной строкой под монетами и очками: это
+   не счёт, а оценка, и мешать её с накопительными числами не стоит. */
+.upRankRow{margin-top:9px}
+.upRank{display:inline-flex;align-items:center;gap:7px;padding:4px 11px;border-radius:20px;
+  font-size:13px;font-weight:800;letter-spacing:.02em;border:1px solid #cbd5e1;color:#475569;
+  background:#e2e8f0}
+.upRankMode{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;opacity:.75}
+.upRank[data-r="S"]{color:#fff;background:#f59e0b;border-color:#d97706}
+.upRank[data-r="A+"],.upRank[data-r="A"]{color:#fff;background:#ef4444;border-color:#dc2626}
+.upRank[data-r="B+"],.upRank[data-r="B"]{color:#fff;background:#8b5cf6;border-color:#7c3aed}
+.upRank[data-r="Declassified"]{color:#64748b;background:transparent}
+.upRank.none{color:#94a3b8;background:transparent;font-weight:600}
 .upActs{display:flex;gap:8px;flex-wrap:wrap}
 .upActs button,.upActs a{padding:10px 18px;border-radius:9px;cursor:pointer;font-size:14px;
   border:1px solid var(--blue);background:var(--panel);color:var(--blue);text-decoration:none;
@@ -197,6 +209,22 @@
   }
 
   /* ---------- шапка профиля ---------- */
+  /* Ранги навыка по режимам (см. ranks.js). Пока сыграно мало, ранга нет —
+     показываем пометку, а не «C»: оценка по паре раундов не оценка. */
+  function rankRow(rk) {
+    if (!rk) return '';
+    var parts = [
+      { k: 'race', title: T('race', 'Race'), v: rk.race },
+      { k: 'hs', title: T('hideAndSeek', 'Hide and Seek'), v: rk.hs }
+    ].map(function (p) {
+      var r = p.v ? p.v.rank : '';
+      var txt = r ? esc(r) : T('rankNone', 'нет ранга');
+      return '<span class="upRank' + (r ? '' : ' none') + '" data-r="' + esc(r) + '">'
+        + '<span class="upRankMode">' + esc(p.title) + '</span> ' + txt + '</span>';
+    }).join('');
+    return '<div class="upStatRow upRankRow">' + parts + '</div>';
+  }
+
   function drawHead(d) {
     isMe = me && !me.guest && String(me.name).toLowerCase() === who.toLowerCase();
     var acts = '';
@@ -229,6 +257,7 @@
       +       '<span class="upCoins">' + (window.BFCoin ? BFCoin.svg(18) : '') + ' <span id="upCoinsV">' + (s.coins || 0) + '</span></span>'
       +       '<span class="upScore"><span class="upScoreBadge">' + T('raceScoresTitle', 'Scores') + '</span> <span id="upScoreV">' + (s.score || 0) + '</span></span>'
       +     '</div>'
+      +     rankRow(d.rank)
       +   '</div>'
       +   '<div class="upActs">' + acts + '</div>'
       + '</div></div>'
@@ -520,7 +549,8 @@
       get('/getJoinDate?name=' + encodeURIComponent(who)).catch(function () { return 0; }),
       get('/getCoins?name=' + encodeURIComponent(who)).catch(function () { return 0; }),
       get('/getAboutMe?name=' + encodeURIComponent(who)).catch(function () { return ''; }),
-      get('/getRelation?name=' + encodeURIComponent(who)).catch(function () { return '0'; })
+      get('/getRelation?name=' + encodeURIComponent(who)).catch(function () { return '0'; }),
+      get('/getRank?name=' + encodeURIComponent(who)).catch(function () { return null; })
     ]).then(function (r) {
       me = r[0];
 
@@ -529,7 +559,8 @@
         joined: typeof r[1] === 'object' ? r[1].date : r[1],
         stats: stats,
         about: typeof r[3] === 'object' ? (r[3].about || '') : r[3],
-        relation: r[4]
+        relation: r[4],
+        rank: r[5]
       });
 
       if (isMe) {
