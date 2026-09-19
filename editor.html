@@ -500,6 +500,9 @@ function figure(w,h,col,accent,skin){
    он для НИХ теперь всегда просто первый цвет); тут это только сама
    заливка, без rgba(255,255,255,..) поверх. */
 function shapeFill(o){
+  // «Смена цвета» перебивает и обычную заливку, и градиент — см. галочку
+  // в инспекторе, там же гасится одно другим, чтобы не путать автора.
+  if(o.colorCycle && playing) return "hsl(" + Math.round(o._hue||0) + ",70%,50%)";
   if(!o.gradient || !o.fill2) return o.fill || C.ink;
   var g = ctx.createLinearGradient(0,0,o.w,0);
   g.addColorStop(0, o.fill || C.ink);
@@ -1181,7 +1184,7 @@ function play(){
   lastSafePos = {x:sp.x, y:sp.y};
   objects.forEach(function(o){
     o._hx = o.x; o._hy = o.y; o._t = 0; o._act = !!o.startsOpen;
-    o._reached = false; o._spin = 0; o._squash = 0;
+    o._reached = false; o._spin = 0; o._squash = 0; o._pulseT = 0; o._hue = 0;
   });
   respawn();
   document.body.classList.add("play");
@@ -1753,6 +1756,8 @@ function step(){
       }
     }
     if(o.spins) o._spin += (o.spin||2)*0.02;
+    if(o.pulse) o._pulseT = (o._pulseT||0) + 0.05;
+    if(o.colorCycle) o._hue = ((o._hue||0) + 1.2) % 360;
     if(o._squash) o._squash *= 0.82;
   });
   if(shake > 0) shake *= 0.86;
@@ -2282,6 +2287,12 @@ function paint(o, isSel){
   ctx.save();
   ctx.translate(o.x+o.w/2, o.y+o.h/2);
   ctx.rotate(o.spins && playing ? (o._spin||0) : (o.rot||0)*Math.PI/180);
+  /* Пульс масштабирует только рисунок, вокруг центра фигуры — сам объект
+     (w/h, хитбокс) не меняется, см. chkPulse в инспекторе. */
+  if(o.pulse && playing){
+    var ps = 1 + 0.22*Math.sin(o._pulseT||0);
+    ctx.scale(ps, ps);
+  }
   ctx.translate(-o.w/2, -o.h/2);
   if(open) ctx.globalAlpha = .2;
   if(o.ghost) ctx.globalAlpha *= .45;      // проходимые видно, но они не мешают
@@ -3164,19 +3175,26 @@ function inspect(){
      бликов и глянца — того самого «масляного» вида, который когда-то
      специально убрали у декоративных объектов (см. grad()). */
   if(SOLID.indexOf(sel.type) !== -1){
-    chk(TR("chkGradient","Градиент"), !!sel.gradient, function(v){
-      sel.gradient = v;
-      if(v && !sel.fill2) sel.fill2 = "#9ca3af";
-      inspect();
-    });
-    if(sel.gradient){
-      var r2 = pr();
-      r2.innerHTML = "<label>" + TR("lblColor2","Цвет 2") + "</label>";
-      var ci2 = document.createElement("input"); ci2.type = "color";
-      ci2.value = (sel.fill2 && sel.fill2[0] === "#" && sel.fill2.length === 7) ? sel.fill2 : "#9ca3af";
-      ci2.addEventListener("focus", commit);
-      ci2.addEventListener("input", function(){ sel.fill2 = ci2.value; });
-      r2.appendChild(ci2);
+    /* Смена цвета — тоже просто заливка, только не статичная и не
+       градиент, а перебор оттенков по кругу (см. shapeFill() и step()
+       выше). Включает и гасит цвет/градиент разом — иначе автору было бы
+       непонятно, почему выбранный им цвет не виден при проигрывании. */
+    chk(TR("chkColorCycle","Смена цвета"), !!sel.colorCycle, function(v){ sel.colorCycle = v; inspect(); });
+    if(!sel.colorCycle){
+      chk(TR("chkGradient","Градиент"), !!sel.gradient, function(v){
+        sel.gradient = v;
+        if(v && !sel.fill2) sel.fill2 = "#9ca3af";
+        inspect();
+      });
+      if(sel.gradient){
+        var r2 = pr();
+        r2.innerHTML = "<label>" + TR("lblColor2","Цвет 2") + "</label>";
+        var ci2 = document.createElement("input"); ci2.type = "color";
+        ci2.value = (sel.fill2 && sel.fill2[0] === "#" && sel.fill2.length === 7) ? sel.fill2 : "#9ca3af";
+        ci2.addEventListener("focus", commit);
+        ci2.addEventListener("input", function(){ sel.fill2 = ci2.value; });
+        r2.appendChild(ci2);
+      }
     }
   }
   if(sel.type === "text"){
@@ -3256,6 +3274,12 @@ function inspect(){
       });
       if(sel.spins) num(TR("lblSpinSpeed","Скорость вращения"), sel.spin||2, function(v){ sel.spin = v; });
     }
+
+    /* Изменение размера — чисто визуальный пульс (см. paint()), хитбокс
+       не трогает: значения w/h у объекта не меняются, только масштаб
+       рисунка. Поэтому, в отличие от Двигается/Вращается, ничего не
+       гасит и не гасится толкаемостью — конфликтовать здесь нечему. */
+    chk(TR("chkPulse","Изменение размера"), !!sel.pulse, function(v){ sel.pulse = v; inspect(); });
 
     /* Лазер — тоже свойство фигуры, а не отдельный объект (см. laserFeeds()
        в step()): включает связанные через «Цели» объекты, пока луч из этой
