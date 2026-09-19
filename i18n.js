@@ -205,6 +205,12 @@
     /* ---------- язык ---------- */
     language: "Language",
 
+    chatSection: "Chat",
+    chatHint: "Hides Messages for you (the menu item and its unread badge) and other "
+      + "players' lines in the in-game chat. You can still send your own messages.",
+    chatShow: "Show",
+    chatHide: "Hide",
+
     /* ---------- обзор карт ---------- */
     colName: "Name",
     colRating: "Rating",
@@ -843,6 +849,13 @@
     unlockThemes: "Открыть темы",
     defaultTheme: "Вернуть обычное оформление",
     language: "Язык",
+
+    chatSection: "Чат",
+    chatHint: "Скрывает у тебя Messages (пункт меню и значок непрочитанного) и чужие "
+      + "реплики в игровом чате. Свои сообщения отправлять по-прежнему можно.",
+    chatShow: "Показывать",
+    chatHide: "Скрыть",
+
     colName: "Название",
     colRating: "Рейтинг",
     colAuthor: "Автор",

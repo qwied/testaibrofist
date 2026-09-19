@@ -646,7 +646,24 @@ function register(app) {
     save();
     res.json({ status: 'success' });
   });
-  app.get('/getMySettings', (req, res) => res.json({ data: {} }));
+  /* Один персональный переключатель: скрыть у себя Messages (пункт меню,
+     значок непрочитанного, плавающая кнопка в игре) и чужие реплики в
+     игровом чате разом — обе половины старого пожелания "выключить чат"
+     были одной и той же жалобой (чат отвлекает), поэтому одна галочка
+     на обе. Свои сообщения отправлять всё ещё можно — прячется только
+     то, что видит сам игрок. Хранится на аккаунте, не в браузере: должно
+     работать одинаково на всех устройствах, как тема и язык. */
+  app.get('/getMySettings', (req, res) => {
+    const u = currentUser(req);
+    res.json({ data: { hideChat: !!(u && u.hideChat) } });
+  });
+  app.post('/settings/hideChat', (req, res) => {
+    const u = currentUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    u.hideChat = String(req.body.on) === '1';
+    save();
+    res.json({ status: 'success', hideChat: u.hideChat });
+  });
   app.get('/getMyOldMapsLink', (req, res) => res.json({ link: '' }));
 
   // ---------- поиск ----------
