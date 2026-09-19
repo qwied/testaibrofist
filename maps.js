@@ -30,6 +30,7 @@ const TOOL_MODES = {
   gate:null, spawn:null, finishline:null,
   button:null, lever:null, water:null, laserFeed:null, laserReceiver:null,
   zombie:null,                 // модификация Zombie Apocalypse — есть в обоих режимах
+  teleport:null,               // пара площадок — есть в обоих режимах, как кнопка/рычаг
   cover:['hideAndSeek'],
   checkpoint:['race'],
   superGate:['race'],
@@ -40,7 +41,7 @@ const TOOL_MODES = {
 const TOOL_RU = {
   cover:'Cover', seeker:'Seeker', door:'Door', button:'Button',
   lever:'Lever', checkpoint:'Checkpoint', finishline:'Finish', water:'Water',
-  superGate:'SUPER BRO gate',
+  superGate:'SUPER BRO gate', teleport:'Teleport',
   liquid:'Liquid'
 };
 
