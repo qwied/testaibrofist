@@ -27,6 +27,10 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
     -webkit-overflow-scrolling:touch;scrollbar-width:none}
   #modes::-webkit-scrollbar{display:none}
   .modeBtn{padding:9px 11px;font-size:12px;white-space:nowrap}
+  #apoc{top:54px;left:8px;right:8px;overflow-x:auto;max-width:calc(100vw - 16px);
+    -webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #apoc::-webkit-scrollbar{display:none}
+  .apocBtn{padding:8px 10px;font-size:11px;white-space:nowrap}
 
   #scene{top:auto;bottom:70px;left:50%;transform:translateX(-50%);
     max-width:calc(100vw - 16px);overflow-x:auto;scrollbar-width:none}
@@ -61,6 +65,14 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
   color:var(--muted);transition:.14s;white-space:nowrap}
 .modeBtn:hover{background:#eef2f8;color:var(--ink)}
 .modeBtn.on{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(59,130,246,.35)}
+/* Модификация карты — отдельной строкой под режимом: режим решает, какие
+   объекты вообще есть, а модификация — по каким правилам в них играют. */
+#apoc{position:fixed;top:62px;left:14px;display:flex;padding:4px;gap:2px;z-index:10}
+.apocBtn{padding:7px 12px;border-radius:8px;cursor:pointer;font-size:11.5px;font-weight:600;
+  color:var(--muted);transition:.14s;white-space:nowrap}
+.apocBtn:hover{background:#eef2f8;color:var(--ink)}
+.apocBtn.on{background:#16a34a;color:#fff;box-shadow:0 2px 8px rgba(22,163,74,.35)}
+.apocBtn.on[data-apoc="1"]{background:#65a30d;box-shadow:0 2px 8px rgba(101,163,13,.4)}
 
 /* top bar */
 #scene{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;padding:4px;gap:2px;z-index:10}
@@ -136,7 +148,7 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 #zLabel{font-size:12px;font-weight:600;min-width:48px}
 
 /* play */
-body.play #tools,body.play #insp,body.play #modes,body.play #zoomBox,body.play #hint{display:none!important}
+body.play #tools,body.play #insp,body.play #modes,body.play #zoomBox,body.play #hint,body.play #apoc{display:none!important}
 #hud{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:12;
   padding:8px 10px;align-items:center;gap:6px}
 body.play #hud{display:flex}
@@ -239,6 +251,7 @@ body{background:#eef2f8;overflow:hidden}
 <body>
 
 <div id="modes" class="panel"></div>
+<div id="apoc" class="panel"></div>
 <div id="scene" class="panel"></div>
 <div id="tools" class="panel"></div>
 
@@ -484,6 +497,32 @@ function shapeFill(o){
   g.addColorStop(0, o.fill || C.ink);
   g.addColorStop(1, o.fill2);
   return g;
+}
+/* Мертвец рисуется поверх той фигуры, что поставил автор: форма остаётся
+   его, но цвет и морда не оставляют вопросов, кто это. Контур берём
+   настоящим многоугольником фигуры (rawPoly), а не рамкой — иначе на
+   круге и треугольнике зелень торчала бы углами наружу. */
+function zombieSkin(o, active){
+  var pts = rawPoly(o), i;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for(i=1;i<pts.length;i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+  ctx.fillStyle = active ? "rgba(132,204,22,.92)" : "rgba(101,163,13,.75)";
+  ctx.fill();
+  ctx.strokeStyle = "#3f6212"; ctx.lineWidth = 1.5; ctx.stroke();
+  var r = Math.max(1.5, Math.min(o.w,o.h)*0.1);
+  var ey = o.h*0.44, ex1 = o.w*0.35, ex2 = o.w*0.65;
+  ctx.fillStyle = "#7f1d1d";
+  ctx.beginPath(); ctx.arc(ex1,ey,r,0,6.2832); ctx.fill();
+  ctx.beginPath(); ctx.arc(ex2,ey,r,0,6.2832); ctx.fill();
+  ctx.fillStyle = active ? "#fecaca" : "#f87171";
+  ctx.beginPath(); ctx.arc(ex1,ey,r*0.45,0,6.2832); ctx.fill();
+  ctx.beginPath(); ctx.arc(ex2,ey,r*0.45,0,6.2832); ctx.fill();
+  ctx.strokeStyle = "#3f6212"; ctx.lineWidth = Math.max(1, r*0.55);
+  ctx.beginPath(); ctx.moveTo(o.w*0.3, o.h*0.7); ctx.lineTo(o.w*0.7, o.h*0.7); ctx.stroke();
+  ctx.restore();
 }
 /* Линза лазера — общий рисунок для старого отдельного объекта laserFeed
    и для той же самой линзы на обычной фигуре со свойством «Лазер»
@@ -762,6 +801,15 @@ var LINKED = ["rect","circle","triangle","button","lever","laserFeed"];
    STATE
    ══════════════════════════════════════════════════ */
 var mode = "hideAndSeek", tool = "select", objects = [], sel = null, uid = 1;
+/* Модификация карты (см. «Zombie Apocalypse» в панели под режимом). Режим
+   решает, какие объекты существуют; модификация — по каким правилам в них
+   играют, и работает в обоих режимах. При выключенной модификации фигуры
+   с галочкой «Зомби» в самой игре просто не существуют: карта играется как
+   обычная, а не с россыпью блоков там, где стояли мертвецы. */
+var apoc = false;
+var ZOMBIE_MAX = 50;              // больше полусотни мертвецов карта не поднимает
+var ZOMBIE_SPEED = 0.62;          // доля от скорости игрока — от зомби всегда можно убежать
+var ZOMBIE_JUMP = 0.82;           // доля от прыжка игрока — уступ перепрыгнет, стену нет
 
 /* ══════════════════════════════════════════════════
    ИНДЕКС ОБЪЕКТОВ
@@ -1133,9 +1181,12 @@ function allAtDoor(o){
    игрока на крышку (как на обычный блок), а проверка на смерть ниже видит
    уже НЕ пересекающиеся хитбоксы — и на верхушке шипа можно стоять живым.
    Без solid игрок проваливается в хитбокс, где его и находит die(). */
+/* Зомби стеной не бывает ни в одном варианте карты: с модификацией это
+   живой мертвец, сквозь которого проходят (и умирают от касания), без
+   модификации его на карте вообще нет. */
 var solid  = function(o){ return SOLID.indexOf(o.type) !== -1 && !opened(o)
                               && o.ghost !== true && o.hideSpot !== true
-                              && o.deadly !== true; };
+                              && o.deadly !== true && o.zombie !== true; };
 var hazard = function(o){ return o.deadly === true && !opened(o); };
 function hit(ax,ay,aw,ah,bx,by,bw,bh){ return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by; }
 
@@ -1461,6 +1512,95 @@ function stepPushables(){
     }
     o._dx = dx;
   }
+}
+
+/* ══════════════════════════════════════════════════
+   ZOMBIE APOCALYPSE
+   «Зомби» — свойство обычной фигуры, как «Толкается» или «Рикошет»:
+   мертвецом можно сделать любой блок, круг или треугольник, отдельного
+   типа в палитре под это нет. Работает свойство только при включённой
+   модификации карты (см. apoc): в классическом варианте той же карты
+   мертвецов на ней просто нет.
+
+   Физика — та же мини-физика, что у толкаемых (см. stepPushables): та же
+   гравитация, стоит на любой твёрдой поверхности. Отличие одно — идёт не
+   от толчка игрока, а сам, в его сторону, и упёршись в стену на земле
+   подпрыгивает, поэтому лезет за игроком по уступам.
+
+   Скорость заведомо ниже игрока: от мертвеца всегда можно убежать. Догнать
+   он может только зазевавшегося или загнанного в угол — иначе карта
+   превращается в лотерею, а не в испытание.
+   ══════════════════════════════════════════════════ */
+function stepZombies(){
+  if(!apoc) return;
+  var live = 0;
+  for(var zi=0; zi<objects.length; zi++){
+    var o = objects[zi];
+    if(!o.zombie) continue;
+    if(++live > ZOMBIE_MAX) break;
+
+    var near = nearby(o.x-70, o.y-70, o.w+140, o.h+140), blockers = [], i;
+    for(i=0;i<near.length;i++){ var s = near[i]; if(s !== o && solid(s)) blockers.push(s); }
+
+    // ---- вертикаль: свободное падение до первой опоры ----
+    o._zvy = (o._zvy||0) + G();
+    var fc = maxFall();
+    if(o._zvy > fc) o._zvy = fc;
+    var yBefore = o.y;
+    o.y += o._zvy;
+    var grounded = false;
+    for(i=0;i<blockers.length;i++){
+      var sv = blockers[i], bbv = bbox(sv);
+      if(o.x >= bbv[2] || o.x+o.w <= bbv[0] || o.y >= bbv[3] || o.y+o.h <= bbv[1]) continue;
+      var spV = spanY(polyOf(sv), o.x+2, o.x+o.w-2);
+      if(!spV || o.y >= spV[1] || o.y+o.h <= spV[0]) continue;
+      if((yBefore+o.h) <= spV[0]+2){ o.y = spV[0]-o.h; o._zvy = 0; grounded = true; }
+    }
+    o._dy = o.y - yBefore;
+
+    // ---- горизонталь: шаг в сторону игрока ----
+    var dx = 0;
+    if(!pl.dead){
+      var toward = (pl.x+pl.w/2) - (o.x+o.w/2);
+      if(Math.abs(toward) > 2){
+        dx = (toward > 0 ? 1 : -1) * maxVX() * ZOMBIE_SPEED;
+        o._zface = toward > 0 ? 1 : -1;
+      }
+    }
+    if(dx !== 0){
+      var xBefore = o.x, wall = false;
+      o.x += dx;
+      for(i=0;i<blockers.length;i++){
+        var sh = blockers[i], bbh = bbox(sh);
+        if(o.y >= bbh[3] || o.y+o.h <= bbh[1]) continue;
+        var spH = spanX(polyOf(sh), o.y+2, o.y+o.h-2);
+        if(!spH) continue;
+        if(dx > 0 && o.x+o.w > spH[0] && xBefore+o.w <= spH[0]+2){ o.x = spH[0]-o.w; wall = true; }
+        else if(dx < 0 && o.x < spH[1] && xBefore >= spH[1]-2){ o.x = spH[1]; wall = true; }
+      }
+      if(wall && grounded) o._zvy = jumpV()*ZOMBIE_JUMP;   // упёрся на земле — перелезает
+      dx = o.x - xBefore;
+    }
+    o._dx = dx;
+
+    if(!pl.dead && overlaps(o, pl.x, pl.y, pl.w, pl.h)) zombieCatch();
+  }
+}
+/* Догнал. В гонке это обычная смерть — через ту же единую точку die(), так
+   что и неуязвимость Practice, и баф SUPER BRO работают как со всякой
+   другой опасностью. В прятках умереть нельзя в принципе (см. die()), и
+   мертвец вместо смерти отбрасывает пойманного на старт: цена сопоставима,
+   а правила режима не ломаются. */
+function zombieCatch(){
+  if(pl.dead || done) return;
+  if(mode !== "hideAndSeek"){ die(); return; }
+  if(godMode) return;
+  if(pl._zHitAt && timeMs - pl._zHitAt < 900) return;   // не отбрасывает каждый кадр
+  pl._zHitAt = timeMs;
+  shake = 10;
+  burst(pl.x+pl.w/2, pl.y+pl.h/2, 18, "#84cc16", 3.6, 30);
+  if(window.BFSound) BFSound.death();
+  respawn();
 }
 
 /* Сколько из (dx,dy) поездки на платформе реально можно проехать, прежде
@@ -1912,6 +2052,7 @@ function step(){
     if(o.type === "lever" && !o._latch){ o._act = !o._act; o._latch = true; drive(o); if(window.BFSound) BFSound.toggle(); }
   });
   laserFeeds();
+  stepZombies();
   // не внутри опасности прямо сейчас — можно смело вернуть сюда при смерти
   // в Practice Mode (если умер этим же кадром, pl.dead уже true — не трогаем)
   if(!pl.dead) lastSafePos = {x:pl.x, y:pl.y};
@@ -2038,6 +2179,7 @@ function paint(o, isSel){
   (PAINT[o.type] || PAINT.rect)(o);
   /* Лазер теперь свойство, а не отдельный тип — рисуем ту же линзу, что
      раньше была у laserFeed, поверх обычной фигуры. */
+  if(o.zombie) zombieSkin(o, playing && apoc);
   if(o.laser){
     var lr = Math.max(2.5, Math.min(o.w,o.h)*0.18), lcx = o.w*0.88, lcy = o.h/2;
     laserLens(lcx, lcy, lr, !!o._act);
@@ -2120,6 +2262,8 @@ function paintFrame(){
        Во время игры её не рисуем: иначе на экране две фигуры, живая и
        та, что стоит на месте спавна. */
     if(playing && ro.type === "spawn") continue;
+    // классический вариант карты: мертвецов на ней нет (см. apoc)
+    if(playing && !apoc && ro.zombie) continue;
     paint(ro, !playing && ro === sel); drawn++;
   }
   /* Луч рисуется отдельным проходом, не в PAINT.laserFeed: его трасса (с
@@ -2240,6 +2384,24 @@ document.getElementById("bGrid").classList.add("on");
   var d = document.createElement("div");
   d.className = "modeBtn" + (i===0?" on":""); d.textContent = TR(m, m); d.dataset.mode = m;
   document.getElementById("modes").appendChild(d);
+});
+
+/* Модификация доступна в обоих режимах — это не третий режим, а правила
+   поверх выбранного (см. apoc и stepZombies). */
+[["0", TR("modClassic","Классика")], ["1", TR("modApoc","Zombie Apocalypse")]].forEach(function(a,i){
+  var d = document.createElement("div");
+  d.className = "apocBtn" + (i===0?" on":""); d.textContent = a[1]; d.dataset.apoc = a[0];
+  document.getElementById("apoc").appendChild(d);
+});
+function syncApocBtns(){
+  document.querySelectorAll(".apocBtn").forEach(function(b){
+    b.classList.toggle("on", (b.dataset.apoc === "1") === !!apoc);
+  });
+}
+document.getElementById("apoc").addEventListener("click", function(e){
+  var b = e.target.closest(".apocBtn"); if(!b || playing) return;
+  apoc = b.dataset.apoc === "1";
+  syncApocBtns();
 });
 
 /* toolbar icons are the real painters, rendered to tiny canvases — icon always matches the object */
@@ -2640,6 +2802,14 @@ function chk(l,v,fn){
   r.appendChild(a); r.appendChild(i);
 }
 function grp(t){ var d = document.createElement("div"); d.className = "grp"; d.textContent = t; props.appendChild(d); }
+// короткая пояснительная строка под галочкой — там, где само название свойства не всё объясняет
+function hint(t){
+  var d = document.createElement("div");
+  d.className = "pHelp"; d.style.cursor = "default";
+  var b = document.createElement("div");
+  b.className = "pHelpBody"; b.style.display = "block"; b.textContent = t;
+  d.appendChild(b); props.appendChild(d);
+}
 
 /* Как связать механизм. Показываем у кнопок, рычагов и их целей —
    там, где это действительно нужно, и по клику, а не постоянной надписью. */
@@ -2781,6 +2951,15 @@ function inspect(){
       if(v && !sel.range) sel.range = 500;
       inspect();
     });
+    /* Зомби идёт сам и своей физикой (см. stepZombies), поэтому синусоида
+       «Двигается», ротация и толкаемость ему только мешали бы — включение
+       гасит их, как «Толкается» гасит «Двигается». */
+    chk(TR("chkZombie","Зомби (преследует)"), !!sel.zombie, function(v){
+      sel.zombie = v;
+      if(v){ sel.moves = false; sel.spins = false; sel.pushable = false; }
+      inspect();
+    });
+    if(sel.zombie) hint(TR("zombieHint","Работает только при модификации Zombie Apocalypse. В классическом варианте карты этой фигуры нет."));
   }
   if(LINKED.indexOf(sel.type) !== -1){
     grp(TR("grpLinks","Связи"));
@@ -2905,7 +3084,7 @@ document.getElementById("file").addEventListener("change", function(e){
   };
   rd.readAsText(f); e.target.value = "";
 });
-window.getEditorMap = function(){ return { mode: mode, data: JSON.stringify({mode:mode,gravity:gravityScale,objects:clean()}) }; };
+window.getEditorMap = function(){ return { mode: mode, data: JSON.stringify({mode:mode,apoc:apoc,gravity:gravityScale,objects:clean()}) }; };
 document.getElementById("bJson").addEventListener("click", function(){
   var a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([JSON.stringify({mode:mode,gravity:gravityScale,objects:clean()},null,2)],{type:"application/json"}));
@@ -2966,6 +3145,7 @@ window.GAME = BRIDGE = {
   get view(){ return view; },
   get objects(){ return objects; },
   get mode(){ return mode; },
+  get apoc(){ return apoc; },
   get done(){ return done; },
   // Practice Mode включается снаружи (game.js) до старта — см. respawn()
   get practice(){ return practiceMode; },
@@ -2990,6 +3170,7 @@ window.GAME = BRIDGE = {
       return out;
     });
     if(d.mode) mode = d.mode;
+    apoc = !!d.apoc;                   // в старых картах модификации не было — классика
     // режимы sandbox и twoPlayer убраны — старые карты открываем как прятки
     if(mode === "sandbox" || mode === "twoPlayer") mode = "hideAndSeek";
     // объекты чужого режима в карту не пускаем
@@ -3038,6 +3219,7 @@ window.GAME = BRIDGE = {
     objects.forEach(function(o){ if(o.id >= uid) uid = o.id + 1; });
     indexMovers(); markDirty();
     sel = null;
+    syncApocBtns();
     resetView();
     return objects.length;
   },
