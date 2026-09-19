@@ -364,6 +364,7 @@ var C = {
   gate1:"#60a5fa", gate2:"#2563eb",
   gold1:"#fde047", gold2:"#f59e0b",
   red1:"#f87171", red2:"#dc2626",
+  tele1:"#22d3ee", tele2:"#0e7490",
   ink:"#111827"
 };
 /* Плоская заливка вместо градиента. Объекты выглядели «масляными»
@@ -643,6 +644,22 @@ var PAINT = {
     ctx.beginPath(); ctx.arc(0,-o.h*0.78,Math.max(3.4,o.w*0.28),0,6.2832); ctx.fill();
     ctx.restore();
   },
+  /* Портал — не платформа, а зона касания (см. teleportTarget() в step()):
+     наступил на площадку — оказался на её паре, чей ID указан в «Целях».
+     Кольцо крутится — читается как «портал», подпись с ID не нужна: она
+     и так есть в панели свойств у обеих площадок. */
+  teleport: function(o){
+    var cx = o.w/2, cy = o.h/2, r = Math.min(o.w,o.h)/2;
+    ctx.fillStyle = C.tele2;
+    rr(0,0,o.w,o.h,Math.min(8,r*0.4)); ctx.fill();
+    var pulse = (Math.sin(anim*0.1)+1)/2;
+    ctx.fillStyle = C.tele1;
+    ctx.globalAlpha = 0.55 + pulse*0.45;
+    ctx.beginPath(); ctx.arc(cx,cy,r*0.62,0,6.2832); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#ecfeff"; ctx.lineWidth = Math.max(1.2,r*0.14);
+    ctx.beginPath(); ctx.arc(cx,cy,r*0.36,anim*0.06,anim*0.06+4.5); ctx.stroke();
+  },
   /* Излучатель светится ярче, пока луч перекрыт игроком (o._act — тот же
      флаг, что у кнопки/рычага, см. laserFeeds() в step()). Линза смотрит
      вдоль локальной +x — тот же «вперёд», что и поворот объекта (o.rot). */
@@ -758,6 +775,7 @@ var TOOLS = [
   {t:"spawn",      n:"Точка старта",k:"toolSpawn",      m:ALL},
   {t:"button",     n:"Кнопка",      k:"toolButton",     m:ALL},
   {t:"lever",      n:"Рычаг",       k:"toolLever",      m:ALL},
+  {t:"teleport",   n:"Телепорт",    k:"toolTeleport",   m:ALL},
   // мертвец из модификации Zombie Apocalypse (см. apoc и stepZombies)
   {t:"zombie",     n:"Зомби",       k:"toolZombie",     m:ALL},
   /* Лазер (старая идея из обратной связи) — не отдельный инструмент, а
@@ -799,7 +817,7 @@ var COLORS = {
   rect:INK, circle:INK, triangle:INK, text:INK,
   button:INK, lever:INK, laserFeed:INK, laserReceiver:INK,
   zombie:"",                       // мертвец всегда зелёный — красить его нечем и незачем
-  checkpoint:"", finishline:"", spawn:INK, superGate:""
+  checkpoint:"", finishline:"", spawn:INK, superGate:"", teleport:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
    Игрок 20x60, ровно три клетки в высоту. */
@@ -807,7 +825,8 @@ var SIZES = {
   rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24],
   button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
   zombie:[22,52],                  // чуть ниже игрока (20x60) — видно, что это не второй игрок
-  checkpoint:[30,64], finishline:[42,86], spawn:[20,60], superGate:[44,90]
+  checkpoint:[30,64], finishline:[42,86], spawn:[20,60], superGate:[44,90],
+  teleport:[36,36]
 };
 var SOLID  = ["rect","circle","triangle"];
 /* Раньше яд, шипы и ротатор убивали просто потому, что так называются.
@@ -817,7 +836,7 @@ var HAZARD = [];
 var DEADLY_BY_DEFAULT = [];
 /* Ворота и укрытие убраны, но механика связей осталась: цель кнопки или
    рычага — теперь любой обычный блок, круг или треугольник. */
-var LINKED = ["rect","circle","triangle","button","lever","laserFeed"];
+var LINKED = ["rect","circle","triangle","button","lever","laserFeed","teleport"];
 
 /* ══════════════════════════════════════════════════
    STATE
@@ -928,7 +947,7 @@ function mk(type,x,y,w,h){
            deadly: DEADLY_BY_DEFAULT.indexOf(type) !== -1};
   if(type === "text") o.text = "Text";
 
-  if(type === "button" || type === "lever"){ o.customId = "w"+o.id; o.targetIds = ""; }
+  if(type === "button" || type === "lever" || type === "teleport"){ o.customId = "w"+o.id; o.targetIds = ""; }
   return o;
 }
 function demo(){
@@ -1077,6 +1096,11 @@ var JUMP_H = 155, MAX_VX = 5.2, FRIC = 0, AIR = 0.85,
     STUCK_WINDOW = 150;   // окно сторожа застревания в прятках — см. respawn()/step()
 // SUPER BRO (ворота superGate, только Race) — длительность бафа полёта/иммунитета, мс
 var SUPER_MS = 8000, SUPER_GRAVITY = 0.32;
+/* Портал: без паузы игрок телепортировался бы туда-обратно каждый кадр —
+   площадка прибытия сама попадает в зону касания площадки отправления
+   (обе одного размера, куда ни попади). Полсекунды с запасом — портал
+   и так срабатывает мгновенно на глаз, лишний кадр-другой не заметен. */
+var TELEPORT_COOLDOWN_MS = 500;
 // Practice: ручной режим полёта — вертикальная скорость вместо гравитации/прыжка
 var FLY_SPEED = 3.6;
 function G(){ return gravityScale * 0.062; }          // 9 → 0.558 px/кадр²
@@ -1092,7 +1116,7 @@ function maxFall(){ return 12 + gravityScale * 0.8; }
 function platBoost(o){ return (o && o.speedMul) ? Math.max(0.05, 1 + (+o.speedMul || 0)) : 1; }
 
 var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,selfJump:false,hidden:false,
-  rideOn:null, standPlat:null, superUntil:0,
+  rideOn:null, standPlat:null, superUntil:0, teleCooldown:0,
 };
 var keys = {l:false,r:false,u:false};
 var coy = 0, buf = 0, hold = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
@@ -2057,6 +2081,21 @@ function step(){
       burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
       if(window.BFSound) BFSound.checkpoint();
     }
+    /* Портал — пара площадок, ID которых указан друг у друга в «Целях»
+       (см. teleportTarget()). Кулдаун — на игроке, а не на площадке: иначе
+       пара «садится» друг на друга и раз за разом дёргает того, кто просто
+       стоит внутри, пока не отойдёт — а его самого могло занести туда как
+       раз этим же порталом. */
+    if(o.type === "teleport" && timeMs >= pl.teleCooldown){
+      var teleDst = teleportTarget(o);
+      if(teleDst){
+        pl.x = teleDst.x + teleDst.w/2 - pl.w/2; pl.y = teleDst.y + teleDst.h - pl.h;
+        pl.vx = 0; pl.vy = 0; pl.rideOn = null;
+        pl.teleCooldown = timeMs + TELEPORT_COOLDOWN_MS;
+        burst(teleDst.x+teleDst.w/2, teleDst.y+teleDst.h/2, 16, C.tele1, 3, 32);
+        if(window.BFSound) BFSound.checkpoint();
+      }
+    }
     // Дверь — это выход: игроку достаточно дойти до неё самому.
     if(o.type === "finishline" && !done){
       done = true; shake = 6;
@@ -2134,6 +2173,17 @@ function drive(src){
   if(!src.targetIds) return;
   var ids = src.targetIds.split(",").map(function(s){ return s.trim(); }).filter(Boolean);
   objects.forEach(function(o){ if(o.customId && ids.indexOf(o.customId) !== -1) o._act = src._act; });
+}
+/* Портал ведёт только на ПЕРВЫЙ ID из «Целей» — в отличие от кнопки/рычага,
+   у телепорта одна конкретная пара, а не список того, что приводить в
+   движение сразу. Запятая с несколькими ID тут не ошибка, просто лишние
+   игнорируются. */
+function teleportTarget(src){
+  if(!src.targetIds) return null;
+  var id = src.targetIds.split(",")[0].trim();
+  if(!id) return null;
+  for(var i=0;i<objects.length;i++) if(objects[i].customId === id) return objects[i];
+  return null;
 }
 /* Лазер — тот же принцип, что и кнопка (см. drive() выше): «нажат», пока
    игрок перекрывает луч, отпущен, как только сошёл. Трасса луча (с учётом
@@ -2917,7 +2967,7 @@ function inspect(){
   grp(TR("grpGameProps","Игровые свойства"));
   /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Яд»
      там бы включала свойство, которое физика всё равно игнорирует. */
-  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline","superGate","zombie"].indexOf(sel.type) === -1)
+  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline","superGate","zombie","teleport"].indexOf(sel.type) === -1)
     chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
   if(SOLID.indexOf(sel.type) !== -1)
     chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; });
@@ -2981,14 +3031,17 @@ function inspect(){
   // мертвец — свой объект со своей физикой; из свойств ему нужна одна подсказка
   if(sel.type === "zombie")
     hint(TR("zombieHint","Ходит за игроком и убивает касанием. Работает только при модификации Zombie Apocalypse — в классическом варианте карты его нет."));
+  // портал — своя подсказка вместо linkHelp(): та объясняет кнопку/рычаг, а не пару площадок
+  if(sel.type === "teleport")
+    hint(TR("teleportHint","Пара площадок. Впиши ID другой площадки в «Цели» у этой — и наоборот у той. Наступил на одну — оказался на другой."));
   if(LINKED.indexOf(sel.type) !== -1){
     grp(TR("grpLinks","Связи"));
     txt("ID", sel.customId, function(v){ sel.customId = v; });
-    if(sel.type === "button" || sel.type === "lever" || sel.type === "laserFeed" || sel.laser)
+    if(sel.type === "button" || sel.type === "lever" || sel.type === "laserFeed" || sel.type === "teleport" || sel.laser)
       txtClear(TR("lblTargets","Цели"), sel.targetIds, function(v){ sel.targetIds = v; });
     if(SOLID.indexOf(sel.type) !== -1)
       chk(TR("chkStartsOpen","Открыт сначала (проходим)"), sel.startsOpen, function(v){ sel.startsOpen = v; });
-    linkHelp();
+    if(sel.type !== "teleport") linkHelp();
   }
   if(sel.type === "laserFeed" || sel.laser)
     num(TR("lblLaserRange","Дальность луча"), sel.range||500, function(v){ sel.range = Math.max(20,v); });
