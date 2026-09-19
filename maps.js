@@ -156,7 +156,60 @@ function randomFor(mapType, not) {
   return m;
 }
 
+// сохраняем ссылку на accounts.js, переданную в register(), — она же нужна
+// вне обработчиков запросов, в renameAuthor() ниже (тот же приём, что
+// accountsRef в server.js)
+let accRef = null;
+
+/* Ключ избранного/папки карты — "автор::карта" в нижнем регистре (см.
+   favKey выше). Он ссылается на карту по имени АВТОРА, а не по её ID,
+   поэтому при переименовании автора ключи у ВСЕХ, кто уже добавил его
+   карту в избранное или разложил по папкам, тихо отвязываются от неё.
+   Трогаем только те ключи, что действительно указывают на переименованные
+   карты — свои избранные карты других авторов не задеть. */
+function remapFavKey(k, fromKey, toKey, mapNamesKey) {
+  const i = String(k).indexOf('::');
+  if (i === -1) return k;
+  const a = k.slice(0, i), mn = k.slice(i + 2);
+  return (a === fromKey && mapNamesKey.indexOf(mn) !== -1) ? (toKey + '::' + mn) : k;
+}
+
+/* Игрок сменил ник (см. /changeNickname в accounts.js и /renameUser в
+   extras.js) — карты остаются при нём, а не превращаются в чужие. Раньше
+   их не удаляло, но и не находило под новым именем: m.author так и
+   оставался старым, и для игрока это выглядело как пропажа. Переносим
+   и подпись карты, и авторство её же комментариев, и — раз уж читаем всю
+   базу — ключи избранного/папок у ДРУГИХ игроков, которые ссылались на
+   эти карты по старому имени автора. */
+function renameAuthor(oldName, newName) {
+  const fromKey = low(oldName), toKey = low(newName);
+  if (!fromKey || !toKey || fromKey === toKey) return;
+  const mapNamesKey = [];
+  maps.forEach(m => {
+    if (low(m.author) !== fromKey) return;
+    m.author = newName;
+    mapNamesKey.push(low(m.mapName));
+    if (Array.isArray(m.comments))
+      m.comments.forEach(c => { if (low(c.author) === fromKey) c.author = newName; });
+  });
+  if (!mapNamesKey.length) return;
+  save();
+  if (!accRef) return;
+  const db = accRef.getDb();
+  Object.values(db.users).forEach(u => {
+    if (Array.isArray(u.favoriteMaps))
+      u.favoriteMaps = u.favoriteMaps.map(k => remapFavKey(k, fromKey, toKey, mapNamesKey));
+    if (u.mapFolderOf && typeof u.mapFolderOf === 'object') {
+      const next = {};
+      Object.keys(u.mapFolderOf).forEach(k => { next[remapFavKey(k, fromKey, toKey, mapNamesKey)] = u.mapFolderOf[k]; });
+      u.mapFolderOf = next;
+    }
+  });
+  accRef.save();
+}
+
 function register(app, getUser, acc, cleanText) {
+  accRef = acc;
   // ---------- публикация карты из редактора ----------
   app.post('/uploadMap', (req, res) => {
     const u = getUser(req);
@@ -667,4 +720,4 @@ function newFromFriends(user) {
   return out;
 }
 
-module.exports = { register, reload: load, MODES, OWNER, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor };
+module.exports = { register, reload: load, MODES, OWNER, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, renameAuthor };

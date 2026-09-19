@@ -439,6 +439,8 @@ function register(app, acc) {
       else s.name = to;
     });
     saveUsers();
+    // владелец переименовал игрока — карты того тоже переезжают на новое имя (см. maps.renameAuthor)
+    mapsApi.renameAuthor(old, to);
     res.json({ status: 'success', message: '«' + old + '» is now «' + to + '»' });
   });
 
