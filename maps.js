@@ -29,6 +29,7 @@ const TOOL_MODES = {
   rect:null, circle:null, triangle:null, text:null, coin:null,
   gate:null, spawn:null, finishline:null,
   button:null, lever:null, water:null, laserFeed:null, laserReceiver:null,
+  zombie:null,                 // модификация Zombie Apocalypse — есть в обоих режимах
   cover:['hideAndSeek'],
   checkpoint:['race'],
   superGate:['race'],

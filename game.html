@@ -509,32 +509,6 @@ function shapeFill(o){
   g.addColorStop(1, o.fill2);
   return g;
 }
-/* Мертвец рисуется поверх той фигуры, что поставил автор: форма остаётся
-   его, но цвет и морда не оставляют вопросов, кто это. Контур берём
-   настоящим многоугольником фигуры (rawPoly), а не рамкой — иначе на
-   круге и треугольнике зелень торчала бы углами наружу. */
-function zombieSkin(o, active){
-  var pts = rawPoly(o), i;
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(pts[0][0], pts[0][1]);
-  for(i=1;i<pts.length;i++) ctx.lineTo(pts[i][0], pts[i][1]);
-  ctx.closePath();
-  ctx.fillStyle = active ? "rgba(132,204,22,.92)" : "rgba(101,163,13,.75)";
-  ctx.fill();
-  ctx.strokeStyle = "#3f6212"; ctx.lineWidth = 1.5; ctx.stroke();
-  var r = Math.max(1.5, Math.min(o.w,o.h)*0.1);
-  var ey = o.h*0.44, ex1 = o.w*0.35, ex2 = o.w*0.65;
-  ctx.fillStyle = "#7f1d1d";
-  ctx.beginPath(); ctx.arc(ex1,ey,r,0,6.2832); ctx.fill();
-  ctx.beginPath(); ctx.arc(ex2,ey,r,0,6.2832); ctx.fill();
-  ctx.fillStyle = active ? "#fecaca" : "#f87171";
-  ctx.beginPath(); ctx.arc(ex1,ey,r*0.45,0,6.2832); ctx.fill();
-  ctx.beginPath(); ctx.arc(ex2,ey,r*0.45,0,6.2832); ctx.fill();
-  ctx.strokeStyle = "#3f6212"; ctx.lineWidth = Math.max(1, r*0.55);
-  ctx.beginPath(); ctx.moveTo(o.w*0.3, o.h*0.7); ctx.lineTo(o.w*0.7, o.h*0.7); ctx.stroke();
-  ctx.restore();
-}
 /* Линза лазера — общий рисунок для старого отдельного объекта laserFeed
    и для той же самой линзы на обычной фигуре со свойством «Лазер»
    (см. paint()): мягкое свечение позади, пока луч перекрыт, плюс сама
@@ -677,6 +651,39 @@ var PAINT = {
     var r = Math.max(2.5, Math.min(o.w,o.h)*0.22), cx = o.w*0.82, cy = o.h/2;
     laserLens(cx, cy, r, !!o._act);
   },
+  /* Мертвец — отдельный объект, а не свойство фигуры: это не часть
+     геометрии уровня, а противник, и выглядеть он должен собой, а не
+     покрашенным блоком. Идёт к игроку и убивает касанием, но только при
+     модификации Zombie Apocalypse (см. apoc и stepZombies) — в
+     классическом варианте той же карты его на ней нет.
+     Разворачивается по ходу движения (_zface), поэтому сразу видно,
+     кого он уже заметил. */
+  zombie: function(o){
+    var w = o.w, h = o.h;
+    if(o._zface < 0){ ctx.translate(w, 0); ctx.scale(-1, 1); }
+    var headR = Math.max(3, Math.min(w*0.44, h*0.2));
+    var bodyTop = headR*2 + Math.max(1, h*0.03);
+    // руки вперёд — узнаваемый силуэт, рисуем до тела, чтобы плечо не торчало
+    ctx.strokeStyle = "#4d7c0f"; ctx.lineWidth = Math.max(1.6, w*0.16);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(w*0.3, bodyTop + (h-bodyTop)*0.22);
+    ctx.lineTo(w*0.98, bodyTop + (h-bodyTop)*0.12);
+    ctx.stroke();
+    ctx.fillStyle = "#65a30d";
+    rr(w*0.2, bodyTop, w*0.6, h-bodyTop, Math.min(4, w*0.16)); ctx.fill();
+    ctx.fillStyle = "#84cc16";
+    ctx.beginPath(); ctx.arc(w/2, headR, headR, 0, 6.2832); ctx.fill();
+    var er = Math.max(1, headR*0.26);
+    ctx.fillStyle = "#7f1d1d";
+    ctx.beginPath(); ctx.arc(w/2 - headR*0.36, headR*0.92, er, 0, 6.2832); ctx.fill();
+    ctx.beginPath(); ctx.arc(w/2 + headR*0.36, headR*0.92, er, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = "#3f6212"; ctx.lineWidth = Math.max(1, headR*0.2);
+    ctx.beginPath();
+    ctx.moveTo(w/2 - headR*0.42, headR*1.46);
+    ctx.lineTo(w/2 + headR*0.42, headR*1.46);
+    ctx.stroke();
+  },
   // приёмник — только ориентир для автора карты, в игровую логику не входит
   laserReceiver: function(o){
     ctx.fillStyle = C.stone3; rr(0,0,o.w,o.h,3); ctx.fill();
@@ -751,6 +758,8 @@ var TOOLS = [
   {t:"spawn",      n:"Точка старта",k:"toolSpawn",      m:ALL},
   {t:"button",     n:"Кнопка",      k:"toolButton",     m:ALL},
   {t:"lever",      n:"Рычаг",       k:"toolLever",      m:ALL},
+  // мертвец из модификации Zombie Apocalypse (см. apoc и stepZombies)
+  {t:"zombie",     n:"Зомби",       k:"toolZombie",     m:ALL},
   /* Лазер (старая идея из обратной связи) — не отдельный инструмент, а
      галочка «Лазер» на обычном блоке/круге/треугольнике (см. Game
      Properties в inspect() и laserFeeds() в step()): включает связанные
@@ -789,6 +798,7 @@ var INK = "#111827";
 var COLORS = {
   rect:INK, circle:INK, triangle:INK, text:INK,
   button:INK, lever:INK, laserFeed:INK, laserReceiver:INK,
+  zombie:"",                       // мертвец всегда зелёный — красить его нечем и незачем
   checkpoint:"", finishline:"", spawn:INK, superGate:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
@@ -796,6 +806,7 @@ var COLORS = {
 var SIZES = {
   rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24],
   button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
+  zombie:[22,52],                  // чуть ниже игрока (20x60) — видно, что это не второй игрок
   checkpoint:[30,64], finishline:[42,86], spawn:[20,60], superGate:[44,90]
 };
 var SOLID  = ["rect","circle","triangle"];
@@ -1192,12 +1203,12 @@ function allAtDoor(o){
    игрока на крышку (как на обычный блок), а проверка на смерть ниже видит
    уже НЕ пересекающиеся хитбоксы — и на верхушке шипа можно стоять живым.
    Без solid игрок проваливается в хитбокс, где его и находит die(). */
-/* Зомби стеной не бывает ни в одном варианте карты: с модификацией это
-   живой мертвец, сквозь которого проходят (и умирают от касания), без
-   модификации его на карте вообще нет. */
+/* SOLID — только блок, круг и треугольник, поэтому мертвец (свой тип
+   "zombie") стеной не бывает сам по себе: сквозь него проходят и умирают
+   от касания, а без модификации его на карте вообще нет. */
 var solid  = function(o){ return SOLID.indexOf(o.type) !== -1 && !opened(o)
                               && o.ghost !== true && o.hideSpot !== true
-                              && o.deadly !== true && o.zombie !== true; };
+                              && o.deadly !== true; };
 var hazard = function(o){ return o.deadly === true && !opened(o); };
 function hit(ax,ay,aw,ah,bx,by,bw,bh){ return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by; }
 
@@ -1547,7 +1558,7 @@ function stepZombies(){
   var live = 0;
   for(var zi=0; zi<objects.length; zi++){
     var o = objects[zi];
-    if(!o.zombie) continue;
+    if(o.type !== "zombie") continue;
     if(++live > ZOMBIE_MAX) break;
 
     var near = nearby(o.x-70, o.y-70, o.w+140, o.h+140), blockers = [], i;
@@ -2190,7 +2201,6 @@ function paint(o, isSel){
   (PAINT[o.type] || PAINT.rect)(o);
   /* Лазер теперь свойство, а не отдельный тип — рисуем ту же линзу, что
      раньше была у laserFeed, поверх обычной фигуры. */
-  if(o.zombie) zombieSkin(o, playing && apoc);
   if(o.laser){
     var lr = Math.max(2.5, Math.min(o.w,o.h)*0.18), lcx = o.w*0.88, lcy = o.h/2;
     laserLens(lcx, lcy, lr, !!o._act);
@@ -2274,7 +2284,7 @@ function paintFrame(){
        та, что стоит на месте спавна. */
     if(playing && ro.type === "spawn") continue;
     // классический вариант карты: мертвецов на ней нет (см. apoc)
-    if(playing && !apoc && ro.zombie) continue;
+    if(playing && !apoc && ro.type === "zombie") continue;
     paint(ro, !playing && ro === sel); drawn++;
   }
   /* Луч рисуется отдельным проходом, не в PAINT.laserFeed: его трасса (с
@@ -2868,7 +2878,7 @@ function inspect(){
     sr.innerHTML = "<label>" + TR("lblSize","Размер") + "</label><b style='font-size:12px'>20 x 60</b>";
   }
 
-  {
+  if(sel.type !== "zombie"){          // мертвеца не красят — он рисуется собой
     var r = pr();
     r.innerHTML = "<label>" + TR("lblColor","Цвет") + "</label>";
     var ci = document.createElement("input"); ci.type = "color";
@@ -2902,7 +2912,7 @@ function inspect(){
   grp(TR("grpGameProps","Игровые свойства"));
   /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Яд»
      там бы включала свойство, которое физика всё равно игнорирует. */
-  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline","superGate"].indexOf(sel.type) === -1)
+  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline","superGate","zombie"].indexOf(sel.type) === -1)
     chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
   if(SOLID.indexOf(sel.type) !== -1)
     chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; });
@@ -2962,16 +2972,10 @@ function inspect(){
       if(v && !sel.range) sel.range = 500;
       inspect();
     });
-    /* Зомби идёт сам и своей физикой (см. stepZombies), поэтому синусоида
-       «Двигается», ротация и толкаемость ему только мешали бы — включение
-       гасит их, как «Толкается» гасит «Двигается». */
-    chk(TR("chkZombie","Зомби (преследует)"), !!sel.zombie, function(v){
-      sel.zombie = v;
-      if(v){ sel.moves = false; sel.spins = false; sel.pushable = false; }
-      inspect();
-    });
-    if(sel.zombie) hint(TR("zombieHint","Работает только при модификации Zombie Apocalypse. В классическом варианте карты этой фигуры нет."));
   }
+  // мертвец — свой объект со своей физикой; из свойств ему нужна одна подсказка
+  if(sel.type === "zombie")
+    hint(TR("zombieHint","Ходит за игроком и убивает касанием. Работает только при модификации Zombie Apocalypse — в классическом варианте карты его нет."));
   if(LINKED.indexOf(sel.type) !== -1){
     grp(TR("grpLinks","Связи"));
     txt("ID", sel.customId, function(v){ sel.customId = v; });
@@ -3221,6 +3225,9 @@ window.GAME = BRIDGE = {
       // «Ящик» был отдельным объектом совсем недолго — стал свойством
       // «Толкается» у обычных фигур, старые карты с ним превращаются в блок
       if(o.type === "box"){ o.type = "rect"; o.pushable = true; }
+      /* Зомби недолго был галочкой на обычной фигуре, а стал своим
+         объектом — в тех картах превращаем помеченную фигуру в него */
+      if(o.zombie){ o.type = "zombie"; delete o.zombie; }
       // Ворота, дверь и укрытие убраны — в старых картах становятся блоком,
       // чтобы геометрия уровня не разъехалась
       if(o.type === "door" || o.type === "gate" || o.type === "cover"){ o.type = "rect"; }

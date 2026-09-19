@@ -1195,6 +1195,44 @@ io.on('connection', (socket) => {
      прошёл. Рекорд карты нигде отдельно не лежит: при расчёте ранга он
      находится перебором тех же лучших времён у всех игроков, поэтому
      всегда честный и не требует своего файла. */
+  /* Физический предел карты. Клиент считает физику сам, поэтому «я
+     финишировал» подделывается всегда — но быстрее, чем по ПРЯМОЙ от
+     старта до финиша на предельной скорости движка, карту не пройти
+     никак. Эту прямую берём из самой карты; стены она не учитывает,
+     поэтому оценка заведомо ниже любого честного забега и ложных
+     срабатываний не даёт. Всё, что быстрее, — не забег, и ни монет, ни
+     очков, ни строчки в статистике за него нет.
+     Карту, которой нет в общем списке (story, черновик), не ограничиваем:
+     сверяться не с чем. */
+  const RACE_TOP_PX_PER_MS = 2.5;   // 2500 px/с — выше рикошетного потолка движка с запасом
+  const RACE_SLACK_PX = 150;        // спавн и финиш — объекты со своими размерами, даём им запас
+  const raceGateCache = new Map();
+  function raceGate(author, mapName) {
+    const k = author + '|' + mapName;
+    const hit = raceGateCache.get(k);
+    if (hit) return hit;
+    let gate = { ms: 0, dist: 0 };
+    try {
+      const rec = require('./maps.js').find(author, mapName);
+      const data = rec && rec.mapData && JSON.parse(rec.mapData);
+      const list = (data && (Array.isArray(data) ? data : data.objects)) || [];
+      let sp = null, fin = null;
+      for (let i = 0; i < list.length; i++) {
+        const o = list[i];
+        if (!o || typeof o.type !== 'string') continue;
+        if (!sp && o.type === 'spawn') sp = o;
+        if (!fin && o.type === 'finishline') fin = o;
+      }
+      if (sp && fin) {
+        const d = Math.hypot((fin.x || 0) - (sp.x || 0), (fin.y || 0) - (sp.y || 0));
+        gate = { ms: d / RACE_TOP_PX_PER_MS, dist: Math.max(0, d - RACE_SLACK_PX) };
+      }
+    } catch (e) { gate = { ms: 0, dist: 0 }; }
+    if (raceGateCache.size > 500) raceGateCache.clear();
+    raceGateCache.set(k, gate);
+    return gate;
+  }
+
   const RACE_BEST_CAP = 300;    // столько карт на аккаунт хватает с запасом
   /* Число начатых забегов нужно ровно для одного: отличить новичка, про
      которого ещё нечего сказать, от игрока, который карту за картой берёт
@@ -1249,6 +1287,14 @@ io.on('connection', (socket) => {
     // забег без единого движения — не забег
     if ((player.moves || 0) - rs.moves < RACE_MIN_MOVES) return;
     if ((player.odo || 0) - rs.odo < RACE_MIN_DIST) return;
+    /* Два точных предела, которые даёт сама карта: до финиша нельзя
+       добраться ни быстрее прямой на предельной скорости движка, ни
+       пройдя меньше её длины. Оба заведомо мягче любого честного
+       забега (прямая не огибает стены), но отсекают «финиш» скрипта,
+       который только что прислал старт. */
+    const gate = raceGate(author, mapName);
+    if (elapsedMs < gate.ms) return;
+    if ((player.odo || 0) - rs.odo < gate.dist) return;
 
     // табличка «Scores» в углу — снимок комнаты, видна и гостям, копится
     // за все забеги подряд, пока игрок в комнате (см. raceScoreboard)

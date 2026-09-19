@@ -16,18 +16,25 @@
    Два сигнала, ровно те же, что в описании рангов у людей:
 
    1. СКОРОСТЬ — «спидранит», «проходит быстро». Меряем не секундами (они
-      несравнимы между лёгкой и адской картой), а долей от рекорда КОНКРЕТНО
-      этой карты: рекорд/своё лучшее время. Пробежал вровень с лучшим — 1.0,
-      вдвое медленнее — 0.5. Так короткая карта и длинная весят одинаково, а
-      планка поднимается сама, когда сообщество начинает бегать быстрее.
-      Рекорд нигде не хранится отдельно — он ищется перебором лучших времён
-      всех игроков на той же карте (см. raceStat в server.js), поэтому он
-      всегда настоящий и не устаревает.
+      несравнимы между лёгкой и адской картой) и НЕ долей от рекорда, а
+      МЕСТОМ среди всех, кто проходил ту же карту: обогнал всех — 1.0,
+      оказался последним — 0. Так короткая карта и длинная весят одинаково.
+
+      Почему именно место, а не доля от рекорда, — важно. Клиент считает
+      физику сам, поэтому подделать один быстрый финиш можно всегда, и
+      раньше такой финиш становился «рекордом карты». Это било не столько
+      по самому обманщику, сколько по всем остальным: их время начинало
+      делиться на полторы секунды, и вся карта обнулялась в ранге у
+      честных игроков. Место так испортить нельзя — лишний быстрый
+      результат сдвигает каждого ровно на одну позицию из N, и чем больше
+      народу прошло карту, тем меньше он значит.
 
    2. ОХВАТ — «способен пройти 85% всех карт в игре». Сколько РАЗНЫХ карт
-      человек вообще довёл до финиша. Потолок намеренно низкий (BREADTH_FULL):
-      двух десятков разных карт достаточно, чтобы показать, что игрок не
-      сидит на одной заученной трассе. Выше — уже не про навык, а про часы.
+      человек довёл до финиша — но считаются только те, где есть с кем
+      сравниваться (MIN_RUNNERS). Иначе охват набивался бы своими же
+      картами, которые никто, кроме автора, не открывал. Потолок намеренно
+      низкий (BREADTH_FULL): двух десятков разных карт достаточно, чтобы
+      показать, что игрок не сидит на одной заученной трассе.
 
    ── HIDE AND SEEK ─────────────────────────────────
    Тоже два, и тоже прямо из описания:
@@ -72,7 +79,7 @@ const RACE_MIN_TRY = 15;        // столько начатых забегов 
 const RACE_DEAD_RATE = 0.1;     // доводит до конца меньше десятой части начатого
 const HS_MIN_ROUNDS = 6;
 const HS_MIN_SEEK = 3;          // меньше раундов охотником — считаем только выживаемость
-const DECLASSIFIED_MAX = 0.08;  // наиграл, но результата нет вовсе
+const HS_DEAD_RATE = 0.05;      // переживает меньше двадцатой части раундов
 
 /* Ступени сверху вниз: процентиль (доля игроков строго ниже) и абсолютный
    пол оценки. Первая ступень, где проходят ОБА условия, и есть ранг. */
@@ -88,30 +95,24 @@ const BANDS = [
 
 function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
-/* Рекорд каждой карты — лучшее время среди всех, кто её проходил, плюс
-   число тех, кто вообще её проходил.
-
-   Счётчик нужен вот зачем: если карту прошёл ровно один человек, то
-   «рекордом» оказывается его же собственное время, и доля от рекорда у
-   него всегда выходит единица — хоть ползком. Так одинокий середняк,
-   набравший десяток никому не известных карт, получал ранг уровня
-   профессионала ни за что. Ориентиром считаем только те карты, где есть
-   с кем сравнивать (MIN_RUNNERS). */
-const MIN_RUNNERS = 2;
-function mapRecords(users) {
-  const best = new Map();
+/* Все лучшие времена по каждой карте — поле, среди которого считается
+   место. Карта идёт в зачёт, только если её прошло хотя бы MIN_RUNNERS
+   человек: на карте, которую открывал один автор, «первое место» не
+   значит ничего, и раньше именно так набивался ранг. */
+const MIN_RUNNERS = 3;
+function mapField(users) {
+  const field = new Map();
   users.forEach((u) => {
     const r = u.rcBest;
     if (!r || typeof r !== 'object') return;
     Object.keys(r).forEach((k) => {
       const ms = r[k];
       if (!(ms > 0)) return;
-      const cur = best.get(k);
-      if (cur === undefined) best.set(k, { ms: ms, runners: 1 });
-      else { cur.runners++; if (ms < cur.ms) cur.ms = ms; }
+      const list = field.get(k);
+      if (list) list.push(ms); else field.set(k, [ms]);
     });
   });
-  return best;
+  return field;
 }
 
 /* Declassified в гонке — это не «медленно», а «не доходит». Человек,
@@ -127,25 +128,33 @@ function raceDeclassified(u) {
 }
 
 // оценка навыка в гонке, 0..1; null — сыграно слишком мало
-function raceScore(u, records) {
-  if ((u.rcFin || 0) < RACE_MIN_FIN) return raceDeclassified(u) ? 0 : null;
+function raceScore(u, field) {
+  if ((u.rcFin || 0) < RACE_MIN_FIN) return null;
   const r = (u.rcBest && typeof u.rcBest === 'object') ? u.rcBest : {};
-  const keys = Object.keys(r);
-  if (!keys.length) return null;
 
   let sum = 0, n = 0;
-  keys.forEach((k) => {
-    const mine = r[k], rec = records.get(k);
-    if (!(mine > 0) || !rec || rec.runners < MIN_RUNNERS || !(rec.ms > 0)) return;
-    sum += clamp01(rec.ms / mine);
+  Object.keys(r).forEach((k) => {
+    const mine = r[k], times = field.get(k);
+    if (!(mine > 0) || !times || times.length < MIN_RUNNERS) return;
+    // место среди прошедших ту же карту: 1 — быстрее всех, 0 — медленнее всех
+    let slower = 0;
+    for (let i = 0; i < times.length; i++) if (times[i] > mine) slower++;
+    sum += slower / (times.length - 1);
     n++;
   });
-  const breadth = clamp01(keys.length / BREADTH_FULL);
-  /* Не с чем сравнить скорость — судим только по охвату, и выше середины
-     такой игрок подняться не может: «быстро» о нём пока ничего не известно,
-     а выдавать высокий ранг авансом нельзя. */
-  if (!n) return clamp01(0.35 * breadth);
-  return clamp01(0.65 * (sum / n) + 0.35 * breadth);
+  /* Ни одной карты, на которой есть с кем сравниться, — судить не о чем.
+     Ранга нет вовсе: это честнее, чем выдавать оценку авансом, и заодно
+     ничего не даёт тому, кто «проходит» только собственные карты. */
+  if (!n) return null;
+  return clamp01(0.65 * (sum / n) + 0.35 * clamp01(n / BREADTH_FULL));
+}
+
+/* Declassified в прятках: раундов сыграно достаточно, а не пережил
+   практически ни одного — то самое «не понимает основных принципов». */
+function hsDeclassified(u) {
+  const hide = u.hsHide || 0;
+  if (hide < HS_MIN_ROUNDS) return false;
+  return ((u.hsSurv || 0) / hide) < HS_DEAD_RATE;
 }
 
 // оценка навыка в прятках, 0..1; null — сыграно слишком мало
@@ -159,8 +168,12 @@ function hsScore(u) {
   return clamp01(0.6 * surv + 0.4 * hunt);
 }
 
+/* Declassified НЕ выводится из самой оценки. Это отдельное условие на
+   каждый режим (см. raceDeclassified и hsDeclassified): «наиграл, но
+   элементарного не делает». Раньше сюда попадал любой, у кого оценка
+   вышла около нуля, и медленный, но исправно доходящий до финиша игрок
+   получал ранг «игру не понимает» — хотя он её как раз проходит. */
 function bandFor(pct, score) {
-  if (score < DECLASSIFIED_MAX) return 'Declassified';
   for (let i = 0; i < BANDS.length; i++) {
     const b = BANDS[i];
     if (pct >= b.pct && score >= b.floor) return b.rank;
@@ -186,11 +199,11 @@ const CACHE_MS = 60 * 1000;
 
 function build(db) {
   const users = Object.values(db.users || {});
-  const records = mapRecords(users);
+  const field = mapField(users);
 
   const race = new Map(), hs = new Map();
   users.forEach((u) => {
-    const rs = raceScore(u, records);
+    const rs = raceScore(u, field);
     if (rs !== null) race.set(u.name, rs);
     const hss = hsScore(u);
     if (hss !== null) hs.set(u.name, hss);
@@ -202,12 +215,15 @@ function build(db) {
   const out = new Map();
   users.forEach((u) => {
     const rs = race.get(u.name), hss = hs.get(u.name);
+    const rDec = raceDeclassified(u), hDec = hsDeclassified(u);
     out.set(u.name.toLowerCase(), {
-      race: rs === undefined ? null
-        : { rank: bandFor(placeIn(raceSorted, rs), rs), score: Math.round(rs * 100),
+      race: (rs === undefined && !rDec) ? null
+        : { rank: rDec ? 'Declassified' : bandFor(placeIn(raceSorted, rs), rs),
+            score: Math.round((rs || 0) * 100),
             finishes: u.rcFin || 0, maps: Object.keys(u.rcBest || {}).length },
-      hs: hss === undefined ? null
-        : { rank: bandFor(placeIn(hsSorted, hss), hss), score: Math.round(hss * 100),
+      hs: (hss === undefined && !hDec) ? null
+        : { rank: hDec ? 'Declassified' : bandFor(placeIn(hsSorted, hss), hss),
+            score: Math.round((hss || 0) * 100),
             rounds: u.hsHide || 0, survived: u.hsSurv || 0,
             seekRounds: u.hsSeek || 0, caught: u.hsCat || 0 }
     });
@@ -237,4 +253,5 @@ function register(app, currentUser, acc) {
 }
 
 module.exports = { register, forName, all, invalidate,
-                   raceScore, hsScore, bandFor, mapRecords, BANDS };
+                   raceScore, hsScore, bandFor, mapField,
+                   raceDeclassified, hsDeclassified, BANDS };
