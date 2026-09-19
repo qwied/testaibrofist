@@ -107,9 +107,9 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 #objTitle span{margin-left:auto;color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0}
 .pRow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0}
 .pRow label{color:#5b6472;font-size:12px}
-.pRow input[type=number],.pRow input[type=text]{width:94px;padding:5px 8px;border:1px solid var(--line);
+.pRow input[type=number],.pRow input[type=text],.pRow select{width:94px;padding:5px 8px;border:1px solid var(--line);
   border-radius:7px;font-size:12px;font-family:inherit;color:var(--ink);background:#fafbfd;outline:none}
-.pRow input:focus{border-color:var(--accent);background:#fff}
+.pRow input:focus,.pRow select:focus{border-color:var(--accent);background:#fff}
 .pRow input[type=color]{width:44px;height:26px;padding:1px;border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer}
 .pRow input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
 .pRow input[type=range]{width:100px;accent-color:var(--accent)}
@@ -539,7 +539,7 @@ var PAINT = {
   },
   text: function(o){
     ctx.fillStyle = o.fill || C.ink;
-    ctx.font = "800 " + Math.max(9,o.h) + "px -apple-system,Segoe UI,Roboto,sans-serif";
+    ctx.font = "800 " + Math.max(9,o.h) + "px " + ((FONTS[o.font] || FONTS.sans).css);
     ctx.textBaseline = "top";
     ctx.fillText(o.text || "Text", 0, 0);
   },
@@ -834,6 +834,22 @@ var DEADLY_BY_DEFAULT = [];
 /* Ворота и укрытие убраны, но механика связей осталась: цель кнопки или
    рычага — теперь любой обычный блок, круг или треугольник. */
 var LINKED = ["rect","circle","triangle","button","lever","laserFeed","teleport"];
+/* Шрифты для текстового объекта (см. text: в PAINT и панель свойств):
+   раньше единственным способом получить не-обычный шрифт было слепить
+   текст на стороннем «генераторе шрифтов» из юникод-символов-подделок
+   под букву и вставить готовую строку — subject просил именно убрать
+   этот лишний шаг. Только системные шрифты — без них шрифт менялся бы
+   не сразу, а через сетевую загрузку, и на офлайн-технике вообще никак.
+   Первый — старый вид по умолчанию, старые карты ничего не теряют. */
+var FONTS = {
+  sans:   {k:"fontSans",   n:"Обычный",           css:"-apple-system,Segoe UI,Roboto,sans-serif"},
+  serif:  {k:"fontSerif",  n:"С засечками",       css:"Georgia,'Times New Roman',serif"},
+  mono:   {k:"fontMono",   n:"Моноширинный",      css:"'Courier New',monospace"},
+  comic:  {k:"fontComic",  n:"Рукописный",        css:"'Comic Sans MS','Comic Sans',cursive"},
+  impact: {k:"fontImpact", n:"Плакатный",         css:"Impact,'Arial Narrow Bold',sans-serif"},
+  script: {k:"fontScript", n:"Курсив",            css:"'Brush Script MT','Segoe Script',cursive"}
+};
+var FONT_KEYS = Object.keys(FONTS);
 
 /* ══════════════════════════════════════════════════
    STATE
@@ -3038,6 +3054,23 @@ function txt(l,v,fn){
   i.addEventListener("input", function(){ fn(i.value); });
   r.appendChild(a); r.appendChild(i);
 }
+/* Шрифт текстового объекта — единственная выпадашка в панели, поэтому не
+   обобщаем в отдельный select(), а пишем прямо под то, что есть (см.
+   FONTS выше). Каждый пункт списка нарисован СВОИМ шрифтом — видно, что
+   выбираешь, не открывая отдельно карту. */
+function fontField(l,v,fn){
+  var r = pr(), a = document.createElement("label"); a.textContent = l;
+  var s = document.createElement("select");
+  FONT_KEYS.forEach(function(k){
+    var opt = document.createElement("option");
+    opt.value = k; opt.textContent = TR(FONTS[k].k, FONTS[k].n); opt.style.fontFamily = FONTS[k].css;
+    if(k === (v || "sans")) opt.selected = true;
+    s.appendChild(opt);
+  });
+  s.addEventListener("focus", commit);
+  s.addEventListener("change", function(){ fn(s.value); });
+  r.appendChild(a); r.appendChild(s);
+}
 /* Тот же текстовый ввод, но с кнопкой «×» рядом — разом убрать все ID
    разом, а не выделять и стирать текст руками. Только для «Целей»
    кнопки/рычага: у обычного текстового поля вроде «ID» такая кнопка
@@ -3146,7 +3179,10 @@ function inspect(){
       r2.appendChild(ci2);
     }
   }
-  if(sel.type === "text") txt(TR("toolText","Текст"), sel.text, function(v){ sel.text = v; });
+  if(sel.type === "text"){
+    txt(TR("toolText","Текст"), sel.text, function(v){ sel.text = v; });
+    fontField(TR("lblFont","Шрифт"), sel.font, function(v){ sel.font = v; });
+  }
 
   grp(TR("grpGameProps","Игровые свойства"));
   /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Яд»
