@@ -342,6 +342,7 @@ const accounts = require('./accounts.js');
 accountsRef = accounts;
 accounts.register(app);
 require('./maps.js').register(app, accounts.currentUser, accounts, cleanText);
+require('./ranks.js').register(app, accounts.currentUser, accounts);
 require('./userSkins.js').register(app, accounts);
 require('./messages.js').register(app, accounts);
 require('./themes.js').register(app, accounts);
@@ -584,6 +585,26 @@ function hsSpin(io, room, st) {
    секунду до конца и получить монеты ни за что. Досрочный конец через
    hsOnCaught сюда тоже заходит, но там пойманы все — наградивших не
    найдётся, и цикл просто ничего не сделает. */
+/* Очки Hide and Seek: продержаться раунд хайдером стоит заметно дороже
+   одной поимки, но охотник за раунд ловит нескольких — за вечер у обеих
+   ролей выходит сопоставимо, и таблица не превращается в рейтинг одних
+   только сикеров. Начисляет их сервер, как и очки Race. */
+const HS_PTS_SURVIVE = 10;
+const HS_PTS_CATCH = 4;
+
+/* Счётчики для автоматических рангов (см. ranks.js): сколько раундов
+   сыграно в каждой роли и сколько из них удачно. Это не награда и не
+   валюта — чистая статистика навыка, поэтому живёт прямо в аккаунте и
+   никаких журналов под себя не заводит. */
+function hsStat(name, fn) {
+  try {
+    const u = accountsRef.getDb().users[accountsRef.key(name)];
+    if (!u) return;
+    fn(u);
+    accountsRef.save();
+  } catch (e) { /* статистика рангов не должна ронять раунд */ }
+}
+
 function hsAwardRoundEnd(io, room, st) {
   const members = st.roundMembers || [];
   const caught = st.caughtSet || new Set();
@@ -602,6 +623,9 @@ function hsAwardRoundEnd(io, room, st) {
     if (!acct) return;                    // гость
     hsCreditAndNotify(sock, acct, 1 + Math.floor(Math.random() * 5), 'hsWin');
     require('./quests.js').track(acct, 'hs_survive_hider');
+    // очки режима — отдельно от монет, для своей таблицы лидеров
+    accountsRef.creditHsScore(acct, HS_PTS_SURVIVE);
+    hsStat(acct, (s) => { s.hsHide = (s.hsHide || 0) + 1; s.hsSurv = (s.hsSurv || 0) + 1; });
   });
 }
 
@@ -686,6 +710,12 @@ function hsStartRound(io, room, st) {
      каждому нужно набрать честный путь заново, а не с чужого старта. */
   const sp0 = gameState.players.get(st.seekerId);
   st.seekerOdo = new Map([[st.seekerId, sp0 ? (sp0.odo || 0) : 0]]);
+  // раунд в роли охотника — для доли поимок в ранге (см. ranks.js)
+  (function () {
+    const sSock = io.sockets.sockets.get(st.seekerId);
+    const sAcct = sSock && sessionName(sSock.handshake.headers.cookie);
+    if (sAcct) hsStat(sAcct, (s) => { s.hsSeek = (s.hsSeek || 0) + 1; });
+  })();
   // заражение: кто сейчас охотится — сначала только тот, кого выбрала рулетка
   st.seekerIds = new Set([st.seekerId]);
   st.caughtSet = new Set();
@@ -1114,7 +1144,17 @@ io.on('connection', (socket) => {
     if (account) {
       hsCreditAndNotify(socket, account, 1, 'hsCatch');
       require('./quests.js').track(account, 'hs_catch');
+      accountsRef.creditHsScore(account, HS_PTS_CATCH);
+      hsStat(account, (s) => { s.hsCat = (s.hsCat || 0) + 1; });
     }
+    /* Пойманному раунд хайдером засчитываем здесь: в hsAwardRoundEnd его
+       уже пропускают, и без этого в статистике оставались бы одни удачные
+       раунды, а доля выживаний у всех была бы ровно единицей. */
+    (function () {
+      const tSock = io.sockets.sockets.get(targetId);
+      const tAcct = tSock && sessionName(tSock.handshake.headers.cookie);
+      if (tAcct) hsStat(tAcct, (s) => { s.hsHide = (s.hsHide || 0) + 1; });
+    })();
 
     /* Заражение: пойманный не выбывает, а сам становится искателем и
        дальше охотится вместе с остальными. Отметку одометра снимаем
@@ -1147,6 +1187,41 @@ io.on('connection', (socket) => {
   // очки за забег: чем быстрее финиш, тем больше — 120 сек и дольше не
   // приносят ничего, секунда почти сразу после старта — почти максимум
   const RACE_SCORE_CAP_S = 120;
+
+  /* Статистика гонки для автоматических рангов (см. ranks.js). Храним
+     ЛУЧШЕЕ время игрока на каждой карте, а не среднее: ранг должен мерить,
+     на что человек способен, а не сколько раз он бросил забег на середине.
+     Из этого же поля берётся и охват — сколько разных карт он вообще
+     прошёл. Рекорд карты нигде отдельно не лежит: при расчёте ранга он
+     находится перебором тех же лучших времён у всех игроков, поэтому
+     всегда честный и не требует своего файла. */
+  const RACE_BEST_CAP = 300;    // столько карт на аккаунт хватает с запасом
+  /* Число начатых забегов нужно ровно для одного: отличить новичка, про
+     которого ещё нечего сказать, от игрока, который карту за картой берёт
+     и ни одну не доводит до финиша. Первому ранга просто нет, второй —
+     Declassified из описания рангов. Без этого счётчика эти два случая
+     выглядят одинаково. */
+  function raceTryStat(name) {
+    try {
+      const u = accountsRef.getDb().users[accountsRef.key(name)];
+      if (!u) return;
+      u.rcTry = (u.rcTry || 0) + 1;
+      accountsRef.save();
+    } catch (e) { /* статистика рангов не должна ронять забег */ }
+  }
+  function raceStat(name, mapKey, ms) {
+    try {
+      const u = accountsRef.getDb().users[accountsRef.key(name)];
+      if (!u || !(ms > 0)) return;
+      u.rcFin = (u.rcFin || 0) + 1;
+      if (!u.rcBest || typeof u.rcBest !== 'object') u.rcBest = {};
+      const had = Object.prototype.hasOwnProperty.call(u.rcBest, mapKey);
+      if (!had && Object.keys(u.rcBest).length >= RACE_BEST_CAP) return;
+      if (!had || ms < u.rcBest[mapKey]) u.rcBest[mapKey] = ms;
+      accountsRef.save();
+    } catch (e) { /* статистика рангов не должна ронять забег */ }
+  }
+
   socket.on('raceStart', (data) => {
     if (limRace()) return;
     const player = gameState.players.get(socket.id);
@@ -1157,6 +1232,7 @@ io.on('connection', (socket) => {
     // снимок одометра на старте — на финише сверяем, сколько набежало
     player.raceStart = { key: author + '|' + mapName, at: Date.now(),
                          odo: player.odo || 0, moves: player.moves || 0 };
+    if (account) raceTryStat(account);
   });
   socket.on('raceFinish', (data) => {
     if (limRace()) return;
@@ -1184,6 +1260,7 @@ io.on('connection', (socket) => {
     hsCreditAndNotify(socket, account, 1 + Math.floor(Math.random() * 5), 'raceFinish');
     require('./quests.js').track(account, 'race_finish');
     if (points > 0) accountsRef.creditScore(account, points);
+    raceStat(account, rs.key, elapsedMs);
   });
 
   socket.on('disconnect', () => {

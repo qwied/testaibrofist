@@ -251,7 +251,7 @@ setInterval(sweepImages, 30 * 60 * 1000).unref();
 
 function register(app, acc) {
   const { currentUser, isOwner, getDb, save: saveUsers, newSession, verifyPassword, key, checkName,
-          sumLog, getCoinLog, getScoreLog, paginate } = acc;
+          sumLog, getCoinLog, getScoreLog, getHsLog, paginate } = acc;
 
   const ownerOnly = (req, res) => {
     const u = currentUser(req);
@@ -356,20 +356,28 @@ function register(app, acc) {
      hsCatch / конец раунда в server.js. */
 
   // ---------- таблица лидеров ----------
-  // metric: coins | score. period: day | week | all (по умолчанию).
-  // day/week — скользящее окно по журналу (coinLog/scoreLog), как и раньше
-  // у «лучшие сегодня/за неделю»; all — постоянный счёт на аккаунте
-  // (u.coins/u.score), он никогда не обрезается журналом.
+  // metric: coins | score (Race) | hs (Hide and Seek).
+  // period: day | week | all (по умолчанию).
+  // day/week — скользящее окно по журналу (coinLog/scoreLog/hsLog), как и
+  // раньше у «лучшие сегодня/за неделю»; all — постоянный счёт на аккаунте
+  // (u.coins/u.score/u.hsScore), он никогда не обрезается журналом.
+  const METRICS = {
+    coins: { log: getCoinLog, field: 'coins' },
+    score: { log: getScoreLog, field: 'score' },
+    hs: { log: getHsLog, field: 'hsScore' }
+  };
   app.get('/getLeaderboard', (req, res) => {
     const db = getDb();
-    const metric = req.query.metric === 'score' ? 'score' : 'coins';
+    const metric = Object.prototype.hasOwnProperty.call(METRICS, req.query.metric)
+      ? req.query.metric : 'coins';
+    const m = METRICS[metric];
     const period = req.query.period === 'day' ? 'day' : req.query.period === 'week' ? 'week' : 'all';
     const windowMs = period === 'day' ? 24 * 60 * 60 * 1000 : period === 'week' ? 7 * 24 * 60 * 60 * 1000 : 0;
 
     const list = windowMs
-      ? sumLog(metric === 'score' ? getScoreLog() : getCoinLog(), windowMs)
+      ? sumLog(m.log(), windowMs)
       : Object.values(db.users)
-          .map(u => ({ name: u.name, amount: (metric === 'score' ? u.score : u.coins) || 0 }))
+          .map(u => ({ name: u.name, amount: u[m.field] || 0 }))
           .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
 
     const page = paginate(list, req.query.page);
@@ -380,8 +388,21 @@ function register(app, acc) {
       myPlace = idx + 1;
       myAmount = idx !== -1 ? list[idx].amount : 0;
     }
+    /* Ранг рядом с именем в таблице: для режимных метрик — ранг того же
+       режима, для монет никакого (монеты про навык ничего не говорят). */
+    const rankMode = metric === 'hs' ? 'hs' : metric === 'score' ? 'race' : null;
+    let ranks = null;
+    if (rankMode) {
+      const rk = require('./ranks.js');
+      ranks = {};
+      page.slice.forEach((row) => {
+        const r = rk.forName(db, row.name)[rankMode];
+        if (r) ranks[row.name] = r.rank;
+      });
+    }
     res.json({
       top: page.slice, page: page.label, metric: metric, period: period,
+      ranks: ranks,
       me: me ? { name: me.name, amount: myAmount, place: myPlace } : null
     });
   });
