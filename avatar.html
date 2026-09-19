@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIBrofist — Avatar</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="ui.css?v=159">
+<script src="theme.js?v=159"></script>
+<script src="device.js?v=159"></script>
+<script src="sound.js?v=159"></script>
+<style>
+  /* Тот же приём, что и у карточек Settings/профиля: рамка var(--line),
+     фон var(--panel) — никаких своих цветов, чтобы страница не выбивалась
+     из общей палитры сайта (см. дизайн-проход по лидерборду/профилю). */
+  .avCard{border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;background:var(--panel)}
+  .avCardTitle{font-weight:800;font-size:15px;margin-bottom:10px}
+  .avHint{color:var(--muted);font-size:13.5px;line-height:1.5;margin-bottom:12px}
+  .avRow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .avRow input[type=color]{width:44px;height:38px;padding:2px;border:1px solid var(--line);
+    border-radius:8px;cursor:pointer;background:var(--panel)}
+  .avPrice{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-size:13px}
+  .avErr{font-size:13px;margin-top:8px;min-height:16px}
+  .avErr.bad{color:var(--red)}
+  .avErr.good{color:var(--green)}
+  #avNickBtn{max-width:260px}
+  #avChatBtn{max-width:260px}
+</style>
+	<link rel="icon" href="/favicon.ico" sizes="any">
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+	<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+	<link rel="manifest" href="/site.webmanifest">
+	<meta name="theme-color" content="#111827">
+	<link rel="canonical" href="https://aibrofist.online/avatar.html">
+	<meta name="description" content="Your account: chat color and nickname.">
+	<meta property="og:type" content="website">
+	<meta property="og:site_name" content="AIBrofist">
+	<meta property="og:title" content="AIBrofist — Avatar">
+	<meta property="og:description" content="Your account: chat color and nickname.">
+	<meta property="og:url" content="https://aibrofist.online/avatar.html">
+	<meta property="og:image" content="https://aibrofist.online/preview.png">
+	<meta name="twitter:card" content="summary_large_image">
+	<meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<div class="bfWrap">
+  <div class="bfTitle" data-i18n="avatar">Avatar</div>
+  <div class="bfSub" data-i18n="avatarSub">Your account's look and identity.</div>
+
+  <div id="avGuest" class="bfHint" data-i18n="avatarGuest" style="display:none">Sign in to change your chat color or nickname.</div>
+
+  <div id="avBody" style="display:none">
+    <div id="avName" style="font-size:20px;font-weight:800;margin-bottom:16px"></div>
+
+    <div class="avCard">
+      <div class="avCardTitle" data-i18n="chatColorTitle">Chat color</div>
+      <div id="avChatColorBox"></div>
+    </div>
+
+    <div class="avCard">
+      <div class="avCardTitle" data-i18n="changeNickTitle">Change nickname</div>
+      <div class="avHint" data-i18n="changeNickHint">Your maps, comments, favorites and friends all move with you — nothing is lost.</div>
+      <div class="avRow">
+        <input class="bfInput" id="avNewNick" type="text" style="max-width:220px;margin-bottom:0"
+               placeholder="New nickname" data-i18n-ph="newNick">
+        <button class="bfBtn go" id="avNickBtn" data-i18n="changeNickBtn">Change nickname</button>
+      </div>
+      <div class="avErr" id="avNickErr"></div>
+    </div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="mobile.css?v=159">
+<script src="i18n.js?v=159"></script>
+<script src="coin.js?v=159"></script>
+<script src="skinRender.js?v=159"></script>
+<script src="skinAvatar.js?v=159" defer></script>
+<script src="shell.js?v=159"></script>
+<script src="abuseShow.js?v=159" defer></script>
+<script src="account.js?v=159" defer></script>
+<script src="owner.js?v=159" defer></script>
+<script>
+(function () {
+  'use strict';
+
+  function T(k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; }
+
+  function post(url, data, cb) {
+    var body = Object.keys(data || {})
+      .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]); })
+      .join('&');
+    fetch(url, { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+      .then(function (r) { return r.json(); }).then(cb)
+      .catch(function () { cb({ status: 'error', message: 'Server unavailable' }); });
+  }
+  function get(url, cb) {
+    fetch(url, { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); }).then(cb).catch(function () { cb(null); });
+  }
+
+  var bio = null;
+
+  function drawChatColor() {
+    var box = document.getElementById('avChatColorBox');
+    if (!bio.chatColorUnlocked) {
+      box.innerHTML =
+          '<div class="avHint">' + T('chatColorLocked', 'Pick your own color for chat bubbles and your name tag.') + '</div>'
+        + '<div class="avRow">'
+        +   '<button class="bfBtn go" id="avChatBtn">' + T('chatColorUnlockBtn', 'Unlock chat color')
+        +     ' <span class="avPrice">&middot; ' + bio.chatColorPrice + (window.BFCoin ? BFCoin.svg(13) : '') + '</span></button>'
+        + '</div>'
+        + '<div class="avErr" id="avChatErr"></div>';
+      document.getElementById('avChatBtn').onclick = function () {
+        var btn = this; btn.disabled = true;
+        post('/chatColor/unlock', {}, function (r) {
+          btn.disabled = false;
+          var err = document.getElementById('avChatErr');
+          if (r && r.status === 'success') {
+            bio.chatColorUnlocked = true;
+            if (window.BFShell && BFShell.refreshCoins) BFShell.refreshCoins(r.coins);
+            drawChatColor();
+            return;
+          }
+          err.className = 'avErr bad';
+          err.textContent = (r && r.message) || T('errorTxt', 'Error');
+        });
+      };
+      return;
+    }
+    box.innerHTML =
+        '<div class="avRow">'
+      +   '<input type="color" id="avColorInput" value="' + (bio.chatColor || '#000000') + '">'
+      +   '<button class="bfBtn go" id="avChatBtn" style="width:auto;padding:11px 18px">'
+      +     T('chatColorSaveBtn', 'Save color') + '</button>'
+      + '</div>'
+      + '<div class="avErr" id="avChatErr"></div>';
+    document.getElementById('avChatBtn').onclick = function () {
+      var v = document.getElementById('avColorInput').value;
+      var err = document.getElementById('avChatErr');
+      err.className = 'avErr'; err.textContent = '…';
+      post('/setMyBio', { chatColor: v }, function (r) {
+        if (r && r.status === 'success') {
+          bio.chatColor = v;
+          err.className = 'avErr good';
+          err.textContent = T('chatColorSaved', 'Color saved');
+        } else {
+          err.className = 'avErr bad';
+          err.textContent = (r && r.message) || T('errorTxt', 'Error');
+        }
+      });
+    };
+  }
+
+  function start() {
+    get('/whoAmI', function (me) {
+      if (!me || me.guest) {
+        document.getElementById('avGuest').style.display = 'block';
+        return;
+      }
+      get('/getMyBio', function (r) {
+        bio = r || {};
+        document.getElementById('avBody').style.display = 'block';
+        document.getElementById('avName').textContent = me.name;
+        drawChatColor();
+      });
+    });
+  }
+
+  document.getElementById('avNickBtn').onclick = function () {
+    var v = document.getElementById('avNewNick').value.trim();
+    var err = document.getElementById('avNickErr');
+    if (!v) { err.className = 'avErr bad'; err.textContent = T('fillBoth', 'Fill in both fields'); return; }
+    err.className = 'avErr'; err.textContent = '…';
+    post('/changeNickname', { name: v }, function (r) {
+      if (r && r.status === 'success') {
+        err.className = 'avErr good';
+        err.textContent = r.message || T('nickChanged', 'Nickname changed');
+        setTimeout(function () { location.reload(); }, 700);
+      } else {
+        err.className = 'avErr bad';
+        err.textContent = (r && r.message) || T('errorTxt', 'Error');
+      }
+    });
+  };
+
+  start();
+})();
+</script>
+</body>
+</html>

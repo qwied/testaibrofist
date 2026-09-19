@@ -40,7 +40,9 @@ load();
 const key = n => String(n || '').toLowerCase();
 
 // самостоятельная смена ника — фиксированная цена в монетах
-const NICK_CHANGE_PRICE = 1000;
+const NICK_CHANGE_PRICE = 1500;
+// свой цвет чата — разовое открытие, как темы (см. themes.js): дальше меняй сколько угодно
+const CHAT_COLOR_PRICE = 500;
 
 /* Пароли: scrypt с повышенной стойкостью (N=2^15). Старые хеши
    проверяются по прежним параметрам и молча пересохраняются новыми
@@ -514,7 +516,32 @@ function register(app) {
       else s.name = to;
     });
     save();
+    /* Раньше карты оставались подписаны старым именем: не удалялись, но
+       и не находились нигде под новым ником — для игрока это выглядело
+       так же, как пропажа. renameAuthor переносит авторство самих карт
+       и чужие избранное/папки, которые на них ссылаются. */
+    require('./maps.js').renameAuthor(old, to);
     res.json({ status: 'success', message: 'Nickname changed to «' + to + '»', name: to, coins: u.coins });
+  });
+
+  // ---------- свой цвет чата: разовое открытие за монеты, как темы ----------
+  app.post('/chatColor/unlock', (req, res) => {
+    const u = currentUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    if (u.chatColorUnlocked)
+      return res.json({ status: 'success', unlocked: true, coins: u.coins || 0 });
+
+    const coins = u.coins || 0;
+    if (coins < CHAT_COLOR_PRICE)
+      return res.json({
+        status: 'error',
+        message: 'You need ' + (CHAT_COLOR_PRICE - coins) + ' more of ' + CHAT_COLOR_PRICE + ' coins'
+      });
+
+    u.coins = coins - CHAT_COLOR_PRICE;
+    u.chatColorUnlocked = true;
+    save();
+    res.json({ status: 'success', unlocked: true, coins: u.coins, message: 'Chat color unlocked' });
   });
 
   app.post('/logOut', (req, res) => {
@@ -590,23 +617,32 @@ function register(app) {
   });
   app.get('/getMyBio', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ name: '', avatar: '0', chatColor: '#000000', whatBro: 'none' });
+    if (!u) return res.json({ name: '', avatar: '0', chatColor: '#000000', whatBro: 'none',
+                              chatColorUnlocked: false, chatColorPrice: CHAT_COLOR_PRICE, coins: 0 });
     res.json({
       name: u.name,
       avatar: u.avatar || '0',
       chatColor: u.chatColor || '#000000',
-      whatBro: u.whatBro || 'none'
+      whatBro: u.whatBro || 'none',
+      chatColorUnlocked: !!u.chatColorUnlocked,
+      chatColorPrice: CHAT_COLOR_PRICE,
+      coins: u.coins || 0
     });
   });
 
-  // сохранение аватара и цвета чата
+  // сохранение аватара и цвета чата — свой цвет требует разовой покупки (см. /chatColor/unlock)
   app.post('/setMyBio', (req, res) => {
     const u = currentUser(req);
     if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const avatar = String(req.body.avatar || '').trim();
     const chatColor = String(req.body.chatColor || '').trim();
     if (avatar) u.avatar = avatar.slice(0, 40);
-    if (/^#[0-9a-fA-F]{6}$/.test(chatColor)) u.chatColor = chatColor;
+    if (/^#[0-9a-fA-F]{6}$/.test(chatColor)) {
+      if (!u.chatColorUnlocked)
+        return res.json({ status: 'error', code: 'locked',
+                          message: 'Chat color is not unlocked yet — needs ' + CHAT_COLOR_PRICE + ' coins' });
+      u.chatColor = chatColor;
+    }
     save();
     res.json({ status: 'success' });
   });

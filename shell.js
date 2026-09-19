@@ -39,7 +39,15 @@
     { key: 'daily',       href: 'daily.html',       txt: 'Daily Reward' },
     { key: 'story',       href: 'story.html',       txt: 'Story Mode' },
     { key: 'logs',        href: 'logs.html',        txt: 'Logs' },
-    { key: 'messages',    href: 'messages.html',    txt: 'Messages' }
+    { key: 'messages',    href: 'messages.html',    txt: 'Messages' },
+    { key: 'avatar',      href: 'avatar.html',      txt: 'Avatar' },
+    /* Настройки раньше открывались только через клик по аватару внизу —
+       незаметно и не на своём месте среди остальных разделов. Теперь это
+       обычный пункт бокового меню; сама модалка (account.js) не менялась,
+       просто у неё появился второй, более заметный, вход — открытие
+       модалки помечено action, а не href, поэтому navItem() не пытается
+       на неё "перейти" и подсвечивать активной её тоже незачем. */
+    { key: 'settings',    action: 'settings',       txt: 'Settings' }
   ];
 
   var SOCIAL = [
@@ -68,9 +76,18 @@
 
   function navItem(l, here) {
     var a = el('a', 'bfNavItem');
-    a.href = l.href;
+    if (l.action) {
+      // не страница, а действие (пока только Settings — открывает ту же модалку, что и раньше)
+      a.href = '#';
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (l.action === 'settings' && window.bfOpenSettings) window.bfOpenSettings();
+      });
+    } else {
+      a.href = l.href;
+      if (l.href.toLowerCase() === here) a.classList.add('on');
+    }
     if (l.ext) { a.target = '_blank'; a.rel = 'noopener'; }
-    if (l.href.toLowerCase() === here) a.classList.add('on');
     var label = document.createElement('span');
     label.textContent = l.txt;
     if (l.key) label.setAttribute('data-i18n', l.key);
@@ -249,13 +266,7 @@
     p.onclick = function () { location.href = 'users.html?name=' + encodeURIComponent(me.name); };
     box.appendChild(p);
 
-    var st = el('div', 'bfDropItem', T('settings', 'Настройки'));
-    st.onclick = function () {
-      closeAll(null);
-      if (window.bfOpenSettings) window.bfOpenSettings();
-      else if (window.BFAuth && BFAuth.settings) BFAuth.settings();
-    };
-    box.appendChild(st);
+    // «Настройки» отсюда убраны — теперь свой пункт в боковом меню (см. NAV)
 
     var out = el('div', 'bfDropItem bfDropOut', T('logout', 'Выйти'));
     out.onclick = function () {

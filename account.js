@@ -251,12 +251,6 @@
        +   '<div class="bf-e" id="bfPassErr"></div>'
        +   '<div class="bf-b" id="bfPassGo">' + T('changePass', 'Сменить пароль') + '</div>'
        + '</div>'
-       + '<div class="bf-b" id="bfNickBtn">' + T('changeNickPrice', 'Сменить ник (1000 монет)') + '</div>'
-       + '<div id="bfNickBox" style="display:none">'
-       +   '<input class="bf-i" id="bfNewNick" type="text" placeholder="' + T('newNick', 'Новый ник') + '">'
-       +   '<div class="bf-e" id="bfNickErr"></div>'
-       +   '<div class="bf-b" id="bfNickGo">' + T('changeNick', 'Сменить ник') + '</div>'
-       + '</div>'
        + '<div class="bf-b ghost2" id="bfLogoutAll" style="border-color:#dc2626;color:#dc2626">'
        +   T('logoutAll', 'Выйти на всех устройствах') + '</div>'
        + '<div class="bf-h" id="bfSecNote">' + T('secNote',
@@ -292,25 +286,6 @@
           box.querySelector('#bfOldPass').value = '';
           box.querySelector('#bfNewPass').value = '';
         } else passErr.textContent = (r && r.message) || 'Error';
-      });
-    };
-    var nickBox = box.querySelector('#bfNickBox');
-    var nickErr = box.querySelector('#bfNickErr');
-    box.querySelector('#bfNickBtn').onclick = function () {
-      nickBox.style.display = nickBox.style.display === 'none' ? 'block' : 'none';
-      nickErr.textContent = '';
-    };
-    box.querySelector('#bfNickGo').onclick = function () {
-      var newNick = box.querySelector('#bfNewNick').value.trim();
-      if (!newNick) { nickErr.textContent = T('fillBoth', 'Заполните оба поля'); return; }
-      nickErr.style.color = 'red';
-      nickErr.textContent = '…';
-      post('/changeNickname', { name: newNick }, function (r) {
-        if (r && r.status === 'success') {
-          nickErr.style.color = 'green';
-          nickErr.textContent = r.message || T('nickChanged', 'Ник изменён');
-          setTimeout(function () { location.reload(); }, 700);
-        } else nickErr.textContent = (r && r.message) || 'Error';
       });
     };
     box.querySelector('#bfLogoutAll').onclick = function () {
