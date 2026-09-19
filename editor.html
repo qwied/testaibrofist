@@ -683,13 +683,14 @@ var TOOLS = [
   {t:"spawn",      n:"Точка старта",k:"toolSpawn",      m:ALL},
   {t:"button",     n:"Кнопка",      k:"toolButton",     m:ALL},
   {t:"lever",      n:"Рычаг",       k:"toolLever",      m:ALL},
-  /* Старая идея из обратной связи: лазер, который «стреляет» в сторону
-     приёмника и включает связанные объекты, пока луч перекрыт игроком.
-     Приёмник — только ориентир для автора карты, куда целиться (сам
-     луч летит по повороту излучателя на фиксированную дальность, см.
-     laserFeeds()/step() — стены он не огибает и не проверяет). */
-  {t:"laserFeed",     n:"Лазер: излучатель", k:"toolLaserFeed",     m:ALL},
-  {t:"laserReceiver", n:"Лазер: приёмник",   k:"toolLaserReceiver", m:ALL},
+  /* Лазер (старая идея из обратной связи) — не отдельный инструмент, а
+     галочка «Лазер» на обычном блоке/круге/треугольнике (см. Game
+     Properties в inspect() и laserFeeds() в step()): включает связанные
+     объекты, пока луч из фигуры перекрыт игроком. Палитра инструментов
+     и так длинная, отдельные значки под это не заводим.
+     Типы laserFeed/laserReceiver из прежней версии остаются
+     зарегистрированы ниже (COLORS/SIZES/PAINT/LINKED) ради старых карт,
+     которые их уже используют — просто без своей кнопки в палитре. */
   // только гонка
   {t:"checkpoint", n:"Чекпоинт",    k:"toolCheckpoint", m:"race"},
   {t:"finishline", n:"Финиш",       k:"toolFinish",     m:"race"},
@@ -1913,7 +1914,7 @@ function drive(src){
 function laserFeeds(){
   for(var i=0;i<objects.length;i++){
     var o = objects[i];
-    if(o.type !== "laserFeed") continue;
+    if(o.type !== "laserFeed" && !o.laser) continue;
     var cx = o.x+o.w/2, cy = o.y+o.h/2, rad = (o.rot||0)*Math.PI/180;
     var range = o.range||500;
     var ex = cx + Math.cos(rad)*range, ey = cy + Math.sin(rad)*range;
@@ -1974,6 +1975,15 @@ function paint(o, isSel){
   if(open) ctx.globalAlpha = .2;
   if(o.ghost) ctx.globalAlpha *= .45;      // проходимые видно, но они не мешают
   (PAINT[o.type] || PAINT.rect)(o);
+  /* Лазер теперь свойство, а не отдельный тип — рисуем ту же линзу, что
+     раньше была у laserFeed, поверх обычной фигуры. */
+  if(o.laser){
+    var lr = Math.max(2.5, Math.min(o.w,o.h)*0.18), lcx = o.w*0.88, lcy = o.h/2;
+    ctx.fillStyle = o._act ? "#fca5a5" : "#7f1d1d";
+    ctx.beginPath(); ctx.arc(lcx,lcy,lr,0,6.2832); ctx.fill();
+    ctx.strokeStyle = o._act ? "#ef4444" : "#450a0a"; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(lcx,lcy,lr*1.7,0,6.2832); ctx.stroke();
+  }
   if(!playing && o.deadly && DEADLY_BY_DEFAULT.indexOf(o.type) === -1){
     ctx.globalAlpha = 1; ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 2;
     ctx.setLineDash([5,4]); ctx.strokeRect(-1,-1,o.w+2,o.h+2); ctx.setLineDash([]);
@@ -2059,7 +2069,7 @@ function paintFrame(){
      Вне игры показываем полную дальность — ориентир, куда целится. */
   for(var lfi=0; lfi<objects.length; lfi++){
     var lo = objects[lfi];
-    if(lo.type !== "laserFeed") continue;
+    if(lo.type !== "laserFeed" && !lo.laser) continue;
     var lcx = lo.x+lo.w/2, lcy = lo.y+lo.h/2, lend;
     if(playing && lo._beamEnd) lend = lo._beamEnd;
     else {
@@ -2871,17 +2881,27 @@ function inspect(){
       });
       if(sel.spins) num(TR("lblSpinSpeed","Скорость вращения"), sel.spin||2, function(v){ sel.spin = v; });
     }
+
+    /* Лазер — тоже свойство фигуры, а не отдельный объект (см. laserFeeds()
+       в step()): включает связанные через «Цели» объекты, пока луч из этой
+       фигуры перекрыт игроком. Независим от толкаемости/движения/вращения —
+       ничего не гасит и не гасится ими. */
+    chk(TR("chkLaser","Лазер (излучатель)"), !!sel.laser, function(v){
+      sel.laser = v;
+      if(v && !sel.range) sel.range = 500;
+      inspect();
+    });
   }
   if(LINKED.indexOf(sel.type) !== -1){
     grp(TR("grpLinks","Связи"));
     txt("ID", sel.customId, function(v){ sel.customId = v; });
-    if(sel.type === "button" || sel.type === "lever" || sel.type === "laserFeed")
+    if(sel.type === "button" || sel.type === "lever" || sel.type === "laserFeed" || sel.laser)
       txtClear(TR("lblTargets","Цели"), sel.targetIds, function(v){ sel.targetIds = v; });
     if(SOLID.indexOf(sel.type) !== -1)
       chk(TR("chkStartsOpen","Открыт сначала (проходим)"), sel.startsOpen, function(v){ sel.startsOpen = v; });
     linkHelp();
   }
-  if(sel.type === "laserFeed")
+  if(sel.type === "laserFeed" || sel.laser)
     num(TR("lblLaserRange","Дальность луча"), sel.range||500, function(v){ sel.range = Math.max(20,v); });
 
   grp(TR("grpOrder","Порядок"));
