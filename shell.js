@@ -76,6 +76,7 @@
 
   function navItem(l, here) {
     var a = el('a', 'bfNavItem');
+    if (l.key) a.dataset.key = l.key;   // чтобы прятать/показывать пункт по ключу (см. applyHideChat)
     if (l.action) {
       // не страница, а действие (пока только Settings — открывает ту же модалку, что и раньше)
       a.href = '#';
@@ -109,6 +110,8 @@
      ещё раз при возврате на вкладку. На страницах самих разделов значок
      не показываем: игрок уже смотрит туда, где лежит новое. */
   var notifyTimer = null;
+  // «Скрыть чат» из Settings (см. applyHideChat) — Messages для этого игрока не считаем вовсе
+  var hideChat = false;
 
   function paintDot(key, n, title) {
     var d = document.getElementById('bfDot_' + key);
@@ -116,6 +119,7 @@
     var here = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
     var mine = (key === 'messages' && here === 'messages.html')
             || (key === 'mapsBrowser' && here === 'mapsbrowser.html');
+    if (key === 'messages' && hideChat) n = 0;
     if (!n || mine) { d.className = 'bfNavDot'; d.textContent = ''; d.removeAttribute('title'); return; }
     d.className = 'bfNavDot on';
     d.textContent = n > 99 ? '99+' : String(n);
@@ -297,10 +301,29 @@
       .catch(function () { me = { guest: true }; });
   }
 
+  /* Скрыть у себя Messages целиком (пункт меню + значок непрочитанного) —
+     см. Settings в account.js и /getMySettings в accounts.js. Пункт не
+     удаляется из разметки, просто прячется — обратимо в любой момент. */
+  function applyHideChat() {
+    fetch('/getMySettings', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        hideChat = !!(d && d.data && d.data.hideChat);
+        window.BF_HIDE_CHAT = hideChat;
+        var item = document.querySelector('.bfNavItem[data-key="messages"]');
+        // .bfNavItem сам держит display:flex !important — обычный inline
+        // style.display им перебивается молча, нужен отдельный класс с тем же !important
+        if (item) item.classList.toggle('bfHidden', hideChat);
+        if (hideChat) paintDot('messages', 0);
+      })
+      .catch(function () {});
+  }
+
   function boot() {
     if (document.getElementById('bfHead')) return;
     build();
     loadMe();
+    applyHideChat();
     startNotifications();
     if (window.I18N) I18N.apply(document.body);
 

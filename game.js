@@ -822,13 +822,27 @@
   function msgsSetup() {
     fetch('/whoAmI', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
       .then(function (d) {
-        if (!d || d.guest || !msgsBtn) return;
+        if (!d || d.guest || !msgsBtn || hideChatPref) return;
         msgsBtn.style.display = 'flex';
         msgsLoadThreads();
         clearInterval(msgsPollTimer);
         msgsPollTimer = setInterval(msgsLoadThreads, 8000);
       }).catch(function () {});
   }
+
+  /* «Скрыть чат» из Settings (см. accounts.js /getMySettings): game.html
+     не грузит shell.js вообще (это голый игровой экран, без сайдбара), так
+     что общий window.BF_HIDE_CHAT оттуда сюда не долетает — спрашиваем
+     сервер сами, тем же приёмом, что и msgsSetup() чуть выше. Пока ответ
+     не пришёл, chatMessage/бегущая строка не режется — реплика-другая до
+     ответа сервера ничем не грозит, а вот держать чат в подвешенном
+     состоянии до первого сетевого запроса не стоит. */
+  var hideChatPref = false;
+  fetch('/getMySettings', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+    .then(function (d) {
+      hideChatPref = !!(d && d.data && d.data.hideChat);
+      if (hideChatPref && msgsBtn) msgsBtn.style.display = 'none';
+    }).catch(function () {});
 
   // системные сообщения — короткой плашкой, история не хранится
   function log(html) {
@@ -1739,7 +1753,7 @@
     });
 
     socket.on('chatMessage', function (m) {
-      if (m.playerName !== me.name && !isMuted(m.playerName)) {
+      if (m.playerName !== me.name && !isMuted(m.playerName) && !hideChatPref) {
         speak(m.playerName, m.text);
         if (window.BFSound) BFSound.chat();
       }
@@ -2043,7 +2057,7 @@
       ctx.translate(o.x, o.y);
       GAME.figure(w, h, o.color || COLOR_NORMAL, true, o.skin || null);
       ctx.restore();
-      drawTag(ctx, o.name || '', o.say, o.x + w / 2, o.y, (o.h || 74), !!hsSeekerIds[id]);
+      drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74), !!hsSeekerIds[id]);
     });
     var p = GAME.pl;
     if (GAME.playing && me.name) {

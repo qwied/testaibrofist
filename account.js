@@ -234,6 +234,26 @@
     }
   }
 
+  // ---------- скрыть у себя Messages и чужой чат в игре (см. accounts.js) ----------
+  function drawChatPref() {
+    var row = box.querySelector('#bfChatRow');
+    if (!row) return;
+    var T2 = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : (f || k); };
+    function paint(hide) {
+      row.innerHTML =
+          '<div class="bf-opt' + (!hide ? ' on' : '') + '" data-hide="0">' + T2('chatShow', 'Показывать') + '</div>'
+        + '<div class="bf-opt' + (hide ? ' on' : '') + '" data-hide="1">' + T2('chatHide', 'Скрыть') + '</div>';
+      var opts = row.querySelectorAll('.bf-opt');
+      for (var i = 0; i < opts.length; i++) {
+        opts[i].onclick = function () {
+          var want = this.getAttribute('data-hide');
+          post('/settings/hideChat', { on: want }, function (r) { paint(r && r.hideChat); });
+        };
+      }
+    }
+    get('/getMySettings', function (r) { paint(!!(r && r.data && r.data.hideChat)); });
+  }
+
   // ---------- настройки аккаунта ----------
   function settings(name) {
     var T = function (k, f) {
@@ -261,9 +281,15 @@
        + '<div class="bf-sec">' + T('themes', 'Темы') + '</div>'
        + '<div id="bfThemeBox"></div>'
        + '<div class="bf-sec">' + T('language', 'Язык') + '</div>'
-       + '<div class="bf-row" id="bfLangRow"></div>');
+       + '<div class="bf-row" id="bfLangRow"></div>'
+       + '<div class="bf-sec">' + T('chatSection', 'Чат') + '</div>'
+       + '<div class="bf-h">' + T('chatHint',
+           'Скрывает у тебя Messages (пункт меню и значок непрочитанного) и чужие '
+         + 'реплики в игровом чате. Свои сообщения отправлять по-прежнему можно.') + '</div>'
+       + '<div class="bf-row" id="bfChatRow"></div>');
     drawTheme();
     drawLang(name);
+    drawChatPref();
     box.querySelector('#bfProfile').onclick = function () {
       location.href = BASE + 'users.html?name=' + encodeURIComponent(name);
     };

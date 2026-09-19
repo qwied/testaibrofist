@@ -59,6 +59,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 .bfNavItem{display:flex !important;align-items:center;gap:11px;background:none;border:none;
   font:inherit;color:var(--sb-ink);padding:10px 10px;border-radius:9px;cursor:pointer;
   text-decoration:none;white-space:nowrap;font-size:14.5px}
+.bfNavItem.bfHidden{display:none !important}
 .bfNavItem svg{flex:0 0 auto;opacity:.85}
 /* Discord/Telegram — единственные иконки, что остались (см. shell.js);
    мельче .85 их мелкие детали (глаза, лапки у Discord) смазываются */
