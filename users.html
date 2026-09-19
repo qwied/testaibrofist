@@ -41,17 +41,22 @@
 .upScoreBadge{display:inline-block;padding:3px 11px;border-radius:20px;font-size:11px;
   font-weight:700;color:#fff;background:var(--blue);text-transform:uppercase;letter-spacing:.03em}
 /* Ранг навыка по режимам — отдельной строкой под монетами и очками: это
-   не счёт, а оценка, и мешать её с накопительными числами не стоит. */
+   не счёт, а оценка, и мешать её с накопительными числами не стоит.
+   Только синий/чёрный/белый (тёмная тема — синий/серый/белый), как и весь
+   остальной сайт: раньше S/A/B/C были каждый своим цветом и не складывались
+   в единую лесенку — редкость ранга теперь видна по НАСЫЩЕННОСТИ одного и
+   того же акцента, а не по случайному набору цветов (см. lbRank в
+   leaderboard.html — та же шкала, тот же вид в обоих местах). */
 .upRankRow{margin-top:9px}
 .upRank{display:inline-flex;align-items:center;gap:7px;padding:4px 11px;border-radius:20px;
-  font-size:13px;font-weight:800;letter-spacing:.02em;border:1px solid #cbd5e1;color:#475569;
-  background:#e2e8f0}
+  font-size:13px;font-weight:800;letter-spacing:.02em;border:1px solid var(--line);color:var(--muted);
+  background:var(--soft)}
 .upRankMode{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;opacity:.92}
-.upRank[data-r="S"]{color:#fff;background:#f59e0b;border-color:#d97706}
-.upRank[data-r="A+"],.upRank[data-r="A"]{color:#fff;background:#ef4444;border-color:#dc2626}
-.upRank[data-r="B+"],.upRank[data-r="B"]{color:#fff;background:#8b5cf6;border-color:#7c3aed}
-.upRank[data-r="Declassified"]{color:#64748b;background:transparent}
-.upRank.none{color:#94a3b8;background:transparent;font-weight:600}
+.upRank[data-r="S"]{color:var(--panel);background:var(--ink);border-color:var(--ink)}
+.upRank[data-r="A+"],.upRank[data-r="A"]{color:#fff;background:var(--blue);border-color:var(--blue)}
+.upRank[data-r="B+"],.upRank[data-r="B"]{color:var(--blue);background:transparent;border-color:var(--blue)}
+.upRank[data-r="Declassified"]{color:var(--muted);background:transparent}
+.upRank.none{color:var(--muted);background:transparent;font-weight:600;opacity:.75}
 .upActs{display:flex;gap:8px;flex-wrap:wrap}
 .upActs button,.upActs a{padding:10px 18px;border-radius:9px;cursor:pointer;font-size:14px;
   border:1px solid var(--blue);background:var(--panel);color:var(--blue);text-decoration:none;
