@@ -1656,6 +1656,12 @@
                TR('modeErrorText', 'Эта игровая комната больше не поддерживается.'), true);
         return;
       }
+      if (d.reason === 'serverBusy') {
+        joined = false;
+        banner(TR('serverBusyTitle', 'Сервер занят'),
+               TR('serverBusyText', 'Сейчас слишком много активных комнат. Попробуй позже.'), true);
+        return;
+      }
       if (d.reason !== 'duplicateAccount') return;
       dupBlocked = true;
       joined = false;

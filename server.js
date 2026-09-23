@@ -473,6 +473,7 @@ const gameState = {
 const roomLeftAt = new Map();
 const ROOM_FULL = 40;   // совпадает с LIMIT в /getBestRoom — комната считается полной с этого числа
 const ALLOWED_GAME_MODES = new Set(['hideAndSeek', 'race']);
+const MAX_ACTIVE_ROOMS = 2000;
 
 /* ================== ПРЯТКИ: ФАЗЫ И РУЛЕТКА ИСКАТЕЛЯ ==================
    Комнаты hideAndSeek живут по фазам, которые задаёт сервер: лобби с
@@ -842,6 +843,10 @@ io.on('connection', (socket) => {
     const room = mode + ':' + roomName;
     const existingRoom = gameState.rooms.get(room);
     const previousPlayer = gameState.players.get(socket.id);
+    if (!existingRoom && gameState.rooms.size >= MAX_ACTIVE_ROOMS) {
+      socket.emit('joinDenied', { reason: 'serverBusy' });
+      return;
+    }
     if (existingRoom && existingRoom.size >= ROOM_FULL
         && (!previousPlayer || previousPlayer.room !== room)) {
       socket.emit('joinDenied', { reason: 'roomFull' });
