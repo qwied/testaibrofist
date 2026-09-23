@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "build": "echo 'no build step: plain Node/Express server, see CLAUDE.md'"
+    "build": "echo 'no build step: plain Node/Express server, see CLAUDE.md'",
+    "test:offline": "node test-offline.js"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",

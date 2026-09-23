@@ -7,6 +7,7 @@
    Наружу: window.BFShow.pull() — обновиться прямо сейчас. */
 (function () {
   'use strict';
+  if (window.BFOffline) return;
 
   var POLL = 3000;              // как часто сверяемся с сервером
   var ver = -1;                 // версия состояния, чтобы не пересобирать зря

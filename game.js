@@ -1048,35 +1048,9 @@
   }
 
   // ---------- загрузка карт ----------
-  var offlineMapNo = 0;
   function offlineMap() {
-    var race = MODE === 'race';
-    var n = ++offlineMapNo;
-    var objects = [
-      { id: 1, type: 'spawn', x: 90, y: 440 },
-      { id: 2, type: 'rect', x: 0, y: 560, w: 1450, h: 80 },
-      { id: 3, type: 'rect', x: 330, y: 455, w: 180, h: 28 },
-      { id: 4, type: 'rect', x: 660, y: 390, w: 180, h: 28 },
-      { id: 5, type: 'rect', x: 1010, y: 470, w: 220, h: 28 },
-      { id: 6, type: 'coin', x: 390, y: 420 },
-      { id: 7, type: 'coin', x: 730, y: 355 },
-      { id: 8, type: 'bounce', x: 560, y: 535 },
-      { id: 9, type: 'teleport', x: 880, y: 520, targetX: 1160, targetY: 420 },
-      { id: 10, type: 'text', x: 180, y: 510, text: 'LOCAL TEST MAP' }
-    ];
-    if (race) {
-      objects.push({ id: 11, type: 'checkpoint', x: 520, y: 500 });
-      objects.push({ id: 12, type: 'superGate', x: 790, y: 500 });
-      objects.push({ id: 13, type: 'finishline', x: 1320, y: 500 });
-    } else {
-      objects.push({ id: 11, type: 'zombie', x: 760, y: 480 });
-      objects.push({ id: 12, type: 'cover', x: 1080, y: 500, w: 90, h: 60 });
-    }
-    return {
-      mapName: (race ? 'Local Race Lab ' : 'Local Hide-and-Seek Lab ') + n,
-      author: 'Local Test',
-      mapData: { mode: MODE, objects: objects }
-    };
+    var list = window.BFOffline && BFOffline.getMaps ? BFOffline.getMaps(MODE) : [];
+    return list.length ? list[0] : null;
   }
   function showMap(m) {
     currentMap = m;
@@ -1118,7 +1092,10 @@
 
   function nextMap(cb) {
     if (OFFLINE) {
-      var local = offlineMap();
+      var list = window.BFOffline && BFOffline.getMaps ? BFOffline.getMaps(MODE) : [];
+      var currentName = currentMap && currentMap.mapName;
+      var local = list.find(function (m) { return m.mapName !== currentName; }) || offlineMap();
+      if (!local) { showMap(null); if (cb) cb(null); return; }
       showMap(local);
       log(TR('mapLog', 'Локальная карта: ') + '<b>' + esc(local.mapName) + '</b>', 's');
       if (cb) cb(local);
@@ -1406,6 +1383,25 @@
 
   // ---------- запуск по режимам ----------
   var bootAt = 0;
+  var offlineHsTimer = null;
+  function startOfflineHideAndSeek() {
+    if (!OFFLINE || MODE !== 'hideAndSeek' || !socket || !socket._fire) return;
+    if (offlineHsTimer) clearTimeout(offlineHsTimer);
+    var bot = { id: 'local-seeker-bot', name: 'Local Seeker Bot', chance: 50 };
+    var meEntry = { id: socket.id, name: me.name, chance: 50 };
+    var winner = q.get('role') === 'seeker' ? socket.id : bot.id;
+    phase = 'lobby'; phaseEnds = Date.now() + 6000;
+    socket._fire('hsRoulette', { players: [meEntry, bot], winnerId: winner, duration: 1400, msLeft: 6000 });
+    setTimeout(function () {
+      if (!socket || !socket.connected) return;
+      socket._fire('hsPhase', { phase: 'round', seekerId: winner, msLeft: ROUND_MS });
+    }, 3900);
+    offlineHsTimer = setTimeout(function () {
+      if (!socket || !socket.connected) return;
+      socket._fire('hsPhase', { phase: 'lobby', msLeft: LOBBY_MS, map: currentMap });
+      startOfflineHideAndSeek();
+    }, 3900 + ROUND_MS + 500);
+  }
   function boot() {
     GAME.setGrid(false);
     bootAt = Date.now();
@@ -1415,7 +1411,11 @@
       $('gTimeBox').style.display = 'none';
         $('gChat').style.display = 'none';
       $('gRate').style.display = 'flex';
-      if (OFFLINE) { showMap(offlineMap()); return; }
+      if (OFFLINE) {
+        var viewed = window.BFOffline && BFOffline.findMap ? BFOffline.findMap(VAUTH || 'Local Test', VIEW) : null;
+        showMap(viewed || offlineMap());
+        return;
+      }
       fetch('/getMapData?author=' + encodeURIComponent(VAUTH || '') + '&mapName=' + encodeURIComponent(VIEW))
         .then(function (r) { return r.json(); })
         .then(function (d) {
@@ -1432,10 +1432,11 @@
       joined = true;
       $('gCount').textContent = '1';
       $('gPing').textContent = 'offline';
-      phase = 'round';
-      phaseEnds = Date.now() + ROUND_MS;
+      phase = MODE === 'hideAndSeek' ? 'lobby' : 'round';
+      phaseEnds = Date.now() + (MODE === 'hideAndSeek' ? LOBBY_MS : ROUND_MS);
       setRole(q.get('role') === 'seeker' ? 'seeker' : 'hider');
       nextMap();
+      if (MODE === 'hideAndSeek') startOfflineHideAndSeek();
     } else {
       connect();
     }
@@ -1556,6 +1557,7 @@
       list.forEach(function (fn) { try { fn(d); } catch (e) {} });
     }
     sock.on = function (ev, fn) { (sock._ls[ev] = sock._ls[ev] || []).push(fn); return sock; };
+    sock._fire = fire;
     sock.emit = function (ev, d) {
       if (ev === 'pingCheck') fire('pongCheck', d);
       else if (ev === 'raceFinish') {

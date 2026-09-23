@@ -304,7 +304,8 @@ body{background:#eef2f8;overflow:hidden}
 <input type="file" id="file" accept=".txt,.json">
 <canvas id="c"></canvas>
 
-<script src="/socket.io/socket.io.js"></script>
+<script src="offline.js?v=1"></script>
+<script>if (new URLSearchParams(location.search).get('online') === '1') document.write('<script src="/socket.io/socket.io.js"><\\/script>');</script>
 <script>
 (function(){
 "use strict";
