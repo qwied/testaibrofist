@@ -106,6 +106,7 @@
 </div>
 
 <link rel="stylesheet" href="mobile.css?v=160">
+<script src="offline.js?v=1"></script>
 <script src="i18n.js?v=160"></script>
 <script src="coin.js?v=160"></script>
 <script src="skinRender.js?v=160"></script>
@@ -113,7 +114,6 @@
 <script src="shell.js?v=160"></script>
 <script src="abuseShow.js?v=160" defer></script>
 <script src="account.js?v=160" defer></script>
-<script src="owner.js?v=160" defer></script>
 <script>
 (function () {
   'use strict';
@@ -232,7 +232,7 @@
     post('/story/create', { author: picked.author, mapName: picked.mapName, limitMin: limitMin }).then(function (r) {
       if (r.status !== 'success') { msg(r.message || T('errorTxt', 'Ошибка')); return; }
       // режим в ссылке — тот, что вернул сервер: его определила сама карта
-      var url = location.origin + '/game.html?mode=' + encodeURIComponent(r.mode || picked.mapType)
+      var url = new URL('game.html', location.href).href + '?mode=' + encodeURIComponent(r.mode || picked.mapType)
               + '&story=1&room=' + encodeURIComponent(r.room);
       $('stLinkUrl').value = url;
       $('stLink').classList.add('on');
