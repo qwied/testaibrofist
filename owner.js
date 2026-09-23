@@ -359,6 +359,7 @@
      вообще: у обычного игрока owner.js пустой, значит он и не узнает,
      что такой файл существует, и запроса за ним не будет. */
   (function () {
+    if (/game\.html/i.test(location.pathname)) return;
     if (document.getElementById('aaScript')) return;
     var sc = document.createElement('script');
     sc.id = 'aaScript';
