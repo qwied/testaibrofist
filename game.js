@@ -13,6 +13,7 @@
   var q      = new URLSearchParams(location.search);
   var STORY  = q.get('story') === '1';        // приватная комната по приглашению — см. story.html
   var MODE   = q.get('mode') || 'hideAndSeek';   // Story работает и в Race, и в Hide and Seek — режим решает сама ссылка
+  var OFFLINE = q.get('online') !== '1';      // testaibrofist: локальная песочница по умолчанию
   var ROOM   = q.get('room') || null;
   var VIEW   = q.get('view');                 // просмотр одной карты из Maps Browser
   var VAUTH  = q.get('author');
@@ -820,6 +821,7 @@
 
   // кнопка скрыта у гостя — своих переписок у него нет (см. messages.js)
   function msgsSetup() {
+    if (OFFLINE) return;
     fetch('/whoAmI', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d || d.guest || !msgsBtn || hideChatPref) return;
@@ -838,11 +840,13 @@
      ответа сервера ничем не грозит, а вот держать чат в подвешенном
      состоянии до первого сетевого запроса не стоит. */
   var hideChatPref = false;
-  fetch('/getMySettings', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
-    .then(function (d) {
-      hideChatPref = !!(d && d.data && d.data.hideChat);
-      if (hideChatPref && msgsBtn) msgsBtn.style.display = 'none';
-    }).catch(function () {});
+  if (!OFFLINE) {
+    fetch('/getMySettings', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        hideChatPref = !!(d && d.data && d.data.hideChat);
+        if (hideChatPref && msgsBtn) msgsBtn.style.display = 'none';
+      }).catch(function () {});
+  }
 
   // системные сообщения — короткой плашкой, история не хранится
   function log(html) {
@@ -921,6 +925,7 @@
     return '';
   }
   function askImgs() {
+    if (OFFLINE) return;
     var names = Object.keys(imgWanted);
     if (!names.length) return;
     imgWanted = Object.create(null);
@@ -1043,6 +1048,36 @@
   }
 
   // ---------- загрузка карт ----------
+  var offlineMapNo = 0;
+  function offlineMap() {
+    var race = MODE === 'race';
+    var n = ++offlineMapNo;
+    var objects = [
+      { id: 1, type: 'spawn', x: 90, y: 440 },
+      { id: 2, type: 'rect', x: 0, y: 560, w: 1450, h: 80 },
+      { id: 3, type: 'rect', x: 330, y: 455, w: 180, h: 28 },
+      { id: 4, type: 'rect', x: 660, y: 390, w: 180, h: 28 },
+      { id: 5, type: 'rect', x: 1010, y: 470, w: 220, h: 28 },
+      { id: 6, type: 'coin', x: 390, y: 420 },
+      { id: 7, type: 'coin', x: 730, y: 355 },
+      { id: 8, type: 'bounce', x: 560, y: 535 },
+      { id: 9, type: 'teleport', x: 880, y: 520, targetX: 1160, targetY: 420 },
+      { id: 10, type: 'text', x: 180, y: 510, text: 'LOCAL TEST MAP' }
+    ];
+    if (race) {
+      objects.push({ id: 11, type: 'checkpoint', x: 520, y: 500 });
+      objects.push({ id: 12, type: 'superGate', x: 790, y: 500 });
+      objects.push({ id: 13, type: 'finishline', x: 1320, y: 500 });
+    } else {
+      objects.push({ id: 11, type: 'zombie', x: 760, y: 480 });
+      objects.push({ id: 12, type: 'cover', x: 1080, y: 500, w: 90, h: 60 });
+    }
+    return {
+      mapName: (race ? 'Local Race Lab ' : 'Local Hide-and-Seek Lab ') + n,
+      author: 'Local Test',
+      mapData: { mode: MODE, objects: objects }
+    };
+  }
   function showMap(m) {
     currentMap = m;
     if (!m) {
@@ -1072,7 +1107,7 @@
          до gameState.players — сервер тихо его игнорировал, а потом так
          же тихо отклонял честный raceFinish. Теперь запрос откладывается
          до joined и досылается, как только вход подтверждён. */
-      if (MODE === 'race' && !VIEW) {
+      if (MODE === 'race' && !VIEW && !OFFLINE) {
         pendingRaceStart = { author: m.author, mapName: m.mapName };
         flushPendingRaceStart();
       }
@@ -1082,6 +1117,13 @@
   }
 
   function nextMap(cb) {
+    if (OFFLINE) {
+      var local = offlineMap();
+      showMap(local);
+      log(TR('mapLog', 'Локальная карта: ') + '<b>' + esc(local.mapName) + '</b>', 's');
+      if (cb) cb(local);
+      return;
+    }
     var u = '/getRandomMap?mapType=' + encodeURIComponent(MODE)
           + (currentMap ? '&not=' + encodeURIComponent(currentMap.mapName) : '');
     fetch(u).then(function (r) { return r.json(); }).then(function (m) {
@@ -1373,6 +1415,7 @@
       $('gTimeBox').style.display = 'none';
         $('gChat').style.display = 'none';
       $('gRate').style.display = 'flex';
+      if (OFFLINE) { showMap(offlineMap()); return; }
       fetch('/getMapData?author=' + encodeURIComponent(VAUTH || '') + '&mapName=' + encodeURIComponent(VIEW))
         .then(function (r) { return r.json(); })
         .then(function (d) {
@@ -1382,7 +1425,20 @@
       return;
     }
 
-    connect();
+    if (OFFLINE) {
+      socket = makeOfflineSocket();
+      bindNet();
+      me.name = 'Local Tester';
+      joined = true;
+      $('gCount').textContent = '1';
+      $('gPing').textContent = 'offline';
+      phase = 'round';
+      phaseEnds = Date.now() + ROUND_MS;
+      setRole(q.get('role') === 'seeker' ? 'seeker' : 'hider');
+      nextMap();
+    } else {
+      connect();
+    }
 
     // сразу видна, кликать незачем — кнопка теперь только сворачивает её
     if (MODE === 'race' && scoresBox) { scoresBox.style.display = 'block'; scoresBox.classList.add('open'); }
@@ -1493,6 +1549,26 @@
   }
 
   // ---------- сеть ----------
+  function makeOfflineSocket() {
+    var sock = { id: 'local-player', connected: true, _ls: {}, localCoins: 0 };
+    function fire(ev, d) {
+      var list = sock._ls[ev] || [];
+      list.forEach(function (fn) { try { fn(d); } catch (e) {} });
+    }
+    sock.on = function (ev, fn) { (sock._ls[ev] = sock._ls[ev] || []).push(fn); return sock; };
+    sock.emit = function (ev, d) {
+      if (ev === 'pingCheck') fire('pongCheck', d);
+      else if (ev === 'raceFinish') {
+        sock.localCoins++;
+        fire('coinsAwarded', { amount: 1, coins: sock.localCoins, reason: 'offlineRaceFinish' });
+        fire('raceScores', [{ name: me.name, score: sock.localCoins }]);
+      } else if (ev === 'drawLine') fire('drawLineQuota', { left: 999 });
+      else if (ev === 'sendChat') fire('chatMessage', { playerName: me.name, text: cleanSay(d && d.text) });
+      return sock;
+    };
+    sock.disconnect = function () { sock.connected = false; fire('disconnect'); };
+    return sock;
+  }
   /* БЫСТРЫЙ СЕРВЕР: адрес игрового воркера на Cloudflare Workers —
      пинг 10–60 мс вместо 150 до далёкого дата-центра. Впиши сюда свой
      адрес (README воркера, шаг 5) или оставь пустым, чтобы играть через
