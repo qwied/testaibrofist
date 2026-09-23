@@ -12,7 +12,7 @@ const offline = read('offline.js');
 const game = read('game.js');
 const gameHtml = read('game.html');
 const pages = ['index.html','race.html','hide-and-seek.html','mapsBrowser.html','story.html','editor.html','leaderboard.html','quests.html','daily.html','avatar.html','users.html','messages.html'];
-pages.forEach(file => ok(file + ' loads offline runtime', read(file).includes('offline.js?v=1')));
+pages.forEach(file => ok(file + ' loads offline runtime', read(file).includes('offline.js?v=2')));
 ok('original game connect contract is preserved', game.includes('function connect()') && game.includes("socket = io({"));
 ok('online Socket.IO script remains available', gameHtml.includes('src="/socket.io/socket.io.js"'));
 ok('local map catalog exists', offline.includes("PREFIX = 'aibrofist.local.v2.'") && offline.includes('makeMaps'));
