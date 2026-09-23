@@ -1643,7 +1643,20 @@
        сервер отказал во входе и не добавил нас в комнату — join больше не
        подтвердится, поэтому просто показываем причину и ничего не шлём. */
     socket.on('joinDenied', function (d) {
-      if (!d || d.reason !== 'duplicateAccount') return;
+      if (!d) return;
+      if (d.reason === 'roomFull') {
+        joined = false;
+        banner(TR('roomFullTitle', 'Комната заполнена'),
+               TR('roomFullText', 'Выбери другую комнату и попробуй снова.'), true);
+        return;
+      }
+      if (d.reason === 'invalidMode') {
+        joined = false;
+        banner(TR('modeErrorTitle', 'Недоступный режим'),
+               TR('modeErrorText', 'Эта игровая комната больше не поддерживается.'), true);
+        return;
+      }
+      if (d.reason !== 'duplicateAccount') return;
       dupBlocked = true;
       joined = false;
       var rb = $('gRoleBox'); if (rb) rb.style.display = 'none';

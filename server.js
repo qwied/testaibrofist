@@ -472,6 +472,7 @@ const gameState = {
 // если комната опустела и удалилась из gameState.rooms.
 const roomLeftAt = new Map();
 const ROOM_FULL = 40;   // совпадает с LIMIT в /getBestRoom — комната считается полной с этого числа
+const ALLOWED_GAME_MODES = new Set(['hideAndSeek', 'race']);
 
 /* ================== ПРЯТКИ: ФАЗЫ И РУЛЕТКА ИСКАТЕЛЯ ==================
    Комнаты hideAndSeek живут по фазам, которые задаёт сервер: лобби с
@@ -833,8 +834,19 @@ io.on('connection', (socket) => {
     data = data || {};
     const mode = cleanName(data.gameMode) || 'main';
     const roomName = cleanName(data.room) || 'main';
+    if (!ALLOWED_GAME_MODES.has(mode)) {
+      socket.emit('joinDenied', { reason: 'invalidMode' });
+      return;
+    }
     // режим входит в ключ комнаты, поэтому режимы не пересекаются
     const room = mode + ':' + roomName;
+    const existingRoom = gameState.rooms.get(room);
+    const previousPlayer = gameState.players.get(socket.id);
+    if (existingRoom && existingRoom.size >= ROOM_FULL
+        && (!previousPlayer || previousPlayer.room !== room)) {
+      socket.emit('joinDenied', { reason: 'roomFull' });
+      return;
+    }
     let name = cleanName(data.playerName);
     if (account) {
       name = account;                            // сессия сильнее присланного имени
@@ -862,7 +874,7 @@ io.on('connection', (socket) => {
        никогда не пустеет, таймеры hsRooms для неё не гаснут, а игрок
        продолжает получать кадры и получать HS-награды за раунд, из
        которого он фактически ушёл. */
-    const prevPlayer = gameState.players.get(socket.id);
+    const prevPlayer = previousPlayer;
     if (prevPlayer && prevPlayer.room) {
       const prevRoom = prevPlayer.room;
       socket.leave(prevRoom);
@@ -1267,6 +1279,8 @@ io.on('connection', (socket) => {
     const author = cleanText(data && data.author, 40);
     const mapName = cleanText(data && data.mapName, 40);
     if (!author || !mapName) return;
+    const map = require('./maps.js').find(author, mapName);
+    if (!map || map.mapType !== 'race') return;
     // снимок одометра на старте — на финише сверяем, сколько набежало
     player.raceStart = { key: author + '|' + mapName, at: Date.now(),
                          odo: player.odo || 0, moves: player.moves || 0 };
@@ -1282,6 +1296,8 @@ io.on('connection', (socket) => {
     const author = cleanText(data && data.author, 40);
     const mapName = cleanText(data && data.mapName, 40);
     if (rs.key !== author + '|' + mapName) return;
+    const map = require('./maps.js').find(author, mapName);
+    if (!map || map.mapType !== 'race') return;
     const elapsedMs = Date.now() - rs.at;
     if (elapsedMs < RACE_MIN_MS) return;
     // забег без единого движения — не забег
