@@ -13,7 +13,6 @@
   var q      = new URLSearchParams(location.search);
   var STORY  = q.get('story') === '1';        // приватная комната по приглашению — см. story.html
   var MODE   = q.get('mode') || 'hideAndSeek';   // Story работает и в Race, и в Hide and Seek — режим решает сама ссылка
-  var OFFLINE = q.get('online') !== '1';      // testaibrofist: локальная песочница по умолчанию
   var ROOM   = q.get('room') || null;
   var VIEW   = q.get('view');                 // просмотр одной карты из Maps Browser
   var VAUTH  = q.get('author');
@@ -821,7 +820,6 @@
 
   // кнопка скрыта у гостя — своих переписок у него нет (см. messages.js)
   function msgsSetup() {
-    if (OFFLINE) return;
     fetch('/whoAmI', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d || d.guest || !msgsBtn || hideChatPref) return;
@@ -840,13 +838,11 @@
      ответа сервера ничем не грозит, а вот держать чат в подвешенном
      состоянии до первого сетевого запроса не стоит. */
   var hideChatPref = false;
-  if (!OFFLINE) {
-    fetch('/getMySettings', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
-      .then(function (d) {
-        hideChatPref = !!(d && d.data && d.data.hideChat);
-        if (hideChatPref && msgsBtn) msgsBtn.style.display = 'none';
-      }).catch(function () {});
-  }
+  fetch('/getMySettings', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+    .then(function (d) {
+      hideChatPref = !!(d && d.data && d.data.hideChat);
+      if (hideChatPref && msgsBtn) msgsBtn.style.display = 'none';
+    }).catch(function () {});
 
   // системные сообщения — короткой плашкой, история не хранится
   function log(html) {
@@ -925,7 +921,6 @@
     return '';
   }
   function askImgs() {
-    if (OFFLINE) return;
     var names = Object.keys(imgWanted);
     if (!names.length) return;
     imgWanted = Object.create(null);
@@ -1048,10 +1043,6 @@
   }
 
   // ---------- загрузка карт ----------
-  function offlineMap() {
-    var list = window.BFOffline && BFOffline.getMaps ? BFOffline.getMaps(MODE) : [];
-    return list.length ? list[0] : null;
-  }
   function showMap(m) {
     currentMap = m;
     if (!m) {
@@ -1081,7 +1072,7 @@
          до gameState.players — сервер тихо его игнорировал, а потом так
          же тихо отклонял честный raceFinish. Теперь запрос откладывается
          до joined и досылается, как только вход подтверждён. */
-      if (MODE === 'race' && !VIEW && !OFFLINE) {
+      if (MODE === 'race' && !VIEW) {
         pendingRaceStart = { author: m.author, mapName: m.mapName };
         flushPendingRaceStart();
       }
@@ -1091,16 +1082,6 @@
   }
 
   function nextMap(cb) {
-    if (OFFLINE) {
-      var list = window.BFOffline && BFOffline.getMaps ? BFOffline.getMaps(MODE) : [];
-      var currentName = currentMap && currentMap.mapName;
-      var local = list.find(function (m) { return m.mapName !== currentName; }) || offlineMap();
-      if (!local) { showMap(null); if (cb) cb(null); return; }
-      showMap(local);
-      log(TR('mapLog', 'Локальная карта: ') + '<b>' + esc(local.mapName) + '</b>', 's');
-      if (cb) cb(local);
-      return;
-    }
     var u = '/getRandomMap?mapType=' + encodeURIComponent(MODE)
           + (currentMap ? '&not=' + encodeURIComponent(currentMap.mapName) : '');
     fetch(u).then(function (r) { return r.json(); }).then(function (m) {
@@ -1383,25 +1364,6 @@
 
   // ---------- запуск по режимам ----------
   var bootAt = 0;
-  var offlineHsTimer = null;
-  function startOfflineHideAndSeek() {
-    if (!OFFLINE || MODE !== 'hideAndSeek' || !socket || !socket._fire) return;
-    if (offlineHsTimer) clearTimeout(offlineHsTimer);
-    var bot = { id: 'local-seeker-bot', name: 'Local Seeker Bot', chance: 50 };
-    var meEntry = { id: socket.id, name: me.name, chance: 50 };
-    var winner = q.get('role') === 'seeker' ? socket.id : bot.id;
-    phase = 'lobby'; phaseEnds = Date.now() + 6000;
-    socket._fire('hsRoulette', { players: [meEntry, bot], winnerId: winner, duration: 1400, msLeft: 6000 });
-    setTimeout(function () {
-      if (!socket || !socket.connected) return;
-      socket._fire('hsPhase', { phase: 'round', seekerId: winner, msLeft: ROUND_MS });
-    }, 3900);
-    offlineHsTimer = setTimeout(function () {
-      if (!socket || !socket.connected) return;
-      socket._fire('hsPhase', { phase: 'lobby', msLeft: LOBBY_MS, map: currentMap });
-      startOfflineHideAndSeek();
-    }, 3900 + ROUND_MS + 500);
-  }
   function boot() {
     GAME.setGrid(false);
     bootAt = Date.now();
@@ -1411,11 +1373,6 @@
       $('gTimeBox').style.display = 'none';
         $('gChat').style.display = 'none';
       $('gRate').style.display = 'flex';
-      if (OFFLINE) {
-        var viewed = window.BFOffline && BFOffline.findMap ? BFOffline.findMap(VAUTH || 'Local Test', VIEW) : null;
-        showMap(viewed || offlineMap());
-        return;
-      }
       fetch('/getMapData?author=' + encodeURIComponent(VAUTH || '') + '&mapName=' + encodeURIComponent(VIEW))
         .then(function (r) { return r.json(); })
         .then(function (d) {
@@ -1425,21 +1382,7 @@
       return;
     }
 
-    if (OFFLINE) {
-      socket = makeOfflineSocket();
-      bindNet();
-      me.name = 'Local Tester';
-      joined = true;
-      $('gCount').textContent = '1';
-      $('gPing').textContent = 'offline';
-      phase = MODE === 'hideAndSeek' ? 'lobby' : 'round';
-      phaseEnds = Date.now() + (MODE === 'hideAndSeek' ? LOBBY_MS : ROUND_MS);
-      setRole(q.get('role') === 'seeker' ? 'seeker' : 'hider');
-      nextMap();
-      if (MODE === 'hideAndSeek') startOfflineHideAndSeek();
-    } else {
-      connect();
-    }
+    connect();
 
     // сразу видна, кликать незачем — кнопка теперь только сворачивает её
     if (MODE === 'race' && scoresBox) { scoresBox.style.display = 'block'; scoresBox.classList.add('open'); }
@@ -1550,27 +1493,6 @@
   }
 
   // ---------- сеть ----------
-  function makeOfflineSocket() {
-    var sock = { id: 'local-player', connected: true, _ls: {}, localCoins: 0 };
-    function fire(ev, d) {
-      var list = sock._ls[ev] || [];
-      list.forEach(function (fn) { try { fn(d); } catch (e) {} });
-    }
-    sock.on = function (ev, fn) { (sock._ls[ev] = sock._ls[ev] || []).push(fn); return sock; };
-    sock._fire = fire;
-    sock.emit = function (ev, d) {
-      if (ev === 'pingCheck') fire('pongCheck', d);
-      else if (ev === 'raceFinish') {
-        sock.localCoins++;
-        fire('coinsAwarded', { amount: 1, coins: sock.localCoins, reason: 'offlineRaceFinish' });
-        fire('raceScores', [{ name: me.name, score: sock.localCoins }]);
-      } else if (ev === 'drawLine') fire('drawLineQuota', { left: 999 });
-      else if (ev === 'sendChat') fire('chatMessage', { playerName: me.name, text: cleanSay(d && d.text) });
-      return sock;
-    };
-    sock.disconnect = function () { sock.connected = false; fire('disconnect'); };
-    return sock;
-  }
   /* БЫСТРЫЙ СЕРВЕР: адрес игрового воркера на Cloudflare Workers —
      пинг 10–60 мс вместо 150 до далёкого дата-центра. Впиши сюда свой
      адрес (README воркера, шаг 5) или оставь пустым, чтобы играть через

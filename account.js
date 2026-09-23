@@ -385,7 +385,7 @@
       icon.style.display = 'inherit';
       get('/getAvatar?name=' + encodeURIComponent(d.name), function (a) {
         var img = icon.querySelector('.profile-image');
-        if (img) img.src = '/avatar/' + ((a && a.avatar) || '0') + '.png';
+        if (img) img.src = 'avatar/' + ((a && a.avatar) || '0') + '.png';
       });
       var items = menu.querySelectorAll('.menu-item');
       if (items[0]) {

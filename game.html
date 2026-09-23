@@ -234,7 +234,8 @@ body.mob #msg h1{font-size:38px}
 #zoomBox,#hint,#hud,#file{display:none !important}
 body{background:#eef2f8;overflow:hidden}
 </style>
-        <script src="device.js?v=160"></script>
+        <script src="offline.js?v=1"></script>
+<script src="device.js?v=160"></script>
         <script src="sound.js?v=160"></script>
         <script src="skinRender.js?v=160"></script>
         <script src="skinCanvas.js?v=160"></script>
@@ -243,10 +244,10 @@ body{background:#eef2f8;overflow:hidden}
         <script src="coin.js?v=160"></script>
         <link rel="stylesheet" type="text/css" href="mobile.css?v=160">
         <script src="theme.js?v=160"></script>
-        <link rel="icon" href="/favicon.ico" sizes="any">
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-        <link rel="manifest" href="/site.webmanifest">
+        <link rel="icon" href="favicon.ico" sizes="any">
+        <link rel="icon" type="image/svg+xml" href="favicon.svg">
+        <link rel="apple-touch-icon" href="apple-touch-icon.png">
+        <link rel="manifest" href="site.webmanifest">
         <meta name="theme-color" content="#111827">
         <link rel="canonical" href="https://aibrofist.online/game.html">
         <meta name="description" content="An AIBrofist game room.">
@@ -304,8 +305,7 @@ body{background:#eef2f8;overflow:hidden}
 <input type="file" id="file" accept=".txt,.json">
 <canvas id="c"></canvas>
 
-<script src="offline.js?v=1"></script>
-<script>if (new URLSearchParams(location.search).get('online') === '1') document.write('<script src="/socket.io/socket.io.js"><\\/script>');</script>
+<script src="/socket.io/socket.io.js"></script>
 <script>
 (function(){
 "use strict";
@@ -3378,8 +3378,7 @@ requestAnimationFrame(loop);
 
 
 </script>
-<!-- testaibrofist is a self-contained single-player test build: no account,
-     admin-abuse or server-backed show scripts are loaded on the game page. -->
+<!-- Administrative/account panels are not part of the game screen. -->
 
 
 <script src="game.js?v=160"></script>

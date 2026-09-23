@@ -3,6 +3,7 @@
    сервер повторно проверяет права на каждый запрос, кнопки — лишь удобная обёртка. */
 (function () {
   'use strict';
+  if (window.BFOffline) return;
 
   var me = { owner: false, name: '', ownerName: 'AIBrofist' };
   var inGame = {};          // "автор::карта" -> [режимы]

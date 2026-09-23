@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   if (window.BFOffline) return;
-  var PREFIX = 'aibrofist.local.v1.';
+  var PREFIX = 'aibrofist.local.v2.';
   var originalFetch = window.fetch ? window.fetch.bind(window) : null;
 
   function read(key, fallback) {
@@ -221,6 +221,47 @@
     if (path === '/story/create') return Promise.resolve(response({ status: 'success', room: 'local-story', mode: 'race' }));
     return Promise.resolve(response({ status: 'error', message: 'Local endpoint not found' }, 404));
   }
+
+  function makeLocalSocket() {
+    var sock = { id: 'local-player', connected: true, _ls: {}, localCoins: 0 };
+    function fire(ev, data) {
+      (sock._ls[ev] || []).slice().forEach(function (fn) { try { fn(data); } catch (e) {} });
+    }
+    sock.on = function (ev, fn) {
+      (sock._ls[ev] = sock._ls[ev] || []).push(fn);
+      return sock;
+    };
+    sock.emit = function (ev, data) {
+      if (ev === 'join') {
+        var user = currentUser();
+        setTimeout(function () {
+          fire('nameFixed', { name: user.name });
+          fire('playersList', [{ id: sock.id, name: user.name, nid: 1, position: {} }]);
+          if (data && data.gameMode === 'hideAndSeek') {
+            var bot = { id: 'local-seeker-bot', name: 'Local Seeker Bot', chance: 50 };
+            var winner = new URLSearchParams(location.search).get('role') === 'seeker' ? sock.id : bot.id;
+            var hsMap = (window.BFOffline && BFOffline.getMaps(data.gameMode)[0]) || null;
+            fire('hsRoulette', { players: [{ id: sock.id, name: user.name, chance: 50 }, bot], winnerId: winner, duration: 1400, msLeft: 6000 });
+            setTimeout(function () { fire('hsPhase', { phase: 'round', seekerId: winner, msLeft: 120000, map: hsMap }); }, 3900);
+          }
+        }, 0);
+      } else if (ev === 'pingCheck') {
+        fire('pongCheck', data);
+      } else if (ev === 'raceFinish') {
+        sock.localCoins += 1;
+        fire('coinsAwarded', { amount: 1, coins: sock.localCoins, reason: 'offlineRaceFinish' });
+        fire('raceScores', [{ name: currentUser().name, score: sock.localCoins }]);
+      } else if (ev === 'drawLine') {
+        fire('drawLineQuota', { left: 999 });
+      } else if (ev === 'sendChat') {
+        fire('chatMessage', { playerName: currentUser().name, text: String(data && data.text || '') });
+      }
+      return sock;
+    };
+    sock.disconnect = function () { sock.connected = false; fire('disconnect'); };
+    return sock;
+  }
+  if (!window.io) window.io = function () { var s = makeLocalSocket(); setTimeout(function () { s._ls.connect && s._ls.connect.forEach(function (fn) { try { fn(); } catch (e) {} }); }, 0); return s; };
 
   window.BFOffline = {
     enabled: true,

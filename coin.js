@@ -8,7 +8,7 @@
   function svg(size) {
     size = size || 18;
     n++;
-    return '<img class="bfCoinIcon" src="/coin.png" width="' + size + '" height="' + size +
+    return '<img class="bfCoinIcon" src="coin.png" width="' + size + '" height="' + size +
            '" alt="монета" style="vertical-align:-0.18em">';
   }
 
@@ -46,7 +46,7 @@
         if (i < parts.length - 1) {
           var img = document.createElement('img');
           img.className = 'bfCoinIcon';
-          img.src = '/coin.png';
+          img.src = 'coin.png';
           img.width = 16; img.height = 16;
           img.alt = 'монета';
           img.style.verticalAlign = '-0.18em';
