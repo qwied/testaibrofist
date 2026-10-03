@@ -780,8 +780,10 @@ var TOOLS = [
   {t:"button",     n:"Кнопка",      k:"toolButton",     m:ALL},
   {t:"lever",      n:"Рычаг",       k:"toolLever",      m:ALL},
   {t:"teleport",   n:"Телепорт",    k:"toolTeleport",   m:ALL},
-  // мертвец из модификации Zombie Apocalypse (см. apoc и stepZombies)
-  {t:"zombie",     n:"Зомби",       k:"toolZombie",     m:ALL},
+  /* мертвец из модификации Zombie Apocalypse (см. apoc и stepZombies) —
+     только прятки: в гонке модификация не предлагается (см. #apoc ниже
+     и TOOL_MODES.zombie в maps.js) */
+  {t:"zombie",     n:"Зомби",       k:"toolZombie",     m:"hideAndSeek"},
   /* Лазер (старая идея из обратной связи) — не отдельный инструмент, а
      галочка «Лазер» на обычном блоке/круге/треугольнике (см. Game
      Properties в inspect() и laserFeeds() в step()): включает связанные
@@ -2489,8 +2491,9 @@ document.getElementById("bGrid").classList.add("on");
   document.getElementById("modes").appendChild(d);
 });
 
-/* Модификация доступна в обоих режимах — это не третий режим, а правила
-   поверх выбранного (см. apoc и stepZombies). */
+/* Модификация — только прятки (см. TOOL_MODES.zombie в maps.js и
+   объект "zombie" в TOOLS выше): в гонке зомби не из кого спавнить,
+   переключатель там только путал бы. */
 [["0", TR("modClassic","Классика")], ["1", TR("modApoc","Zombie Apocalypse")]].forEach(function(a,i){
   var d = document.createElement("div");
   d.className = "apocBtn" + (i===0?" on":""); d.textContent = a[1]; d.dataset.apoc = a[0];
@@ -2501,6 +2504,17 @@ function syncApocBtns(){
     b.classList.toggle("on", (b.dataset.apoc === "1") === !!apoc);
   });
 }
+/* game.html — это сам экран игры, а не редактор: переключатель там не
+   нужен ВООБЩЕ, ни в каком режиме — его никто не должен видеть, пока
+   идёт матч. IS_GAME_PAGE решает это по имени файла, один раз — тот же
+   приём работает в обеих копиях движка (editor.html/game.html) без
+   отдельной ветки кода под каждую. */
+var IS_GAME_PAGE = /\/?game\.html/i.test(location.pathname);
+function syncApocVisibility(){
+  document.getElementById("apoc").style.display =
+    (mode === "hideAndSeek" && !IS_GAME_PAGE) ? "flex" : "none";
+}
+syncApocVisibility();
 document.getElementById("apoc").addEventListener("click", function(e){
   var b = e.target.closest(".apocBtn"); if(!b || playing) return;
   apoc = b.dataset.apoc === "1";
@@ -2578,6 +2592,8 @@ document.getElementById("modes").addEventListener("click", function(e){
   var b = e.target.closest(".modeBtn"); if(!b || playing) return;
   document.querySelectorAll(".modeBtn").forEach(function(x){ x.classList.remove("on"); });
   b.classList.add("on"); mode = b.dataset.mode; syncTools();
+  if(mode !== "hideAndSeek" && apoc){ apoc = false; syncApocBtns(); }
+  syncApocVisibility();
   if(!toolOK(tool)) setTool("select");
 });
 toolsEl.addEventListener("click", function(e){
@@ -3303,9 +3319,13 @@ window.GAME = BRIDGE = {
       return out;
     });
     if(d.mode) mode = d.mode;
-    apoc = !!d.apoc;                   // в старых картах модификации не было — классика
     // режимы sandbox и twoPlayer убраны — старые карты открываем как прятки
     if(mode === "sandbox" || mode === "twoPlayer") mode = "hideAndSeek";
+    // в старых картах модификации не было — классика; в гонке её не бывает
+    // в принципе (см. TOOL_MODES.zombie), даже если в JSON что-то лежит
+    apoc = (mode === "hideAndSeek") && !!d.apoc;
+    syncApocBtns();
+    syncApocVisibility();
     // объекты чужого режима в карту не пускаем
     objects = objects.filter(function(o){ return allowedIn(o.type, mode); });
     /* Самодельные/очень старые карты не всегда проставляют id. nearby()
