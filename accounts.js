@@ -618,7 +618,8 @@ function register(app) {
   app.get('/getMyBio', (req, res) => {
     const u = currentUser(req);
     if (!u) return res.json({ name: '', avatar: '0', chatColor: '#000000', whatBro: 'none',
-                              chatColorUnlocked: false, chatColorPrice: CHAT_COLOR_PRICE, coins: 0 });
+                              chatColorUnlocked: false, chatColorPrice: CHAT_COLOR_PRICE,
+                              nickPrice: NICK_CHANGE_PRICE, coins: 0 });
     res.json({
       name: u.name,
       avatar: u.avatar || '0',
@@ -626,6 +627,7 @@ function register(app) {
       whatBro: u.whatBro || 'none',
       chatColorUnlocked: !!u.chatColorUnlocked,
       chatColorPrice: CHAT_COLOR_PRICE,
+      nickPrice: NICK_CHANGE_PRICE,
       coins: u.coins || 0
     });
   });

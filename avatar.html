@@ -23,8 +23,30 @@
   .avErr{font-size:13px;margin-top:8px;min-height:16px}
   .avErr.bad{color:var(--red)}
   .avErr.good{color:var(--green)}
-  #avNickBtn{max-width:260px}
   #avChatBtn{max-width:260px}
+
+  /* Скин игрока — окошко посередине страницы. Обводка того же цвета,
+     что и у карточек в светлой теме (var(--line), светло-серый), но в
+     тёмной — не тёмно-серая, как везде, а белая: на тёмном фоне серая
+     рамка почти сливается, а окно с самим персонажем должно выделяться
+     как отдельный, самый заметный элемент страницы. */
+  .avSkinWrap{display:flex;justify-content:center;margin-bottom:14px}
+  .avSkinBox{width:180px;height:240px;border-radius:14px;border:2px solid var(--line);
+    background:var(--soft);display:flex;align-items:center;justify-content:center;overflow:hidden}
+  html[data-bf-mode="dark"] .avSkinBox{border-color:#fff}
+  .avSkinBox img{width:100%;height:100%;object-fit:contain;display:block}
+  .avNickRow{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:20px}
+  .avNickName{font-size:19px;font-weight:800}
+  #avNickOpenBtn{width:auto;padding:9px 20px}
+
+  /* Окно смены ника переиспользует попап из account.js (вход/настройки) —
+     тот же затемняющий фон и та же центральная карточка, см. bfOpenModal.
+     Здесь только своя раскладка внутри: поле и кнопка в один ряд. */
+  .avModalRow{display:flex;gap:8px;margin:10px 0}
+  .avModalRow .bf-i{flex:1;margin:0;width:auto}
+  .avModalRow .bf-b{margin:0;white-space:nowrap;padding:0 16px}
+  .avModalPrice{display:flex;justify-content:center;align-items:center;gap:5px;
+    color:var(--muted);font-size:13px;margin-top:2px}
 </style>
 	<link rel="icon" href="favicon.ico" sizes="any">
 	<link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -51,22 +73,15 @@
   <div id="avGuest" class="bfHint" data-i18n="avatarGuest" style="display:none">Sign in to change your chat color or nickname.</div>
 
   <div id="avBody" style="display:none">
-    <div id="avName" style="font-size:20px;font-weight:800;margin-bottom:16px"></div>
+    <div class="avSkinWrap"><div class="avSkinBox"><img class="bfAvatar" alt=""></div></div>
+    <div class="avNickRow">
+      <span class="avNickName" id="avNickName"></span>
+      <button class="bfBtn go" id="avNickOpenBtn" data-i18n="changeNickBtn">Change</button>
+    </div>
 
     <div class="avCard">
       <div class="avCardTitle" data-i18n="chatColorTitle">Chat color</div>
       <div id="avChatColorBox"></div>
-    </div>
-
-    <div class="avCard">
-      <div class="avCardTitle" data-i18n="changeNickTitle">Change nickname</div>
-      <div class="avHint" data-i18n="changeNickHint">Your maps, comments, favorites and friends all move with you — nothing is lost.</div>
-      <div class="avRow">
-        <input class="bfInput" id="avNewNick" type="text" style="max-width:220px;margin-bottom:0"
-               placeholder="New nickname" data-i18n-ph="newNick">
-        <button class="bfBtn go" id="avNickBtn" data-i18n="changeNickBtn">Change nickname</button>
-      </div>
-      <div class="avErr" id="avNickErr"></div>
     </div>
   </div>
 </div>
@@ -162,28 +177,47 @@
       get('/getMyBio', function (r) {
         bio = r || {};
         document.getElementById('avBody').style.display = 'block';
-        document.getElementById('avName').textContent = me.name;
+        document.getElementById('avNickName').textContent = me.name;
         drawChatColor();
       });
     });
   }
 
-  document.getElementById('avNickBtn').onclick = function () {
-    var v = document.getElementById('avNewNick').value.trim();
-    var err = document.getElementById('avNickErr');
-    if (!v) { err.className = 'avErr bad'; err.textContent = T('fillBoth', 'Fill in both fields'); return; }
-    err.className = 'avErr'; err.textContent = '…';
-    post('/changeNickname', { name: v }, function (r) {
-      if (r && r.status === 'success') {
-        err.className = 'avErr good';
-        err.textContent = r.message || T('nickChanged', 'Nickname changed');
-        setTimeout(function () { location.reload(); }, 700);
-      } else {
-        err.className = 'avErr bad';
-        err.textContent = (r && r.message) || T('errorTxt', 'Error');
-      }
-    });
-  };
+  /* Окно смены ника — тот же попап (затемнение + карточка по центру),
+     что у входа и у Settings (см. account.js), просто со своей начинкой:
+     поле и кнопка «Изменить» в один ряд, цена под ними. */
+  function openNickModal() {
+    if (!window.bfOpenModal) return;
+    window.bfOpenModal(
+        '<div class="bf-x">&times;</div>'
+      + '<div class="bf-t">' + T('changeNickTitle', 'Change nickname') + '</div>'
+      + '<div class="avHint">' + T('changeNickHint',
+          'Your maps, comments, favorites and friends all move with you — nothing is lost.') + '</div>'
+      + '<div class="avModalRow">'
+      +   '<input class="bf-i" id="avModalNick" type="text" placeholder="' + T('newNick', 'New nickname') + '">'
+      +   '<button class="bf-b" id="avModalNickBtn">' + T('changeNickBtn', 'Change') + '</button>'
+      + '</div>'
+      + '<div class="avModalPrice">' + (bio.nickPrice || 1500) + (window.BFCoin ? BFCoin.svg(13) : '') + '</div>'
+      + '<div class="avErr" id="avModalNickErr" style="text-align:center"></div>'
+    );
+    document.getElementById('avModalNickBtn').onclick = function () {
+      var v = document.getElementById('avModalNick').value.trim();
+      var err = document.getElementById('avModalNickErr');
+      if (!v) { err.className = 'avErr bad'; err.textContent = T('fillBoth', 'Fill in both fields'); return; }
+      err.className = 'avErr'; err.textContent = '…';
+      post('/changeNickname', { name: v }, function (r) {
+        if (r && r.status === 'success') {
+          err.className = 'avErr good';
+          err.textContent = r.message || T('nickChanged', 'Nickname changed');
+          setTimeout(function () { location.reload(); }, 700);
+        } else {
+          err.className = 'avErr bad';
+          err.textContent = (r && r.message) || T('errorTxt', 'Error');
+        }
+      });
+    };
+  }
+  document.getElementById('avNickOpenBtn').onclick = openNickModal;
 
   start();
 })();

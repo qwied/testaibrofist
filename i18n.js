@@ -181,7 +181,7 @@
     chatColorSaved: "Color saved",
     changeNickTitle: "Change nickname",
     changeNickHint: "Your maps, comments, favorites and friends all move with you — nothing is lost.",
-    changeNickBtn: "Change nickname",
+    changeNickBtn: "Change",
 
     addFromUrl: "From URL",
     addFromFile: "From file",
@@ -847,7 +847,7 @@
     chatColorSaved: "Цвет сохранён",
     changeNickTitle: "Сменить ник",
     changeNickHint: "Карты, комментарии, избранное и друзья переезжают вместе с тобой — ничего не теряется.",
-    changeNickBtn: "Сменить ник",
+    changeNickBtn: "Изменить",
     addFromUrl: "Из ссылки",
     addFromFile: "Из файла",
     setImage: "Задать картинку",
