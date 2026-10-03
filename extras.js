@@ -5,6 +5,7 @@ const path = require('path');
 const DATA_DIR = path.join(__dirname, 'data');
 const LOGS_FILE = path.join(DATA_DIR, 'logs.json');
 const IMG_DIR = path.join(DATA_DIR, 'logimg');
+const GEO_FILE = path.join(DATA_DIR, 'geoStats.json');
 
 /* Картинки новостей.
    Файл лежит на диске, в logs.json попадает только адрес и размеры —
@@ -64,6 +65,17 @@ function saveImage(buf, ext) {
 
 let logs = [];
 
+/* Временная диагностика (не постоянная аналитика): откуда реально заходят
+   игроки, чтобы один раз выбрать датацентр под реальный пинг, а не
+   наугад. Храним ТОЛЬКО счётчик подключений по странам — ни IP, ни
+   что-либо привязанное к игроку: страну определяет Cloudflare на границе
+   и кладёт в заголовок cf-ipcountry, сырой адрес сюда вообще не доходит
+   (тот же принцип, что у хеша IP в accounts.js — адрес не нужен, нужен
+   только агрегат). Без Cloudflare перед сервером заголовка не будет —
+   тогда все подключения падают в "XX", и это само по себе ответ: страну
+   придётся смотреть по-другому. */
+let geoStats = { since: Date.now(), byCountry: {} };
+
 // адреса всех картинок, на которые ссылается лента
 function usedImages() {
   const set = new Set();
@@ -114,6 +126,10 @@ function load() {
     if (fs.existsSync(LOGS_FILE)) logs = JSON.parse(fs.readFileSync(LOGS_FILE, 'utf8'));
   } catch (e) { console.log('logs.json не прочитан'); }
   if (!Array.isArray(logs)) logs = [];
+  try {
+    if (fs.existsSync(GEO_FILE)) geoStats = JSON.parse(fs.readFileSync(GEO_FILE, 'utf8'));
+  } catch (e) { console.log('geoStats.json не прочитан'); }
+  if (!geoStats || typeof geoStats.byCountry !== 'object') geoStats = { since: Date.now(), byCountry: {} };
   /* Старые новости писались без картинок. Приводим все записи к одному
      виду сразу при чтении: дальше по коду `l.images` — всегда массив. */
   logs.forEach(l => {
@@ -244,6 +260,24 @@ function save() {
     } catch (e) { console.log('не смог сохранить logs.json:', e.message); }
   }, 300);
 }
+
+let geoT = null;
+function saveGeo() {
+  clearTimeout(geoT);
+  geoT = setTimeout(() => {
+    try {
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.writeFileSync(GEO_FILE, JSON.stringify(geoStats, null, 2));
+    } catch (e) { console.log('не смог сохранить geoStats.json:', e.message); }
+  }, 2000);   // подключений может быть много разом — пишем на диск реже, чем logs
+}
+// вызывается из server.js при каждом новом socket.io-подключении
+function recordGeoHit(country) {
+  const c = (String(country || '').toUpperCase().match(/^[A-Z]{2}$/) || ['XX'])[0];
+  geoStats.byCountry[c] = (geoStats.byCountry[c] || 0) + 1;
+  saveGeo();
+}
+
 load();
 migrateLogsToEnglish().catch(() => {});
 sweepImages();
@@ -263,6 +297,15 @@ function register(app, acc) {
   app.get('/getLogs', (req, res) => {
     const u = currentUser(req);
     res.json({ owner: isOwner(u), logs: logs.slice().sort((a, b) => b.date - a.date).slice(0, 100) });
+  });
+
+  /* Временная диагностика для выбора датацентра (см. recordGeoHit выше) —
+     только счётчик подключений по странам, владельцу. Снять, когда
+     решение по хостингу принято — постоянно собирать это не нужно. */
+  app.get('/geoStats', (req, res) => {
+    if (!ownerOnly(req, res)) return;
+    const total = Object.values(geoStats.byCountry).reduce((a, b) => a + b, 0);
+    res.json({ since: geoStats.since, total, byCountry: geoStats.byCountry });
   });
 
   /* Картинка уходит на сервер отдельно от текста: в новость попадает
@@ -557,4 +600,4 @@ function register(app, acc) {
   });
 }
 
-module.exports = { register, reload: load, IMG_DIR };
+module.exports = { register, reload: load, IMG_DIR, recordGeoHit };

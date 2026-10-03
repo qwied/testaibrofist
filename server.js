@@ -810,6 +810,8 @@ function socketLimiter(perSecond, perTenSec) {
 // Инициализация
 io.on('connection', (socket) => {
   gameState.stats.totalPlayers++;
+  // временная диагностика для выбора датацентра — см. recordGeoHit в extras.js
+  require('./extras.js').recordGeoHit(socket.handshake.headers['cf-ipcountry']);
 
   const account = sessionName(socket.handshake.headers.cookie);  // подтверждённый ник или null
   const limMove = socketLimiter(90, 700);    // движение идёт 30 раз/сек, запас на всплески
