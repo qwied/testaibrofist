@@ -14,22 +14,22 @@
 .mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
 .mbFilters .bfBtn{margin-bottom:0;width:auto;padding:11px 22px}
 
-/* Единая обрамлённая таблица вместо отдельной карточки на каждую карту:
-   шапка (с пейджером внутри неё, справа) и список строк живут в одном
-   скруглённом блоке, строки разделяет тонкая линия, а не своя рамка —
-   воздуха больше, взгляду не на чем "спотыкаться" между карточками. */
-.mbTable{border:1px solid var(--line);border-radius:16px;background:var(--panel,#fff);overflow:hidden}
+/* Шапка с пейджером — лёгкая панель без своей рамки, разделяет её с
+   карточками только тонкая линия снизу. Каждая карта при этом — своё
+   собственное окошко: рамка того же var(--line), что меняет цвет сама,
+   когда переключаешь тему, так что обводка всегда на месте что в
+   светлой, что в тёмной. */
+.mbTable{display:flex;flex-direction:column}
 .mbHead{display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:14px 16px;font-size:13px;font-weight:700;color:var(--blue);border-bottom:1px solid var(--line)}
+  padding:4px 16px 12px;font-size:13px;font-weight:700;color:var(--blue);border-bottom:1px solid var(--line)}
 .mbHeadCols{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px;gap:10px;flex:1;min-width:0}
 .mbHead .bfPager{margin:0;gap:8px}
 .mbHead .bfPager button{width:34px;height:34px;font-size:14px}
 .mbHead .bfPager span{font-weight:700;color:var(--ink)}
-.mbList{display:flex;flex-direction:column}
+.mbList{display:flex;flex-direction:column;gap:12px;margin-top:14px}
 .mbRow{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px 124px;gap:10px 10px;
-  align-items:center;padding:16px;border-bottom:1px solid var(--line)}
-.mbRow:last-child{border-bottom:none}
-.mbRow:hover{background:var(--soft)}
+  align-items:center;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel,#fff)}
+.mbRow:hover{border-color:var(--blue)}
 .mbName{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;min-width:0}
 .mbName span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Звезда и чекбокс — единственные два элемента на странице без своего
@@ -117,13 +117,21 @@
   .mbFavOnly{grid-column:1/-1}
   .mbHeadCols{grid-template-columns:1fr auto}
   .mbHeadCols>div:nth-child(2),.mbHeadCols>div:nth-child(4),.mbHeadCols>div:nth-child(5){display:none}
-  .mbRow{grid-template-columns:1fr auto;gap:2px 10px}
-  .mbName{grid-column:1}
-  .mbRate{grid-column:2;justify-content:flex-end}
-  .mbAuthor{grid-column:1;font-size:13.5px}
-  .mbDate{grid-column:2;text-align:right}
-  .mbVote{grid-column:1/-1;margin-top:8px}
-  .mbPlay{grid-column:1/-1;margin-top:8px}
+  /* На телефоне карточка не сжимает то же самое, что на компьютере, в
+     две узкие колонки — каждое поле получает свою строку и воздух
+     вокруг, рейтинг становится цветным бейджем вместо голой цифры. */
+  .mbRow{grid-template-columns:1fr auto;gap:10px 10px;padding:16px}
+  .mbName{grid-column:1;font-size:16.5px}
+  .mbRate{grid-column:2;justify-self:end;background:var(--soft);padding:4px 11px;
+    border-radius:10px;font-size:14px}
+  .mbAuthor{grid-column:1/-1;font-size:14px}
+  .mbDate{grid-column:1/-1;text-align:left;margin-top:-6px}
+  .mbVote{grid-column:1/-1;margin-top:4px}
+  .mbVote button{min-height:44px;font-size:14px}
+  .mbPlay{grid-column:1/-1;margin-top:2px;padding:13px 0;font-size:15px}
+  .mbExtra{font-size:13px}
+  .mbPractice{font-size:13px}
+  .mbCommentsToggle{font-size:13px}
 }
 </style>
         <link rel="icon" href="favicon.ico" sizes="any">
