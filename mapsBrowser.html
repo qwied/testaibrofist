@@ -14,33 +14,41 @@
 .mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
 .mbFilters .bfBtn{margin-bottom:0;width:auto;padding:11px 22px}
 
-/* Шапка с пейджером — лёгкая панель без своей рамки, разделяет её с
-   карточками только тонкая линия снизу. Каждая карта при этом — своё
-   собственное окошко: рамка того же var(--line), что меняет цвет сама,
-   когда переключаешь тему, так что обводка всегда на месте что в
-   светлой, что в тёмной. */
+/* Вся таблица — шапка-колонки и список карт — одно целое: на телефоне
+   они едут по горизонтали СИНХРОННО, одним общим скроллом .mbScroll,
+   а не так, что каждая карточка листается отдельно сама по себе — это
+   была бы уже не "та же таблица, что на компьютере", а россыпь никак
+   не связанных друг с другом кусков. Пейджер — единственное, что
+   прокрутку не ловит: это управление страницей, а не колонка таблицы. */
 .mbTable{display:flex;flex-direction:column}
-.mbHead{display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:4px 16px 12px;font-size:13px;font-weight:700;color:var(--blue);border-bottom:1px solid var(--line)}
-.mbHeadCols{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px;gap:10px;flex:1;min-width:0}
+.mbHead{display:flex;align-items:center;justify-content:flex-end;gap:10px;
+  padding:4px 16px 12px;border-bottom:1px solid var(--line)}
 .mbHead .bfPager{margin:0;gap:8px}
 .mbHead .bfPager button{width:34px;height:34px;font-size:14px}
 .mbHead .bfPager span{font-weight:700;color:var(--ink)}
-.mbList{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+/* .mbScroll — единственное место прокрутки: шапка-колонки и список карт
+   внутри него едут строго синхронно, одним куском, как и положено одной
+   таблице, а не так, что каждая карточка листается сама по себе.
+   .mbScrollInner шириной по содержимому (width:max-content) — поэтому
+   обычные блочные .mbHeadCols/.mbList ниже передают свою настоящую
+   ширину наверх вместо того, чтобы обрезаться раньше времени;
+   min-width:100% держит его на всю ширину экрана, пока содержимое и
+   так помещается (как на компьютере). min-width:0 на самом .mbScroll —
+   чтобы он, в отличие от .mbScrollInner, умел сжаться до ширины
+   экрана, а не раздувать вбок всю страницу. */
+.mbScroll{overflow-x:auto;min-width:0;-webkit-overflow-scrolling:touch}
+.mbScrollInner{width:max-content;min-width:100%}
+.mbHeadCols{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px 124px;gap:10px;
+  padding:14px 16px 10px;font-size:13px;font-weight:700;color:var(--blue)}
+.mbList{display:flex;flex-direction:column;gap:12px;padding:0 16px 4px}
 /* .mbRow — само окошко карты (рамка, фон, отступ вокруг всего).
    .mbRowMain — его строка колонок (Name/Rating/Author/Date/Vote/Play) —
-   РОВНО та же сетка, что и на компьютере, никаких отдельных уменьшенных
-   версий под телефон. Если по ширине экрана она не помещается, карточка
-   не переверстывается и ничего не ужимается — .mbRowMain в этом случае
-   просто прокручивается по горизонтали (см. мобильный блок ниже). */
-.mbRow{display:flex;flex-direction:column;gap:8px;min-width:0;
+   РОВНО та же сетка, что и у .mbHeadCols и что на компьютере, никаких
+   отдельных уменьшенных версий под телефон. */
+.mbRow{display:flex;flex-direction:column;gap:8px;
   padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel,#fff)}
 .mbRow:hover{border-color:var(--blue)}
-/* min-width:0 — без него flex/grid-элемент не сжимается ниже размера
-   своего содержимого (классический баг "min-width: auto"), и на
-   телефоне вся карточка растягивалась по ширине вместе со строкой
-   вместо того, чтобы остаться на месте, а скроллилась — сама строка. */
-.mbRowMain{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px 124px;gap:10px;align-items:center;min-width:0}
+.mbRowMain{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px 124px;gap:10px;align-items:center}
 .mbName{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;min-width:0}
 .mbName span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Звезда и чекбокс — единственные два элемента на странице без своего
@@ -126,18 +134,15 @@
   .mbFilters{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
   .mbFilters .bfBtn{grid-column:1/-1;width:100%}
   .mbFavOnly{grid-column:1/-1}
-  .mbHeadCols{grid-template-columns:1fr auto}
-  .mbHeadCols>div:nth-child(2),.mbHeadCols>div:nth-child(4),.mbHeadCols>div:nth-child(5){display:none}
-  /* Точно та же строка, что на компьютере, и тот же размер шрифта —
-     ничего не уменьшено. 2fr/1.2fr/1.1fr без заданной ширины контейнера
-     считаются непредсказуемо (в прокручиваемом блоке сетка не знает,
-     от какой ширины считать доли, и текст названия карты пропадал) —
-     поэтому здесь те же колонки, но в пикселях, пересчитанных из того,
-     во что эти доли обычно разворачиваются на экране компьютера. Если
-     по ширине экрана строка не помещается, она просто прокручивается
-     по горизонтали, как обычная широкая таблица, а не сжимается. */
-  .mbRowMain{grid-template-columns:260px 92px 150px 140px 150px 124px;
-    overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* Те же самые колонки, что на компьютере, и тот же размер шрифта —
+     ничего не уменьшено и не спрятано. 2fr/1.2fr/1.1fr без заданной
+     ширины контейнера (внутри .mbScrollInner, которая шириной "по
+     содержимому") считаются непредсказуемо — поэтому здесь те же
+     колонки, но в пикселях, пересчитанных из того, во что эти доли
+     обычно разворачиваются на экране компьютера. У шапки и у строк —
+     одинаковые значения, чтобы колонки совпадали друг с другом, когда
+     едут вместе при прокрутке. */
+  .mbHeadCols,.mbRowMain{grid-template-columns:260px 92px 150px 140px 150px 124px}
 }
 </style>
         <link rel="icon" href="favicon.ico" sizes="any">
@@ -191,18 +196,21 @@
 
   <div class="mbTable">
     <div class="mbHead">
+      <div class="bfPager">
+        <button id="mbPrev">&lt;</button><span id="mbPage">1/1</span><button id="mbNext">&gt;</button>
+      </div>
+    </div>
+    <div class="mbScroll"><div class="mbScrollInner">
       <div class="mbHeadCols">
         <div data-i18n="colName">Название</div>
         <div data-i18n="colRating" style="text-align:center">Рейтинг</div>
         <div data-i18n="colAuthor">Автор</div>
         <div data-i18n="colDate">Дата</div>
         <div data-i18n="colVote">Голос</div>
+        <div></div>
       </div>
-      <div class="bfPager">
-        <button id="mbPrev">&lt;</button><span id="mbPage">1/1</span><button id="mbNext">&gt;</button>
-      </div>
-    </div>
-    <div id="mbList"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
+      <div id="mbList"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
+    </div></div>
   </div>
   <div class="bfMsg" id="mbMsg"></div>
 </div>
