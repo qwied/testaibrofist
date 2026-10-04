@@ -28,20 +28,19 @@
 .mbHead .bfPager span{font-weight:700;color:var(--ink)}
 .mbList{display:flex;flex-direction:column;gap:12px;margin-top:14px}
 /* .mbRow — само окошко карты (рамка, фон, отступ вокруг всего).
-   .mbRowTop — верхняя строка: .mbRowMain (Name/Rating/Author/Date/Vote)
-   плюс кнопка Play сбоку. На телефоне .mbRowMain превращается в узкую
-   полосу с горизонтальной прокруткой — та же раскладка колонок, что на
-   компьютере, просто она не помещается по ширине целиком и её можно
-   пролистать пальцем. Play нарочно вынесена ИЗ прокручиваемой части —
-   это главное действие на карточке, его не должно уносить за край
-   экрана вместе с менее важными полями вроде даты. Practice и
-   Комментарии ниже в прокрутке не участвуют — они и так на всю ширину. */
-.mbRow{display:flex;flex-direction:column;gap:8px;
+   .mbRowMain — его строка колонок (Name/Rating/Author/Date/Vote/Play) —
+   РОВНО та же сетка, что и на компьютере, никаких отдельных уменьшенных
+   версий под телефон. Если по ширине экрана она не помещается, карточка
+   не переверстывается и ничего не ужимается — .mbRowMain в этом случае
+   просто прокручивается по горизонтали (см. мобильный блок ниже). */
+.mbRow{display:flex;flex-direction:column;gap:8px;min-width:0;
   padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel,#fff)}
 .mbRow:hover{border-color:var(--blue)}
-.mbRowTop{display:flex;align-items:center;gap:10px}
-.mbRowMain{flex:1;min-width:0;display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px;gap:10px;align-items:center}
-.mbRowTop>.mbPlay{flex:0 0 124px;width:auto}
+/* min-width:0 — без него flex/grid-элемент не сжимается ниже размера
+   своего содержимого (классический баг "min-width: auto"), и на
+   телефоне вся карточка растягивалась по ширине вместе со строкой
+   вместо того, чтобы остаться на месте, а скроллилась — сама строка. */
+.mbRowMain{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px 124px;gap:10px;align-items:center;min-width:0}
 .mbName{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;min-width:0}
 .mbName span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Звезда и чекбокс — единственные два элемента на странице без своего
@@ -129,28 +128,16 @@
   .mbFavOnly{grid-column:1/-1}
   .mbHeadCols{grid-template-columns:1fr auto}
   .mbHeadCols>div:nth-child(2),.mbHeadCols>div:nth-child(4),.mbHeadCols>div:nth-child(5){display:none}
-  /* Та же раскладка колонок, что на компьютере — не стопка полей, а
-     одна строка (Name/Rating/Author/Date/Vote), только в узких,
-     фиксированных по ширине колонках. Целиком она в экран телефона не
-     входит — .mbRowMain сама становится горизонтально прокручиваемой
-     полосой, то, что не влезло, долистывается пальцем вместо того,
-     чтобы раздувать карту по высоте на весь экран. Play нарочно не
-     в этой полосе — свайпом её было бы легко унести за край, а это
-     главная кнопка карточки, она должна быть видна всегда. */
-  .mbRow{padding:12px}
-  .mbRowTop{gap:6px}
-  .mbRowMain{grid-template-columns:118px 32px 78px 56px 86px;gap:8px;
-    overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
-  .mbRowTop>.mbPlay{flex:0 0 58px;font-size:11.5px;padding:9px 0;white-space:nowrap}
-  .mbName{font-size:13.5px;min-width:0}
-  .mbRate{font-size:14px}
-  .mbAuthor{font-size:12px}
-  .mbDate{font-size:11px;overflow:hidden;text-overflow:ellipsis}
-  .mbVote{gap:4px}
-  .mbVote button{font-size:11px;padding:2px;min-height:34px}
-  .mbExtra{font-size:13px}
-  .mbPractice{font-size:13px}
-  .mbCommentsToggle{font-size:13px}
+  /* Точно та же строка, что на компьютере, и тот же размер шрифта —
+     ничего не уменьшено. 2fr/1.2fr/1.1fr без заданной ширины контейнера
+     считаются непредсказуемо (в прокручиваемом блоке сетка не знает,
+     от какой ширины считать доли, и текст названия карты пропадал) —
+     поэтому здесь те же колонки, но в пикселях, пересчитанных из того,
+     во что эти доли обычно разворачиваются на экране компьютера. Если
+     по ширине экрана строка не помещается, она просто прокручивается
+     по горизонтали, как обычная широкая таблица, а не сжимается. */
+  .mbRowMain{grid-template-columns:260px 92px 150px 140px 150px 124px;
+    overflow-x:auto;-webkit-overflow-scrolling:touch}
 }
 </style>
         <link rel="icon" href="favicon.ico" sizes="any">
@@ -284,7 +271,6 @@
                String(me.name).toLowerCase() === String(m.author).toLowerCase();
     var rc = m.rating > 0 ? 'pos' : (m.rating < 0 ? 'neg' : 'zero');
     return '<div class="mbRow" data-map="' + esc(m.mapName) + '" data-author="' + esc(m.author) + '">'
-      + '<div class="mbRowTop">'
       + '<div class="mbRowMain">'
       + '<div class="mbName" title="' + esc(m.mapName) + '">'
       +   '<button class="mbFav' + (m.myFavorite ? ' on' : '') + '" data-fav="1" title="'
@@ -299,7 +285,6 @@
       +     THUMB_UP + ' ' + m.likes + '</button>'
       +   '<button class="down' + (m.myVote < 0 ? ' on' : '') + '" data-vote="-1">'
       +     THUMB_DOWN + ' ' + m.dislikes + '</button>'
-      + '</div>'
       + '</div>'
       + '<button class="mbPlay" data-play="1">' + T('play', 'Играть') + '</button>'
       + '</div>'
