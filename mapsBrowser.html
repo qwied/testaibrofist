@@ -3,7 +3,12 @@
 <head>
 <meta charset="utf-8">
 <title>AIBrofist — Maps Browser</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Фиксированная ширина вместо width=device-width: страница всегда
+     рендерится как десктопная версия (то же самое, что "Запросить
+     версию для компьютера" в браузере) — телефон просто уменьшает
+     картинку целиком, чтобы она влезла на экран, вместо того чтобы
+     переверстывать её под узкий экран. -->
+<meta name="viewport" content="width=1280">
 <link rel="stylesheet" href="ui.css?v=160">
 <script src="offline.js?v=2"></script>
 <script src="theme.js?v=160"></script>
