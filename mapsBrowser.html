@@ -14,12 +14,22 @@
 .mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
 .mbFilters .bfBtn{margin-bottom:0;width:auto;padding:11px 22px}
 
-.mbHead{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px 124px;gap:10px;
-  padding:0 14px 8px;font-size:13px;font-weight:700;color:var(--muted)}
-.mbList{display:flex;flex-direction:column;gap:10px}
+/* Единая обрамлённая таблица вместо отдельной карточки на каждую карту:
+   шапка (с пейджером внутри неё, справа) и список строк живут в одном
+   скруглённом блоке, строки разделяет тонкая линия, а не своя рамка —
+   воздуха больше, взгляду не на чем "спотыкаться" между карточками. */
+.mbTable{border:1px solid var(--line);border-radius:16px;background:var(--panel,#fff);overflow:hidden}
+.mbHead{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:14px 16px;font-size:13px;font-weight:700;color:var(--blue);border-bottom:1px solid var(--line)}
+.mbHeadCols{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px;gap:10px;flex:1;min-width:0}
+.mbHead .bfPager{margin:0;gap:8px}
+.mbHead .bfPager button{width:34px;height:34px;font-size:14px}
+.mbHead .bfPager span{font-weight:700;color:var(--ink)}
+.mbList{display:flex;flex-direction:column}
 .mbRow{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px 124px;gap:10px 10px;
-  align-items:center;border:1px solid var(--line);border-radius:13px;padding:12px 14px;background:#fff}
-.mbRow:hover{border-color:var(--blue)}
+  align-items:center;padding:16px;border-bottom:1px solid var(--line)}
+.mbRow:last-child{border-bottom:none}
+.mbRow:hover{background:var(--soft)}
 .mbName{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;min-width:0}
 .mbName span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Звезда и чекбокс — единственные два элемента на странице без своего
@@ -49,8 +59,8 @@
 .mbVote button.up.on{border-color:var(--green);color:var(--green);background:#f0fdf4}
 .mbVote button.down.on{border-color:var(--red);color:var(--red);background:#fef2f2}
 
-.mbPlay{width:100%;padding:10px 0;border-radius:9px;border:1px solid var(--blue);
-  background:#fff;color:var(--blue);cursor:pointer;font-weight:600}
+.mbPlay{width:100%;padding:11px 0;border-radius:22px;border:1px solid var(--blue);
+  background:var(--panel,#fff);color:var(--blue);cursor:pointer;font-weight:700;letter-spacing:.2px}
 .mbPlay:hover{background:var(--blue);color:#fff}
 .mbExtra{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 /* Свой ряд под остальными колонками — сетка карточки жёстко на 6 колонок,
@@ -105,7 +115,8 @@
   .mbFilters{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
   .mbFilters .bfBtn{grid-column:1/-1;width:100%}
   .mbFavOnly{grid-column:1/-1}
-  .mbHead{display:none}
+  .mbHeadCols{grid-template-columns:1fr auto}
+  .mbHeadCols>div:nth-child(2),.mbHeadCols>div:nth-child(4),.mbHeadCols>div:nth-child(5){display:none}
   .mbRow{grid-template-columns:1fr auto;gap:2px 10px}
   .mbName{grid-column:1}
   .mbRate{grid-column:2;justify-content:flex-end}
@@ -164,19 +175,21 @@
     <button class="bfBtn go" id="mbGo" data-i18n="refresh">Обновить</button>
   </div>
 
-  <div class="bfPager">
-    <button id="mbPrev">&lt;</button><span id="mbPage">1/1</span><button id="mbNext">&gt;</button>
+  <div class="mbTable">
+    <div class="mbHead">
+      <div class="mbHeadCols">
+        <div data-i18n="colName">Название</div>
+        <div data-i18n="colRating" style="text-align:center">Рейтинг</div>
+        <div data-i18n="colAuthor">Автор</div>
+        <div data-i18n="colDate">Дата</div>
+        <div data-i18n="colVote">Голос</div>
+      </div>
+      <div class="bfPager">
+        <button id="mbPrev">&lt;</button><span id="mbPage">1/1</span><button id="mbNext">&gt;</button>
+      </div>
+    </div>
+    <div id="mbList"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
   </div>
-
-  <div class="mbHead">
-    <div data-i18n="colName">Название</div>
-    <div data-i18n="colRating" style="text-align:center">Рейтинг</div>
-    <div data-i18n="colAuthor">Автор</div>
-    <div data-i18n="colDate">Дата</div>
-    <div data-i18n="colVote">Голос</div>
-    <div></div>
-  </div>
-  <div id="mbList"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
   <div class="bfMsg" id="mbMsg"></div>
 </div>
 
