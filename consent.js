@@ -21,7 +21,7 @@
   }
 
   var CSS = ''
-    + '#bfConsent{position:fixed;inset:0;z-index:9998;display:flex;align-items:center;'
+    + '#bfConsent{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;z-index:9998;display:flex;align-items:center;'
     + 'justify-content:center;padding:16px;background:rgba(9,12,18,.62);backdrop-filter:blur(3px)}'
     + '#bfConsentBox{background:var(--panel,#fff);color:var(--ink,#111827);'
     + 'border:1px solid var(--line,#e5e7eb);border-radius:16px;max-width:560px;width:100%;'

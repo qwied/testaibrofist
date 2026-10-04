@@ -6,8 +6,14 @@
   var BASE = '';
 
   var css = ''
-    + '.bf-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:none}'
-    + '.bf-box{position:fixed;inset:0;margin:auto;width:320px;height:max-content;max-height:90vh;background:var(--panel);'
+    /* inset:0 дублируется явными top/right/bottom/left — в части встроенных
+       WebView (например, старый Telegram-браузер на Android) инструкция
+       inset молча не поддерживается, и оверлей без заданного размера
+       схлопывается в нулевую точку: кнопки со страницы под ним становятся
+       кликабельны и видны поверх затемнения. */
+    + '.bf-ov{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;'
+    + 'background:rgba(0,0,0,.5);z-index:9998;display:none}'
+    + '.bf-box{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;margin:auto;width:320px;height:max-content;max-height:90vh;background:var(--panel);'
     + 'border:3px solid var(--line);border-radius:8px;padding:26px 30px 22px;color:var(--ink);z-index:9999;display:none;'
     + 'font-family:sans-serif;box-sizing:border-box}'
     + '.bf-x{position:absolute;right:5px;top:4px;border:1px solid;border-radius:31px;font-size:14px;'

@@ -25,7 +25,7 @@
   function ensureCanvas() {
     if (cv) return;
     cv = document.createElement('canvas');
-    cv.style.cssText = 'position:fixed;inset:0;z-index:9998;pointer-events:none';
+    cv.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:9998;pointer-events:none';
     document.body.appendChild(cv);
     cx = cv.getContext('2d');
     resize();
@@ -43,7 +43,7 @@
   function ensureLayer() {
     if (layer) return layer;
     layer = document.createElement('div');
-    layer.style.cssText = 'position:fixed;inset:0;z-index:9997;pointer-events:none;overflow:hidden';
+    layer.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:9997;pointer-events:none;overflow:hidden';
     document.body.appendChild(layer);
     return layer;
   }
