@@ -183,7 +183,7 @@
     + '#gMap .rate{margin-top:7px;display:flex;gap:6px;align-items:center}'
     + '#gMap .rate button{border:1px solid #2196F3;background:#fff;color:#2196F3;border-radius:5px;'
     + 'padding:4px 11px;cursor:pointer;font-size:13px}'
-    + '#gBanner{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;'
+    + '#gBanner{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;z-index:70;display:none;align-items:center;justify-content:center;'
     + 'flex-direction:column;gap:9px;background:rgba(255,255,255,.93);font:16px sans-serif;text-align:center;padding:24px}'
     + '#gBanner h2{margin:0;font-size:25px}'
     + '#gBanner p{margin:0;color:#6b7280;max-width:420px}'
