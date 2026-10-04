@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <title>AIBrofist — Maps Browser</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Мобильной версии у этой страницы больше нет: всегда десктопный
+     layout, телефон просто показывает его в масштабе и даёт прокрутку/
+     зум, как было бы на любом обычном нерезиновом сайте. device.js
+     специально не трогает фиксированную ширину (см. проверку там). -->
+<meta name="viewport" content="width=1280">
 <link rel="stylesheet" href="ui.css?v=160">
 <script src="offline.js?v=2"></script>
 <script src="theme.js?v=160"></script>
@@ -124,26 +128,6 @@
 .mbDel{border:1px solid var(--red);color:var(--red);background:var(--panel);border-radius:8px;
   padding:9px 15px;font-size:13px;cursor:pointer}
 .mbDel:hover{background:var(--red);color:#fff}
-
-@media (max-width:760px){
-  /* auto-fit, а не жёсткие две колонки: ширину фильтрам даёт колонка
-     рядом с боковым меню, а не экран, и медиа-запросом её не угадать.
-     На телефоне в две колонки выходило по ~100px, и «Sort by date»
-     обрезалось до «Sort by d»; теперь при нехватке места ряд сам
-     складывается в одну колонку. */
-  .mbFilters{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
-  .mbFilters .bfBtn{grid-column:1/-1;width:100%}
-  .mbFavOnly{grid-column:1/-1}
-  /* Те же самые колонки, что на компьютере, и тот же размер шрифта —
-     ничего не уменьшено и не спрятано. 2fr/1.2fr/1.1fr без заданной
-     ширины контейнера (внутри .mbScrollInner, которая шириной "по
-     содержимому") считаются непредсказуемо — поэтому здесь те же
-     колонки, но в пикселях, пересчитанных из того, во что эти доли
-     обычно разворачиваются на экране компьютера. У шапки и у строк —
-     одинаковые значения, чтобы колонки совпадали друг с другом, когда
-     едут вместе при прокрутке. */
-  .mbHeadCols,.mbRowMain{grid-template-columns:260px 92px 150px 140px 150px 124px}
-}
 </style>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
