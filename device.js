@@ -51,8 +51,10 @@
       m.name = 'viewport';
       document.head.appendChild(m);
     }
-    // в редакторе свой viewport с запретом зума — его не трогаем
-    if (m.content.indexOf('user-scalable=no') === -1)
+    // в редакторе свой viewport с запретом зума, а на страницах с
+    // фиксированной шириной (принудительно «десктопная версия» на
+    // телефоне) — свой viewport=width=<px>; в обоих случаях не трогаем
+    if (m.content.indexOf('user-scalable=no') === -1 && !/width=\d/.test(m.content))
       m.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
   }
 })();
