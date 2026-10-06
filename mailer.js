@@ -25,7 +25,7 @@ function sendCode(email, code) {
           + 'If you didn’t request this, you can ignore this email.</p>'
     });
     const req = https.request('https://api.resend.com/emails', {
-      method: 'POST',
+      method: 'POST', family: 4,
       headers: {
         'Authorization': 'Bearer ' + RESEND_API_KEY,
         'Content-Type': 'application/json',
@@ -40,6 +40,15 @@ function sendCode(email, code) {
         else console.log('[mailer] sent to ' + email);
         resolve(ok);
       });
+    });
+    const t0 = Date.now();
+    req.on('socket', socket => {
+      console.log('[mailer] socket assigned +' + (Date.now() - t0) + 'ms');
+      socket.on('lookup', (err, address, family) => {
+        console.log('[mailer] dns lookup +' + (Date.now() - t0) + 'ms ->',
+          err ? ('error: ' + err.message) : (address + ' (IPv' + family + ')'));
+      });
+      socket.on('connect', () => console.log('[mailer] tcp connected +' + (Date.now() - t0) + 'ms'));
     });
     req.on('error', e => { console.error('[mailer] request error:', e.message); resolve(false); });
     req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error('Resend request timed out')));

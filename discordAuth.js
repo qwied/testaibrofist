@@ -8,11 +8,30 @@ const https = require('https');
 // /auth/discord/callback: страница в браузере грузилась бы бесконечно.
 const TIMEOUT_MS = 10000;
 
+/* family:4 — на части хостингов исходящий IPv6-маршрут битый (пакеты
+   уходят в никуда), а Node по умолчанию пробует его первым. Внешне это
+   выглядит как «зависает, потом таймаут» ровно на тех хостах, где
+   IPv6-попытка не проваливается мгновенно. IPv4 тут не компромисс —
+   он и так единственный реальный путь наружу. */
+function instrument(req, label) {
+  const t0 = Date.now();
+  req.on('socket', socket => {
+    console.log('[discordAuth]', label, 'socket assigned +' + (Date.now() - t0) + 'ms');
+    socket.on('lookup', (err, address, family) => {
+      console.log('[discordAuth]', label, 'dns lookup +' + (Date.now() - t0) + 'ms ->',
+        err ? ('error: ' + err.message) : (address + ' (IPv' + family + ')'));
+    });
+    socket.on('connect', () => {
+      console.log('[discordAuth]', label, 'tcp connected +' + (Date.now() - t0) + 'ms');
+    });
+  });
+}
+
 function post(url, body, headers) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const req = https.request(u, {
-      method: 'POST',
+      method: 'POST', family: 4,
       headers: Object.assign({ 'Content-Length': Buffer.byteLength(body) }, headers)
     }, res => {
       let data = '';
@@ -25,6 +44,7 @@ function post(url, body, headers) {
         }
       });
     });
+    instrument(req, 'POST ' + u.pathname);
     req.on('error', reject);
     req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error('Discord request timed out')));
     req.write(body);
@@ -34,7 +54,7 @@ function post(url, body, headers) {
 
 function get(url, headers) {
   return new Promise((resolve, reject) => {
-    const req = https.request(url, { method: 'GET', headers: headers }, res => {
+    const req = https.request(url, { method: 'GET', family: 4, headers: headers }, res => {
       let data = '';
       res.on('data', c => { data += c; });
       res.on('end', () => {
@@ -45,6 +65,7 @@ function get(url, headers) {
         }
       });
     });
+    instrument(req, 'GET ' + url);
     req.on('error', reject);
     req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error('Discord request timed out')));
     req.end();
