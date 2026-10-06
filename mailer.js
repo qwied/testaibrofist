@@ -7,6 +7,9 @@ const https = require('https');
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const MAIL_FROM = process.env.MAIL_FROM || 'AIBROFIST <onboarding@resend.dev>';
+// как в discordAuth.js — без таймаута при недоступности api.resend.com
+// запрос висел бы вечно, и мы бы никогда не узнали, что письмо не ушло
+const TIMEOUT_MS = 10000;
 
 function sendCode(email, code) {
   return new Promise(resolve => {
@@ -29,10 +32,17 @@ function sendCode(email, code) {
         'Content-Length': Buffer.byteLength(payload)
       }
     }, res => {
-      res.on('data', () => {});
-      res.on('end', () => resolve(res.statusCode >= 200 && res.statusCode < 300));
+      let data = '';
+      res.on('data', c => { data += c; });
+      res.on('end', () => {
+        const ok = res.statusCode >= 200 && res.statusCode < 300;
+        if (!ok) console.error('[mailer] Resend rejected, status', res.statusCode, '-', data.slice(0, 300));
+        else console.log('[mailer] sent to ' + email);
+        resolve(ok);
+      });
     });
-    req.on('error', () => resolve(false));
+    req.on('error', e => { console.error('[mailer] request error:', e.message); resolve(false); });
+    req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error('Resend request timed out')));
     req.write(payload);
     req.end();
   });
