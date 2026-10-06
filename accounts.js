@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { atomicWriteFileSync } = require('./fsAtomic.js');
 const { sendCode } = require('./mailer.js');
+const { exchangeCode, fetchProfile } = require('./discordAuth.js');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'users.json');
@@ -179,6 +180,43 @@ setInterval(() => {
   emailCodes.forEach((v, k) => { if (v.expires < now) emailCodes.delete(k); });
 }, 60000).unref();
 
+/* ---------- вход через Discord ----------
+   OAuth2: /auth/discord отправляет на Discord, тот возвращает на
+   /auth/discord/callback с кодом. Для новой учётки колбэк не может сразу
+   спросить ник (это редирект, а не XHR-форма) — поэтому заводит короткую
+   «отложенную» запись в pendingDiscord и шлёт браузер на
+   /?authSignup=discord, где фронт уже обычным POST-ом довершает
+   регистрацию через /auth/discord/completeSignup. */
+const DISCORD_PENDING_TTL = 10 * 60 * 1000;
+const pendingDiscord = new Map();   // token -> {discordId, discordName, expires}
+
+function userByDiscordId(id) {
+  const k = String(id || '');
+  return k ? Object.values(db.users).find(u => String(u.discordId) === k) || null : null;
+}
+function isHttps(req) {
+  return String((req && req.headers || {})['x-forwarded-proto'] || '') === 'https';
+}
+// res.setHeader('Set-Cookie', x) ЗАМЕНЯЕТ предыдущее значение целиком —
+// если на один ответ нужно несколько Set-Cookie (например, свою куку и ту,
+// что ставит newSession), добавлять нужно именно так, а не повторным setHeader
+function addCookie(res, cookieStr) {
+  const existing = res.getHeader('Set-Cookie');
+  const arr = existing ? (Array.isArray(existing) ? existing.slice() : [existing]) : [];
+  arr.push(cookieStr);
+  res.setHeader('Set-Cookie', arr);
+}
+function discordRedirectUri(req) {
+  if (process.env.DISCORD_REDIRECT_URI) return process.env.DISCORD_REDIRECT_URI;
+  const proto = isHttps(req) ? 'https' : 'http';
+  return proto + '://' + req.headers.host + '/auth/discord/callback';
+}
+
+setInterval(() => {
+  const now = Date.now();
+  pendingDiscord.forEach((v, k) => { if (v.expires < now) pendingDiscord.delete(k); });
+}, 60000).unref();
+
 function parseCookies(req) {
   const out = {};
   const src = (req && req.headers && req.headers.cookie) || req || '';
@@ -230,9 +268,8 @@ function newSession(res, name, req) {
   // На своём домене сайт работает по HTTPS — помечаем куку Secure,
   // иначе браузер может отдать её по незащищённому соединению.
   const src = req || res.req || {};
-  const https = String((src.headers || {})['x-forwarded-proto'] || '') === 'https';
-  res.setHeader('Set-Cookie',
-    `sid=${sid}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly` + (https ? '; Secure' : ''));
+  addCookie(res,
+    `sid=${sid}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly` + (isHttps(src) ? '; Secure' : ''));
   save();
 }
 
@@ -577,6 +614,96 @@ function register(app) {
     res.json({ status: 'success', message: 'Account created' });
   });
 
+  // ---------- вход через Discord ----------
+  app.get('/auth/discord', (req, res) => {
+    if (!process.env.DISCORD_CLIENT_ID)
+      return res.status(503).send('Discord sign-in is not configured yet');
+    const state = crypto.randomBytes(16).toString('hex');
+    addCookie(res, 'dstate=' + state + '; Path=/; Max-Age=600; SameSite=Lax; HttpOnly' + (isHttps(req) ? '; Secure' : ''));
+    const url = 'https://discord.com/api/oauth2/authorize?' + new URLSearchParams({
+      client_id: process.env.DISCORD_CLIENT_ID,
+      redirect_uri: discordRedirectUri(req),
+      response_type: 'code',
+      scope: 'identify',
+      state: state
+    }).toString();
+    res.redirect(url);
+  });
+
+  app.get('/auth/discord/callback', async (req, res) => {
+    try {
+      const code = String(req.query.code || '');
+      const state = String(req.query.state || '');
+      const cookies = parseCookies(req);
+      if (!code || !state || state !== cookies.dstate)
+        return res.status(400).send('Discord sign-in failed — please try again');
+
+      const token = await exchangeCode(code, discordRedirectUri(req));
+      if (!token || !token.access_token) return res.status(400).send('Discord sign-in failed — please try again');
+      const profile = await fetchProfile(token.access_token);
+      if (!profile || !profile.id) return res.status(400).send('Discord sign-in failed — please try again');
+
+      const me = currentUser(req);
+      const owner = userByDiscordId(profile.id);
+
+      if (me && (!owner || key(owner.name) === key(me.name))) {
+        me.discordId = profile.id;
+        me.discordName = profile.username || '';
+        save();
+        addCookie(res, 'dstate=; Path=/; Max-Age=0');
+        return res.redirect('/?linked=discord');
+      }
+      if (owner) {
+        owner.lastSeen = Date.now();
+        newSession(res, owner.name, req);
+        save();
+        addCookie(res, 'dstate=; Path=/; Max-Age=0');
+        return res.redirect('/');
+      }
+      if (me) return res.status(400).send('This Discord account is already linked to another user');
+
+      const pendingToken = crypto.randomBytes(24).toString('hex');
+      pendingDiscord.set(pendingToken, {
+        discordId: profile.id, discordName: profile.username || '',
+        expires: Date.now() + DISCORD_PENDING_TTL
+      });
+      addCookie(res, 'dstate=; Path=/; Max-Age=0');
+      addCookie(res, 'pendingAuth=' + pendingToken + '; Path=/; Max-Age=600; SameSite=Lax; HttpOnly' + (isHttps(req) ? '; Secure' : ''));
+      res.redirect('/?authSignup=discord');
+    } catch (e) {
+      res.status(500).send('Discord sign-in failed — please try again');
+    }
+  });
+
+  app.post('/auth/discord/completeSignup', (req, res) => {
+    const name = String(req.body.name || '').trim();
+    const token = parseCookies(req).pendingAuth;
+    const entry = token && pendingDiscord.get(token);
+    if (!entry || entry.expires < Date.now())
+      return res.json({ status: 'error', message: 'Sign in with Discord again' });
+
+    let err = checkName(name);
+    if (err) return res.json({ status: 'error', message: err });
+    if (db.users[key(name)]) return res.json({ status: 'error', message: 'This username is already taken' });
+    if (OWNER_ALIASES.indexOf(key(name)) !== -1)
+      return res.json({ status: 'error', message: 'This username is reserved' });
+    if (userByDiscordId(entry.discordId))
+      return res.json({ status: 'error', message: 'This Discord account is already linked to another user' });
+
+    pendingDiscord.delete(token);
+    db.users[key(name)] = {
+      name, discordId: entry.discordId, discordName: entry.discordName,
+      joined: Date.now(), lastSeen: Date.now(),
+      coins: 0, about: '', avatar: '0',
+      items: [], skin: {}, lang: '',
+      friends: [], incoming: [], outgoing: []
+    };
+    newSession(res, name, req);
+    addCookie(res, 'pendingAuth=; Path=/; Max-Age=0');
+    save();
+    res.json({ status: 'success', message: 'Account created' });
+  });
+
   // ---------- смена пароля ----------
   app.post('/changePassword', (req, res) => {
     const u = currentUser(req);
@@ -778,7 +905,8 @@ function register(app) {
      работать одинаково на всех устройствах, как тема и язык. */
   app.get('/getMySettings', (req, res) => {
     const u = currentUser(req);
-    res.json({ data: { hideChat: !!(u && u.hideChat), email: (u && u.email) || '' } });
+    res.json({ data: { hideChat: !!(u && u.hideChat), email: (u && u.email) || '',
+                        discordName: (u && u.discordName) || '' } });
   });
   app.post('/settings/hideChat', (req, res) => {
     const u = currentUser(req);
