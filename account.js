@@ -66,8 +66,10 @@
   function screenChoice() {
     open('<div class="bf-x">X</div>'
        + '<div class="bf-t">Sign in or sign up</div>'
+       + '<div class="bf-b" id="bfDiscord">Continue with Discord</div>'
        + '<div class="bf-b" id="bfEmail">Continue with email</div>'
        + '<div class="bf-b ghost2" id="bfLogin" style="font-size:14px">Sign in with password</div>');
+    box.querySelector('#bfDiscord').onclick = function () { location.href = '/auth/discord'; };
     box.querySelector('#bfEmail').onclick = function () { screenEmail(screenChoice); };
     box.querySelector('#bfLogin').onclick = screenLogin;
   }
@@ -167,6 +169,28 @@
       if (!n) { err.textContent = 'Enter a username'; return; }
       go.textContent = 'Creating...';
       post('/auth/completeSignup', { email: email, name: n }, function (r) {
+        if (r && r.status === 'success') location.reload();
+        else { err.textContent = (r && r.message) || 'Sign up failed'; go.textContent = 'Create account'; }
+      });
+    };
+    enterKey(function () { go.click(); });
+  }
+
+  // сервер уже знает, кто мы в Discord (кука pendingAuth), тут только ник
+  function screenPickNameDiscord() {
+    open('<div class="bf-x">X</div>'
+       + '<div class="bf-t">Choose a username</div>'
+       + '<input class="bf-i" id="bfName" type="text" maxlength="20" placeholder="Username">'
+       + '<div class="bf-h">up to 20 characters, Latin or Cyrillic letters</div>'
+       + '<div class="bf-e" id="bfErr"></div>'
+       + '<div class="bf-b" id="bfGo">Create account</div>');
+    var go = box.querySelector('#bfGo');
+    go.onclick = function () {
+      var n = box.querySelector('#bfName').value.trim();
+      var err = box.querySelector('#bfErr');
+      if (!n) { err.textContent = 'Enter a username'; return; }
+      go.textContent = 'Creating...';
+      post('/auth/discord/completeSignup', { name: n }, function (r) {
         if (r && r.status === 'success') location.reload();
         else { err.textContent = (r && r.message) || 'Sign up failed'; go.textContent = 'Create account'; }
       });
@@ -333,6 +357,21 @@
     });
   }
 
+  // ---------- привязка Discord ----------
+  function drawDiscordLink() {
+    var holder = box.querySelector('#bfDiscordBox');
+    if (!holder) return;
+    get('/getMySettings', function (r) {
+      var dname = r && r.data && r.data.discordName;
+      if (dname) {
+        holder.innerHTML = '<div class="bf-h">Discord: ' + escapeHtml(dname) + ' — you can sign in with it.</div>';
+        return;
+      }
+      holder.innerHTML = '<div class="bf-b" id="bfLinkDiscord">Link Discord</div>';
+      holder.querySelector('#bfLinkDiscord').onclick = function () { location.href = '/auth/discord'; };
+    });
+  }
+
   // ---------- настройки аккаунта ----------
   function settings(name) {
     var T = function (k, f) {
@@ -355,6 +394,7 @@
        + '<div class="bf-h" id="bfSecNote">' + T('secNote',
            'Пароль хранится в зашифрованном виде — его не видно даже администратору.') + '</div>'
        + '<div id="bfEmailBox"></div>'
+       + '<div id="bfDiscordBox"></div>'
        + '<div id="bfOwner"></div>'
        + '<div class="bf-sec">' + T('themes', 'Темы') + '</div>'
        + '<div id="bfThemeBox"></div>'
@@ -369,6 +409,7 @@
     drawLang(name);
     drawChatPref();
     drawEmailLink(name);
+    drawDiscordLink();
     box.querySelector('#bfProfile').onclick = function () {
       location.href = BASE + 'users.html?name=' + encodeURIComponent(name);
     };
@@ -487,6 +528,19 @@
   }, 100);
   if (document.readyState !== 'loading') wire();
   else document.addEventListener('DOMContentLoaded', wire);
+
+  // возврат с /auth/discord/callback: ?authSignup=discord — новый человек,
+  // спрашиваем ник; ?linked=discord — свой аккаунт уже привязан, просто
+  // убираем метку из адресной строки
+  (function () {
+    var qs = new URLSearchParams(location.search);
+    if (!qs.has('authSignup') && !qs.has('linked')) return;
+    var needsName = qs.get('authSignup') === 'discord';
+    qs.delete('authSignup'); qs.delete('linked');
+    var clean = location.pathname + (qs.toString() ? '?' + qs.toString() : '');
+    history.replaceState(null, '', clean);
+    if (needsName) screenPickNameDiscord();
+  })();
 
   // единая шапка (shell.js) открывает эти окна сама
   window.bfOpenAuth = screenChoice;
