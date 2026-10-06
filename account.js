@@ -66,46 +66,8 @@
   function screenChoice() {
     open('<div class="bf-x">X</div>'
        + '<div class="bf-t">Sign in or sign up</div>'
-       + '<div class="bf-b" id="bfDiscord">Continue with Discord</div>'
-       + '<div class="bf-h" id="bfMore" style="cursor:pointer;text-decoration:underline;margin-top:10px">Sign in another way</div>');
+       + '<div class="bf-b" id="bfDiscord">Continue with Discord</div>');
     box.querySelector('#bfDiscord').onclick = function () { location.href = '/auth/discord'; };
-    box.querySelector('#bfMore').onclick = screenMoreOptions;
-  }
-
-  // старые аккаунты (email-код, пароль) по-прежнему заходят — просто не
-  // на первом экране, чтобы не перегружать его для новых игроков
-  function screenMoreOptions() {
-    open('<div class="bf-x">X</div><div class="bf-back">&lt;</div>'
-       + '<div class="bf-t">Sign in another way</div>'
-       + '<div class="bf-b" id="bfEmail">Continue with email</div>'
-       + '<div class="bf-b ghost2" id="bfLogin" style="font-size:14px">Sign in with password</div>');
-    box.querySelector('.bf-back').onclick = screenChoice;
-    box.querySelector('#bfEmail').onclick = function () { screenEmail(screenChoice); };
-    box.querySelector('#bfLogin').onclick = screenLogin;
-  }
-
-  function screenLogin() {
-    open('<div class="bf-x">X</div><div class="bf-back">&lt;</div>'
-       + '<div class="bf-t">Sign in</div>'
-       + '<input class="bf-i" id="bfName" type="text" maxlength="20" placeholder="Username">'
-       + '<input class="bf-i" id="bfPass" type="password" placeholder="Password">'
-       + '<div class="bf-e" id="bfErr"></div>'
-       + '<div class="bf-b" id="bfGo">Sign in</div>');
-    box.querySelector('.bf-back').onclick = screenChoice;
-    var go = box.querySelector('#bfGo');
-    go.onclick = function () {
-      var n = box.querySelector('#bfName').value.trim();
-      var p = box.querySelector('#bfPass').value;
-      var err = box.querySelector('#bfErr');
-      if (!n) { err.textContent = 'Enter your username'; return; }
-      if (!p) { err.textContent = 'Enter your password'; return; }
-      go.textContent = 'Checking...';
-      post('/login/password', { username: n, password: p }, function (r) {
-        if (r && r.status === 'success') location.reload();
-        else { err.textContent = (r && r.message) || 'Sign in failed'; go.textContent = 'Sign in'; }
-      });
-    };
-    enterKey(function () { go.click(); });
   }
 
   // ---------- вход/регистрация по коду на почту ----------
