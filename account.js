@@ -66,10 +66,10 @@
   function screenChoice() {
     open('<div class="bf-x">X</div>'
        + '<div class="bf-t">Sign in or sign up</div>'
-       + '<div class="bf-b" id="bfLogin">Sign in to account</div>'
-       + '<div class="bf-b" id="bfReg">Create account</div>');
+       + '<div class="bf-b" id="bfEmail">Continue with email</div>'
+       + '<div class="bf-b ghost2" id="bfLogin" style="font-size:14px">Sign in with password</div>');
+    box.querySelector('#bfEmail').onclick = function () { screenEmail(screenChoice); };
     box.querySelector('#bfLogin').onclick = screenLogin;
-    box.querySelector('#bfReg').onclick = screenRegister;
   }
 
   function screenLogin() {
@@ -93,35 +93,91 @@
         else { err.textContent = (r && r.message) || 'Sign in failed'; go.textContent = 'Sign in'; }
       });
     };
-    enterKey(screenLoginSubmit);
-    function screenLoginSubmit() { go.click(); }
+    enterKey(function () { go.click(); });
   }
 
-  function screenRegister() {
+  // ---------- вход/регистрация по коду на почту ----------
+  // backFn — куда вернуться по «<»: из главного окна входа — к выбору
+  // способа, из настроек (привязка почты к уже существующему аккаунту) —
+  // обратно в настройки.
+  function screenEmail(backFn, title) {
     open('<div class="bf-x">X</div><div class="bf-back">&lt;</div>'
-       + '<div class="bf-t">Sign up</div>'
+       + '<div class="bf-t">' + (title || 'Continue with email') + '</div>'
+       + '<input class="bf-i" id="bfMail" type="email" placeholder="Email">'
+       + '<div class="bf-e" id="bfErr"></div>'
+       + '<div class="bf-b" id="bfGo">Send code</div>');
+    box.querySelector('.bf-back').onclick = backFn;
+    var go = box.querySelector('#bfGo');
+    go.onclick = function () {
+      var email = box.querySelector('#bfMail').value.trim();
+      var err = box.querySelector('#bfErr');
+      if (!email) { err.textContent = 'Enter your email'; return; }
+      go.textContent = 'Sending...';
+      post('/auth/requestCode', { email: email }, function (r) {
+        if (r && r.status === 'success') screenCode(email, backFn);
+        else { err.textContent = (r && r.message) || 'Could not send the code'; go.textContent = 'Send code'; }
+      });
+    };
+    enterKey(function () { go.click(); });
+  }
+
+  function screenCode(email, backFn) {
+    open('<div class="bf-x">X</div><div class="bf-back">&lt;</div>'
+       + '<div class="bf-t">Enter the code</div>'
+       + '<div class="bf-h">Sent to ' + escapeHtml(email) + '</div>'
+       + '<input class="bf-i" id="bfCode" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code">'
+       + '<div class="bf-e" id="bfErr"></div>'
+       + '<div class="bf-b" id="bfGo">Confirm</div>'
+       + '<div class="bf-h" id="bfResend" style="cursor:pointer;text-decoration:underline">Resend code</div>');
+    box.querySelector('.bf-back').onclick = function () { screenEmail(backFn); };
+    var go = box.querySelector('#bfGo');
+    go.onclick = function () {
+      var code = box.querySelector('#bfCode').value.trim();
+      var err = box.querySelector('#bfErr');
+      if (!code) { err.textContent = 'Enter the code'; return; }
+      go.textContent = 'Checking...';
+      post('/auth/verifyCode', { email: email, code: code }, function (r) {
+        if (r && r.status === 'success' && r.mode === 'needsName') return screenPickName(email, backFn);
+        if (r && r.status === 'success') return location.reload();
+        err.textContent = (r && r.message) || 'Wrong code';
+        go.textContent = 'Confirm';
+      });
+    };
+    box.querySelector('#bfResend').onclick = function () {
+      var err = box.querySelector('#bfErr');
+      post('/auth/requestCode', { email: email }, function (r) {
+        err.style.color = r && r.status === 'success' ? 'green' : 'red';
+        err.textContent = r && r.status === 'success' ? 'Code sent again' : ((r && r.message) || 'Could not send the code');
+      });
+    };
+    enterKey(function () { go.click(); });
+  }
+
+  function screenPickName(email, backFn) {
+    open('<div class="bf-x">X</div>'
+       + '<div class="bf-t">Choose a username</div>'
        + '<input class="bf-i" id="bfName" type="text" maxlength="20" placeholder="Username">'
        + '<div class="bf-h">up to 20 characters, Latin or Cyrillic letters</div>'
-       + '<input class="bf-i" id="bfPass" type="password" placeholder="Password">'
-       + '<div class="bf-h">password — at least 4 characters</div>'
        + '<div class="bf-e" id="bfErr"></div>'
        + '<div class="bf-b" id="bfGo">Create account</div>');
-    box.querySelector('.bf-back').onclick = screenChoice;
     var go = box.querySelector('#bfGo');
     go.onclick = function () {
       var n = box.querySelector('#bfName').value.trim();
-      var p = box.querySelector('#bfPass').value;
       var err = box.querySelector('#bfErr');
       if (!n) { err.textContent = 'Enter a username'; return; }
-      if (n.length > 20) { err.textContent = 'Username must be 20 characters or fewer'; return; }
-      if (!p) { err.textContent = 'Enter a password'; return; }
       go.textContent = 'Creating...';
-      post('/signUp', { name: n, password: p }, function (r) {
+      post('/auth/completeSignup', { email: email, name: n }, function (r) {
         if (r && r.status === 'success') location.reload();
         else { err.textContent = (r && r.message) || 'Sign up failed'; go.textContent = 'Create account'; }
       });
     };
     enterKey(function () { go.click(); });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
   }
 
   function enterKey(fn) {
@@ -260,6 +316,23 @@
     get('/getMySettings', function (r) { paint(!!(r && r.data && r.data.hideChat)); });
   }
 
+  // ---------- привязка почты (вход по коду вместо/вместе с паролем) ----------
+  function drawEmailLink(name) {
+    var holder = box.querySelector('#bfEmailBox');
+    if (!holder) return;
+    get('/getMySettings', function (r) {
+      var email = r && r.data && r.data.email;
+      if (email) {
+        holder.innerHTML = '<div class="bf-h">Email: ' + escapeHtml(email) + ' — you can sign in with a code sent to it.</div>';
+        return;
+      }
+      holder.innerHTML = '<div class="bf-b" id="bfLinkEmail">Link email (sign in by code)</div>';
+      holder.querySelector('#bfLinkEmail').onclick = function () {
+        screenEmail(function () { settings(name); }, 'Link an email');
+      };
+    });
+  }
+
   // ---------- настройки аккаунта ----------
   function settings(name) {
     var T = function (k, f) {
@@ -281,8 +354,7 @@
        +   T('logoutAll', 'Выйти на всех устройствах') + '</div>'
        + '<div class="bf-h" id="bfSecNote">' + T('secNote',
            'Пароль хранится в зашифрованном виде — его не видно даже администратору.') + '</div>'
-       + '<div class="bf-b" id="bfGoogle">Link Google account</div>'
-       + '<div class="bf-h" id="bfGoogleNote"></div>'
+       + '<div id="bfEmailBox"></div>'
        + '<div id="bfOwner"></div>'
        + '<div class="bf-sec">' + T('themes', 'Темы') + '</div>'
        + '<div id="bfThemeBox"></div>'
@@ -296,6 +368,7 @@
     drawTheme();
     drawLang(name);
     drawChatPref();
+    drawEmailLink(name);
     box.querySelector('#bfProfile').onclick = function () {
       location.href = BASE + 'users.html?name=' + encodeURIComponent(name);
     };
@@ -324,11 +397,6 @@
       post('/logOutAll', {}, function () { location.reload(); });
     };
 
-    box.querySelector('#bfGoogle').onclick = function () {
-      box.querySelector('#bfGoogleNote').innerHTML =
-        'Linking is not available yet: it needs a Google app key ' +
-        'and an email service to send codes. Sign in is username/password only for now.';
-    };
     // панель владельца живёт в owner.js, а этот файл сервер отдаёт
     // только самому владельцу — у остальных её кода нет вообще
     if (typeof window.bfOwnerPanel === 'function') {

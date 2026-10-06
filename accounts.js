@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { atomicWriteFileSync } = require('./fsAtomic.js');
+const { sendCode } = require('./mailer.js');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'users.json');
@@ -151,6 +152,31 @@ setInterval(() => {
   const now = Date.now();
   loginTries.forEach((t, k) => { if (t.until && t.until < now) loginTries.delete(k); });
   if (loginTries.size > 5000) loginTries.clear();
+}, 60000).unref();
+
+/* ---------- вход по коду на почту ----------
+   Код живёт только в памяти, как loginTries, — сам адрес нигде не
+   сохраняется, пока человек не подтвердит его кодом. kind определяет,
+   что произойдёт после верного кода:
+     'login'  — почта уже привязана к аккаунту, код просто пускает в него
+     'signup' — почта новая, после кода ещё нужно выбрать ник
+     'link'   — почта привязывается к уже вошедшему аккаунту с паролем */
+const CODE_TTL = 10 * 60 * 1000;        // код годен 10 минут
+const CODE_RESEND_WAIT = 60 * 1000;     // не чаще одного письма в минуту на адрес
+const CODE_MAX_TRIES = 6;               // столько неверных попыток терпим
+const emailCodes = new Map();           // email -> {code, expires, attempts, kind, forName, verified, sentAt}
+
+function emailKey(e) { return String(e || '').trim().toLowerCase(); }
+function validEmail(e) { return /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/.test(String(e || '').trim()); }
+function userByEmail(e) {
+  const k = emailKey(e);
+  return k ? Object.values(db.users).find(u => emailKey(u.email) === k) || null : null;
+}
+function genCode() { return String(crypto.randomInt(100000, 1000000)); }
+
+setInterval(() => {
+  const now = Date.now();
+  emailCodes.forEach((v, k) => { if (v.expires < now) emailCodes.delete(k); });
 }, 60000).unref();
 
 function parseCookies(req) {
@@ -455,13 +481,111 @@ function register(app) {
   app.post('/login/password', doLogin);
   app.post('/signIn', doLogin);
 
+  // ---------- вход/регистрация по коду на почту ----------
+  app.post('/auth/requestCode', (req, res) => {
+    const email = emailKey(req.body.email);
+    if (!validEmail(email)) return res.json({ status: 'error', message: 'Enter a valid email address' });
+
+    const prev = emailCodes.get(email);
+    if (prev && Date.now() - prev.sentAt < CODE_RESEND_WAIT)
+      return res.json({ status: 'error', message: 'Wait ' +
+        Math.ceil((CODE_RESEND_WAIT - (Date.now() - prev.sentAt)) / 1000) + 's before requesting another code' });
+
+    const me = currentUser(req);
+    const owner = userByEmail(email);
+    let kind;
+    if (me && (!owner || key(owner.name) === key(me.name))) kind = 'link';
+    else if (owner) kind = 'login';
+    else if (me) return res.json({ status: 'error', message: 'This email is already linked to another account' });
+    else kind = 'signup';
+
+    const code = genCode();
+    emailCodes.set(email, {
+      code, expires: Date.now() + CODE_TTL, attempts: 0, kind,
+      forName: kind === 'link' ? me.name : null, verified: false, sentAt: Date.now()
+    });
+    sendCode(email, code);
+    res.json({ status: 'success', kind });
+  });
+
+  app.post('/auth/verifyCode', (req, res) => {
+    const email = emailKey(req.body.email);
+    const code = String(req.body.code || '').trim();
+    const entry = emailCodes.get(email);
+    if (!entry || entry.expires < Date.now())
+      return res.json({ status: 'error', message: 'Code expired — request a new one' });
+    if (entry.attempts >= CODE_MAX_TRIES) {
+      emailCodes.delete(email);
+      return res.json({ status: 'error', message: 'Too many attempts — request a new code' });
+    }
+    if (code !== entry.code) {
+      entry.attempts++;
+      return res.json({ status: 'error', message: 'Wrong code' });
+    }
+
+    if (entry.kind === 'login') {
+      const u = userByEmail(email);
+      emailCodes.delete(email);
+      if (!u) return res.json({ status: 'error', message: 'Account not found' });
+      u.lastSeen = Date.now();
+      newSession(res, u.name, req);
+      save();
+      return res.json({ status: 'success', mode: 'login' });
+    }
+
+    if (entry.kind === 'link') {
+      const me = currentUser(req);
+      emailCodes.delete(email);
+      if (!me || key(me.name) !== key(entry.forName || ''))
+        return res.json({ status: 'error', message: 'Sign in again and retry' });
+      me.email = email;
+      save();
+      return res.json({ status: 'success', mode: 'link' });
+    }
+
+    // signup: код верный, аккаунта ещё нет — отдельным шагом попросим ник
+    entry.verified = true;
+    entry.expires = Date.now() + CODE_TTL;
+    res.json({ status: 'success', mode: 'needsName' });
+  });
+
+  app.post('/auth/completeSignup', (req, res) => {
+    const email = emailKey(req.body.email);
+    const name = String(req.body.name || '').trim();
+    const entry = emailCodes.get(email);
+    if (!entry || entry.kind !== 'signup' || !entry.verified || entry.expires < Date.now())
+      return res.json({ status: 'error', message: 'Confirm your email code again' });
+
+    let err = checkName(name);
+    if (err) return res.json({ status: 'error', message: err });
+    if (db.users[key(name)]) return res.json({ status: 'error', message: 'This username is already taken' });
+    if (OWNER_ALIASES.indexOf(key(name)) !== -1)
+      return res.json({ status: 'error', message: 'This username is reserved' });
+    if (userByEmail(email))
+      return res.json({ status: 'error', message: 'This email is already linked to another account' });
+
+    emailCodes.delete(email);
+    db.users[key(name)] = {
+      name, email,
+      joined: Date.now(), lastSeen: Date.now(),
+      coins: 0, about: '', avatar: '0',
+      items: [], skin: {}, lang: '',
+      friends: [], incoming: [], outgoing: []
+    };
+    newSession(res, name, req);
+    save();
+    res.json({ status: 'success', message: 'Account created' });
+  });
+
   // ---------- смена пароля ----------
   app.post('/changePassword', (req, res) => {
     const u = currentUser(req);
     if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const oldPw = String(req.body.oldPassword || '');
     const newPw = String(req.body.newPassword || '');
-    if (!verifyPassword(oldPw, u.salt, u.hash))
+    // аккаунт, заведённый по коду на почту, пароля ещё не имеет — это
+    // первая его установка, старый проверять не с чем
+    if (u.hash && !verifyPassword(oldPw, u.salt, u.hash))
       return res.json({ status: 'error', message: 'Current password is incorrect' });
     const err = checkNewPassword(newPw);
     if (err) return res.json({ status: 'error', message: err });
@@ -654,7 +778,7 @@ function register(app) {
      работать одинаково на всех устройствах, как тема и язык. */
   app.get('/getMySettings', (req, res) => {
     const u = currentUser(req);
-    res.json({ data: { hideChat: !!(u && u.hideChat) } });
+    res.json({ data: { hideChat: !!(u && u.hideChat), email: (u && u.email) || '' } });
   });
   app.post('/settings/hideChat', (req, res) => {
     const u = currentUser(req);
