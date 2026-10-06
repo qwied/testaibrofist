@@ -3,6 +3,11 @@
 // Discord, без новой npm-зависимости.
 const https = require('https');
 
+// 10 секунд — иначе при недоступности api.discord.com запрос висел бы
+// вечно (у https.request нет таймаута по умолчанию), а с ним и весь
+// /auth/discord/callback: страница в браузере грузилась бы бесконечно.
+const TIMEOUT_MS = 10000;
+
 function post(url, body, headers) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
@@ -18,6 +23,7 @@ function post(url, body, headers) {
       });
     });
     req.on('error', reject);
+    req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error('Discord request timed out')));
     req.write(body);
     req.end();
   });
@@ -34,6 +40,7 @@ function get(url, headers) {
       });
     });
     req.on('error', reject);
+    req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error('Discord request timed out')));
     req.end();
   });
 }
