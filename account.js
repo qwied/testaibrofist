@@ -67,9 +67,19 @@
     open('<div class="bf-x">X</div>'
        + '<div class="bf-t">Sign in or sign up</div>'
        + '<div class="bf-b" id="bfDiscord">Continue with Discord</div>'
+       + '<div class="bf-h" id="bfMore" style="cursor:pointer;text-decoration:underline;margin-top:10px">Sign in another way</div>');
+    box.querySelector('#bfDiscord').onclick = function () { location.href = '/auth/discord'; };
+    box.querySelector('#bfMore').onclick = screenMoreOptions;
+  }
+
+  // старые аккаунты (email-код, пароль) по-прежнему заходят — просто не
+  // на первом экране, чтобы не перегружать его для новых игроков
+  function screenMoreOptions() {
+    open('<div class="bf-x">X</div><div class="bf-back">&lt;</div>'
+       + '<div class="bf-t">Sign in another way</div>'
        + '<div class="bf-b" id="bfEmail">Continue with email</div>'
        + '<div class="bf-b ghost2" id="bfLogin" style="font-size:14px">Sign in with password</div>');
-    box.querySelector('#bfDiscord').onclick = function () { location.href = '/auth/discord'; };
+    box.querySelector('.bf-back').onclick = screenChoice;
     box.querySelector('#bfEmail').onclick = function () { screenEmail(screenChoice); };
     box.querySelector('#bfLogin').onclick = screenLogin;
   }
