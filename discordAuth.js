@@ -19,7 +19,10 @@ function post(url, body, headers) {
       res.on('data', c => { data += c; });
       res.on('end', () => {
         try { resolve({ status: res.statusCode, body: JSON.parse(data || '{}') }); }
-        catch (e) { reject(e); }
+        catch (e) {
+          console.error('[discordAuth] non-JSON response, status', res.statusCode, '-', data.slice(0, 300));
+          reject(e);
+        }
       });
     });
     req.on('error', reject);
@@ -36,7 +39,10 @@ function get(url, headers) {
       res.on('data', c => { data += c; });
       res.on('end', () => {
         try { resolve({ status: res.statusCode, body: JSON.parse(data || '{}') }); }
-        catch (e) { reject(e); }
+        catch (e) {
+          console.error('[discordAuth] non-JSON response, status', res.statusCode, '-', data.slice(0, 300));
+          reject(e);
+        }
       });
     });
     req.on('error', reject);
@@ -45,6 +51,7 @@ function get(url, headers) {
   });
 }
 
+// успех -> тело ответа Discord; неудача -> null, причина уже залогирована
 async function exchangeCode(code, redirectUri) {
   const params = new URLSearchParams({
     client_id: process.env.DISCORD_CLIENT_ID || '',
@@ -55,12 +62,20 @@ async function exchangeCode(code, redirectUri) {
   }).toString();
   const r = await post('https://discord.com/api/oauth2/token', params,
     { 'Content-Type': 'application/x-www-form-urlencoded' });
-  return r.status >= 200 && r.status < 300 ? r.body : null;
+  if (r.status < 200 || r.status >= 300) {
+    console.error('[discordAuth] token exchange rejected, status', r.status, '-', JSON.stringify(r.body));
+    return null;
+  }
+  return r.body;
 }
 
 async function fetchProfile(accessToken) {
   const r = await get('https://discord.com/api/users/@me', { 'Authorization': 'Bearer ' + accessToken });
-  return r.status >= 200 && r.status < 300 ? r.body : null;
+  if (r.status < 200 || r.status >= 300) {
+    console.error('[discordAuth] profile fetch rejected, status', r.status, '-', JSON.stringify(r.body));
+    return null;
+  }
+  return r.body;
 }
 
 module.exports = { exchangeCode, fetchProfile };
