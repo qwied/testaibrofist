@@ -1,6 +1,7 @@
 // ============ КАРТЫ: публикация из редактора и Maps Browser ============
 const fs = require('fs');
 const path = require('path');
+const { atomicWriteFileSync } = require('./fsAtomic.js');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const MAPS_FILE = path.join(DATA_DIR, 'maps.json');
@@ -121,7 +122,7 @@ function save() {
   timer = setTimeout(() => {
     try {
       if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(MAPS_FILE, JSON.stringify(maps, null, 2));
+      atomicWriteFileSync(MAPS_FILE, JSON.stringify(maps, null, 2));
     } catch (e) { console.log('не смог сохранить maps.json:', e.message); }
   }, 300);
 }

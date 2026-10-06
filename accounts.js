@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { atomicWriteFileSync } = require('./fsAtomic.js');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'users.json');
@@ -31,7 +32,7 @@ function save() {
   saveTimer = setTimeout(() => {
     try {
       if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+      atomicWriteFileSync(DB_FILE, JSON.stringify(db, null, 2));
     } catch (e) { console.log('не смог сохранить users.json:', e.message); }
   }, 300);
 }
@@ -233,7 +234,7 @@ function saveCoinLog() {
   coinLogSaveTimer = setTimeout(() => {
     try {
       if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(COINLOG_FILE, JSON.stringify(coinLog, null, 2));
+      atomicWriteFileSync(COINLOG_FILE, JSON.stringify(coinLog, null, 2));
     } catch (e) { console.log('не смог сохранить coinlog.json:', e.message); }
   }, 300);
 }
@@ -299,7 +300,7 @@ function saveScoreLog() {
   scoreLogSaveTimer = setTimeout(() => {
     try {
       if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(SCORELOG_FILE, JSON.stringify(scoreLog, null, 2));
+      atomicWriteFileSync(SCORELOG_FILE, JSON.stringify(scoreLog, null, 2));
     } catch (e) { console.log('не смог сохранить scorelog.json:', e.message); }
   }, 300);
 }
@@ -357,7 +358,7 @@ function saveHsLog() {
   hsLogSaveTimer = setTimeout(() => {
     try {
       if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(HSLOG_FILE, JSON.stringify(hsLog, null, 2));
+      atomicWriteFileSync(HSLOG_FILE, JSON.stringify(hsLog, null, 2));
     } catch (e) { console.log('не смог сохранить hslog.json:', e.message); }
   }, 300);
 }
