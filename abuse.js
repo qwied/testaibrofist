@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { atomicWriteFileSync } = require('./fsAtomic.js');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const FILE_DIR = path.join(DATA_DIR, 'abuse');
@@ -27,7 +28,7 @@ function load() {
 function save() {
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(STATE, JSON.stringify(state));
+    atomicWriteFileSync(STATE, JSON.stringify(state));
   } catch (e) { console.error('abuse.json:', e.message); }
 }
 function bump() { state.v = (state.v || 0) + 1; save(); }
@@ -81,7 +82,7 @@ function register(app, acc) {
     const name = Date.now().toString(36) + Math.random().toString(36).slice(2, 8) + '.' + ext;
     try {
       fs.mkdirSync(FILE_DIR, { recursive: true });
-      fs.writeFileSync(path.join(FILE_DIR, name), d.buf);
+      atomicWriteFileSync(path.join(FILE_DIR, name), d.buf);
     } catch (e) {
       return res.json({ status: 'error', message: 'Failed to save: ' + e.message });
     }

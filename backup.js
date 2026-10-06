@@ -16,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const { atomicWriteFileSync } = require('./fsAtomic.js');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 
@@ -130,7 +131,7 @@ function register(app, hooks) {
           if (!full) throw new Error('unsafe path in backup: ' + (f && f.name));
           const buf = Buffer.from(String(f.data || ''), 'base64');
           fs.mkdirSync(path.dirname(full), { recursive: true });
-          fs.writeFileSync(full, buf);
+          atomicWriteFileSync(full, buf);
           restored++;
         });
       } catch (e) {

@@ -1,6 +1,7 @@
 // ====== Новости, монеты, таблица лидеров и инструменты владельца ======
 const fs = require('fs');
 const path = require('path');
+const { atomicWriteFileSync } = require('./fsAtomic.js');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const LOGS_FILE = path.join(DATA_DIR, 'logs.json');
@@ -59,7 +60,7 @@ function imgFile(url) {
 function saveImage(buf, ext) {
   const name = Date.now().toString(36) + Math.random().toString(36).slice(2, 8) + '.' + ext;
   fs.mkdirSync(IMG_DIR, { recursive: true });
-  fs.writeFileSync(path.join(IMG_DIR, name), buf);
+  atomicWriteFileSync(path.join(IMG_DIR, name), buf);
   return IMG_URL + name;
 }
 
@@ -256,7 +257,7 @@ function save() {
   t = setTimeout(() => {
     try {
       if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(LOGS_FILE, JSON.stringify(logs, null, 2));
+      atomicWriteFileSync(LOGS_FILE, JSON.stringify(logs, null, 2));
     } catch (e) { console.log('не смог сохранить logs.json:', e.message); }
   }, 300);
 }
@@ -267,7 +268,7 @@ function saveGeo() {
   geoT = setTimeout(() => {
     try {
       if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(GEO_FILE, JSON.stringify(geoStats, null, 2));
+      atomicWriteFileSync(GEO_FILE, JSON.stringify(geoStats, null, 2));
     } catch (e) { console.log('не смог сохранить geoStats.json:', e.message); }
   }, 2000);   // подключений может быть много разом — пишем на диск реже, чем logs
 }

@@ -13,7 +13,7 @@ fs.mkdirSync(path.join(TMP, 'data'));
 // старая новость без поля images — проверим, что чтение её не сломает
 fs.writeFileSync(path.join(TMP, 'data', 'logs.json'),
   JSON.stringify([{ id: 1, title: 'старая', text: 'без картинок', date: 1 }]));
-['extras.js', 'maps.js'].forEach(f => fs.copyFileSync(path.join(__dirname, f), path.join(TMP, f)));
+['extras.js', 'maps.js', 'fsAtomic.js'].forEach(f => fs.copyFileSync(path.join(__dirname, f), path.join(TMP, f)));
 
 const extras = require(path.join(TMP, 'extras.js'));
 const IMG_DIR = extras.IMG_DIR;
