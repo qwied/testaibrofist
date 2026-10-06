@@ -25,6 +25,10 @@ function load() {
   } catch (e) { console.log('users.json не прочитан, начинаю с нуля'); }
   if (!db.users) db.users = {};
   if (!db.sessions) db.sessions = {};
+  // раньше на каждом аккаунте хранился IP регистрации для лимита «один
+  // аккаунт на устройство» — лимит убран, адреса чужих людей из базы
+  // больше не нужны и не должны в ней оставаться
+  Object.values(db.users).forEach(u => { delete u.ip; });
 }
 let saveTimer = null;
 function save() {
@@ -414,18 +418,10 @@ function register(app) {
     if (OWNER_ALIASES.indexOf(key(name)) !== -1)
       return res.json({ status: 'error', message: 'This username is reserved' });
 
-    const ip = ipKey(req);
-    if (ip) {
-      const owned = Object.values(db.users).some(u => u.ip === ip && isOwner(u));
-      const taken = Object.values(db.users).find(u => u.ip === ip);
-      if (taken && !owned)
-        return res.json({ status: 'error', message: 'An account («' + taken.name + '») already exists on this device' });
-    }
-
     const salt = crypto.randomBytes(16).toString('hex');
     db.users[key(name)] = {
       name, salt, hash: hashNew(password, salt),
-      joined: Date.now(), lastSeen: Date.now(), ip: ip,
+      joined: Date.now(), lastSeen: Date.now(),
       coins: 0, about: '', avatar: '0',
       items: [], skin: {}, lang: '',
       friends: [], incoming: [], outgoing: []
