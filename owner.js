@@ -301,9 +301,14 @@
       post('/owner/removeMap', { author: info.author, mapName: info.mapName })
         .then(function (r) {
           if (r.status !== 'success') { fail(r.message || T('errorTxt', 'Ошибка')); return; }
+          /* Раньше строка просто тускнела (opacity .35) и оставалась в
+             списке — карта на сервере уже удалена, но в Maps Browser
+             выглядит как будто нет: легко решить, что удаление не
+             сработало. Теперь строку убираем по-настоящему. */
           row.style.opacity = '.35';
           row.style.pointerEvents = 'none';
           del.textContent = T('deleted', 'Удалена');
+          setTimeout(function () { row.remove(); }, 600);
         })
         .catch(function () { fail(T('errorTxt', 'Ошибка')); });
     };
