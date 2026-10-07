@@ -1108,7 +1108,12 @@ function drawParts(){
    земле. Подъём/падение (вертикаль, jumpV()/G()) этим не затронуты —
    глохнет только горизонтальный разгон. Константа MOVE_A и функция
    moveA() удалены вместе с разгоном — больше их никто не звал. */
-var JUMP_H = 155, MAX_VX = 10.4, FRIC = 0, AIR = 0,   // MAX_VX x2 — по прямой просьбе
+var JUMP_H = 155, MAX_VX = 5.2, FRIC = 0, AIR = 0,
+    /* Удвоенная скорость («как будто бегает») оказалась слишком быстрой
+       на глаз — вернули обратно к исходной 5.2. */
+    FALL_MULT = 1.7,   // гравитация на спуске сильнее, чем на подъёме —
+                        // прыжок ощутимо быстрее падает вниз после вершины
+                        // дуги, вместо того чтобы зависать в воздухе
     COYOTE = 6, BUFFER = 7, WALL_SLIDE = 2.2, WALL_VX = 6.2, STEP_UP = 16,
     /* MIN_HOLD обрывал подъём так рано (7 кадров), что реальная высота
        прыжка была 122.9 px вместо заданных JUMP_H=155 — прыжок явно не
@@ -1892,7 +1897,8 @@ function step(){
     if(pl.vy < 0 && pl.selfJump && hold > MIN_HOLD) pl.vy += G()*0.5;
 
     // SUPER BRO (см. superGate ниже): пониженная гравитация — эффект полёта
-    pl.vy += G() * ((mode === "race" && pl.superUntil > timeMs) ? SUPER_GRAVITY : 1);
+    var superFly = mode === "race" && pl.superUntil > timeMs;
+    pl.vy += G() * (superFly ? SUPER_GRAVITY : (pl.vy >= 0 ? FALL_MULT : 1));
     // трение о стену — только в воздухе
     if(pl.wall !== 0 && pl.vy > WALL_SLIDE) pl.vy -= (pl.vy - WALL_SLIDE) * 0.55;
     var fallCap = maxFall();
