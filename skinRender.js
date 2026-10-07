@@ -68,7 +68,7 @@
   function parts(skin, byId, bodyColor, thumb) {
     skin = skin || {}; byId = byId || {};
     return {
-      base: bodyColor || '#111827',
+      base: bodyColor || '#000000',
       back: [],
       body: piece(byId[skin.body], thumb),
       face: [],
@@ -106,8 +106,7 @@
 
     // силуэт: его цвет задаёт игра, детали ложатся поверх
     out.push('<g fill="' + p.base + '"><circle cx="' + HEAD_R + '" cy="' + HEAD_R + '" r="' + HEAD_R +
-             '"/><rect x="0" y="' + T + '" width="' + W + '" height="' + BODY_H +
-             '" rx="' + BODY_RX + '"/></g>');
+             '"/><rect x="0" y="' + T + '" width="' + W + '" height="' + BODY_H + '"/></g>');
     out.push(p.body.map(shape).join(''));
     out.push(p.head.map(shape).join(''));
 
