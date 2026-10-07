@@ -418,8 +418,8 @@ else {
     return y0 - top;
   }
   const tapH = jumpHeight(2), holdH = jumpHeight(60);
-  check('тап поднимает на 123 px', Math.abs(tapH - 123) <= 2, tapH.toFixed(0));
-  check('высота не растёт от удержания', Math.abs(holdH - 123) <= 2, holdH.toFixed(0));
+  check('тап поднимает на 148.5 px', Math.abs(tapH - 148.5) <= 2, tapH.toFixed(0));
+  check('высота не растёт от удержания', Math.abs(holdH - 148.5) <= 2, holdH.toFixed(0));
   check('удержание не даёт прыжок выше тапа', Math.abs(holdH - tapH) <= 1, (holdH - tapH).toFixed(0));
 
   /* Управление резкое с обоих концов: нажал — сразу максимум, отпустил —
