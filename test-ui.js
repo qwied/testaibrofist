@@ -259,7 +259,7 @@ function check(name, cond) {
 if (!GAME) { console.log('  ✗ мост GAME недоступен'); physFail++; }
 else {
   const floor = { id: 1, type: 'rect', x: 0, y: 400, w: 600, h: 40, rot: 0, fill: '#111827' };
-  const spawn = { id: 2, type: 'spawn', x: 60, y: 340, w: 20, h: 60, rot: 0, fill: '#111827' };
+  const spawn = { id: 2, type: 'spawn', x: 60, y: 340, w: 30, h: 100, rot: 0, fill: '#111827' };
 
   // 1. падение и приземление на пол
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floor, spawn] });
@@ -267,7 +267,7 @@ else {
   clearKeys();
   for (let i = 0; i < 120; i++) GAME.step();
   check('игрок встаёт на пол', GAME.pl.ground && Math.abs(GAME.pl.y + GAME.pl.h - 400) < 2);
-  check('размер игрока 20x60', GAME.pl.w === 20 && GAME.pl.h === 60);
+  check('размер игрока 30x100', GAME.pl.w === 30 && GAME.pl.h === 100);
 
   // 8. рикошет: падение на отражающий блок отбрасывает вверх
   const rico = { id: 3, type: 'rect', x: 0, y: 400, w: 600, h: 40, rot: 0,
@@ -355,7 +355,7 @@ else {
   //     и его выбросило на верх соседнего объекта. Теперь угол отталкивает вбок.
   const floorC = { id: 1, type: 'rect', x: 0, y: 400, w: 600, h: 40, rot: 0, fill: '#111827' };
   const wallC  = { id: 2, type: 'rect', x: 400, y: 100, w: 40, h: 300, rot: 0, fill: '#111827' };
-  const spawnC = { id: 3, type: 'spawn', x: 395, y: 200, w: 20, h: 60, rot: 0, fill: '#111827' };
+  const spawnC = { id: 3, type: 'spawn', x: 395, y: 200, w: 30, h: 100, rot: 0, fill: '#111827' };
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floorC, wallC, spawnC] });
   GAME.startPlay();
   clearKeys();
@@ -375,7 +375,7 @@ else {
   //     игрока, продавленного в середину широкого пола, нельзя выталкивать вбок:
   //     из блока шириной 600 это швыряло бы на 300 px. Его поднимает вертикальный проход.
   const floorD = { id: 1, type: 'rect', x: 0, y: 400, w: 600, h: 40, rot: 0, fill: '#111827' };
-  const spawnD = { id: 2, type: 'spawn', x: 300, y: 380, w: 20, h: 60, rot: 0, fill: '#111827' };
+  const spawnD = { id: 2, type: 'spawn', x: 300, y: 340, w: 30, h: 100, rot: 0, fill: '#111827' };
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floorD, spawnD] });
   GAME.startPlay();
   clearKeys();
@@ -387,7 +387,7 @@ else {
 
   // 15. угол работает с обеих сторон: игрок зашёл справа — оттолкнёт вправо
   const wallE  = { id: 2, type: 'rect', x: 400, y: 100, w: 40, h: 300, rot: 0, fill: '#111827' };
-  const spawnE = { id: 3, type: 'spawn', x: 425, y: 200, w: 20, h: 60, rot: 0, fill: '#111827' };
+  const spawnE = { id: 3, type: 'spawn', x: 425, y: 200, w: 30, h: 100, rot: 0, fill: '#111827' };
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floorC, wallE, spawnE] });
   GAME.startPlay();
   clearKeys();
@@ -401,7 +401,7 @@ else {
 
   // 16. высота прыжка: значения зафиксированы, чтобы не уползали правками
   const floorJ = { id: 1, type: 'rect', x: 0, y: 400, w: 900, h: 40, rot: 0, fill: '#111827' };
-  const spawnJ = { id: 2, type: 'spawn', x: 60, y: 340, w: 20, h: 60, rot: 0, fill: '#111827' };
+  const spawnJ = { id: 2, type: 'spawn', x: 60, y: 340, w: 30, h: 100, rot: 0, fill: '#111827' };
   function jumpHeight(holdFrames) {
     GAME.loadMap({ mode: 'hideAndSeek', objects: [floorJ, spawnJ] });
     GAME.startPlay(); clearKeys();
@@ -447,7 +447,7 @@ else {
   //     ровно то, что оставалось после v96: платформа стыкуется с объектом
   //     вплотную и успевает вдавить игрока глубже старого порога в 32 px.
   const wideWall = { id: 2, type: 'rect', x: 400, y: 100, w: 100, h: 300, rot: 0, fill: '#111827' };
-  const spawnG   = { id: 3, type: 'spawn', x: 425, y: 200, w: 20, h: 60, rot: 0, fill: '#111827' };
+  const spawnG   = { id: 3, type: 'spawn', x: 425, y: 200, w: 30, h: 100, rot: 0, fill: '#111827' };
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floorC, wideWall, spawnG] });
   GAME.startPlay();
   clearKeys();
@@ -464,7 +464,7 @@ else {
   const wallH  = { id: 2, type: 'rect', x: 500, y: 200, w: 60, h: 200, rot: 0, fill: '#111827' };
   const platH  = { id: 3, type: 'rect', x: 300, y: 340, w: 60, h: 60, rot: 0, fill: '#2f8bff',
                    moves: true, moveX: 260, moveY: 0, speed: 1.6 };
-  const spawnH = { id: 4, type: 'spawn', x: 460, y: 340, w: 20, h: 60, rot: 0, fill: '#111827' };
+  const spawnH = { id: 4, type: 'spawn', x: 460, y: 340, w: 30, h: 100, rot: 0, fill: '#111827' };
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floorH, wallH, platH, spawnH] });
   GAME.startPlay();
   clearKeys();
@@ -475,7 +475,7 @@ else {
 }
 if (GAME && GAME.restartRun) {
   const floorF = { id: 1, type: 'rect', x: 0, y: 400, w: 1400, h: 40, rot: 0, fill: '#111827' };
-  const spawnF = { id: 2, type: 'spawn', x: 60, y: 340, w: 20, h: 60, rot: 0, fill: '#111827' };
+  const spawnF = { id: 2, type: 'spawn', x: 60, y: 340, w: 30, h: 100, rot: 0, fill: '#111827' };
   const finF = { id: 3, type: 'finishline', x: 1200, y: 314, w: 42, h: 86, rot: 0, fill: '' };
 
   GAME.loadMap({ mode: 'race', objects: [floorF, spawnF, finF] });

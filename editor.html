@@ -451,7 +451,7 @@ function figure(w,h,col,accent,skin){
   if((pic || (gifFrame && gifDims)) && !isAcc){
     var natW = gifFrame ? gifDims.width : pic.naturalWidth;
     var natH = gifFrame ? gifDims.height : pic.naturalHeight;
-    /* Хитбокс игрока узкий и высокий (20x60) — почти любая обычная
+    /* Хитбокс игрока узкий и высокий (30x100) — почти любая обычная
        картинка (квадратная, портрет, тем более пейзаж) намного шире
        этого относительно своей высоты. Раньше картинку вписывали в
        хитбокс целиком (Math.min) — она сжималась до крошечной полоски
@@ -823,12 +823,16 @@ var COLORS = {
   checkpoint:"", finishline:"", spawn:INK, superGate:"", teleport:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
-   Игрок 20x60, ровно три клетки в высоту. */
+   Игрок 30x100 (круг-голова радиуса 15 над телом 30x65, см. FIG_GAP
+   в figure()) — по прямой просьбе, замена прежних 20x60. Checkpoint/
+   finishline/superGate увеличены на ту же разницу в ширине и высоте,
+   что были у них над старым игроком, — дверь остаётся «чуть просторнее
+   игрока», а не наоборот. */
 var SIZES = {
   rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24],
   button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
-  zombie:[22,52],                  // чуть ниже игрока (20x60) — видно, что это не второй игрок
-  checkpoint:[30,64], finishline:[42,86], spawn:[20,60], superGate:[44,90],
+  zombie:[22,52],                  // чуть ниже игрока — видно, что это не второй игрок
+  checkpoint:[40,104], finishline:[52,126], spawn:[30,100], superGate:[54,130],
   teleport:[36,36]
 };
 var SOLID  = ["rect","circle","triangle"];
@@ -3157,7 +3161,7 @@ function inspect(){
 
   num("X", sel.x, function(v){ sel.x = v; });
   num("Y", sel.y, function(v){ sel.y = v; });
-  /* Размер игрока задан движком (20x60) и не редактируется, иначе одна
+  /* Размер игрока задан движком (30x100) и не редактируется, иначе одна
      и та же карта проходится по-разному у разных авторов. */
   if(sel.type !== "spawn"){
     num(TR("lblWidth","Ширина"), sel.w, function(v){ sel.w = Math.max(1,v); });
