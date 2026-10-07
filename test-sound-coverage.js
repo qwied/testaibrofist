@@ -18,7 +18,7 @@ console.log('sound.js:');
   const src = fs.readFileSync(__dirname + '/' + f, 'utf8');
   console.log(f + ':');
   ok('приземление после падения озвучено (BFSound.land)',
-      /if\(wasAir && pl\.vy > 6\)\{ puff\(pl\.x\+pl\.w\/2, pl\.y\+pl\.h, 5\); if\(window\.BFSound\) BFSound\.land\(\); \}/.test(src));
+      /if\(wasAir && pl\.vy > 6\)\{ if\(window\.BFSound\) BFSound\.land\(\); \}/.test(src));
   ok('пружина\/рикошет озвучены (BFSound.bounce)',
       /puff\(px - nv\[0\]\*pl\.w\*0\.5, py - nv\[1\]\*pl\.h\*0\.5, 8\);\s*\n\s*if\(window\.BFSound\) BFSound\.bounce\(\);/.test(src));
   ok('чекпоинт озвучен (BFSound.checkpoint)',

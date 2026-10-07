@@ -29,7 +29,7 @@
   var ROUND_MS  = 120000;   // раунд — 2 минуты
   var LOBBY_MS  = 30000;    // ожидание в Hide and Seek — 30 секунд
 
-  var COLOR_NORMAL = '#111827';
+  var COLOR_NORMAL = '#000000';
   var COLOR_SEEKER = '#1e6fe0';   // синяя полоса под ником у искателя (не цвет модели)
 
   var me = { name: '', role: 'hider', caught: false };
