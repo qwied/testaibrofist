@@ -44,7 +44,12 @@
      Здесь только своя раскладка внутри: поле и кнопка в один ряд. */
   .avModalRow{display:flex;gap:8px;margin:10px 0}
   .avModalRow .bf-i{flex:1;margin:0;width:auto}
-  .avModalRow .bf-b{margin:0;white-space:nowrap;padding:0 16px}
+  /* .bf-b задаёт свой padding:11px 0 (см. account.js) — здесь его заменяли
+     на padding:0 16px, обнуляя вертикальный отступ, и кнопка выходила
+     заметно ниже соседнего поля ввода (то же padding:11px 0 у .bf-i
+     никто не трогал). Вертикальный отступ теперь тот же, что у поля —
+     кнопка и поле в ряду одной высоты. */
+  .avModalRow .bf-b{margin:0;white-space:nowrap;padding:11px 16px}
   .avModalPrice{display:flex;justify-content:center;align-items:center;gap:5px;
     color:var(--muted);font-size:13px;margin-top:2px}
 </style>
