@@ -1108,7 +1108,7 @@ function drawParts(){
    земле. Подъём/падение (вертикаль, jumpV()/G()) этим не затронуты —
    глохнет только горизонтальный разгон. Константа MOVE_A и функция
    moveA() удалены вместе с разгоном — больше их никто не звал. */
-var JUMP_H = 155, MAX_VX = 5.2, FRIC = 0, AIR = 0,
+var JUMP_H = 155, MAX_VX = 10.4, FRIC = 0, AIR = 0,   // MAX_VX x2 — по прямой просьбе
     COYOTE = 6, BUFFER = 7, WALL_SLIDE = 2.2, WALL_VX = 6.2, STEP_UP = 16,
     /* MIN_HOLD обрывал подъём так рано (7 кадров), что реальная высота
        прыжка была 122.9 px вместо заданных JUMP_H=155 — прыжок явно не
@@ -1121,6 +1121,17 @@ var JUMP_H = 155, MAX_VX = 5.2, FRIC = 0, AIR = 0,
        обрывается раньше времени. Сам механизм (обрыв подъёма через
        MIN_HOLD кадров, высота не зависит от удержания кнопки) не тронут. */
     MIN_HOLD = 25,
+    /* Цепляние за уступ: прыжок впритык к углу блока раньше либо
+       отскакивал, либо медленно «протискивал» игрока по STEP_UP за кадр
+       (см. ветку uPen<=dPen ниже) — несколько кадров вязкого ползанья
+       читались как баг. Теперь такое касание сразу ловится явным
+       состоянием pl.grab (см. tryGrab() в step()), а не доедается общей
+       веткой угла. GRAB_ZONE — на сколько кромка блока может быть выше
+       головы игрока и всё ещё цепляться (бросок впритык не всегда
+       попадает ровно в кромку). GRAB_COOLDOWN — кадров до повторного
+       захвата после отпускания/залезания, чтобы не хвататься обратно
+       в тот же кадр, пока хитбоксы ещё соприкасаются. */
+    GRAB_ZONE = 16, GRAB_COOLDOWN = 10,
     STUCK_WINDOW = 150;   // окно сторожа застревания в прятках — см. respawn()/step()
 // SUPER BRO (ворота superGate, только Race) — длительность бафа полёта/иммунитета, мс
 var SUPER_MS = 8000, SUPER_GRAVITY = 0.32;
@@ -1144,10 +1155,10 @@ function maxFall(){ return 12 + gravityScale * 0.8; }
 function platBoost(o){ return (o && o.speedMul) ? Math.max(0.05, 1 + (+o.speedMul || 0)) : 1; }
 
 var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,selfJump:false,hidden:false,
-  rideOn:null, standPlat:null, superUntil:0, teleCooldown:0,
+  rideOn:null, standPlat:null, superUntil:0, teleCooldown:0, grab:null,
 };
 var keys = {l:false,r:false,u:false};
-var coy = 0, buf = 0, hold = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
+var coy = 0, buf = 0, hold = 0, grabCd = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
 /* Practice Mode (только Race, включается снаружи через GAME.practice —
    см. game.js): смерть возвращает не на спавн/чекпоинт, а на последнюю
    позицию, где игрок ТОЧНО не касался опасности — «где умер», но не
@@ -1209,7 +1220,7 @@ function restartRun(){
 function respawn(){
   var p = (practiceMode && mode === "race") ? lastSafePos : spawnPt;
   pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
-  pl.rideOn = null; pl.superUntil = 0;
+  pl.rideOn = null; pl.superUntil = 0; pl.grab = null; grabCd = 0;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
 }
 function die(){
@@ -1795,7 +1806,35 @@ function step(){
   var sol = [], i;
   for(i=0;i<near.length;i++) if(solid(near[i])) sol.push(near[i]);
 
-  var dir = (keys.r?1:0)-(keys.l?1:0);
+  /* Захват уступа: ввод разбирается здесь, до обычной физики — залезть
+     наверх или отпуститься должно начинать действовать с этого же
+     кадра, а не кадром позже. Пока grabbing истинный, движение и
+     гравитация ниже не трогают игрока вовсе: он висит неподвижно. */
+  var grabbing = false;
+  if(pl.grab){
+    var gWall = pl.wall, gAway = (gWall === 1 && keys.l) || (gWall === -1 && keys.r);
+    if(keys.u){
+      /* Залезть наверх — прямо на кромку блока, с лёгким толчком от края.
+         grabbing остаётся true и в этом кадре тоже: иначе обычный
+         триггер прыжка ниже увидит ту же самую зажатую keys.u и тут же
+         подбросит игрока — прыжок вместо посадки на кромку. Следующий
+         кадр обычная физика уже подхватит отпущенную/всё ещё зажатую
+         кнопку как положено. */
+      var gBB = bbox(pl.grab);
+      pl.y = gBB[1] - pl.h; pl.x += gWall === 1 ? 4 : -4;
+      pl.ground = true; coy = COYOTE; pl.vy = 0; pl.vx = 0; pl.selfJump = false;
+      pl.grab = null; grabCd = GRAB_COOLDOWN;
+      grabbing = true;
+    } else if(gAway || !solid(pl.grab)){
+      // отпустились сами (кнопка в обратную сторону) или блок исчез из-под руки
+      pl.grab = null; grabCd = GRAB_COOLDOWN;
+    } else {
+      grabbing = true;
+    }
+  }
+  if(grabCd > 0) grabCd--;
+
+  var dir = grabbing ? 0 : (keys.r?1:0)-(keys.l?1:0);
   if(dir){
     /* Разгона нет: нажал — сразу полная скорость, одна и та же всегда.
        Раньше скорость набиралась за 7 кадров (MOVE_A), и даже этот
@@ -1821,7 +1860,10 @@ function step(){
   if(coy > 0) coy--;
   if(buf > 0) buf--;
 
-  if(flyMode){
+  if(grabbing){
+    // висим на уступе — гравитация и прыжок не действуют, пока не отпустились/залезли
+    pl.vy = 0; pl.selfJump = false; buf = 0; coy = 0; hold = 0;
+  } else if(flyMode){
     /* Practice: полёт — вместо прыжка и гравитации вертикальная скорость
        напрямую от зажатой кнопки прыжка (вверх), без неё — лёгкое
        снижение, чтобы можно было и приземлиться. Столкновения ниже по
@@ -1834,8 +1876,10 @@ function step(){
        он прыгает снова, без повторного нажатия. */
     if(keys.u && !pl.selfJump && (pl.ground || coy > 0)) buf = BUFFER;
     if(buf > 0){
-      /* Карабканья по стенам нет: от стены не оттолкнуться и по ней
-         не забраться. Остаётся только скольжение — см. WALL_SLIDE ниже. */
+      /* По стене не оттолкнуться и на бегу по ней не забраться — только
+         соскальзывание (WALL_SLIDE ниже). Забраться можно только с
+         явного захвата уступа у самого верха стены — см. pl.grab выше
+         и tryGrab() ниже. */
       if(coy > 0 || pl.ground){
         pl.vy = jumpV(); buf = 0; coy = 0; hold = 0; pl.ground = false; pl.selfJump = true;
         if(window.BFSound) BFSound.jump();
@@ -1855,7 +1899,9 @@ function step(){
     if(pl.vy > fallCap) pl.vy = fallCap;
   }
 
-
+  // висящего на уступе не двигаем и не разбираем столкновения — он и
+  // так стоит ровно там, где его поставил tryGrab()
+  if(!grabbing){
   var xBefore = pl.x;                              // где игрок был до этого шага
   pl.x += pl.vx; pl.wall = 0;
   sol.forEach(function(o){
@@ -2052,7 +2098,28 @@ function step(){
     /* Иначе игрока накрыла сбоку платформа, едущая только вбок: её
        разбирает горизонтальный проход, наверх игрока не выдёргиваем. */
   });
+  } // !grabbing
   if(pl.ground) pl.wall = 0;
+
+  /* Захват уступа: сработавшая только что горизонтальная/угловая
+     развязка уже выставила pl.wall и честную позицию у стены — ищем
+     среди тех же sol, какой блок это был, и проверяем, что его кромка
+     на высоте головы (а не где-то посреди стены, это просто
+     скольжение). Ловим только о неподвижную геометрию: у едущей
+     платформы кромка сама гуляет, цепляться там нечего. */
+  if(!pl.grab && !grabbing && !pl.ground && grabCd === 0 && !flyMode && pl.wall !== 0
+     && !(mode === "race" && pl.superUntil > timeMs)){
+    for(var gi=0; gi<sol.length; gi++){
+      var go = sol[gi];
+      if(go.moves || go.pushable) continue;
+      var gBB2 = bbox(go);
+      if(pl.wall === 1 && Math.abs((pl.x+pl.w) - gBB2[0]) > 1) continue;
+      if(pl.wall === -1 && Math.abs(pl.x - gBB2[2]) > 1) continue;
+      if(gBB2[1] < pl.y - 4 || gBB2[1] > pl.y + GRAB_ZONE) continue;
+      pl.grab = go; pl.y = gBB2[1]; pl.vx = 0; pl.vy = 0; pl.selfJump = false;
+      break;
+    }
+  }
 
   /* Кто именно сейчас несёт игрока (для «едем вместе» и для бустера
      скорости — см. platBoost) решаем ПОСЛЕ всего цикла выше, а не внутри

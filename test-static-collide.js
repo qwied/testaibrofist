@@ -6,7 +6,7 @@
 const { makeEngine, obj } = require('./harness.js');
 const TARGET = process.argv[2] || (__dirname + '/game.html');
 
-const MAXVX = 5.2 * Math.sqrt(9 * 0.062 / 0.62);   // ~4.93 собственный бег
+const MAXVX = 10.4 * Math.sqrt(9 * 0.062 / 0.62);   // ~9.87 собственный бег (MAX_VX x2)
 const MAXFALL = 12 + 9 * 0.8;                      // 19.2 предел падения
 const STEP_UP = 16;                                // законный шаг на уступ
 const LIMX = MAXVX + MAXVX + 8.5;   // свой шаг за кадр + одна законная поправка выталкивания
@@ -29,7 +29,15 @@ function run(name, objs, spawn, drive, frames) {
   for (let f = 0; f < frames; f++) {
     if (drive) drive(f, E.keys());
     const x0 = E.pl().x, y0 = E.pl().y;
+    const wasGrab = !!E.pl().grab;
     E.step();
+    /* Залезание с уступа — это нарочный мгновенный снап на свою высоту
+       (pl.h), а не сбой физики: тот же класс события, что телепорт или
+       чекпоинт, которые этот тест и не должен ловить. Кадр, где grab
+       только что погас залезанием наверх, из общего предела рывка не
+       считаем — остальные кадры (включая сам захват) проверяются как
+       обычно. */
+    if (wasGrab && !E.pl().grab && E.pl().ground) continue;
     const dx = Math.abs(E.pl().x - x0), dy = Math.abs(E.pl().y - y0);
     if (dx > worstX) { worstX = dx; }
     if (dy > worstY) { worstY = dy; }
