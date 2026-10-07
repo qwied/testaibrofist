@@ -105,9 +105,10 @@ function harness(mod, extra, userName) {
   ok('больше 30% текста отклоняется', r.status === 'error', r.message);
   r = await O.call('POST /uploadMap', withText(120, 0.25, 'okText'));
   ok('меньше 30% текста проходит', r.status === 'success', r.message);
-  // maps.js считает владельцем по имени аккаунта (System по умолчанию),
-  // а не по флагу из acc — берём ровно то имя, что isOwnerName примет
-  const Owner = harness('./maps.js', {}, 'System');
+  // maps.js считает владельцем по имени аккаунта через OWNER_ALIASES
+  // из accounts.js (не по флагу из acc) — берём ровно то же имя, а не
+  // хардкодим его здесь второй раз и не расходимся с реальным списком
+  const Owner = harness('./maps.js', {}, require('./accounts.js').OWNER_ALIASES[0]);
   r = await Owner.call('POST /uploadMap', withText(5, 0, 'ownerTiny'));
   ok('владельцу минимум объектов не мешает', r.status === 'success', r.message);
 

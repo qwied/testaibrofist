@@ -7,12 +7,16 @@ const DATA_DIR = path.join(__dirname, 'data');
 const MAPS_FILE = path.join(DATA_DIR, 'maps.json');
 
 const MODES = ['hideAndSeek', 'race'];
-// в игровые режимы попадают только карты владельца сайта
-// (имя можно поменять переменной окружения OWNER_NAME, без правки кода)
-const OWNER = process.env.OWNER_NAME || 'System';
-const OWNER_ALIASES = String(process.env.OWNER_ALIASES || 'System,AIBrofist')
-  .split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
-if (OWNER_ALIASES.indexOf(OWNER.toLowerCase()) === -1) OWNER_ALIASES.push(OWNER.toLowerCase());
+/* Владелец сайта — ОДИН список, accounts.js (OWNER_ALIASES). Раньше
+   здесь был свой отдельный список с тем же умолчанием, но независимо
+   пересчитанный — малейшее расхождение с accounts.js (например, после
+   смены владельца только в одном месте) и /owner/removeMap начинал
+   писать настоящему владельцу «Not available». accounts.js требуется
+   раньше maps.js в server.js, так что к этому моменту он уже полностью
+   загружен — циклической зависимости нет (сам accounts.js требует
+   maps.js лениво, внутри функций, а не при загрузке модуля).
+   в игровые режимы попадают только карты владельца сайта. */
+const { OWNER_ALIASES } = require('./accounts.js');
 const isOwnerName = n => OWNER_ALIASES.indexOf(String(n || '').toLowerCase()) !== -1;
 
 const DAILY_LIMIT = 3;                 // сколько новых карт можно выложить за сутки
@@ -722,4 +726,4 @@ function newFromFriends(user) {
   return out;
 }
 
-module.exports = { register, reload: load, MODES, OWNER, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, renameAuthor };
+module.exports = { register, reload: load, MODES, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, renameAuthor };
