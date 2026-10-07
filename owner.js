@@ -288,14 +288,24 @@
         return;
       }
       del.textContent = '…';
+      /* Ошибка раньше навсегда оставалась текстом кнопки («Not available»
+         и т.п.) — выглядело так, будто удалять карту вообще нельзя,
+         хотя повторный клик (armed остался '1') на самом деле просто
+         отправил бы запрос заново. Теперь текст и armed откатываются
+         сами через пару секунд, и видно, что это кнопка, а не ярлык. */
+      function fail(text) {
+        del.textContent = text;
+        del.dataset.armed = '';
+        setTimeout(function () { del.textContent = T('removeTxt', 'Удалить'); }, 2500);
+      }
       post('/owner/removeMap', { author: info.author, mapName: info.mapName })
         .then(function (r) {
-          if (r.status !== 'success') { del.textContent = r.message || T('errorTxt', 'Ошибка'); return; }
+          if (r.status !== 'success') { fail(r.message || T('errorTxt', 'Ошибка')); return; }
           row.style.opacity = '.35';
           row.style.pointerEvents = 'none';
           del.textContent = T('deleted', 'Удалена');
         })
-        .catch(function () { del.textContent = T('errorTxt', 'Ошибка'); });
+        .catch(function () { fail(T('errorTxt', 'Ошибка')); });
     };
 
     // по кнопке на каждый режим: клик добавляет, повторный убирает
