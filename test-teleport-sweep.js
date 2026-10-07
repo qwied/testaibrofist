@@ -10,7 +10,7 @@ const GROUND_Y = 520;
 const ground = () => obj('rect', -400, GROUND_Y, 3600, 80);
 
 // максимум собственного бега/падения игрока (gravity 9)
-const MAXVX = 7 * Math.sqrt(9 * 0.062 / 0.62);      // ≈ 6.64
+const MAXVX = 6.2 * Math.sqrt(9 * 0.062 / 0.62);      // ≈ 5.88
 const MAXFALL = 12 + 9 * 0.8;                          // 19.2
 
 function platDX(o, frames){      // максимальный ход платформы по X за кадр

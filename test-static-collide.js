@@ -6,7 +6,7 @@
 const { makeEngine, obj } = require('./harness.js');
 const TARGET = process.argv[2] || (__dirname + '/game.html');
 
-const MAXVX = 7 * Math.sqrt(9 * 0.062 / 0.62);   // ~6.64 собственный бег
+const MAXVX = 6.2 * Math.sqrt(9 * 0.062 / 0.62);   // ~5.88 собственный бег
 const MAXFALL = 12 + 9 * 0.8;                      // 19.2 предел падения
 const STEP_UP = 16;                                // законный шаг на уступ
 const LIMX = MAXVX + MAXVX + 8.5;   // свой шаг за кадр + одна законная поправка выталкивания

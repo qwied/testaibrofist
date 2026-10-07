@@ -5,7 +5,7 @@
 'use strict';
 const { makeEngine, obj } = require('./harness.js');
 
-const MAXVX = 7 * Math.sqrt(9 * 0.062 / 0.62);   // ~6.64 базовый бег
+const MAXVX = 6.2 * Math.sqrt(9 * 0.062 / 0.62);   // ~5.88 базовый бег
 const GY = 520;
 
 function topSpeed(target, speedMul, frames) {
