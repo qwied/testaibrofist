@@ -52,7 +52,6 @@
         'Ник и пароль — чтобы вы могли войти в аккаунт. Пароль хранится в зашифрованном виде.',
         'Игровой прогресс: монеты, скины, созданные карты, оценки и список друзей.',
         'Дата регистрации и время последнего входа.',
-        'IP-адрес — только чтобы ограничить создание аккаунтов и подобрать язык интерфейса.',
         'Настройки: выбранный язык и тема оформления.'
       ],
       whyH: 'Зачем это нужно',
@@ -78,7 +77,6 @@
         'Username and password, so you can sign in. The password is stored encrypted.',
         'Game progress: coins, skins, maps you made, ratings and your friends list.',
         'Sign-up date and last seen time.',
-        'IP address — only to limit account creation and pick the interface language.',
         'Settings: chosen language and colour theme.'
       ],
       whyH: 'Why we need it',
