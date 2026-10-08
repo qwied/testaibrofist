@@ -350,25 +350,25 @@ else {
   }
   var JERK = 22;   // |vx|max 5.88 + STEP_UP 16 — законная поправка за кадр
 
-  // 13. угол стены: игрока сбоку от блока отталкивает вбок, а не телепортирует наверх
-  //     именно эту дыру ловил пользователь: платформа прижала игрока к стене —
-  //     и его выбросило на верх соседнего объекта. Теперь угол отталкивает вбок.
+  // 13. угол стены: столкновение само по себе не должно двигать игрока
+  //     вбок — раньше угол отталкивал вбок сам, по требованию это убрали:
+  //     координаты по X меняет только собственная скорость игрока
+  //     (X-pass) и его нажатие клавиш, а не столкновение с углом.
   const floorC = { id: 1, type: 'rect', x: 0, y: 400, w: 600, h: 40, rot: 0, fill: '#111827' };
   const wallC  = { id: 2, type: 'rect', x: 400, y: 100, w: 40, h: 300, rot: 0, fill: '#111827' };
   const spawnC = { id: 3, type: 'spawn', x: 395, y: 200, w: 30, h: 100, rot: 0, fill: '#111827' };
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floorC, wallC, spawnC] });
   GAME.startPlay();
   clearKeys();
-  // игрок заспавнен сбоку от стены, чуть внутри (15 px) — как после толчка платформой
-  const yBeforeCorner = GAME.pl.y;
-  const jerkC = settle(12);
-  // без фикса: pl.y стало бы 40 (телепорт на верх стены y=100)
-  // с фиксом: pl.y остаётся ~200 (игрока оттолкнуло вбок)
+  // игрок заспавнен сбоку от стены, чуть внутри (5 px) — как после толчка платформой
+  const xBeforeCorner = GAME.pl.x;
+  settle(12);
+  // стена не телепортирует наверх (регресс v95) — игрок проваливается
+  // вертикально мимо неё, а не выбрасывается на её крышку
   check('угол стены не телепортирует наверх', GAME.pl.y > 150,
-        'pl.y=' + GAME.pl.y.toFixed(0) + ' (было ' + yBeforeCorner.toFixed(0) + ')');
-  check('игрока оттолкнуло вбок от стены', GAME.pl.x + GAME.pl.w <= 400,
-        'pl.x=' + GAME.pl.x.toFixed(0) + ' правый край=' + (GAME.pl.x + GAME.pl.w));
-  check('и вышел он без рывка', jerkC <= JERK, 'макс сдвиг за кадр ' + jerkC.toFixed(1));
+        'pl.y=' + GAME.pl.y.toFixed(0));
+  check('столкновение с углом не двигает игрока вбок', GAME.pl.x === xBeforeCorner,
+        'pl.x=' + GAME.pl.x.toFixed(1) + ' (было ' + xBeforeCorner.toFixed(1) + ')');
   GAME.stop();
 
   // 14. глубокий провал по-прежнему поднимает наверх — регресс на v95
@@ -385,16 +385,16 @@ else {
   check('и поднимает без рывка', jerkD <= JERK, 'макс сдвиг за кадр ' + jerkD.toFixed(1));
   GAME.stop();
 
-  // 15. угол работает с обеих сторон: игрок зашёл справа — оттолкнёт вправо
+  // 15. то же самое с другой стороны: игрок зашёл справа — тоже без сдвига вбок
   const wallE  = { id: 2, type: 'rect', x: 400, y: 100, w: 40, h: 300, rot: 0, fill: '#111827' };
   const spawnE = { id: 3, type: 'spawn', x: 425, y: 200, w: 30, h: 100, rot: 0, fill: '#111827' };
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floorC, wallE, spawnE] });
   GAME.startPlay();
   clearKeys();
-  const jerkE = settle(12);
-  check('угол с правой стороны отталкивает вправо', GAME.pl.x >= 440,
-        'pl.x=' + GAME.pl.x.toFixed(0));
-  check('и вправо тоже без рывка', jerkE <= JERK, 'макс сдвиг за кадр ' + jerkE.toFixed(1));
+  const xBeforeCornerE = GAME.pl.x;
+  settle(12);
+  check('угол с правой стороны тоже не двигает вбок', GAME.pl.x === xBeforeCornerE,
+        'pl.x=' + GAME.pl.x.toFixed(1) + ' (было ' + xBeforeCornerE.toFixed(1) + ')');
   check('и тоже не телепортирует наверх', GAME.pl.y > 150,
         'pl.y=' + GAME.pl.y.toFixed(0));
   GAME.stop();
@@ -443,20 +443,19 @@ else {
   check('наката нет совсем', slide <= vTop + 0.01, slide.toFixed(1) + ' px');
   GAME.stop();
 
-  // 17. глубоко вдавленный в стену угол — тоже вбок, а не наверх
-  //     ровно то, что оставалось после v96: платформа стыкуется с объектом
-  //     вплотную и успевает вдавить игрока глубже старого порога в 32 px.
+  // 17. глубоко вдавленный в широкую стену угол — тоже без сдвига вбок,
+  //     не наверх (ровно то, что оставалось после v96, см. выше)
   const wideWall = { id: 2, type: 'rect', x: 400, y: 100, w: 100, h: 300, rot: 0, fill: '#111827' };
   const spawnG   = { id: 3, type: 'spawn', x: 425, y: 200, w: 30, h: 100, rot: 0, fill: '#111827' };
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floorC, wideWall, spawnG] });
   GAME.startPlay();
   clearKeys();
-  const jerkG = settle(16);
+  const xBeforeCornerG = GAME.pl.x;
+  settle(16);
   check('вдавленного на 45 px не выбрасывает наверх', GAME.pl.y > 150,
         'pl.y=' + GAME.pl.y.toFixed(0));
-  check('вдавленного выносит без рывка', jerkG <= JERK, 'макс сдвиг за кадр ' + jerkG.toFixed(1));
-  check('его отодвигает вбок к ближней грани', GAME.pl.x + GAME.pl.w <= 401,
-        'правый край=' + (GAME.pl.x + GAME.pl.w).toFixed(0));
+  check('вдавленного тоже не двигает вбок', GAME.pl.x === xBeforeCornerG,
+        'pl.x=' + GAME.pl.x.toFixed(1) + ' (было ' + xBeforeCornerG.toFixed(1) + ')');
   GAME.stop();
 
   // 18. платформа прижимает игрока к стене вплотную — и держит, не подбрасывая
