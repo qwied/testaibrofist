@@ -271,6 +271,7 @@
     giveCoins: "Give coins",
     amount: "Amount",
     playerName: "Player name",
+    setJoinDate: "Join date",
     onlyOwner: "Owner only",
 
     /* ---------- редактор карт ---------- */
@@ -930,6 +931,7 @@
     giveCoins: "Выдать монеты",
     amount: "Количество",
     playerName: "Ник игрока",
+    setJoinDate: "Дата регистрации",
     onlyOwner: "Доступно только владельцу",
     coinLimit: "В карте можно поставить максимум 3 монеты",
     publishMap: "Опубликовать в Maps Browser",
