@@ -280,22 +280,43 @@ else {
   for (let i = 0; i < 60; i++) { GAME.step(); if (GAME.pl.vy < -3) bounced = true; }
   check('рикошет отбрасывает вверх', bounced);
 
-  // 7. по стене не забраться, но по ней сползают
+  // 7. по стене сползают медленнее свободного падения, но без прыжка
+  //    всё равно не лезут наверх — только соскальзывание
   const wall = { id: 4, type: 'rect', x: 320, y: 100, w: 40, h: 300, rot: 0, fill: '#111827' };
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floor, spawn, wall] });
   GAME.startPlay();
   clearKeys();
   GAME.pl.x = 296; GAME.pl.y = 150; GAME.pl.vy = 0;
-  GAME.keys.r = true; GAME.keys.u = true;          // жмём в стену и вверх
-  let topY = GAME.pl.y, freeFall = 0;
+  GAME.keys.r = true;          // жмём в стену, прыжок не трогаем
+  let topY = GAME.pl.y;
   for (let i = 0; i < 60; i++) { GAME.step(); if (GAME.pl.y < topY) topY = GAME.pl.y; }
-  check('по стене не забраться', topY >= 149);
+  check('без прыжка по стене не забраться', topY >= 149);
   const slideVY = GAME.pl.vy;
   clearKeys();
   // то же падение, но в стороне от стены — для сравнения скорости
   GAME.pl.x = 100; GAME.pl.y = 150; GAME.pl.vy = 0;
+  let freeFall = 0;
   for (let i = 0; i < 60; i++) { GAME.pl.y = 150; GAME.step(); freeFall = GAME.pl.vy; }
   check('у стены падение медленнее', slideVY < freeFall, slideVY.toFixed(2) + ' против ' + freeFall.toFixed(2));
+
+  // 7б. отталкивание от стены: прыжок у стены — это именно кик прочь от
+  //     неё (вертикаль + горизонталь, wallVX), а не бесконечный подъём
+  //     вдоль стены. Один прыжок — и снова падение, как обычно.
+  GAME.loadMap({ mode: 'hideAndSeek', objects: [floor, spawn, wall] });
+  GAME.startPlay();
+  clearKeys();
+  GAME.pl.x = 296; GAME.pl.y = 150; GAME.pl.vy = 0;
+  GAME.keys.r = true;
+  GAME.step();                     // кадр касания стены
+  const xBeforeKick = GAME.pl.x;
+  GAME.keys.u = true;
+  GAME.step();                     // кадр прыжка от стены
+  check('прыжок от стены даёт вертикаль', GAME.pl.vy < -5, 'vy=' + GAME.pl.vy.toFixed(2));
+  check('и толкает прочь от стены', GAME.pl.x < xBeforeKick, 'x=' + GAME.pl.x.toFixed(1) + ' (было ' + xBeforeKick.toFixed(1) + ')');
+  clearKeys();
+  let topYKick = GAME.pl.y, fellBack = false;
+  for (let i = 0; i < 60; i++) { GAME.step(); if (GAME.pl.y < topYKick) topYKick = GAME.pl.y; if (GAME.pl.vy > 0) fellBack = true; }
+  check('это один прыжок, а не бесконечный подъём', fellBack);
 
   // 11. сила батута и наклонный отскок
   function bounceTop(power, rot) {

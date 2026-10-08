@@ -1139,13 +1139,6 @@ var JUMP_H = 155, MAX_VX = 6.2, FRIC = 0, AIR = 0,
        захвата после отпускания/залезания, чтобы не хвататься обратно
        в тот же кадр, пока хитбоксы ещё соприкасаются. */
     GRAB_ZONE = 16, GRAB_COOLDOWN = 10,
-    /* Прыжок от стены впритык к её уголку (см. pl.wallCorner ниже): по
-       стене нигде не оттолкнуться, но у самого торца статичного блока —
-       можно, как обычный прыжок, а не рикошет с горизонтальным ударом.
-       WALL_JUMP_ZONE — насколько близко к концу стены должна быть
-       голова/нога игрока, чтобы это считалось «впритык к уголку», а не
-       серединой стены. */
-    WALL_JUMP_ZONE = 8,
     STUCK_WINDOW = 150;   // окно сторожа застревания в прятках — см. respawn()/step()
 // SUPER BRO (ворота superGate, только Race) — длительность бафа полёта/иммунитета, мс
 var SUPER_MS = 8000, SUPER_GRAVITY = 0.32;
@@ -1887,17 +1880,19 @@ function step(){
     pl.selfJump = false; buf = 0; coy = 0; hold = 0;
   } else {
     /* Кнопку прыжка можно держать: как только игрок коснулся земли,
-       он прыгает снова, без повторного нажатия. */
-    if(keys.u && !pl.selfJump && (pl.ground || coy > 0 || pl.wallCorner)) buf = BUFFER;
+       он прыгает снова, без повторного нажатия. Прижавшись к стене в
+       воздухе (pl.wall) — тоже, это и есть отталкивание от стены: даёт
+       вертикаль прыжка плюс горизонтальный кик прочь от стены (wallVX),
+       а не просто повторяет земной прыжок. Климб наверх через это не
+       получить — для этого есть явный захват уступа (pl.grab выше). */
+    if(keys.u && !pl.selfJump && (pl.ground || coy > 0 || pl.wall !== 0)) buf = BUFFER;
     if(buf > 0){
-      /* По стене нигде не оттолкнуться и на бегу по ней не забраться —
-         кроме самого торца статичной стены (pl.wallCorner, см. X-pass
-         выше): там обычный прыжок работает, как с земли. Середина
-         стены остаётся соскальзыванием (WALL_SLIDE ниже). Забраться
-         наверх можно только с явного захвата уступа у самого верха
-         стены — см. pl.grab выше и tryGrab() ниже. */
-      if(coy > 0 || pl.ground || pl.wallCorner){
+      if(coy > 0 || pl.ground){
         pl.vy = jumpV(); buf = 0; coy = 0; hold = 0; pl.ground = false; pl.selfJump = true;
+        if(window.BFSound) BFSound.jump();
+      } else if(pl.wall !== 0){
+        pl.vy = jumpV(); pl.vx = (pl.wall === 1 ? -1 : 1) * wallVX();
+        buf = 0; coy = 0; hold = 0; pl.ground = false; pl.selfJump = true;
         if(window.BFSound) BFSound.jump();
       }
     }
@@ -1920,7 +1915,7 @@ function step(){
   // так стоит ровно там, где его поставил tryGrab()
   if(!grabbing){
   var xBefore = pl.x;                              // где игрок был до этого шага
-  pl.x += pl.vx; pl.wall = 0; pl.wallCorner = false;
+  pl.x += pl.vx; pl.wall = 0;
   sol.forEach(function(o){
     var bb = bbox(o);
     if(pl.x >= bb[2] || pl.x+pl.w <= bb[0] || pl.y >= bb[3] || pl.y+pl.h <= bb[1]) return;
@@ -1990,20 +1985,6 @@ function step(){
     if((goL ? (pl.x + pl.w) - sp[0] : sp[1] - pl.x) > Math.abs(pl.vx) + 8) return;
     if(goL){ pl.x = sp[0] - pl.w; if(pl.vx !== 0) pl.wall = 1; }
     else   { pl.x = sp[1];        if(pl.vx !== 0) pl.wall = -1; }
-    /* Прыжок впритык к уголку стены (не середине): по стене нигде не
-       оттолкнуться, но у самого торца статичного блока — обычный прыжок
-       работает, как если бы игрок стоял на земле. Торец — это где
-       заканчивается сама стена по Y, а не уровень глаз игрока. Высоту
-       стены смотрим чуть ВНУТРИ блока от грани касания (pl.x тут уже
-       снаружи блока — им саму стену не зацепить). */
-    if(pl.wall !== 0 && !o.moves){
-      var wallEdge = goL ? sp[0] + 1 : sp[1] - 1;
-      var wallY = spanY(P, wallEdge - 0.5, wallEdge + 0.5);
-      if(wallY && (Math.abs((pl.y + pl.h) - wallY[1]) <= WALL_JUMP_ZONE
-                || Math.abs(pl.y - wallY[0]) <= WALL_JUMP_ZONE)){
-        pl.wallCorner = true;
-      }
-    }
     /* Рикошет отражает движение, а не гасит его. Медленное касание не
        отражаем — иначе игрок дрожит, прижавшись к блоку. */
     if(o.ricochet && Math.abs(pl.vx) > RICO_MIN) ricochet(o);
