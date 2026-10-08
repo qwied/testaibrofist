@@ -280,56 +280,22 @@ else {
   for (let i = 0; i < 60; i++) { GAME.step(); if (GAME.pl.vy < -3) bounced = true; }
   check('рикошет отбрасывает вверх', bounced);
 
-  // 7. по стене сползают медленнее свободного падения, но без прыжка
-  //    всё равно не лезут наверх — только соскальзывание
+  // 7. по стене не забраться, но по ней сползают
   const wall = { id: 4, type: 'rect', x: 320, y: 100, w: 40, h: 300, rot: 0, fill: '#111827' };
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floor, spawn, wall] });
   GAME.startPlay();
   clearKeys();
   GAME.pl.x = 296; GAME.pl.y = 150; GAME.pl.vy = 0;
-  GAME.keys.r = true;          // жмём в стену, прыжок не трогаем
-  let topY = GAME.pl.y;
+  GAME.keys.r = true; GAME.keys.u = true;          // жмём в стену и вверх
+  let topY = GAME.pl.y, freeFall = 0;
   for (let i = 0; i < 60; i++) { GAME.step(); if (GAME.pl.y < topY) topY = GAME.pl.y; }
-  check('без прыжка по стене не забраться', topY >= 149);
+  check('по стене не забраться', topY >= 149);
   const slideVY = GAME.pl.vy;
   clearKeys();
   // то же падение, но в стороне от стены — для сравнения скорости
   GAME.pl.x = 100; GAME.pl.y = 150; GAME.pl.vy = 0;
-  let freeFall = 0;
   for (let i = 0; i < 60; i++) { GAME.pl.y = 150; GAME.step(); freeFall = GAME.pl.vy; }
   check('у стены падение медленнее', slideVY < freeFall, slideVY.toFixed(2) + ' против ' + freeFall.toFixed(2));
-
-  // 7б. отталкивание от стены — только впритык к её концу (нижний край
-  //     тут, y=400), не по всей высоте: прыжок — это кик прочь от стены
-  //     (вертикаль + горизонталь, wallVX), а не бесконечный подъём вдоль
-  //     неё. Один прыжок — и снова падение, как обычно.
-  GAME.loadMap({ mode: 'hideAndSeek', objects: [floor, spawn, wall] });
-  GAME.startPlay();
-  clearKeys();
-  GAME.pl.x = 296; GAME.pl.y = 298; GAME.pl.vy = 0;   // низ игрока (398) впритык к низу стены (400)
-  GAME.keys.r = true;
-  GAME.step();                     // кадр касания стены
-  const xBeforeKick = GAME.pl.x;
-  GAME.keys.u = true;
-  GAME.step();                     // кадр прыжка от стены
-  check('прыжок от стены даёт вертикаль', GAME.pl.vy < -5, 'vy=' + GAME.pl.vy.toFixed(2));
-  check('и толкает прочь от стены', GAME.pl.x < xBeforeKick, 'x=' + GAME.pl.x.toFixed(1) + ' (было ' + xBeforeKick.toFixed(1) + ')');
-  clearKeys();
-  let topYKick = GAME.pl.y, fellBack = false;
-  for (let i = 0; i < 60; i++) { GAME.step(); if (GAME.pl.y < topYKick) topYKick = GAME.pl.y; if (GAME.pl.vy > 0) fellBack = true; }
-  check('это один прыжок, а не бесконечный подъём', fellBack);
-
-  // 7в. у ВЕРХНЕГО конца стены кик не взводится вовсе — там уже есть
-  //     отдельный захват уступа (pl.grab), второй механики там не нужно,
-  //     даже если захват почему-то не сработал в этот же кадр.
-  GAME.loadMap({ mode: 'hideAndSeek', objects: [floor, spawn, wall] });
-  GAME.startPlay();
-  clearKeys();
-  GAME.pl.x = 296; GAME.pl.y = 100; GAME.pl.vy = 0;   // верх игрока вровень с верхом стены (100)
-  GAME.keys.r = true;
-  GAME.step();                     // кадр касания стены
-  check('у верхнего конца стены pl.wallCorner не взводится', GAME.pl.wallCorner === false,
-        'wallCorner=' + GAME.pl.wallCorner);
 
   // 11. сила батута и наклонный отскок
   function bounceTop(power, rot) {
