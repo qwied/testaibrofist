@@ -134,6 +134,18 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 .zBtns div{flex:1;text-align:center;padding:6px 0;border:1px solid var(--line);border-radius:7px;
   font-size:11px;cursor:pointer;background:#fafbfd}
 .zBtns div:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* Связи кликом: уже выбранные цели — чипами, добавление — одной кнопкой вместо ручного ввода ID */
+.lnkChips{display:flex;flex-wrap:wrap;gap:5px}
+.lnkEmpty{font-size:11px;color:var(--muted)}
+.lnkChip{display:inline-flex;align-items:center;gap:4px;background:#eef2f8;border:1px solid var(--line);
+  border-radius:999px;padding:3px 4px 3px 9px;font-size:11px;color:var(--ink)}
+.lnkChipX{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;
+  width:16px;height:16px;line-height:1;border-radius:50%;padding:0}
+.lnkChipX:hover{background:#ef4444;color:#fff}
+.lnkAdd{text-align:center;padding:7px 0;border:1px dashed var(--line);border-radius:7px;
+  font-size:11.5px;cursor:pointer;background:#fafbfd;color:var(--accent)}
+.lnkAdd:hover{background:#eef2f8}
+.lnkAdd.on{background:var(--accent);border-style:solid;color:#fff}
 #widgets{color:#5b6472;line-height:1.65}
 #widgets code{background:#eef2f8;padding:1px 5px;border-radius:4px;font-size:11px;color:var(--accent-dark)}
 #widgets b{color:var(--ink)}
@@ -2527,6 +2539,32 @@ function paintFrame(){
     }
     ctx.restore();
   }
+  /* Линии связей — только в редакторе, не в игре: пунктир от источника
+     (кнопка/рычаг/портал/...) к каждой его цели, чтобы было видно, что
+     на что влияет, не кликая по каждому объекту. Линия, где участвует
+     выделенный объект (с любой стороны), ярче остальных. */
+  if(!playing){
+    for(var cki=0; cki<objects.length; cki++){
+      var co = objects[cki];
+      if(LINKED.indexOf(co.type) === -1 || !co.targetIds) continue;
+      var cids = co.targetIds.split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+      for(var cji=0; cji<cids.length; cji++){
+        var ct = null;
+        for(var cmi=0; cmi<objects.length; cmi++){ if(objects[cmi].customId === cids[cji]){ ct = objects[cmi]; break; } }
+        if(!ct) continue;
+        var cInvolved = (sel === co || sel === ct);
+        ctx.save();
+        ctx.strokeStyle = cInvolved ? "rgba(59,130,246,.85)" : "rgba(59,130,246,.28)";
+        ctx.lineWidth = (cInvolved ? 2 : 1.3) / view.s;
+        ctx.setLineDash([5/view.s, 4/view.s]);
+        ctx.beginPath();
+        ctx.moveTo(co.x+co.w/2, co.y+co.h/2);
+        ctx.lineTo(ct.x+ct.w/2, ct.y+ct.h/2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
   if(playing && !pl.dead){
     ctx.save(); ctx.translate(pl.x, pl.y);
     // себя в укрытии видно бледным — чужие не видят вообще
@@ -2779,6 +2817,31 @@ function gripAt(x,y){
 var snapN = function(v){ return grid ? Math.round(v/GRID)*GRID : v; };
 
 var drag = null;
+/* Привязка кликом: Связи {from, single} — выбранный источник ждёт клика
+   по карте. Ставится/снимается кнопкой в инспекторе (см. linkPicker()),
+   перехватывается в самом начале mousedown/touchstart — раньше pan и
+   down(), иначе клик по карте вместо выбора цели снял бы выделение или
+   потащил карту. */
+var linkPick = null;
+function finishLinkPick(picked){
+  var src = linkPick.from, single = linkPick.single;
+  if(picked === src){ linkPick = null; inspect(); return; }   // клик по себе — отмена
+  if(!picked || LINKED.indexOf(picked.type) === -1) return;    // мимо — пробуем ещё раз
+  linkPick = null;
+  commit();
+  // у блока/круга/треугольника своего ID может ещё не быть — платформы и
+  // двери не заводят его сами при создании (в отличие от кнопки/рычага/
+  // портала), заводим здесь же, по той же схеме "w"+id, что и везде
+  if(!picked.customId) picked.customId = "w" + picked.id;
+  if(single){
+    src.targetIds = picked.customId;
+  } else {
+    var ids = (src.targetIds||"").split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+    if(ids.indexOf(picked.customId) === -1) ids.push(picked.customId);
+    src.targetIds = ids.join(",");
+  }
+  inspect();
+}
 function cPt(cx,cy){ var r = cv.getBoundingClientRect(); return {x:cx-r.left, y:cy-r.top}; }
 function down(x,y,shift){
   if(playing) return;
@@ -2859,6 +2922,7 @@ cv.addEventListener("mousedown", function(e){
   }
   if(e.button !== 0) return;
   var p = toWorld(e.offsetX, e.offsetY);
+  if(linkPick){ finishLinkPick(at(p.x, p.y)); e.preventDefault(); return; }
   if(wantPan(p.x, p.y)){
     if(tool === "select" && sel){ sel = null; inspect(); }
     startPan(e.offsetX, e.offsetY); e.preventDefault(); return;
@@ -2900,6 +2964,7 @@ cv.addEventListener("touchstart", function(e){
   if(playing) return;
   if(e.touches.length !== 1) return;
   var c = cPt(e.touches[0].clientX, e.touches[0].clientY), p = toWorld(c.x,c.y);
+  if(linkPick){ finishLinkPick(at(p.x, p.y)); e.preventDefault(); return; }
   if(wantPan(p.x, p.y)){
     if(tool === "select" && sel){ sel = null; inspect(); }
     startPan(c.x, c.y); e.preventDefault(); return;
@@ -2975,6 +3040,7 @@ document.addEventListener("keydown", function(e){
     if(e.code === "Escape") stop();
     return;
   }
+  if(e.key === "Escape" && linkPick){ linkPick = null; inspect(); return; }
   var mod = e.ctrlKey || e.metaKey;
   if(mod && e.code === "KeyZ"){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if(mod && e.code === "KeyY"){ e.preventDefault(); redo(); return; }
@@ -3096,32 +3162,57 @@ function hint(t){
   d.appendChild(b); props.appendChild(d);
 }
 
-/* Как связать механизм. Показываем у кнопок, рычагов и их целей —
-   там, где это действительно нужно, и по клику, а не постоянной надписью. */
-function linkHelp(){
-  var d = document.createElement("div");
-  d.className = "pHelp";
-  var h = document.createElement("div");
-  h.className = "pHelpHead";
-  h.textContent = TR("linkHelpClosed","Как связать? ▾");
-  var b = document.createElement("div");
-  b.className = "pHelpBody";
-  b.innerHTML = TR("linkHelpBody",
-      "1. У <b>блока-цели</b> задай <b>ID</b> — например <code>g1</code>.<br>"
-    + "2. У <b>Кнопки</b> или <b>Рычага</b> впиши тот же <code>g1</code> в поле <b>Цели</b>.<br>"
-    + "3. Нажми ▶ — блок откроется от кнопки.<br><br>"
-    + "Целей можно указать несколько через запятую: <code>g1,g2</code>.<br>"
-    + "Кнопка держит, пока на ней стоят. Рычаг переключает насовсем.");
-  h.onclick = function(){
-    var open = b.style.display === "block";
-    b.style.display = open ? "none" : "block";
-    h.textContent = open ? TR("linkHelpClosed","Как связать? ▾") : TR("linkHelpOpen","Как связать? ▴");
-  };
-  d.appendChild(h); d.appendChild(b);
-  props.appendChild(d);
+// короткое читаемое имя объекта для чипов связей — тот же вид, что в заголовке инспектора
+function linkName(o){
+  var T = TOOLS.filter(function(x){ return x.t === o.type; })[0];
+  return (T ? TR(T.k, T.n) : o.type) + " #" + o.id;
+}
+/* Привязка кликом вместо ручного набора ID: список уже выбранных целей
+   чипами (крестик — убрать), кнопка "Добавить" ставит linkPick и дальше
+   ждёт клика по карте (см. finishLinkPick() и перехват в mousedown/
+   touchstart выше). single — для портала: там цель одна, новый выбор
+   просто заменяет старую, а не добавляется в список. */
+function linkPicker(src, single){
+  var r = pr(); r.style.flexDirection = "column"; r.style.alignItems = "stretch"; r.style.gap = "6px";
+  var lbl = document.createElement("label"); lbl.textContent = TR("lblTargets","Цели");
+  r.appendChild(lbl);
+  var ids = (src.targetIds||"").split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+  var wrap = document.createElement("div"); wrap.className = "lnkChips";
+  if(!ids.length){
+    var empty = document.createElement("span"); empty.className = "lnkEmpty";
+    empty.textContent = TR("lnkNone","Пока ничего не выбрано");
+    wrap.appendChild(empty);
+  }
+  ids.forEach(function(id){
+    var t = objects.filter(function(o){ return o.customId === id; })[0];
+    var chip = document.createElement("span"); chip.className = "lnkChip";
+    chip.appendChild(document.createTextNode(t ? linkName(t) : (TR("lnkMissing","пропало: ") + id)));
+    var x = document.createElement("button"); x.type = "button"; x.className = "lnkChipX";
+    x.title = TR("lnkRemove","Убрать связь"); x.textContent = "×";
+    x.addEventListener("click", function(e){
+      e.stopPropagation(); commit();
+      src.targetIds = ids.filter(function(other){ return other !== id; }).join(",");
+      inspect();
+    });
+    chip.appendChild(x); wrap.appendChild(chip);
+  });
+  r.appendChild(wrap);
+  var picking = !!(linkPick && linkPick.from === src);
+  var addBtn = document.createElement("div");
+  addBtn.className = "lnkAdd" + (picking ? " on" : "");
+  addBtn.textContent = picking
+    ? TR("lnkPicking","Кликни объект на карте… (Esc — отмена)")
+    : (single ? TR("lnkPickOne","Выбрать на карте") : TR("lnkPickAdd","+ Добавить с карты"));
+  addBtn.addEventListener("click", function(){
+    linkPick = picking ? null : { from: src, single: !!single };
+    inspect();
+  });
+  r.appendChild(addBtn);
 }
 function inspect(){
   var box = document.getElementById("insp");
+  // выделение сменилось (или снялось) — незавершённый выбор цели теперь ничей
+  if(linkPick && linkPick.from !== sel) linkPick = null;
   if(!sel || playing){ box.style.display = "none"; return; }
   box.style.display = "flex";
   props.innerHTML = "";
@@ -3256,9 +3347,9 @@ function inspect(){
   // мертвец — свой объект со своей физикой; из свойств ему нужна одна подсказка
   if(sel.type === "zombie")
     hint(TR("zombieHint","Ходит за игроком и убивает касанием. Работает только при модификации Zombie Apocalypse — в классическом варианте карты его нет."));
-  // портал — своя подсказка вместо linkHelp(): та объясняет кнопку/рычаг, а не пару площадок
+  // портал — своя подсказка: поясняет именно пару площадок, а не кнопку/рычаг
   if(sel.type === "teleport"){
-    hint(TR("teleportHint","Пара площадок. Впиши ID другой площадки в «Цели» у этой — и наоборот у той. Наступил на одну — оказался на другой."));
+    hint(TR("teleportHint","Пара площадок, которые переносят друг в друга. Жми «Выбрать на карте» ниже и кликни вторую площадку — свяжутся сами."));
     // чисто визуальная галочка — на саму телепортацию не влияет, та всё
     // равно работает по ID/Целям (см. teleportTarget() в step())
     chk(TR("chkTeleExit","Это выход (синий)"), sel.teleExit, function(v){ sel.teleExit = v; });
@@ -3267,10 +3358,9 @@ function inspect(){
     grp(TR("grpLinks","Связи"));
     txt("ID", sel.customId, function(v){ sel.customId = v; });
     if(sel.type === "button" || sel.type === "lever" || sel.type === "laserFeed" || sel.type === "teleport" || sel.laser)
-      txtClear(TR("lblTargets","Цели"), sel.targetIds, function(v){ sel.targetIds = v; });
+      linkPicker(sel, sel.type === "teleport");
     if(SOLID.indexOf(sel.type) !== -1)
       chk(TR("chkStartsOpen","Открыт сначала (проходим)"), sel.startsOpen, function(v){ sel.startsOpen = v; });
-    if(sel.type !== "teleport") linkHelp();
   }
   if(sel.type === "laserFeed" || sel.laser)
     num(TR("lblLaserRange","Дальность луча"), sel.range||500, function(v){ sel.range = Math.max(20,v); });
