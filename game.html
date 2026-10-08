@@ -658,8 +658,12 @@ var PAINT = {
      o.teleExit различает вход (оранжевый) и выход (синий) — чисто
      визуально, на саму телепортацию не влияет (она всё равно работает
      по ID/Целям, см. teleportTarget()); настраивается галочкой в
-     инспекторе. Чёрная "дыра" с огненным кольцом вокруг — под стиль
-     референса, кольцо из отдельных языков пламени мерцает через anim. */
+     инспекторе. Чёрная "дыра" с огненной рамкой вокруг — под стиль
+     референса: языки пламени гуще и шире прежних (14 вместо 9,
+     перекрывают друг друга), плюс сплошное кольцо под ними убирает
+     просветы между языками у самого основания — рамка читается цельной,
+     а не рассыпается на отдельные "запятые". Яркий тонкий контур у края
+     дыры и редкие искры наружу добавляют глубины. */
   teleport: function(o){
     var cx = o.w/2, cy = o.h/2, rx = o.w/2, ry = o.h/2, rm = Math.min(rx,ry);
     var exit = !!o.teleExit;
@@ -667,27 +671,27 @@ var PAINT = {
     var cMid    = exit ? "#38bdf8" : "#fb923c";
     var cDeep   = exit ? "#0369a1" : "#9a3412";
     ctx.save();
-    var glow = ctx.createRadialGradient(cx,cy,rm*0.55, cx,cy, Math.max(rx,ry)*1.3);
-    glow.addColorStop(0, cMid+"66"); glow.addColorStop(1, cMid+"00");
+    var glow = ctx.createRadialGradient(cx,cy,rm*0.55, cx,cy, Math.max(rx,ry)*1.35);
+    glow.addColorStop(0, cMid+"55"); glow.addColorStop(1, cMid+"00");
     ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.ellipse(cx,cy,rx*1.3,ry*1.3,0,0,6.2832); ctx.fill();
-    /* Языки пламени — не ровные спицы, а закруглённые капли неравной
-       длины: золотой угол (2.4 рад) даёт разброс по кругу без видимой
-       симметрии "шестерёнки". Без lighter-блендинга — иначе перекрытия
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx*1.35,ry*1.35,0,0,6.2832); ctx.fill();
+    /* Языки пламени — закруглённые капли неравной длины: золотой угол
+       (2.4 рад) даёт разброс по кругу без видимой симметрии
+       "шестерёнки". Без lighter-блендинга — иначе перекрытия
        высветляются почти до белого и цвет теряется. */
-    var n = 9, i;
+    var n = 14, i;
     for(i=0;i<n;i++){
       var seed = i*2.399963;
       var a = seed;
-      var flick = 0.55 + 0.45*Math.sin(anim*0.09 + i*2.7);
-      var len = rm * (0.3 + 0.16*Math.sin(seed*5)) * (0.65+0.6*flick);
-      var spread = 0.15 + 0.04*Math.sin(seed*7);
-      var b1x = cx+Math.cos(a-spread)*rx*0.88, b1y = cy+Math.sin(a-spread)*ry*0.88;
-      var b2x = cx+Math.cos(a+spread)*rx*0.88, b2y = cy+Math.sin(a+spread)*ry*0.88;
+      var flick = 0.6 + 0.4*Math.sin(anim*0.1 + i*2.7);
+      var len = rm * (0.32 + 0.13*Math.sin(seed*5)) * (0.7+0.5*flick);
+      var spread = 0.26 + 0.05*Math.sin(seed*7);
+      var b1x = cx+Math.cos(a-spread)*rx*0.84, b1y = cy+Math.sin(a-spread)*ry*0.84;
+      var b2x = cx+Math.cos(a+spread)*rx*0.84, b2y = cy+Math.sin(a+spread)*ry*0.84;
       var tx = cx+Math.cos(a)*(rx+len), ty = cy+Math.sin(a)*(ry+len);
-      var mx = cx+Math.cos(a)*(rx+len*0.55), my = cy+Math.sin(a)*(ry+len*0.55);
-      var fg = ctx.createRadialGradient(cx+Math.cos(a)*rx*0.88, cy+Math.sin(a)*ry*0.88, 0, tx, ty, len);
-      fg.addColorStop(0, cDeep); fg.addColorStop(0.5, cMid); fg.addColorStop(1, cBright+"00");
+      var mx = cx+Math.cos(a)*(rx+len*0.5), my = cy+Math.sin(a)*(ry+len*0.5);
+      var fg = ctx.createRadialGradient(cx+Math.cos(a)*rx*0.84, cy+Math.sin(a)*ry*0.84, 0, tx, ty, len);
+      fg.addColorStop(0, cDeep); fg.addColorStop(0.45, cMid); fg.addColorStop(1, cBright+"00");
       ctx.fillStyle = fg;
       ctx.beginPath();
       ctx.moveTo(b1x,b1y);
@@ -695,11 +699,31 @@ var PAINT = {
       ctx.quadraticCurveTo(mx + (b2x-mx)*0.3, my + (b2y-my)*0.3, b2x, b2y);
       ctx.closePath(); ctx.fill();
     }
+    // сплошное кольцо у основания языков — закрывает просветы между ними
+    ctx.strokeStyle = cMid;
+    ctx.lineWidth = Math.max(1.8, rm*0.22);
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx*0.86,ry*0.86,0,0,6.2832); ctx.stroke();
+    // яркий тонкий контур у самого края дыры
     ctx.strokeStyle = cBright;
-    ctx.lineWidth = Math.max(1.2, rm*0.13);
-    ctx.beginPath(); ctx.ellipse(cx,cy,rx*0.85,ry*0.85,0,0,6.2832); ctx.stroke();
+    ctx.lineWidth = Math.max(1.2, rm*0.1);
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx*0.76,ry*0.76,0,0,6.2832); ctx.stroke();
+    // искры — мелкие частицы, улетающие наружу от кольца по кругу через anim
+    ctx.fillStyle = cBright;
+    var sparks = 5;
+    for(i=0;i<sparks;i++){
+      var sPhase = (anim*0.7 + i*53) % 46;
+      var sAlpha = Math.max(0, 1 - sPhase/46);
+      if(sAlpha <= 0.02) continue;
+      var sa = i*2.75;
+      var sDist = rm*1.05 + sPhase*0.5;
+      ctx.globalAlpha = sAlpha*0.85;
+      ctx.beginPath();
+      ctx.arc(cx+Math.cos(sa)*sDist, cy+Math.sin(sa)*sDist*(ry/rx), Math.max(0.8, rm*0.045), 0, 6.2832);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     ctx.fillStyle = "#05070a";
-    ctx.beginPath(); ctx.ellipse(cx,cy,rx*0.7,ry*0.7,0,0,6.2832); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx*0.68,ry*0.68,0,0,6.2832); ctx.fill();
     ctx.restore();
   },
   /* Излучатель светится ярче, пока луч перекрыт игроком (o._act — тот же
