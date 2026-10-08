@@ -299,13 +299,14 @@ else {
   for (let i = 0; i < 60; i++) { GAME.pl.y = 150; GAME.step(); freeFall = GAME.pl.vy; }
   check('у стены падение медленнее', slideVY < freeFall, slideVY.toFixed(2) + ' против ' + freeFall.toFixed(2));
 
-  // 7б. отталкивание от стены: прыжок у стены — это именно кик прочь от
-  //     неё (вертикаль + горизонталь, wallVX), а не бесконечный подъём
-  //     вдоль стены. Один прыжок — и снова падение, как обычно.
+  // 7б. отталкивание от стены — только впритык к её концу (нижний край
+  //     тут, y=400), не по всей высоте: прыжок — это кик прочь от стены
+  //     (вертикаль + горизонталь, wallVX), а не бесконечный подъём вдоль
+  //     неё. Один прыжок — и снова падение, как обычно.
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floor, spawn, wall] });
   GAME.startPlay();
   clearKeys();
-  GAME.pl.x = 296; GAME.pl.y = 150; GAME.pl.vy = 0;
+  GAME.pl.x = 296; GAME.pl.y = 298; GAME.pl.vy = 0;   // низ игрока (398) впритык к низу стены (400)
   GAME.keys.r = true;
   GAME.step();                     // кадр касания стены
   const xBeforeKick = GAME.pl.x;
