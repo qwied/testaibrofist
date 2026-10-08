@@ -118,6 +118,12 @@
       + '<div class="ow-b" id="owCGo">' + T('apply', 'Применить') + '</div>'
       + '<div class="ow-m" id="owCMsg"></div>'
 
+      + '<div class="ow-sub">' + T('setJoinDate', 'Дата регистрации') + '</div>'
+      + '<input class="ow-i" id="owJName" placeholder="' + T('playerName', 'Ник игрока') + '">'
+      + '<input class="ow-i" id="owJDate" type="date">'
+      + '<div class="ow-b" id="owJGo">' + T('apply', 'Применить') + '</div>'
+      + '<div class="ow-m" id="owJMsg"></div>'
+
       + '<div class="ow-sub">' + T('boostVotes', 'Оценка карты') + '</div>'
       + '<div class="ow-m" style="text-align:left;color:#6b7280;margin-bottom:4px">'
       +   'These numbers set the final total on the card, not an increment.</div>'
@@ -154,6 +160,17 @@
         name: box.querySelector('#owCName').value.trim(),
         coins: box.querySelector('#owCAmt').value.trim(),
         mode: box.querySelector('#owCMode').value
+      }).then(function (r) {
+        m.style.color = r.status === 'success' ? '#2e9b2e' : 'red';
+        m.textContent = r.message || '';
+      }).catch(function () { m.style.color = 'red'; m.textContent = T('serverDown', 'Сервер недоступен'); });
+    };
+
+    box.querySelector('#owJGo').onclick = function () {
+      var m = box.querySelector('#owJMsg');
+      post('/owner/setJoinDate', {
+        name: box.querySelector('#owJName').value.trim(),
+        date: box.querySelector('#owJDate').value
       }).then(function (r) {
         m.style.color = r.status === 'success' ? '#2e9b2e' : 'red';
         m.textContent = r.message || '';

@@ -132,58 +132,6 @@ app.use((req, res, next) => {
   next();
 });
 
-/* Мини-лимитер запросов: без него один скрипт способен забомбить сервер
-   тысячами обращений. Обычному игроку лимит не виден никогда. */
-const RL_BUCKETS = new Map();
-setInterval(() => {
-  const now = Date.now();
-  RL_BUCKETS.forEach((b, k) => { if (now - b.start > 120000) RL_BUCKETS.delete(k); });
-}, 60000).unref();
-/* За Cloudflare реальный адрес приходит в CF-Connecting-IP — но эти
-   заголовки шлёт КЛИЕНТ, и если перед Node в моменте нет прокси, который
-   их сам перезаписывает (например, прямой заход на *.up.railway.app без
-   Cloudflare), любой запрос может подставить туда что угодно и на каждый
-   запрос менять "свой IP" — лимитер и защита от брутфорса тогда не значат
-   ничего. Доверяем этим заголовкам только если оператор явно подтвердил,
-   что перед сервером всегда стоит такой прокси. */
-const TRUST_PROXY_IP = /^(1|true|yes)$/i.test(String(process.env.TRUST_PROXY_IP || ''));
-function clientKey(req) {
-  if (TRUST_PROXY_IP) {
-    const cf = String(req.headers['cf-connecting-ip'] || '').trim();
-    if (cf) return cf;
-    // крайний левый элемент X-Forwarded-For подделывается клиентом
-    const xff = String(req.headers['x-forwarded-for'] || '');
-    if (xff) return xff.split(',').pop().trim();
-  }
-  return (req.socket && req.socket.remoteAddress) || 'unknown';
-}
-/* Статику (весь каталог сайта отдаётся через express.static ниже —
-   html/js/css/картинки) лимитер раньше тоже считал, наравне с «живыми»
-   запросами. Один переход по страницам — это уже десяток-другой файлов
-   разом, а за последние сессии на сайте прибавилось поллинга (Messages
-   каждые 5-8 сек, Leaderboard каждые 15 сек) — в сумме лимит стал
-   реально ловить обычных игроков, а не только скрипты-бомбардировщики.
-   Хуже того: получив 429 на sound.js, браузер получал JSON вместо
-   скрипта и ронял его с ошибкой MIME — сайт частично ломался.
-   Статика ничего не считает и не пишет на диск, лимитировать её незачем —
-   и так есть Cache-Control на этих файлах (см. ниже). */
-const STATIC_EXT = /\.(js|css|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|map|xml|txt|webmanifest|mp3|mp4)$/i;
-function rateLimit(limit, windowMs) {
-  return (req, res, next) => {
-    if (req.method === 'GET' && STATIC_EXT.test(req.path)) return next();
-    const k = clientKey(req);
-    const now = Date.now();
-    let b = RL_BUCKETS.get(k);
-    if (!b || now - b.start > windowMs) { b = { start: now, n: 0 }; RL_BUCKETS.set(k, b); }
-    b.n++;
-    if (b.n > limit) return res.status(429).json({ status: 'error', message: 'Too many requests, try again later' });
-    next();
-  };
-}
-// было 240 — с ростом поллинга (Messages/Leaderboard) стало тесно и для
-// динамических запросов настоящего активного игрока в нескольких вкладках
-app.use(rateLimit(500, 60000));   // 500 запросов в минуту с одного адреса
-
 /* CSRF: POST-запросы принимаем только со своего сайта.
    Кука и так SameSite=Lax, это вторая линия обороны. */
 app.use((req, res, next) => {

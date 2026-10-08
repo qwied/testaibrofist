@@ -513,6 +513,29 @@ function register(app, acc) {
     });
   });
 
+  // ---------- дата регистрации любого профиля (только владелец) ----------
+  app.post('/owner/setJoinDate', (req, res) => {
+    if (!ownerOnly(req, res)) return;
+    const db = getDb();
+    const name = String(req.body.name || '').trim();
+    const target = db.users[key(name)];
+    if (!target) return res.json({ status: 'error', message: 'Player «' + name + '» not found' });
+
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(req.body.date || '').trim());
+    if (!m) return res.json({ status: 'error', message: 'Use YYYY-MM-DD' });
+    const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    const dt = new Date(Date.UTC(y, mo - 1, d));
+    // Date() перекатывает несуществующий день в следующий месяц (30
+    // февраля станет 2 марта) вместо ошибки — сверяем компоненты обратно,
+    // чтобы поймать именно такую дату, а не молча её принять
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d)
+      return res.json({ status: 'error', message: 'That date does not exist' });
+
+    target.joined = dt.getTime();
+    saveUsers();
+    res.json({ status: 'success', message: '«' + target.name + '» now joined ' + req.body.date });
+  });
+
   // ---------- накрутка лайков и дизлайков (только владелец) ----------
   const mapsApi = require('./maps.js');
 
