@@ -2010,15 +2010,15 @@ function step(){
     if((goL ? (pl.x + pl.w) - sp[0] : sp[1] - pl.x) > Math.abs(pl.vx) + 8) return;
     if(goL){ pl.x = sp[0] - pl.w; if(pl.vx !== 0) pl.wall = 1; }
     else   { pl.x = sp[1];        if(pl.vx !== 0) pl.wall = -1; }
-    /* Отталкивание от стены — только впритык к самому концу стены по Y
-       (WALL_JUMP_ZONE от её верха или низа), не по всей высоте. Конец
-       стены смотрим чуть ВНУТРИ блока от грани касания — pl.x тут уже
-       снаружи блока, им саму стену не зацепить. */
+    /* Отталкивание от стены — только впритык к НИЖНЕМУ концу стены по Y
+       (WALL_JUMP_ZONE), не по всей высоте и не у верхнего конца: там уже
+       есть отдельный захват уступа (pl.grab) и прыжок там не нужен.
+       Конец стены смотрим чуть ВНУТРИ блока от грани касания — pl.x тут
+       уже снаружи блока, им саму стену не зацепить. */
     if(pl.wall !== 0 && !o.moves){
       var wallEdge = goL ? sp[0] + 1 : sp[1] - 1;
       var wallY = spanY(P, wallEdge - 0.5, wallEdge + 0.5);
-      if(wallY && (Math.abs((pl.y + pl.h) - wallY[1]) <= WALL_JUMP_ZONE
-                || Math.abs(pl.y - wallY[0]) <= WALL_JUMP_ZONE)){
+      if(wallY && Math.abs((pl.y + pl.h) - wallY[1]) <= WALL_JUMP_ZONE){
         pl.wallCorner = true;
       }
     }
