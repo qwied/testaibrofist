@@ -515,6 +515,22 @@ if (GAME && GAME.restartRun) {
   GAME.loadMap({ mode: 'race', objects: [floorF, spawnF, finNear] });
   check('старт рядом с финишем ловится', GAME.spawnTooClose() !== null,
         'расстояние ' + GAME.spawnTooClose());
+
+  // зомби существует только при модификации Zombie Apocalypse — в
+  // старой карте без неё (apoc не выставлен) он не должен остаться
+  const floorZ = { id: 1, type: 'rect', x: 0, y: 400, w: 600, h: 40, rot: 0, fill: '#111827' };
+  const spawnZ = { id: 2, type: 'spawn', x: 60, y: 340, w: 30, h: 100, rot: 0, fill: '#111827' };
+  const zombie = { id: 50, type: 'zombie', x: 200, y: 300, w: 22, h: 52, rot: 0 };
+  GAME.loadMap({ mode: 'hideAndSeek', objects: [floorZ, spawnZ, zombie] });
+  check('зомби без модификации Zombie Apocalypse не остаётся в карте',
+        !GAME.objects.some(o => o.type === 'zombie'), GAME.objects.map(o => o.type).join(','));
+  check('палитра: инструмент зомби недоступен без модификации', !GAME.toolOK('zombie'));
+
+  // а при включённой модификации — остаётся, и инструмент доступен
+  GAME.loadMap({ mode: 'hideAndSeek', apoc: true, objects: [floorZ, spawnZ, zombie] });
+  check('зомби при модификации Zombie Apocalypse остаётся в карте',
+        GAME.objects.some(o => o.type === 'zombie'), GAME.objects.map(o => o.type).join(','));
+  check('палитра: инструмент зомби доступен с модификацией', GAME.toolOK('zombie'));
 }
 
 console.log(`Физика: пройдено ${phys}, ошибок ${physFail}`);

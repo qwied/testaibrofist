@@ -106,38 +106,15 @@ function checkNewPassword(pw) {
   return '';
 }
 
-/* Реальный адрес игрока за прокси: Cloudflare отдаёт его в CF-Connecting-IP.
-   Но это обычный заголовок запроса — если сервер доступен и без такого
-   прокси перед собой (например, напрямую по *.up.railway.app), любой
-   клиент подставляет туда что хочет и на каждый запрос выглядит новым
-   устройством: обходится и лимит попыток входа, и «один аккаунт на IP».
-   Доверяем заголовку только когда оператор явно подтвердил переменной
-   окружения, что прокси перед сервером есть всегда (см. server.js). */
-const TRUST_PROXY_IP = /^(1|true|yes)$/i.test(String(process.env.TRUST_PROXY_IP || ''));
-function clientIp(req) {
-  if (TRUST_PROXY_IP) {
-    const cf = String(req.headers['cf-connecting-ip'] || '').trim();
-    if (cf) return cf;
-    // первый элемент X-Forwarded-For клиент рисует себе сам
-    const xff = String(req.headers['x-forwarded-for'] || '');
-    if (xff) return xff.split(',').pop().trim();
-  }
-  return (req.socket && req.socket.remoteAddress) || '';
-}
-
-// один аккаунт на устройство: IP храним хешем, сам адрес не сохраняем
-function ipKey(req) {
-  const raw = clientIp(req);
-  return raw ? crypto.createHash('sha256').update(raw).digest('hex').slice(0, 24) : '';
-}
-
 /* ---------- защита от брутфорса ----------
-   После серии неудачных попыток вход на аккаунт и с адреса
-   временно закрыт. Блокировка копится отдельно по нику и по IP. */
+   После серии неудачных попыток вход на аккаунт временно закрыт.
+   Блокировка копится по нику — раньше ещё и отдельно по IP, но адрес
+   игрока больше нигде не используем (вход теперь в основном через
+   Discord), а блокировка по одному нику защищает ничуть не хуже. */
 const LOCK_WINDOW = 15 * 60 * 1000;   // окно 15 минут
 const LOCK_MAX = 8;                   // столько неудач подряд терпим
 const LOCK_TIME = 15 * 60 * 1000;     // само запирание — 15 минут
-const loginTries = new Map();         // "ip|name" -> {n, until}
+const loginTries = new Map();         // name -> {n, until}
 function loginBlocked(k) {
   const t = loginTries.get(k);
   return t && t.until > Date.now() ? t.until : 0;
@@ -472,7 +449,7 @@ function register(app) {
   const doLogin = (req, res) => {
     const name = String(req.body.username || req.body.name || '').trim();
     const password = String(req.body.password || '');
-    const k = ipKey(req) + '|' + key(name);
+    const k = key(name);
     const blocked = loginBlocked(k);
     if (blocked)
       return res.json({ status: 'error',
