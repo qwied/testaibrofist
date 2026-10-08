@@ -1119,13 +1119,6 @@ var JUMP_H = 155, MAX_VX = 6.2, FRIC = 0, AIR = 0,
        захвата после отпускания/залезания, чтобы не хвататься обратно
        в тот же кадр, пока хитбоксы ещё соприкасаются. */
     GRAB_ZONE = 16, GRAB_COOLDOWN = 10,
-    /* Отталкивание от стены (см. pl.wallCorner ниже) — только впритык к
-       самому концу стены по Y, а не по всей её высоте: попросили именно
-       «1 пиксель угла», не стену целиком. Буквально 1px не ставим —
-       между кадрами игрок сдвигается на несколько px и мог бы проскочить
-       мимо такого узкого окна, а не это и имели в виду. 3px — то же самое
-       на глаз, но реально успевает сработать. */
-    WALL_JUMP_ZONE = 3,
     STUCK_WINDOW = 150;   // окно сторожа застревания в прятках — см. respawn()/step()
 // SUPER BRO (ворота superGate, только Race) — длительность бафа полёта/иммунитета, мс
 var SUPER_MS = 8000, SUPER_GRAVITY = 0.32;
@@ -1904,20 +1897,15 @@ function step(){
     pl.selfJump = false; buf = 0; coy = 0; hold = 0;
   } else {
     /* Кнопку прыжка можно держать: как только игрок коснулся земли,
-       он прыгает снова, без повторного нажатия. Впритык к концу стены
-       (pl.wallCorner, см. X-pass выше) — тоже: это отталкивание от
-       стены, вертикаль прыжка плюс горизонтальный кик прочь от стены
-       (wallVX). По всей остальной высоте стены — только соскальзывание
-       (WALL_SLIDE ниже), не прыжок. Климб наверх через это не получить —
-       для этого есть явный захват уступа (pl.grab выше). */
-    if(keys.u && !pl.selfJump && (pl.ground || coy > 0 || pl.wallCorner)) buf = BUFFER;
+       он прыгает снова, без повторного нажатия. */
+    if(keys.u && !pl.selfJump && (pl.ground || coy > 0)) buf = BUFFER;
     if(buf > 0){
+      /* По стене не оттолкнуться и на бегу по ней не забраться — только
+         соскальзывание (WALL_SLIDE ниже). Забраться можно только с
+         явного захвата уступа у самого верха стены — см. pl.grab выше
+         и tryGrab() ниже. */
       if(coy > 0 || pl.ground){
         pl.vy = jumpV(); buf = 0; coy = 0; hold = 0; pl.ground = false; pl.selfJump = true;
-        if(window.BFSound) BFSound.jump();
-      } else if(pl.wallCorner){
-        pl.vy = jumpV(); pl.vx = (pl.wall === 1 ? -1 : 1) * wallVX();
-        buf = 0; coy = 0; hold = 0; pl.ground = false; pl.selfJump = true;
         if(window.BFSound) BFSound.jump();
       }
     }
@@ -1940,7 +1928,7 @@ function step(){
   // так стоит ровно там, где его поставил tryGrab()
   if(!grabbing){
   var xBefore = pl.x;                              // где игрок был до этого шага
-  pl.x += pl.vx; pl.wall = 0; pl.wallCorner = false;
+  pl.x += pl.vx; pl.wall = 0;
   sol.forEach(function(o){
     var bb = bbox(o);
     if(pl.x >= bb[2] || pl.x+pl.w <= bb[0] || pl.y >= bb[3] || pl.y+pl.h <= bb[1]) return;
@@ -2010,18 +1998,6 @@ function step(){
     if((goL ? (pl.x + pl.w) - sp[0] : sp[1] - pl.x) > Math.abs(pl.vx) + 8) return;
     if(goL){ pl.x = sp[0] - pl.w; if(pl.vx !== 0) pl.wall = 1; }
     else   { pl.x = sp[1];        if(pl.vx !== 0) pl.wall = -1; }
-    /* Отталкивание от стены — только впритык к НИЖНЕМУ концу стены по Y
-       (WALL_JUMP_ZONE), не по всей высоте и не у верхнего конца: там уже
-       есть отдельный захват уступа (pl.grab) и прыжок там не нужен.
-       Конец стены смотрим чуть ВНУТРИ блока от грани касания — pl.x тут
-       уже снаружи блока, им саму стену не зацепить. */
-    if(pl.wall !== 0 && !o.moves){
-      var wallEdge = goL ? sp[0] + 1 : sp[1] - 1;
-      var wallY = spanY(P, wallEdge - 0.5, wallEdge + 0.5);
-      if(wallY && Math.abs((pl.y + pl.h) - wallY[1]) <= WALL_JUMP_ZONE){
-        pl.wallCorner = true;
-      }
-    }
     /* Рикошет отражает движение, а не гасит его. Медленное касание не
        отражаем — иначе игрок дрожит, прижавшись к блоку. */
     if(o.ricochet && Math.abs(pl.vx) > RICO_MIN) ricochet(o);
