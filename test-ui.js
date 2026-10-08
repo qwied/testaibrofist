@@ -319,6 +319,18 @@ else {
   for (let i = 0; i < 60; i++) { GAME.step(); if (GAME.pl.y < topYKick) topYKick = GAME.pl.y; if (GAME.pl.vy > 0) fellBack = true; }
   check('это один прыжок, а не бесконечный подъём', fellBack);
 
+  // 7в. у ВЕРХНЕГО конца стены кик не взводится вовсе — там уже есть
+  //     отдельный захват уступа (pl.grab), второй механики там не нужно,
+  //     даже если захват почему-то не сработал в этот же кадр.
+  GAME.loadMap({ mode: 'hideAndSeek', objects: [floor, spawn, wall] });
+  GAME.startPlay();
+  clearKeys();
+  GAME.pl.x = 296; GAME.pl.y = 100; GAME.pl.vy = 0;   // верх игрока вровень с верхом стены (100)
+  GAME.keys.r = true;
+  GAME.step();                     // кадр касания стены
+  check('у верхнего конца стены pl.wallCorner не взводится', GAME.pl.wallCorner === false,
+        'wallCorner=' + GAME.pl.wallCorner);
+
   // 11. сила батута и наклонный отскок
   function bounceTop(power, rot) {
     // батут поднят над полом: иначе игрок гасит скорость о пол, а не о него
