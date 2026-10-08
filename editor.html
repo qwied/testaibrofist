@@ -621,44 +621,82 @@ var PAINT = {
     ctx.fillStyle = C.gold1;
     ctx.beginPath(); ctx.arc(o.w*0.8,o.h*0.52,Math.max(2,o.w*0.07),0,6.2832); ctx.fill();
   },
+  /* Плоский стиль по образцу — тёмная база, поверх неё красная плашка,
+     которая при нажатии "утапливается" вниз. Раньше тут был o._active,
+     которого нигде в коде не существует (реально переключает o._act,
+     см. step()/drive()) — кнопка никогда не меняла вид при нажатии. */
   button: function(o){
-    var pressed = o._active;
-    ctx.fillStyle = C.stone3;
-    rr(0, o.h*0.62, o.w, o.h*0.38, 2); ctx.fill();
-    var by = pressed ? o.h*0.42 : o.h*0.06, bh = pressed ? o.h*0.22 : o.h*0.58;
-    ctx.fillStyle = grad(0,by,0,by+bh, pressed?"#4ade80":C.red1, pressed?"#15803d":C.red2);
-    rr(o.w*0.16, by, o.w*0.68, bh, Math.min(4,bh/2)); ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,.35)";
-    rr(o.w*0.22, by+1.5, o.w*0.56, Math.max(1.5,bh*0.24), 2); ctx.fill();
+    var pressed = o._act;
+    ctx.fillStyle = "#111827";
+    rr(0, o.h*0.52, o.w, o.h*0.48, Math.min(5,o.w*0.14)); ctx.fill();
+    var capH = o.h*0.42, capY = pressed ? o.h*0.38 : o.h*0.1;
+    ctx.fillStyle = "#f16d63";
+    rr(o.w*0.1, capY, o.w*0.8, capH, Math.min(7,capH*0.45)); ctx.fill();
   },
+  /* Тот же баг с o._active чинится здесь же — реальный флаг o._act. */
   lever: function(o){
-    ctx.fillStyle = C.stone3;
-    rr(0, o.h*0.82, o.w, o.h*0.18, 2); ctx.fill();
-    ctx.save(); ctx.translate(o.w/2, o.h*0.86);
-    ctx.rotate(o._active ? 0.62 : -0.62);
-    ctx.fillStyle = C.metal3;
-    rr(-Math.max(1.4,o.w*0.09), -o.h*0.78, Math.max(2.8,o.w*0.18), o.h*0.78, 1.5); ctx.fill();
-    var kg = ctx.createRadialGradient(-1,-o.h*0.8,0,0,-o.h*0.78,Math.max(3.4,o.w*0.28));
-    kg.addColorStop(0, o._active?"#86efac":"#fca5a5"); kg.addColorStop(1, o._active?"#15803d":"#b91c1c");
-    ctx.fillStyle = kg;
-    ctx.beginPath(); ctx.arc(0,-o.h*0.78,Math.max(3.4,o.w*0.28),0,6.2832); ctx.fill();
+    var on = o._act;
+    ctx.fillStyle = "#111827";
+    rr(0, o.h*0.8, o.w, o.h*0.2, Math.min(4,o.w*0.14)); ctx.fill();
+    ctx.save();
+    ctx.translate(o.w*0.5, o.h*0.82);
+    ctx.rotate(on ? -0.5 : 0.5);
+    ctx.strokeStyle = "#64748b";
+    ctx.lineWidth = Math.max(2, o.w*0.17);
+    ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-o.h*0.72); ctx.stroke();
+    ctx.fillStyle = "#f16d63";
+    ctx.beginPath(); ctx.arc(0,-o.h*0.72,Math.max(3,o.w*0.27),0,6.2832); ctx.fill();
     ctx.restore();
   },
   /* Портал — не платформа, а зона касания (см. teleportTarget() в step()):
      наступил на площадку — оказался на её паре, чей ID указан в «Целях».
-     Кольцо крутится — читается как «портал», подпись с ID не нужна: она
-     и так есть в панели свойств у обеих площадок. */
+     o.teleExit различает вход (оранжевый) и выход (синий) — чисто
+     визуально, на саму телепортацию не влияет (она всё равно работает
+     по ID/Целям, см. teleportTarget()); настраивается галочкой в
+     инспекторе. Чёрная "дыра" с огненным кольцом вокруг — под стиль
+     референса, кольцо из отдельных языков пламени мерцает через anim. */
   teleport: function(o){
-    var cx = o.w/2, cy = o.h/2, r = Math.min(o.w,o.h)/2;
-    ctx.fillStyle = C.tele2;
-    rr(0,0,o.w,o.h,Math.min(8,r*0.4)); ctx.fill();
-    var pulse = (Math.sin(anim*0.1)+1)/2;
-    ctx.fillStyle = C.tele1;
-    ctx.globalAlpha = 0.55 + pulse*0.45;
-    ctx.beginPath(); ctx.arc(cx,cy,r*0.62,0,6.2832); ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = "#ecfeff"; ctx.lineWidth = Math.max(1.2,r*0.14);
-    ctx.beginPath(); ctx.arc(cx,cy,r*0.36,anim*0.06,anim*0.06+4.5); ctx.stroke();
+    var cx = o.w/2, cy = o.h/2, rx = o.w/2, ry = o.h/2, rm = Math.min(rx,ry);
+    var exit = !!o.teleExit;
+    var cBright = exit ? "#bae6fd" : "#fed7aa";
+    var cMid    = exit ? "#38bdf8" : "#fb923c";
+    var cDeep   = exit ? "#0369a1" : "#9a3412";
+    ctx.save();
+    var glow = ctx.createRadialGradient(cx,cy,rm*0.55, cx,cy, Math.max(rx,ry)*1.3);
+    glow.addColorStop(0, cMid+"66"); glow.addColorStop(1, cMid+"00");
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx*1.3,ry*1.3,0,0,6.2832); ctx.fill();
+    /* Языки пламени — не ровные спицы, а закруглённые капли неравной
+       длины: золотой угол (2.4 рад) даёт разброс по кругу без видимой
+       симметрии "шестерёнки". Без lighter-блендинга — иначе перекрытия
+       высветляются почти до белого и цвет теряется. */
+    var n = 9, i;
+    for(i=0;i<n;i++){
+      var seed = i*2.399963;
+      var a = seed;
+      var flick = 0.55 + 0.45*Math.sin(anim*0.09 + i*2.7);
+      var len = rm * (0.3 + 0.16*Math.sin(seed*5)) * (0.65+0.6*flick);
+      var spread = 0.15 + 0.04*Math.sin(seed*7);
+      var b1x = cx+Math.cos(a-spread)*rx*0.88, b1y = cy+Math.sin(a-spread)*ry*0.88;
+      var b2x = cx+Math.cos(a+spread)*rx*0.88, b2y = cy+Math.sin(a+spread)*ry*0.88;
+      var tx = cx+Math.cos(a)*(rx+len), ty = cy+Math.sin(a)*(ry+len);
+      var mx = cx+Math.cos(a)*(rx+len*0.55), my = cy+Math.sin(a)*(ry+len*0.55);
+      var fg = ctx.createRadialGradient(cx+Math.cos(a)*rx*0.88, cy+Math.sin(a)*ry*0.88, 0, tx, ty, len);
+      fg.addColorStop(0, cDeep); fg.addColorStop(0.5, cMid); fg.addColorStop(1, cBright+"00");
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(b1x,b1y);
+      ctx.quadraticCurveTo(mx + (b1x-mx)*0.3, my + (b1y-my)*0.3, tx, ty);
+      ctx.quadraticCurveTo(mx + (b2x-mx)*0.3, my + (b2y-my)*0.3, b2x, b2y);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.strokeStyle = cBright;
+    ctx.lineWidth = Math.max(1.2, rm*0.13);
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx*0.85,ry*0.85,0,0,6.2832); ctx.stroke();
+    ctx.fillStyle = "#05070a";
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx*0.7,ry*0.7,0,0,6.2832); ctx.fill();
+    ctx.restore();
   },
   /* Излучатель светится ярче, пока луч перекрыт игроком (o._act — тот же
      флаг, что у кнопки/рычага, см. laserFeeds() в step()). Линза смотрит
@@ -674,32 +712,27 @@ var PAINT = {
      модификации Zombie Apocalypse (см. apoc и stepZombies) — в
      классическом варианте той же карты его на ней нет.
      Разворачивается по ходу движения (_zface), поэтому сразу видно,
-     кого он уже заметил. */
+     кого он уже заметил. Хитбокс теперь впритык как у игрока (см.
+     SIZES.zombie) — силуэт рисуем той же figure(), что и игрока, чтобы
+     форма совпадала буквально, а не просто размером; зомби узнаётся по
+     цвету, квадратным красным глазам и рваному краю одежды. */
   zombie: function(o){
     var w = o.w, h = o.h;
     if(o._zface < 0){ ctx.translate(w, 0); ctx.scale(-1, 1); }
-    var headR = Math.max(3, Math.min(w*0.44, h*0.2));
-    var bodyTop = headR*2 + Math.max(1, h*0.03);
-    // руки вперёд — узнаваемый силуэт, рисуем до тела, чтобы плечо не торчало
-    ctx.strokeStyle = "#4d7c0f"; ctx.lineWidth = Math.max(1.6, w*0.16);
-    ctx.lineCap = "round";
+    figure(w, h, "#55722c");
+    var headD = w;
+    ctx.fillStyle = "#3f5720";
     ctx.beginPath();
-    ctx.moveTo(w*0.3, bodyTop + (h-bodyTop)*0.22);
-    ctx.lineTo(w*0.98, bodyTop + (h-bodyTop)*0.12);
-    ctx.stroke();
-    ctx.fillStyle = "#65a30d";
-    rr(w*0.2, bodyTop, w*0.6, h-bodyTop, Math.min(4, w*0.16)); ctx.fill();
-    ctx.fillStyle = "#84cc16";
-    ctx.beginPath(); ctx.arc(w/2, headR, headR, 0, 6.2832); ctx.fill();
-    var er = Math.max(1, headR*0.26);
-    ctx.fillStyle = "#7f1d1d";
-    ctx.beginPath(); ctx.arc(w/2 - headR*0.36, headR*0.92, er, 0, 6.2832); ctx.fill();
-    ctx.beginPath(); ctx.arc(w/2 + headR*0.36, headR*0.92, er, 0, 6.2832); ctx.fill();
-    ctx.strokeStyle = "#3f6212"; ctx.lineWidth = Math.max(1, headR*0.2);
-    ctx.beginPath();
-    ctx.moveTo(w/2 - headR*0.42, headR*1.46);
-    ctx.lineTo(w/2 + headR*0.42, headR*1.46);
-    ctx.stroke();
+    ctx.moveTo(0, h*0.62);
+    ctx.lineTo(w*0.16, h*0.7);
+    ctx.lineTo(0, h*0.78);
+    ctx.lineTo(w*0.14, h*0.9);
+    ctx.lineTo(0, h);
+    ctx.closePath(); ctx.fill();
+    var eyeS = Math.max(2, headD*0.17), eyeY = headD*0.42;
+    ctx.fillStyle = "#b91c1c";
+    ctx.fillRect(w/2 - headD*0.27 - eyeS/2, eyeY, eyeS, eyeS);
+    ctx.fillRect(w/2 + headD*0.27 - eyeS/2, eyeY, eyeS, eyeS);
   },
   // приёмник — только ориентир для автора карты, в игровую логику не входит
   laserReceiver: function(o){
@@ -831,7 +864,7 @@ var COLORS = {
 var SIZES = {
   rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24],
   button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
-  zombie:[22,52],                  // чуть ниже игрока — видно, что это не второй игрок
+  zombie:[30,100],                 // впритык как у игрока — по прямой просьбе
   checkpoint:[40,104], finishline:[52,126], spawn:[30,100], superGate:[54,130],
   teleport:[36,36]
 };
@@ -3404,8 +3437,12 @@ function inspect(){
   if(sel.type === "zombie")
     hint(TR("zombieHint","Ходит за игроком и убивает касанием. Работает только при модификации Zombie Apocalypse — в классическом варианте карты его нет."));
   // портал — своя подсказка вместо linkHelp(): та объясняет кнопку/рычаг, а не пару площадок
-  if(sel.type === "teleport")
+  if(sel.type === "teleport"){
     hint(TR("teleportHint","Пара площадок. Впиши ID другой площадки в «Цели» у этой — и наоборот у той. Наступил на одну — оказался на другой."));
+    // чисто визуальная галочка — на саму телепортацию не влияет, та всё
+    // равно работает по ID/Целям (см. teleportTarget() в step())
+    chk(TR("chkTeleExit","Это выход (синий)"), sel.teleExit, function(v){ sel.teleExit = v; });
+  }
   if(LINKED.indexOf(sel.type) !== -1){
     grp(TR("grpLinks","Связи"));
     txt("ID", sel.customId, function(v){ sel.customId = v; });
@@ -3691,6 +3728,8 @@ window.GAME = BRIDGE = {
     indexMovers(); markDirty();
     sel = null;
     syncApocBtns();
+    syncTools();
+    if(!toolOK(tool)) setTool("select");
     resetView();
     return objects.length;
   },
