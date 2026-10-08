@@ -521,16 +521,24 @@ if (GAME && GAME.restartRun) {
   const floorZ = { id: 1, type: 'rect', x: 0, y: 400, w: 600, h: 40, rot: 0, fill: '#111827' };
   const spawnZ = { id: 2, type: 'spawn', x: 60, y: 340, w: 30, h: 100, rot: 0, fill: '#111827' };
   const zombie = { id: 50, type: 'zombie', x: 200, y: 300, w: 22, h: 52, rot: 0 };
+  const zEl = Array.prototype.find.call(toolsEl.children, t => t.dataset.tool === 'zombie');
   GAME.loadMap({ mode: 'hideAndSeek', objects: [floorZ, spawnZ, zombie] });
   check('зомби без модификации Zombie Apocalypse не остаётся в карте',
         !GAME.objects.some(o => o.type === 'zombie'), GAME.objects.map(o => o.type).join(','));
   check('палитра: инструмент зомби недоступен без модификации', !GAME.toolOK('zombie'));
+  // открытие карты через мост (как «Изменить» на своей карте) должно
+  // реально прятать иконку в палитре, а не только отказывать в toolOK() —
+  // раньше loadMap() не звал syncTools() и иконка оставалась видимой
+  check('палитра (DOM): иконка зомби скрыта без модификации после открытия карты',
+        !!zEl && zEl.style.display === 'none', zEl && zEl.style.display);
 
   // а при включённой модификации — остаётся, и инструмент доступен
   GAME.loadMap({ mode: 'hideAndSeek', apoc: true, objects: [floorZ, spawnZ, zombie] });
   check('зомби при модификации Zombie Apocalypse остаётся в карте',
         GAME.objects.some(o => o.type === 'zombie'), GAME.objects.map(o => o.type).join(','));
   check('палитра: инструмент зомби доступен с модификацией', GAME.toolOK('zombie'));
+  check('палитра (DOM): иконка зомби показана с модификацией после открытия карты',
+        !!zEl && zEl.style.display !== 'none', zEl && zEl.style.display);
 }
 
 console.log(`Физика: пройдено ${phys}, ошибок ${physFail}`);
