@@ -2584,6 +2584,23 @@ document.getElementById("apoc").addEventListener("click", function(e){
   var b = e.target.closest(".apocBtn"); if(!b || playing) return;
   apoc = b.dataset.apoc === "1";
   syncApocBtns();
+  syncTools();
+  if(!toolOK(tool)) setTool("select");
+  // зомби существует только при модификации Zombie Apocalypse — уже
+  // расставленных мертвецов при возврате к «Классике» тоже убираем,
+  // иначе их можно опубликовать в карте, где они ничего не делают
+  // (см. "playing && !apoc" в step())
+  if(!apoc){
+    var drop = objects.filter(function(o){ return o.type === "zombie"; });
+    if(drop.length){
+      commit();
+      objects = objects.filter(function(o){ return o.type !== "zombie"; });
+      sel = null; markDirty(); indexMovers();
+      showMsg(TR("droppedObjsTitle","Убрано объектов: {n}").replace("{n}", drop.length),
+              TR("zombieDroppedBody","Зомби есть только при модификации «Zombie Apocalypse». Ctrl+Z вернёт их обратно."));
+      setTimeout(hideMsg, 2600);
+    }
+  }
 });
 
 /* toolbar icons are the real painters, rendered to tiny canvases — icon always matches the object */
@@ -2646,10 +2663,20 @@ function drawIcon(cvs, type){
 /* ══════════════════════════════════════════════════
    INTERACTION
    ══════════════════════════════════════════════════ */
-function toolOK(t){ var e = document.querySelector('.tool[data-tool="'+t+'"]'); return !!e && e.dataset.modes.split(" ").indexOf(mode) !== -1; }
+// зомби существует только при модификации Zombie Apocalypse — в
+// обычной «Классике» его спавнить нельзя, хотя режим карты (hideAndSeek)
+// тот же самый, поэтому отдельная проверка сверх dataset.modes
+function toolOK(t){
+  var e = document.querySelector('.tool[data-tool="'+t+'"]');
+  if(!e) return false;
+  if(t === "zombie" && !apoc) return false;
+  return e.dataset.modes.split(" ").indexOf(mode) !== -1;
+}
 function syncTools(){
   document.querySelectorAll(".tool").forEach(function(t){
-    t.style.display = t.dataset.modes.split(" ").indexOf(mode) !== -1 ? "flex" : "none";
+    var ok = t.dataset.modes.split(" ").indexOf(mode) !== -1;
+    if(t.dataset.tool === "zombie" && !apoc) ok = false;
+    t.style.display = ok ? "flex" : "none";
   });
 }
 syncTools();
@@ -2709,7 +2736,7 @@ function down(x,y,shift){
     else sel = null;
     inspect(); return;
   }
-  if(!allowedIn(tool, mode)){ setTool("select"); return; }
+  if(!toolOK(tool)){ setTool("select"); return; }
   if(overLimit(1)) return;
   commit();
   if(tool === "spawn"){
@@ -3360,6 +3387,7 @@ window.GAME = BRIDGE = {
   get objects(){ return objects; },
   get mode(){ return mode; },
   get apoc(){ return apoc; },
+  toolOK: function(t){ return toolOK(t); },   // автотесты: доступность инструмента (зомби/apoc)
   get done(){ return done; },
   // Practice Mode включается снаружи (game.js) до старта — см. respawn()
   get practice(){ return practiceMode; },
@@ -3393,6 +3421,11 @@ window.GAME = BRIDGE = {
     syncApocVisibility();
     // объекты чужого режима в карту не пускаем
     objects = objects.filter(function(o){ return allowedIn(o.type, mode); });
+    // зомби существует только при модификации Zombie Apocalypse — в
+    // старых картах он мог оказаться без неё (до проверки в toolOK/
+    // syncTools выше); в геймплее он и так уже неактивен при !apoc
+    // (см. "playing && !apoc" в step()), просто убираем его из карты
+    if(!apoc) objects = objects.filter(function(o){ return o.type !== "zombie"; });
     /* Самодельные/очень старые карты не всегда проставляют id. nearby()
        различает объекты именно по id (see комментарий там про телепорт
        на статичной геометрии) — два объекта без id схлопывались в один
