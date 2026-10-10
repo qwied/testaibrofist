@@ -140,7 +140,12 @@
     + 'font-size:11px;font-weight:600;cursor:pointer;background:var(--panel);white-space:nowrap;transition:background .15s,color .15s}'
     + '.ow-mode:hover{border-color:#2196F3;color:#2196F3}'
     + '.ow-mode.on{background:#2e9b2e;border-color:#2e9b2e;color:#fff}'
-    + '@media(max-width:640px){.ow-box{width:calc(100vw - 24px)}.ow-fab{right:12px;bottom:78px}}';
+    + '@media(max-width:640px){.ow-box{width:calc(100vw - 24px)}.ow-fab{right:12px;bottom:78px}}'
+    /* Резерв места внизу страницы под обе фиксированные кнопки (эту и
+       Admin Abuse) — см. комментарий у classList.add('ow-has-fab') в
+       buildPanel(). Без него последние строки длинных списков (таблица
+       лидеров, Maps Browser и т.п.) у владельца частично скрывались. */
+    + '@media(max-width:860px){body.ow-has-fab{padding-bottom:140px}}';
 
   function injectCss() {
     var s = document.createElement('style');
@@ -163,6 +168,15 @@
     fab.textContent = T('ownerFab', 'Ред');
     fab.onclick = open;
     document.body.appendChild(fab);
+
+    /* Эта кнопка и Admin Abuse (adminAbuse.js) рядом с ней — обе
+       position:fixed в правом нижнем углу. На узких экранах любой
+       список, доходящий до низа страницы (таблица лидеров, список карт
+       и т.п.), оказывался у владельца частично ПОД ними — не прочитать,
+       не нажать последние строки. Только у владельца: обычный игрок эту
+       панель вообще не получает (см. /whoAmI ниже), так что на игроков
+       это не влияет. */
+    document.body.classList.add('ow-has-fab');
   }
 
   function close() { ov.style.display = 'none'; box.style.display = 'none'; }
