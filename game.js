@@ -1317,6 +1317,83 @@
     }, spin + 120));
   }
 
+  /* Рулетка режима раунда: та же лента и тот же визуальный механизм, что
+     у выбора искателя (см. runRoulette выше), только крутит 2 карточки —
+     Classic/Zombie Apocalypse — и останавливается на РЕЖИМЕ этого раунда,
+     а не на игроке. Раньше apoc-раунд не показывал в лобби вообще
+     ничего — единственным намёком была строчка в логе при старте охоты;
+     классический раунд тоже никак не называл себя режимом, хотя рулетка
+     искателя и так на него намекала. Короткая — только объявляет режим,
+     не отнимает заметную часть времени на прятки (см. onDone ниже: для
+     классики за ней сразу следует обычная рулетка искателя). */
+  function runModeRoulette(apoc, onDone) {
+    roulStop();
+    var box = $('gRoul'), view = $('gRoulView'), track = $('gRoulTrack');
+    var res = $('gRoulRes');
+    var list = [{ name: TR('modeClassic', 'Classic') }, { name: TR('modeApoc', 'Zombie Apocalypse') }];
+    var winIdx = apoc ? 1 : 0;
+
+    banner('', '', false);
+    document.body.classList.add('hasRoulette');
+
+    var seq = [], edge = 3;
+    while (seq.length < edge) seq = seq.concat(list);
+    var startIdx = seq.length;
+    var pass = 6 + Math.floor(Math.random() * 3);   // короче, чем у искателя — тут всего 2 исхода
+    while (seq.length < startIdx + pass) seq = seq.concat(list);
+    var target = seq.length + winIdx;
+    seq = seq.concat(list);
+    while (seq.length < target + edge + 1) seq = seq.concat(list);
+
+    track.innerHTML = '';
+    var pills = seq.map(function (p) {
+      var el = document.createElement('div');
+      el.className = 'rName';
+      el.textContent = p.name || '';
+      track.appendChild(el);
+      return el;
+    });
+
+    res.classList.remove('on'); res.textContent = '';
+    box.classList.add('on');
+    relayoutCorner();
+
+    var step = (pills[0] && pills[0].getBoundingClientRect().width) || 150;
+    var W = view.getBoundingClientRect().width || step;
+    function posOf(k) { return Math.round(W / 2 - (k * step + step / 2)); }
+
+    var spin = 1700;   // короткая: только объявить режим, не отнять время пряток
+
+    track.style.transition = 'none';
+    track.style.transform  = 'translateX(' + posOf(startIdx) + 'px)';
+    void track.offsetWidth;
+    track.style.transition = 'transform ' + spin + 'ms cubic-bezier(.09,.66,.14,1)';
+    track.style.transform  = 'translateX(' + posOf(target) + 'px)';
+
+    if (window.BFSound) {
+      BFSound.roulSpin();
+      var tickIdx = startIdx;
+      var tickUntil = Date.now() + spin;
+      (function tickFrame() {
+        if (Date.now() >= tickUntil) { roulRAF = null; return; }
+        var idx = Math.round((W / 2 - step / 2 - currentTrackX(track)) / step);
+        if (idx !== tickIdx) { tickIdx = idx; BFSound.roulTick(); }
+        roulRAF = requestAnimationFrame(tickFrame);
+      })();
+    }
+
+    roulTimers.push(setTimeout(function () {
+      pills[target].classList.add('rWin');
+      if (window.BFSound) BFSound.roulLand();
+      res.textContent = apoc ? TR('modeApoc', 'Zombie Apocalypse') : TR('modeClassic', 'Classic');
+      res.classList.add('on');
+      roulTimers.push(setTimeout(function () {
+        roulStop();
+        if (onDone) onDone();
+      }, 1100));
+    }, spin + 120));
+  }
+
   // ---------- таймер и фазы ----------
   function fmt(ms) {
     if (ms < 0) ms = 0;
@@ -1852,8 +1929,15 @@
       setRole('hider');
       $('gRoleBox').style.display = 'none';
       clearCaught();
-      runRoulette(d);
-      showChance((d.players) || []);
+      // сначала короткая рулетка режима ("Classic") — потом, как и раньше,
+      // рулетка искателя. msLeft пересчитываем на момент фактического
+      // запуска — от phaseEnds, а не берём д.msLeft как есть: он успел
+      // устареть на время показа рулетки режима
+      runModeRoulette(false, function () {
+        d.msLeft = phaseEnds - Date.now();
+        runRoulette(d);
+        showChance((d.players) || []);
+      });
     });
 
     // смена фазы: конец рулетки/прятаний — начало охоты и обратно
@@ -1906,6 +1990,13 @@
         zombieRoundReset();
         // карту комнаты назначает сервер: у всех в комнате она одна
         if (!STORY) loadServerMap(d.map);
+        /* Объявление режима раунда: классика уже получает рулетку
+           искателя (см. 'hsRoulette' — оно приходит раньше этого самого
+           события, в один приём с сервера) — своя рулетка режима ей не
+           нужна, иначе были бы две подряд. apoc-раунд рулетку искателя
+           никогда не получает (нет человека-искателя, см. hsStartLobby),
+           так что без этого лобби объявляло режим молча. */
+        if (d.apoc) runModeRoulette(true);
       } else if (d.phase === 'storyEnd') {
         // общий лимит времени Story-сессии вышел — сервер обрывает цикл
         // лобби/раунд насовсем (см. hsEndStory в server.js)
