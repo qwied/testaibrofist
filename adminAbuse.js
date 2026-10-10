@@ -71,8 +71,10 @@
     +   '#aaFab span{display:none}}'
     /* В игре на телефоне правый угол занят снизу вверх: пэд, пара
        «чат + Messages» (150px), кнопка владельца (220px) — эта идёт
-       следующей. */
-    + '@media (max-width:860px){body.play.mob #aaFab{bottom:282px}'
+       следующей. max-width тут не работает: viewport закреплён на
+       1280px (десктопный вид на телефоне), и innerWidth всегда ~1280.
+       pointer:coarse — признак устройства, этим пином не ломается. */
+    + '@media (pointer:coarse){body.play.mob #aaFab{bottom:282px}'
     +   'body.play.mob #aaPanel{bottom:332px}}'
     + '#aaPanel{position:fixed;right:14px;bottom:130px;z-index:10000;width:308px;max-width:calc(100vw - 28px);'
     + 'max-height:78vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;'

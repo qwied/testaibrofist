@@ -2,7 +2,7 @@
 <html data-page="editor" lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=1280, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <title>AIBrofist — Map Editor</title>
 <style>
@@ -191,7 +191,15 @@ body.play #hud{display:flex}
 #pad{display:none;position:fixed;bottom:0;left:0;right:0;z-index:13;
   padding:0 18px calc(20px + env(safe-area-inset-bottom));justify-content:space-between;pointer-events:none}
 body.play.mob #pad{display:flex}
-.padG{display:flex;gap:13px;pointer-events:auto}
+/* viewport теперь закреплён на 1280px (десктопный вид на телефоне — см.
+   <meta viewport> выше), и браузер просто ужимает всю страницу под экран.
+   Без компенсации пад ужался бы вместе с ней и по кнопкам было бы не
+   попасть пальцем. --padZoom считается ниже из screen.width (он не
+   меняется от пина) и растягивает пад обратно до настоящего размера —
+   кнопки «плавают» над уменьшенной картинкой игры в своём истинном размере. */
+.padG{display:flex;gap:13px;pointer-events:auto;transform:scale(var(--padZoom,1))}
+.padG:first-child{transform-origin:bottom left}
+.padG:last-child{transform-origin:bottom right}
 .pBtn{width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.9);border:1px solid var(--line);
   box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:23px;color:#5b6472;
   user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
@@ -337,6 +345,17 @@ var isMob = function(){
 };
 function syncMob(){ document.body.classList.toggle("mob", isMob()); }
 syncMob(); addEventListener("resize", syncMob); addEventListener("orientationchange", syncMob);
+
+/* компенсация пина viewport на 1280px (десктопный вид на телефоне) для
+   пада управления — см. комментарий у .padG выше. screen.width не
+   зависит от <meta viewport> и даёт настоящую ширину экрана. */
+function syncPadZoom(){
+  var sw = (window.screen && screen.width) || 1280;
+  var z = Math.max(1, Math.min(4, 1280 / sw));
+  document.documentElement.style.setProperty("--padZoom", z);
+}
+syncPadZoom(); addEventListener("resize", syncPadZoom);
+addEventListener("orientationchange", function(){ setTimeout(syncPadZoom, 300); setTimeout(syncPadZoom, 800); });
 
 var cv = document.getElementById("c"), ctx = cv.getContext("2d");
 /* Адаптивное разрешение (v103): если устройство не тянет (кадр дороже 30 мс),

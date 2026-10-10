@@ -70,7 +70,11 @@
        в правом углу было нельзя. Поднимаем её над панелью, а заодно над
        парой «чат + Messages», которая теперь стоит в том же углу на
        отметке 150px и занимает 58px в высоту (см. game.js). */
-    + '@media (max-width:860px){body.play.mob .ow-fab{bottom:220px}}'
+    /* max-width здесь не годится: viewport теперь закреплён на 1280px
+       (десктопный вид на телефоне), и innerWidth всегда ~1280 независимо
+       от реального экрана. pointer:coarse — признак самого устройства,
+       не страницы, и не ломается этим пином. */
+    + '@media (pointer:coarse){body.play.mob .ow-fab{bottom:220px}}'
     + 'background:linear-gradient(135deg,#1f2937,#111827);color:#fff;border:none;font-size:22px;cursor:pointer;'
     + 'box-shadow:0 6px 18px rgba(0,0,0,.32);transition:transform .15s,box-shadow .15s}'
     + '.ow-fab:hover{background:linear-gradient(135deg,#2196F3,#1976d2);transform:translateY(-1px);box-shadow:0 8px 22px rgba(33,150,243,.35)}'
@@ -145,7 +149,8 @@
        Admin Abuse) — см. комментарий у classList.add('ow-has-fab') в
        buildPanel(). Без него последние строки длинных списков (таблица
        лидеров, Maps Browser и т.п.) у владельца частично скрывались. */
-    + '@media(max-width:860px){body.ow-has-fab{padding-bottom:140px}}';
+    // см. комментарий выше про pointer:coarse вместо max-width
+    + '@media(pointer:coarse){body.ow-has-fab{padding-bottom:140px}}';
 
   function injectCss() {
     var s = document.createElement('style');
