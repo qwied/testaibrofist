@@ -38,16 +38,14 @@ const TOOL_MODES = {
   teleport:null,               // пара площадок — есть в обоих режимах, как кнопка/рычаг
   cover:['hideAndSeek'],
   checkpoint:['race'],
-  superGate:['race'],
   // устаревшие типы — принимаем, но в палитре их больше нет
   poison:null, spike:null, bounce:null, platform:null, rotator:null,
-  door:null, seeker:null, liquid:null, box:null
+  door:null, seeker:null, liquid:null, box:null, superGate:null
 };
 const TOOL_RU = {
   cover:'Cover', seeker:'Seeker', door:'Door', button:'Button',
   lever:'Lever', checkpoint:'Checkpoint', finishline:'Finish', water:'Water',
-  superGate:'SUPER BRO gate', teleport:'Teleport', zombie:'Zombie',
-  liquid:'Liquid'
+  teleport:'Teleport', zombie:'Zombie', liquid:'Liquid', superGate:'SUPER BRO gate'
 };
 
 // объекты карты (mapData — JSON из редактора)
