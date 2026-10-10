@@ -298,7 +298,6 @@ body{background:#eef2f8;overflow:hidden}
   <div id="exitBtn" data-i18n="edExit">Выйти</div>
   <div class="stat"><i>⏱</i><span id="sTime">0.0</span></div>
   <div class="stat" data-i18n-title="edDeathTip" title="смертей"><i data-i18n="hudDeathLabel">Смерти</i><span id="sDeath">0</span></div>
-  <div class="stat" id="sSuperBox" style="display:none"><i>⚡</i><span>SUPER BRO</span> <span id="sSuper">0</span>s</div>
 </div>
 <div id="msg"><h1 id="msgT"></h1><p id="msgS"></p></div>
 
@@ -811,24 +810,6 @@ var PAINT = {
     }
     ctx.strokeStyle = C.stone3; ctx.lineWidth = 1.6; ctx.strokeRect(.8,.8,o.w-1.6,o.h-1.6);
   },
-  superGate: function(o){
-    var pulse = (Math.sin(anim*0.08)+1)/2;   // дыхание свечения — как волна у чекпоинта
-    ctx.fillStyle = C.gate2;
-    rr(0, 0, o.w, o.h, Math.min(10, o.w*0.22)); ctx.fill();
-    ctx.fillStyle = C.gate1;
-    rr(o.w*0.12, o.h*0.06, o.w*0.76, o.h*0.88, Math.min(8, o.w*0.18)); ctx.fill();
-    ctx.fillStyle = C.gold1;
-    ctx.globalAlpha = 0.55 + pulse*0.45;
-    ctx.beginPath();
-    ctx.moveTo(o.w*0.56, o.h*0.1);
-    ctx.lineTo(o.w*0.34, o.h*0.52);
-    ctx.lineTo(o.w*0.48, o.h*0.52);
-    ctx.lineTo(o.w*0.4, o.h*0.9);
-    ctx.lineTo(o.w*0.66, o.h*0.42);
-    ctx.lineTo(o.w*0.5, o.h*0.42);
-    ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = 1;
-  },
 };
 
 /* ══════════════════════════════════════════════════
@@ -863,13 +844,7 @@ var TOOLS = [
      которые их уже используют — просто без своей кнопки в палитре. */
   // только гонка
   {t:"checkpoint", n:"Чекпоинт",    k:"toolCheckpoint", m:"race"},
-  {t:"finishline", n:"Финиш",       k:"toolFinish",     m:"race"},
-  /* Идея из старой обратной связи: «дотронулся до ворот — стал SUPER BRO»
-     (см. TOOL_MODES.superGate в maps.js и обработку в step()). Только
-     полёт (пониженная гравитация) и иммунитет к опасностям, ограниченные
-     по времени — оживление «призраков» не переносим: в Race нет самого
-     понятия призрака/заражения, которое есть в прятках. */
-  {t:"superGate",  n:"Ворота SUPER BRO", k:"toolSuperGate", m:"race"}
+  {t:"finishline", n:"Финиш",       k:"toolFinish",     m:"race"}
 ];
 var MODE_OF = {};
 TOOLS.forEach(function(T){ MODE_OF[T.t] = T.m; });
@@ -892,19 +867,19 @@ var COLORS = {
   rect:INK, circle:INK, triangle:INK, text:INK,
   button:INK, lever:INK, laserFeed:INK, laserReceiver:INK,
   zombie:"",                       // мертвец всегда зелёный — красить его нечем и незачем
-  checkpoint:"", finishline:"", spawn:INK, superGate:"", teleport:""
+  checkpoint:"", finishline:"", spawn:INK, teleport:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
    Игрок 30x100 (круг-голова радиуса 15 над телом 30x65, см. FIG_GAP
    в figure()) — по прямой просьбе, замена прежних 20x60. Checkpoint/
-   finishline/superGate увеличены на ту же разницу в ширине и высоте,
-   что были у них над старым игроком, — дверь остаётся «чуть просторнее
-   игрока», а не наоборот. */
+   finishline увеличены на ту же разницу в ширине и высоте, что были у
+   них над старым игроком, — дверь остаётся «чуть просторнее игрока»,
+   а не наоборот. */
 var SIZES = {
   rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24],
   button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
   zombie:[30,100],                 // впритык как у игрока — по прямой просьбе
-  checkpoint:[40,104], finishline:[52,126], spawn:[30,100], superGate:[54,130],
+  checkpoint:[40,104], finishline:[52,126], spawn:[30,100],
   teleport:[36,36]
 };
 var SOLID  = ["rect","circle","triangle"];
@@ -1209,8 +1184,6 @@ var JUMP_H = 155, MAX_VX = 6.2, FRIC = 0, AIR = 0,
        в тот же кадр, пока хитбоксы ещё соприкасаются. */
     GRAB_ZONE = 16, GRAB_COOLDOWN = 10,
     STUCK_WINDOW = 150;   // окно сторожа застревания в прятках — см. respawn()/step()
-// SUPER BRO (ворота superGate, только Race) — длительность бафа полёта/иммунитета, мс
-var SUPER_MS = 8000, SUPER_GRAVITY = 0.32;
 /* Портал: без паузы игрок телепортировался бы туда-обратно каждый кадр —
    площадка прибытия сама попадает в зону касания площадки отправления
    (обе одного размера, куда ни попади). Полсекунды с запасом — портал
@@ -1231,7 +1204,7 @@ function maxFall(){ return 12 + gravityScale * 0.8; }
 function platBoost(o){ return (o && o.speedMul) ? Math.max(0.05, 1 + (+o.speedMul || 0)) : 1; }
 
 var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,selfJump:false,hidden:false,
-  rideOn:null, standPlat:null, superUntil:0, teleCooldown:0, grab:null,
+  rideOn:null, standPlat:null, teleCooldown:0, grab:null,
 };
 var keys = {l:false,r:false,u:false};
 var coy = 0, buf = 0, hold = 0, grabCd = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
@@ -1252,6 +1225,10 @@ var deaths = 0, timeMs = 0, shake = 0, acc = 0, last = 0, lastStepAt = -9999;
 /* Где игрок относительно воды: верхняя кромка, под водой ли голова
    и не кислота ли это. Считается по тем же объектам, что и коллизии. */
 function findSpawn(){ for(var i=0;i<objects.length;i++) if(objects[i].type === "spawn") return objects[i]; return null; }
+/* Зомби в карте теперь один, как и точка старта — он просто метка, откуда
+   стартует ИИ-охотник (см. apoc и заражение в сетевой части), а не
+   самостоятельный объект со своей обычной физикой. */
+function findZombie(){ for(var i=0;i<objects.length;i++) if(objects[i].type === "zombie") return objects[i]; return null; }
 function play(){
   var sp = findSpawn();
   if(!sp){ dialog(TR("noSpawnTitle","Нет точки старта"), TR("noSpawnBody","Поставь инструмент «Точка старта», потом жми ▶."), null); return; }
@@ -1296,7 +1273,7 @@ function restartRun(){
 function respawn(){
   var p = (practiceMode && mode === "race") ? lastSafePos : spawnPt;
   pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
-  pl.rideOn = null; pl.superUntil = 0; pl.grab = null; grabCd = 0;
+  pl.rideOn = null; pl.grab = null; grabCd = 0;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
 }
 function die(){
@@ -1748,8 +1725,8 @@ function stepZombies(){
   }
 }
 /* Догнал. В гонке это обычная смерть — через ту же единую точку die(), так
-   что и неуязвимость Practice, и баф SUPER BRO работают как со всякой
-   другой опасностью. В прятках умереть нельзя в принципе (см. die()), и
+   что неуязвимость Practice работает как со всякой другой опасностью.
+   В прятках умереть нельзя в принципе (см. die()), и
    мертвец вместо смерти отбрасывает пойманного на старт: цена сопоставима,
    а правила режима не ломаются. */
 function zombieCatch(){
@@ -1845,12 +1822,6 @@ function step(){
 
   timeMs += 16.67;
   document.getElementById("sTime").textContent = (timeMs/1000).toFixed(1);
-  var superOn = mode === "race" && pl.superUntil > timeMs, superBox = document.getElementById("sSuperBox");
-  if(superBox){
-    superBox.style.display = superOn ? "" : "none";
-    if(superOn) document.getElementById("sSuper").textContent = Math.ceil((pl.superUntil - timeMs)/1000);
-  }
-
   /* Поездка на движущейся платформе.
      Смещение платформы применяется ОДИН раз и ДО собственной физики
      игрока. Раньше его добавляли уже после того, как игрока прижали
@@ -1967,9 +1938,7 @@ function step(){
        зависит от удержания. */
     if(pl.vy < 0 && pl.selfJump && hold > MIN_HOLD) pl.vy += G()*0.5;
 
-    // SUPER BRO (см. superGate ниже): пониженная гравитация — эффект полёта
-    var superFly = mode === "race" && pl.superUntil > timeMs;
-    pl.vy += G() * (superFly ? SUPER_GRAVITY : (pl.vy >= 0 ? FALL_MULT : 1));
+    pl.vy += G() * (pl.vy >= 0 ? FALL_MULT : 1);
     // трение о стену — только в воздухе
     if(pl.wall !== 0 && pl.vy > WALL_SLIDE) pl.vy -= (pl.vy - WALL_SLIDE) * 0.55;
     var fallCap = maxFall();
@@ -2169,8 +2138,7 @@ function step(){
      на высоте головы (а не где-то посреди стены, это просто
      скольжение). Ловим только о неподвижную геометрию: у едущей
      платформы кромка сама гуляет, цепляться там нечего. */
-  if(!pl.grab && !grabbing && !pl.ground && grabCd === 0 && !flyMode && pl.wall !== 0
-     && !(mode === "race" && pl.superUntil > timeMs)){
+  if(!pl.grab && !grabbing && !pl.ground && grabCd === 0 && !flyMode && pl.wall !== 0){
     for(var gi=0; gi<sol.length; gi++){
       var go = sol[gi];
       if(go.moves || go.pushable) continue;
@@ -2221,19 +2189,7 @@ function step(){
       if(o.type === "lever") o._latch = false;
       return;
     }
-    if(hazard(o)){
-      // SUPER BRO: пока баф активен, опасности не убивают (только Race — см. superGate)
-      if(!(mode === "race" && pl.superUntil > timeMs)){ die(); return; }
-    }
-    if(o.type === "superGate" && mode === "race"){
-      // не спамим звук/частицы каждый кадр, пока игрок стоит в воротах —
-      // только когда касание реально продлевает баф
-      if(pl.superUntil < timeMs + SUPER_MS - 200){
-        burst(o.x+o.w/2, o.y+o.h/2, 18, C.gate1, 3.4, 36);
-        if(window.BFSound) BFSound.checkpoint();
-      }
-      pl.superUntil = timeMs + SUPER_MS;
-    }
+    if(hazard(o)){ die(); return; }
     if(o.type === "checkpoint" && !o._reached){
       o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h}; lastSafePos = {x:spawnPt.x, y:spawnPt.y};
       burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
@@ -2565,6 +2521,25 @@ function paintFrame(){
       }
     }
   }
+  /* Точка назначения движущейся платформы — только у выделенного объекта,
+     только в редакторе: синяя точка показывает, куда едет платформа.
+     Конечная точка — строго x+moveX, y+moveY (см. формулу в step(): k
+     идёт 0→1→0, при k=1 платформа ровно там); скорость влияет только
+     на то, как быстро она туда доедет, а не на саму точку. */
+  if(!playing && sel && sel.moves && (sel.moveX || sel.moveY)){
+    var mcx = sel.x+sel.w/2, mcy = sel.y+sel.h/2;
+    var mdx = mcx+(sel.moveX||0), mdy = mcy+(sel.moveY||0);
+    ctx.save();
+    ctx.strokeStyle = "rgba(37,99,235,.55)";
+    ctx.lineWidth = 1.6/view.s;
+    ctx.setLineDash([4/view.s, 4/view.s]);
+    ctx.beginPath(); ctx.moveTo(mcx, mcy); ctx.lineTo(mdx, mdy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#2563eb";
+    ctx.beginPath(); ctx.arc(mdx, mdy, 6/view.s, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.6/view.s; ctx.stroke();
+    ctx.restore();
+  }
   if(playing && !pl.dead){
     ctx.save(); ctx.translate(pl.x, pl.y);
     // себя в укрытии видно бледным — чужие не видят вообще
@@ -2843,6 +2818,20 @@ function finishLinkPick(picked){
   inspect();
 }
 function cPt(cx,cy){ var r = cv.getBoundingClientRect(); return {x:cx-r.left, y:cy-r.top}; }
+/* Портал спаривается сам, по 2 подряд поставленных объекта: первый —
+   вход (оранжевый, запускает перенос), второй — выход (синий, только
+   точка прибытия). Свободный вход ищем по пустому targetIds — как
+   только второй портал поставлен, пара замыкается сама, без ручного
+   выбора цели (см. teleport-блок в inspect()). Зовётся только из
+   down() — у вставки/дублирования портал остаётся при своих старых
+   связях, как и у любого другого типа. */
+function pairTeleport(o){
+  var mate = objects.filter(function(x){
+    return x.type === "teleport" && x !== o && !x.teleExit && !x.targetIds;
+  })[0];
+  if(mate){ o.teleExit = true; mate.targetIds = o.customId; }
+  else o.teleExit = false;
+}
 function down(x,y,shift){
   if(playing) return;
   var g = gripAt(x,y);
@@ -2862,9 +2851,13 @@ function down(x,y,shift){
   if(tool === "spawn"){
     var ex = findSpawn(); if(ex) objects = objects.filter(function(o){ return o !== ex; });
   }
+  if(tool === "zombie"){
+    var exz = findZombie(); if(exz) objects = objects.filter(function(o){ return o !== exz; });
+  }
   var d = SIZES[tool] || [50,50];
   var o = mk(tool, x, y, 1, 1);
   objects.push(o); sel = o;
+  if(tool === "teleport") pairTeleport(o);
   drag = {m:"new", ox:x, oy:y, moved:false, w:d[0], h:d[1]};
   inspect();
 }
@@ -3170,8 +3163,8 @@ function linkName(o){
 /* Привязка кликом вместо ручного набора ID: список уже выбранных целей
    чипами (крестик — убрать), кнопка "Добавить" ставит linkPick и дальше
    ждёт клика по карте (см. finishLinkPick() и перехват в mousedown/
-   touchstart выше). single — для портала: там цель одна, новый выбор
-   просто заменяет старую, а не добавляется в список. */
+   touchstart выше). single — цель одна, новый выбор заменяет старую
+   вместо добавления в список (сейчас без вызовов, задел на будущее). */
 function linkPicker(src, single){
   var r = pr(); r.style.flexDirection = "column"; r.style.alignItems = "stretch"; r.style.gap = "6px";
   var lbl = document.createElement("label"); lbl.textContent = TR("lblTargets","Цели");
@@ -3234,6 +3227,7 @@ function inspect(){
   }
 
   if(sel.type !== "zombie"){          // мертвеца не красят — он рисуется собой
+    grp(TR("grpAppearance","Внешний вид"));
     var r = pr();
     r.innerHTML = "<label>" + TR("lblColor","Цвет") + "</label>";
     var ci = document.createElement("input"); ci.type = "color";
@@ -3277,7 +3271,7 @@ function inspect(){
   grp(TR("grpGameProps","Игровые свойства"));
   /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Яд»
      там бы включала свойство, которое физика всё равно игнорирует. */
-  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline","superGate","zombie","teleport"].indexOf(sel.type) === -1)
+  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline","zombie","teleport"].indexOf(sel.type) === -1)
     chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
   if(SOLID.indexOf(sel.type) !== -1)
     chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; });
@@ -3288,6 +3282,7 @@ function inspect(){
   /* Рикошет, толкаемость, движение и вращение — свойства, а не отдельные
      объекты. */
   if(SOLID.indexOf(sel.type) !== -1){
+    grp(TR("grpMovement","Движение и эффекты"));
     chk(TR("chkRicochet","Рикошет"), !!sel.ricochet, function(v){ sel.ricochet = v; });
 
     /* Толкается — своя физика (см. stepPushables): падает и стоит на
@@ -3347,18 +3342,24 @@ function inspect(){
   // мертвец — свой объект со своей физикой; из свойств ему нужна одна подсказка
   if(sel.type === "zombie")
     hint(TR("zombieHint","Ходит за игроком и убивает касанием. Работает только при модификации Zombie Apocalypse — в классическом варианте карты его нет."));
-  // портал — своя подсказка: поясняет именно пару площадок, а не кнопку/рычаг
+  /* Портал спаривается сам при постановке (см. pairTeleport()) — тут
+     только показываем текущее состояние пары, выбирать цель вручную
+     больше негде и незачем. */
   if(sel.type === "teleport"){
-    hint(TR("teleportHint","Пара площадок, которые переносят друг в друга. Жми «Выбрать на карте» ниже и кликни вторую площадку — свяжутся сами."));
-    // чисто визуальная галочка — на саму телепортацию не влияет, та всё
-    // равно работает по ID/Целям (см. teleportTarget() в step())
-    chk(TR("chkTeleExit","Это выход (синий)"), sel.teleExit, function(v){ sel.teleExit = v; });
+    if(sel.teleExit){
+      hint(TR("teleportExitHint","Выход портала (синий). Переносит сюда из входа — сам телепортацию не запускает."));
+    } else {
+      var teleMate = objects.filter(function(o){ return o.customId === sel.targetIds; })[0];
+      hint(teleMate
+        ? TR("teleportEntryHint","Вход портала (оранжевый) → ") + linkName(teleMate)
+        : TR("teleportWaitingHint","Вход портала (оранжевый). Поставь ещё один портал — он станет выходом и свяжется сам."));
+    }
   }
   if(LINKED.indexOf(sel.type) !== -1){
     grp(TR("grpLinks","Связи"));
     txt("ID", sel.customId, function(v){ sel.customId = v; });
-    if(sel.type === "button" || sel.type === "lever" || sel.type === "laserFeed" || sel.type === "teleport" || sel.laser)
-      linkPicker(sel, sel.type === "teleport");
+    if(sel.type === "button" || sel.type === "lever" || sel.type === "laserFeed" || sel.laser)
+      linkPicker(sel);
     if(SOLID.indexOf(sel.type) !== -1)
       chk(TR("chkStartsOpen","Открыт сначала (проходим)"), sel.startsOpen, function(v){ sel.startsOpen = v; });
   }
@@ -3470,7 +3471,7 @@ document.getElementById("file").addEventListener("change", function(e){
       mode = d.mode || "hideAndSeek";
       // гравитация из карты игнорируется: она всегда 9
       document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
-      objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid"; });
+      objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid" && o.type !== "superGate"; });
       syncTools(); sel = null; inspect();
     }catch(err){ dialog(TR("errorTxt","Ошибка"), TR("readErrorBody","Не удалось прочитать файл карты."),null); }
   };
@@ -3619,7 +3620,8 @@ window.GAME = BRIDGE = {
       // чтобы геометрия уровня не разъехалась
       if(o.type === "door" || o.type === "gate" || o.type === "cover"){ o.type = "rect"; }
     });
-    objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid"; });
+    // SUPER BRO gate убран как объект (см. историю) — на старых картах просто пропадает
+    objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid" && o.type !== "superGate"; });
     if(objects.length > OBJ_LIMIT) objects.length = OBJ_LIMIT;
     objects.forEach(function(o){ if(o.id >= uid) uid = o.id + 1; });
     indexMovers(); markDirty();
