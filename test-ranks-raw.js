@@ -41,6 +41,50 @@ console.log('часть A — чистые функции (bandFor/raceScore/hsS
 
   const field = rk.mapField([{ rcBest: { m1: 1000 } }, { rcBest: { m1: 2000 } }, { rcBest: { m1: 3000 } }]);
   ok(field.get('m1').length === 3, 'mapField собирает времена всех игроков по карте');
+
+  // медали за время на карте (см. /owner/setMapRankTiers в maps.js) — добавка к формуле выше
+  const raceTiers = [{ rank: 'S', ms: 10000 }, { rank: 'A+', ms: 15000 }, { rank: 'A', ms: 20000 }];
+  ok(rk.rankForTime(raceTiers, 9000, 'min') === 'S', 'rankForTime: быстрее порога S — S');
+  ok(rk.rankForTime(raceTiers, 14000, 'min') === 'A+', 'rankForTime: между S и A+ — A+');
+  ok(rk.rankForTime(raceTiers, 99999, 'min') === null, 'rankForTime: медленнее всех порогов — null (не ошибка)');
+  const hiderTiers = [{ rank: 'S', ms: 100000 }, { rank: 'B', ms: 50000 }];
+  ok(rk.rankForTime(hiderTiers, 110000, 'max') === 'S', 'rankForTime(dir=max): дольше порога S — S');
+  ok(rk.rankForTime(hiderTiers, 10000, 'max') === null, 'rankForTime(dir=max): меньше любого порога — null');
+  ok(rk.rankForTime(null, 1000, 'min') === null, 'rankForTime: без лестницы (карта без медалей) — null, не падает');
+
+  const mapsByKey = new Map([['own|m1', { race: raceTiers }]]);
+  const uGoodMedal = { rcFin: 10, rcBest: { 'own|m1': 9000 } };   // S на единственной карте с лестницей
+  ok(rk.medalAvgRace(uGoodMedal, mapsByKey) === rk.MEDAL_WEIGHT.S,
+     'medalAvgRace: одна карта с медалью S — средняя равна весу S');
+  ok(rk.medalAvgRace({ rcBest: {} }, mapsByKey) === null,
+     'medalAvgRace: нет времён ни на одной карте с лестницей — null (добавка не участвует)');
+
+  // добавка не портит оценку, когда владелец ещё НИЧЕГО не настроил —
+  // raceScore/hsScore должны совпадать с версией без mapsByKey совсем
+  const uRace = { rcFin: 10, rcBest: { a: 1000, b: 1000, c: 1000, d: 1000, e: 1000 } };
+  const emptyField = rk.mapField([uRace, { rcBest: { a: 2000 } }, { rcBest: { a: 3000 } }]);
+  const withoutMaps = rk.raceScore(uRace, emptyField);
+  const withEmptyMapsByKey = rk.raceScore(uRace, emptyField, new Map());
+  ok(withoutMaps === withEmptyMapsByKey,
+     'raceScore: пустая mapsByKey (владелец ничего не настроил) не меняет оценку',
+     withoutMaps + ' vs ' + withEmptyMapsByKey);
+
+  /* Главная просьба, из-за которой gate переписан: медаль за КОНКРЕТНУЮ
+     карту не должна ждать, пока человек набегает общий минимум
+     (RACE_MIN_FIN/HS_MIN_ROUNDS) по ВСЕЙ игре — ранг это и есть медаль,
+     без неё раньше было бы "нет ранга" даже с S на размеченной карте. */
+  const uFewFinishes = { rcFin: 1, rcBest: { 'own|m1': 9000 } };   // меньше RACE_MIN_FIN=5
+  ok(rk.raceScore(uFewFinishes, new Map(), mapsByKey) === rk.MEDAL_WEIGHT.S,
+     'raceScore: мало финишей всего, но есть медаль S на размеченной карте — ранг всё равно S',
+     rk.raceScore(uFewFinishes, new Map(), mapsByKey));
+  ok(rk.raceScore({ rcFin: 1, rcBest: {} }, new Map(), mapsByKey) === null,
+     'raceScore: мало финишей и вообще никаких медалей — честно null, не 0');
+
+  const hsMapsByKey = new Map([['own|hsmap', { hider: [{ rank: 'A', ms: 50000 }] }]]);
+  const uFewRounds = { hsHide: 1, hsMapBest: { 'own|hsmap': { hiderMs: 60000 } } };  // меньше HS_MIN_ROUNDS=6
+  ok(rk.hsScore(uFewRounds, hsMapsByKey) === rk.MEDAL_WEIGHT.A,
+     'hsScore: мало раундов всего, но есть медаль A на размеченной карте — ранг всё равно A',
+     rk.hsScore(uFewRounds, hsMapsByKey));
 })();
 
 console.log('\nчасть B — /owner/setRank и /getRank живьём:');

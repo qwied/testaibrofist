@@ -119,6 +119,20 @@
 .mbCommentForm button:hover{background:var(--blue);color:#fff}
 .mbCommentSignIn{color:var(--muted,#6b7280);font-size:12.5px}
 
+/* Медали за время (см. ranks.js/owner.js) — лестница порогов, которую
+   расставляет владелец сайта, и буква, которую уже заработал сам
+   зритель. Те же цвета по буквам, что и в профиле (users.html, .upRank),
+   своя копия: страницы разные, общего стиля между ними нет. */
+.mbMedals{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  font-size:12px;color:var(--muted,#6b7280)}
+.mbMedalGroup{display:inline-flex;gap:5px;align-items:center;flex-wrap:wrap}
+.mbMedalPill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:12px;
+  border:1px solid var(--line);white-space:nowrap}
+.mbMedalPill[data-r="S"]{color:var(--panel,#fff);background:var(--ink,#111827);border-color:var(--ink,#111827)}
+.mbMedalPill[data-r="A+"],.mbMedalPill[data-r="A"]{color:#fff;background:var(--blue);border-color:var(--blue)}
+.mbMedalPill[data-r="B+"],.mbMedalPill[data-r="B"]{color:var(--blue);background:transparent;border-color:var(--blue)}
+.mbMedalMine{font-weight:700}
+
 /* Проигрывание карты прямо в Maps Browser: страница не покидается,
    адрес остаётся прежним, игра занимает весь экран. */
 .mbOverlay{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;z-index:1000;display:none;background:rgba(15,23,42,.72)}
@@ -258,11 +272,39 @@
       { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
+  /* Медали за время (см. rankForTime в ranks.js) — лестницу порогов задаёт
+     владелец сайта (см. "Ранг" в owner.js), m.rankTiers/m.myMedal приходят
+     прямо в /getMaps. Один и тот же порядок букв, что и везде в игре. */
+  var RANK_ORDER = ['S', 'A+', 'A', 'B+', 'B', 'C+', 'C'];
+  function ladderText(tiers, dir) {
+    var byRank = {}; (tiers || []).forEach(function (t) { byRank[t.rank] = t.ms; });
+    return RANK_ORDER.filter(function (r) { return byRank[r] > 0; }).map(function (r) {
+      return esc(r) + (dir === 'max' ? '≥' : '≤') + Math.round(byRank[r] / 100) / 10 + 's';
+    }).join(' · ');
+  }
+  function medalsRow(m) {
+    if (!m.rankTiers) return '';
+    var mine = m.myMedal || {};
+    var groups = [];
+    if (m.mapType === 'race' && m.rankTiers.race) {
+      groups.push({ label: T('mapRankRace', 'Finish'), txt: ladderText(m.rankTiers.race, 'min'), mine: mine.race });
+    }
+    if (m.rankTiers.hider) groups.push({ label: T('mapRankHider', 'Hider'), txt: ladderText(m.rankTiers.hider, 'max'), mine: mine.hider });
+    if (m.rankTiers.seeker) groups.push({ label: T('mapRankSeeker', 'Seeker'), txt: ladderText(m.rankTiers.seeker, 'min'), mine: mine.seeker });
+    if (!groups.length) return '';
+    return '<div class="mbMedals">' + groups.map(function (g) {
+      return '<span class="mbMedalGroup">' + esc(g.label) + ': ' + g.txt
+        + (g.mine ? ' <span class="mbMedalPill mbMedalMine" data-r="' + esc(g.mine) + '">'
+                   + T('mapRankYours', 'your best') + ' ' + esc(g.mine) + '</span>' : '')
+        + '</span>';
+    }).join('') + '</div>';
+  }
+
   function row(m) {
     var mine = me && !me.guest &&
                String(me.name).toLowerCase() === String(m.author).toLowerCase();
     var rc = m.rating > 0 ? 'pos' : (m.rating < 0 ? 'neg' : 'zero');
-    return '<div class="mbRow" data-map="' + esc(m.mapName) + '" data-author="' + esc(m.author) + '">'
+    return '<div class="mbRow" data-map="' + esc(m.mapName) + '" data-author="' + esc(m.author) + '" data-type="' + esc(m.mapType) + '">'
       + '<div class="mbRowMain">'
       + '<div class="mbName" title="' + esc(m.mapName) + '">'
       +   '<button class="mbFav' + (m.myFavorite ? ' on' : '') + '" data-fav="1" title="'
@@ -280,6 +322,7 @@
       + '</div>'
       + '<button class="mbPlay" data-play="1">' + T('play', 'Играть') + '</button>'
       + '</div>'
+      + medalsRow(m)
       + '<label class="mbPractice" title="' + T('practiceHint', 'Умирая, возвращаешься туда, где умер, а не на старт')
       +   '"><input type="checkbox" data-practice="1"> ' + T('practiceTxt', 'Practice') + '</label>'
       + '<span class="mbPracticeOpts" style="display:none">'

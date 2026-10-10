@@ -555,9 +555,26 @@ function hsStat(name, fn) {
   } catch (e) { /* статистика рангов не должна ронять раунд */ }
 }
 
+/* Лучшее время на КОНКРЕТНОЙ карте — медали за время (см. rankForTime в
+   ranks.js), отдельная система поверх hsHide/hsSurv/hsSeek/hsCat выше: та
+   считает ранг по ВСЕЙ игре сразу, эта — даёт букву на одну карту, которую
+   расставляет сам владелец (см. /owner/setMapRankTiers в maps.js). Для
+   хайдера лучше — дольше (hiderMs), для искателя — быстрее (seekerMs);
+   обновляем только если новый результат действительно лучше прежнего. */
+function hsCreditMapBest(acct, mapKey, role, ms) {
+  if (!acct || !mapKey || !(ms >= 0)) return;
+  hsStat(acct, (u) => {
+    if (!u.hsMapBest || typeof u.hsMapBest !== 'object') u.hsMapBest = {};
+    const e = u.hsMapBest[mapKey] || (u.hsMapBest[mapKey] = {});
+    if (role === 'hider') { if (!(e.hiderMs >= ms)) e.hiderMs = ms; }
+    else { if (!(e.seekerMs <= ms)) e.seekerMs = ms; }
+  });
+}
+
 function hsAwardRoundEnd(io, room, st) {
   const members = st.roundMembers || [];
   const caught = st.caughtSet || new Set();
+  const mapKey = st.map ? (st.map.author + '|' + st.map.mapName) : null;
   members.forEach((m) => {
     if (caught.has(m.id)) return;
     const sock = io.sockets.sockets.get(m.id);
@@ -576,6 +593,8 @@ function hsAwardRoundEnd(io, room, st) {
     // очки режима — отдельно от монет, для своей таблицы лидеров
     accountsRef.creditHsScore(acct, HS_PTS_SURVIVE);
     hsStat(acct, (s) => { s.hsHide = (s.hsHide || 0) + 1; s.hsSurv = (s.hsSurv || 0) + 1; });
+    // дожил до конца раунда без поимки — лучший возможный результат хайдером на этой карте
+    hsCreditMapBest(acct, mapKey, 'hider', HS_ROUND_MS);
   });
 }
 
@@ -705,6 +724,7 @@ function hsStartRound(io, room, st) {
   if (st.phase === 'storyEnd') return;
   st.phase = 'round';
   st.endsAt = Date.now() + HS_ROUND_MS;
+  st.roundStartedAt = Date.now();   // для медалей за время — см. hsDoInfect/hsCreditMapBest
   // снимок пряток на момент старта — только они и только если не пойманы, получат награду в конце
   // odo — отметка одометра на старте ЛОББИ, по ней в конце видно, кто вообще играл
   st.roundMembers = hsMembers(room).filter((m) => m.id !== st.seekerId)
@@ -766,13 +786,18 @@ function hsEndRoundEarly(room, st) {
    касается, у него нет аккаунта, которому платить. */
 function hsDoInfect(io, room, st, targetId, target) {
   st.caughtSet.add(targetId);
+  const mapKey = st.map ? (st.map.author + '|' + st.map.mapName) : null;
+  const roundStartedAt = st.roundStartedAt || Date.now();
   /* Пойманному раунд хайдером засчитываем здесь: в hsAwardRoundEnd его
      уже пропускают, и без этого в статистике оставались бы одни удачные
      раунды, а доля выживаний у всех была бы ровно единицей. */
   (function () {
     const tSock = io.sockets.sockets.get(targetId);
     const tAcct = tSock && sessionName(tSock.handshake.headers.cookie);
-    if (tAcct) hsStat(tAcct, (s) => { s.hsHide = (s.hsHide || 0) + 1; });
+    if (!tAcct) return;
+    hsStat(tAcct, (s) => { s.hsHide = (s.hsHide || 0) + 1; });
+    // сколько прожил хайдером на ЭТОЙ карте до поимки — медаль за время (см. ranks.js)
+    hsCreditMapBest(tAcct, mapKey, 'hider', Date.now() - roundStartedAt);
   })();
   /* Заражение: пойманный сам становится искателем и дальше охотится
      вместе с остальными. Отметку одометра снимаем прямо сейчас — считаем
@@ -786,7 +811,19 @@ function hsDoInfect(io, room, st, targetId, target) {
   if (st.apoc && st.zombieDriverId === targetId) hsZombieReassignDriver(io, room, st, targetId);
   // прячущихся не осталось — раунд можно заканчивать, не дожидаясь таймера
   const stillHiding = (st.roundMembers || []).some(m => !st.caughtSet.has(m.id));
-  if (!stillHiding) hsEndRoundEarly(room, st);
+  if (!stillHiding) {
+    /* Зачистка всей карты — медаль за скорость искателю. Только живому
+       охотнику, выбранному рулеткой: в apoc-раунде ловит зомби без
+       аккаунта (st.seekerId тогда null), а заразившиеся по пути хайдеры
+       эту медаль не получают — как и hsSeek выше, она только у того, кто
+       охотился с самого начала раунда. */
+    if (st.seekerId) {
+      const sSock = io.sockets.sockets.get(st.seekerId);
+      const sAcct = sSock && sessionName(sSock.handshake.headers.cookie);
+      if (sAcct) hsCreditMapBest(sAcct, mapKey, 'seeker', Date.now() - roundStartedAt);
+    }
+    hsEndRoundEarly(room, st);
+  }
 }
 
 /* Клиентский отчёт «все пойманы» — подстраховка на случай рассинхрона,
