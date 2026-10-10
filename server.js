@@ -789,14 +789,21 @@ function hsDoInfect(io, room, st, targetId, target) {
   if (!stillHiding) hsEndRoundEarly(room, st);
 }
 
-/* Клиентский отчёт «все пойманы». Верим только тому, кто сейчас реально
-   охотится (искателю или уже заражённому — заражение делает сикером
-   наравне с исходным), и не больше одного раза за раунд — иначе спамом
-   сообщений можно было бы перескакивать раунды. */
+/* Клиентский отчёт «все пойманы» — подстраховка на случай рассинхрона,
+   основной путь — серверный stillHiding в hsDoInfect. Раньше это было
+   голым доверием: любой текущий сикер (в том числе тот, кого заразили
+   против его желания минуту назад) мог прислать hsCaught без единой
+   реальной поимки и обрывать раунд по требованию — хоть каждый раунд
+   подряд, caughtSent ведь сбрасывается в каждом новом лобби. Теперь
+   сверяем то же самое условие, что и в hsDoInfect: округляем раунд
+   досрочно только если caughtSet и правда покрывает всех roundMembers,
+   а не потому что сикер так сказал. */
 function hsOnCaught(room, socketId) {
   const st = hsRooms.get(room);
   if (!st || st.phase !== 'round' || st.caughtSent) return;
   if (!st.seekerIds || !st.seekerIds.has(socketId)) return;
+  const stillHiding = (st.roundMembers || []).some(m => !st.caughtSet.has(m.id));
+  if (stillHiding) return;
   hsEndRoundEarly(room, st);
 }
 
