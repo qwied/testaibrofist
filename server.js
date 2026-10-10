@@ -608,6 +608,68 @@ function hsMapOf(st) {
   return st && st.map ? { author: st.map.author, mapName: st.map.mapName } : null;
 }
 
+/* Карта раунда может быть Zombie Apocalypse — читаем это прямо из её
+   JSON (тот же o.apoc, что выставляет редактор, см. window.getEditorMap)
+   и ищем метку зомби (type:"zombie", она одна — см. findZombie() в
+   редакторе). Без метки apoc-карта всё равно не ломает раунд: просто
+   играется как обычная, с человеком-искателем (см. hsStartLobby) —
+   включить модификатор без зомби на карте вполне можно, это не ошибка. */
+function hsApplyApoc(st) {
+  st.apoc = false;
+  st.zombieSpawn = null;
+  if (!st.map) return;
+  try {
+    const rec = require('./maps.js').find(st.map.author, st.map.mapName);
+    const data = rec && rec.mapData && JSON.parse(rec.mapData);
+    if (!data || !data.apoc) return;
+    const list = (data && (Array.isArray(data) ? data : data.objects)) || [];
+    let zb = null;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i] && list[i].type === 'zombie') { zb = list[i]; break; }
+    }
+    if (!zb) return;
+    st.apoc = true;
+    st.zombieSpawn = { x: Number(zb.x) || 0, y: Number(zb.y) || 0 };
+  } catch (e) { /* карта повреждена/не найдена — без зомби в этом раунде */ }
+}
+
+/* Кто из подключённых ведёт зомби в этом раунде: у его клиента уже
+   загружена вся геометрия карты, как у любого игрока, так что настоящая
+   платформенная физика (гравитация, столкновения, прыжки через уступы)
+   считается у него локально — так же, как раньше считалась для каждого
+   клиента отдельно и только для его собственного игрока (см. stepZombies
+   в движке) — и просто транслируется остальным через zombiePos/zombieState
+   ниже. Без этого пришлось бы заново писать всю физику уровня на сервере,
+   которому карта сейчас вообще не известна (см. hsPickMap). */
+function hsZombieAssignDriver(io, room, st) {
+  const members = hsMembers(room);
+  const pick = members.length ? members[Math.floor(Math.random() * members.length)] : null;
+  st.zombieDriverId = pick ? pick.id : null;
+  st.zombiePos = st.zombieSpawn ? { x: st.zombieSpawn.x, y: st.zombieSpawn.y } : { x: 0, y: 0 };
+  st.zombieOdo = 0;
+  st.zombieOdoBase = 0;
+  if (st.zombieDriverId) {
+    const sock = io.sockets.sockets.get(st.zombieDriverId);
+    if (sock) sock.emit('zombieDriverAssign', { x: st.zombiePos.x, y: st.zombiePos.y });
+  }
+}
+
+/* Ведущий отключился или сам заразился (см. hsDoInfect) — зомби не должен
+   замереть насовсем: передаём управление следующему подключённому, с той
+   позиции, где зомби сейчас стоит, а не обратно на спавн — иначе был бы
+   заметный прыжок на глазах у всех. Некому передать — зомби просто
+   замирает на месте до следующего раунда, это не ломает комнату. */
+function hsZombieReassignDriver(io, room, st, excludeId) {
+  if (!st.apoc || st.phase !== 'round') return;
+  const members = hsMembers(room).filter(m => m.id !== excludeId);
+  const pick = members.length ? members[Math.floor(Math.random() * members.length)] : null;
+  st.zombieDriverId = pick ? pick.id : null;
+  if (!st.zombieDriverId) return;
+  const sock = io.sockets.sockets.get(st.zombieDriverId);
+  const at = st.zombiePos || st.zombieSpawn || { x: 0, y: 0 };
+  if (sock) sock.emit('zombieDriverAssign', { x: at.x, y: at.y });
+}
+
 function hsStartLobby(io, room, st) {
   if (st.phase === 'storyEnd') return;   // лимит Story уже вышел — новый раунд не начинаем
   if (st.phase === 'round') hsAwardRoundEnd(io, room, st);
@@ -630,8 +692,11 @@ function hsStartLobby(io, room, st) {
     st.lobbyOdo.set(m.id, p ? (p.odo || 0) : 0);
   });
   hsPickMap(st);
-  hsSpin(io, room, st);
-  io.to(room).emit('hsPhase', { phase: 'lobby', msLeft: HS_LOBBY_MS, roundNum: st.roundNum, map: hsMapOf(st) });
+  hsApplyApoc(st);
+  // apoc-карта охотится зомби, а не разыгранным по рулетке человеком — см. hsStartRound
+  if (st.apoc) { st.seekerId = null; st.seekerName = ''; }
+  else hsSpin(io, room, st);
+  io.to(room).emit('hsPhase', { phase: 'lobby', msLeft: HS_LOBBY_MS, roundNum: st.roundNum, map: hsMapOf(st), apoc: !!st.apoc });
   clearTimeout(st.timer);
   st.timer = setTimeout(() => hsStartRound(io, room, st), st.endsAt - Date.now());
 }
@@ -651,26 +716,32 @@ function hsStartRound(io, room, st) {
       m.odo = (st.lobbyOdo && st.lobbyOdo.has(m.id)) ? st.lobbyOdo.get(m.id) : now;
       return m;
     });
-  /* То же и для искателя: от этой отметки в hsCatch считается, сколько он
-     реально пробежал за раунд. Без неё хватало одного честного шага за всю
-     сессию, чтобы дальше ловить телепортом в каждом следующем раунде.
-
-     seekerOdo — теперь Map, а не число: заражение (см. hsCatch) добавляет
-     в неё нового искателя со своей отметкой в момент заражения, поэтому
-     каждому нужно набрать честный путь заново, а не с чужого старта. */
-  const sp0 = gameState.players.get(st.seekerId);
-  st.seekerOdo = new Map([[st.seekerId, sp0 ? (sp0.odo || 0) : 0]]);
-  // раунд в роли охотника — для доли поимок в ранге (см. ranks.js)
-  (function () {
-    const sSock = io.sockets.sockets.get(st.seekerId);
-    const sAcct = sSock && sessionName(sSock.handshake.headers.cookie);
-    if (sAcct) hsStat(sAcct, (s) => { s.hsSeek = (s.hsSeek || 0) + 1; });
-  })();
-  // заражение: кто сейчас охотится — сначала только тот, кого выбрала рулетка
-  st.seekerIds = new Set([st.seekerId]);
   st.caughtSet = new Set();
+  if (st.apoc) {
+    // никто не начинает охотником — зомби ловит первым, см. hsZombieAssignDriver
+    st.seekerIds = new Set();
+    hsZombieAssignDriver(io, room, st);
+  } else {
+    /* От этой отметки в hsCatch считается, сколько искатель реально
+       пробежал за раунд. Без неё хватало одного честного шага за всю
+       сессию, чтобы дальше ловить телепортом в каждом следующем раунде.
+
+       seekerOdo — Map, а не число: заражение (см. hsDoInfect) добавляет
+       в неё нового искателя со своей отметкой в момент заражения, поэтому
+       каждому нужно набрать честный путь заново, а не с чужого старта. */
+    const sp0 = gameState.players.get(st.seekerId);
+    st.seekerOdo = new Map([[st.seekerId, sp0 ? (sp0.odo || 0) : 0]]);
+    // раунд в роли охотника — для доли поимок в ранге (см. ranks.js)
+    (function () {
+      const sSock = io.sockets.sockets.get(st.seekerId);
+      const sAcct = sSock && sessionName(sSock.handshake.headers.cookie);
+      if (sAcct) hsStat(sAcct, (s) => { s.hsSeek = (s.hsSeek || 0) + 1; });
+    })();
+    // заражение: кто сейчас охотится — сначала только тот, кого выбрала рулетка
+    st.seekerIds = new Set([st.seekerId]);
+  }
   io.to(room).emit('hsPhase', { phase: 'round', msLeft: HS_ROUND_MS,
-    seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st) });
+    seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st), apoc: !!st.apoc });
   clearTimeout(st.timer);
   st.timer = setTimeout(() => hsStartLobby(io, room, st), HS_ROUND_MS);
 }
@@ -685,6 +756,37 @@ function hsEndRoundEarly(room, st) {
   st.caughtSent = true;
   clearTimeout(st.timer);
   st.timer = setTimeout(() => hsStartLobby(io, room, st), 1400);
+}
+
+/* Общий хвост заражения — делится между hsCatch (искатель-человек поймал)
+   и zombieCatch (зомби apoc-раунда поймал, см. hsZombieAssignDriver):
+   пойманный не выбывает, а сам становится охотником и дальше ловит
+   остальных вместе со всеми, кто уже заражён. Награда самому ловцу (если
+   это был человек) начисляется ДО вызова этой функции — зомби она не
+   касается, у него нет аккаунта, которому платить. */
+function hsDoInfect(io, room, st, targetId, target) {
+  st.caughtSet.add(targetId);
+  /* Пойманному раунд хайдером засчитываем здесь: в hsAwardRoundEnd его
+     уже пропускают, и без этого в статистике оставались бы одни удачные
+     раунды, а доля выживаний у всех была бы ровно единицей. */
+  (function () {
+    const tSock = io.sockets.sockets.get(targetId);
+    const tAcct = tSock && sessionName(tSock.handshake.headers.cookie);
+    if (tAcct) hsStat(tAcct, (s) => { s.hsHide = (s.hsHide || 0) + 1; });
+  })();
+  /* Заражение: пойманный сам становится искателем и дальше охотится
+     вместе с остальными. Отметку одометра снимаем прямо сейчас — считаем
+     ему путь с этого момента, а не всю сессию (иначе телепорт-ловля была
+     бы доступна ему сразу же). */
+  st.seekerIds.add(targetId);
+  if (!st.seekerOdo) st.seekerOdo = new Map();
+  st.seekerOdo.set(targetId, target.odo || 0);
+  io.to(room).emit('hsInfected', { id: targetId, name: target.name });
+  // заразили самого ведущего зомби — передаём зомби следующему, см. hsZombieReassignDriver
+  if (st.apoc && st.zombieDriverId === targetId) hsZombieReassignDriver(io, room, st, targetId);
+  // прячущихся не осталось — раунд можно заканчивать, не дожидаясь таймера
+  const stillHiding = (st.roundMembers || []).some(m => !st.caughtSet.has(m.id));
+  if (!stillHiding) hsEndRoundEarly(room, st);
 }
 
 /* Клиентский отчёт «все пойманы». Верим только тому, кто сейчас реально
@@ -712,6 +814,9 @@ function hsOnLeave(io, room, leftId) {
     return;
   }
   if (leftId && leftId === st.seekerId && st.phase === 'lobby') hsSpin(io, room, st);
+  if (leftId && st.apoc && st.phase === 'round' && leftId === st.zombieDriverId) {
+    hsZombieReassignDriver(io, room, st, leftId);
+  }
 }
 
 /* ================== ЗАЩИТА СОКЕТОВ ==================
@@ -922,7 +1027,7 @@ io.on('connection', (socket) => {
           if (st.seekerOdo) st.seekerOdo.set(socket.id, player.odo || 0);
           io.to(room).emit('hsPhase', { phase: 'round',
             msLeft: Math.max(0, st.endsAt - Date.now()),
-            seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st) });
+            seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st), apoc: !!st.apoc });
         }
         /* Зашёл, пока идёт лобби, — отметку одометра ставим ему прямо
            сейчас: hsStartLobby снял её только с тех, кто уже был в
@@ -938,7 +1043,10 @@ io.on('connection', (socket) => {
           seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st),
           // догоняющему нужен весь список охотящихся — не только исходного
           // искателя, но и всех, кого заразили до его входа (см. hsCatch)
-          seekerIds: st.seekerIds ? Array.from(st.seekerIds) : [] });
+          seekerIds: st.seekerIds ? Array.from(st.seekerIds) : [],
+          // apoc-раунд уже идёт — зомби догоняющему нужно видеть сразу,
+          // не дожидаясь следующего zombiePos от ведущего (см. hsZombieAssignDriver)
+          apoc: !!st.apoc, zombiePos: st.apoc && st.zombiePos ? st.zombiePos : null });
       }
     }
 
@@ -1103,7 +1211,6 @@ io.on('connection', (socket) => {
        общий пробег за всю сессию тут ни при чём. */
     const base = st.seekerOdo ? (st.seekerOdo.get(socket.id) || 0) : 0;
     if ((player.odo || 0) - base < HS_MIN_DIST) return;
-    st.caughtSet.add(targetId);
     // гостю монеты не копим — как и раньше в addCoins, но саму механику
     // заражения это не должно затрагивать: гость-искатель ловит ничуть не
     // хуже, просто без награды (раньше return тут обрывал ВЕСЬ catch —
@@ -1114,27 +1221,62 @@ io.on('connection', (socket) => {
       accountsRef.creditHsScore(account, HS_PTS_CATCH);
       hsStat(account, (s) => { s.hsCat = (s.hsCat || 0) + 1; });
     }
-    /* Пойманному раунд хайдером засчитываем здесь: в hsAwardRoundEnd его
-       уже пропускают, и без этого в статистике оставались бы одни удачные
-       раунды, а доля выживаний у всех была бы ровно единицей. */
-    (function () {
-      const tSock = io.sockets.sockets.get(targetId);
-      const tAcct = tSock && sessionName(tSock.handshake.headers.cookie);
-      if (tAcct) hsStat(tAcct, (s) => { s.hsHide = (s.hsHide || 0) + 1; });
-    })();
+    hsDoInfect(io, room, st, targetId, target);
+  });
 
-    /* Заражение: пойманный не выбывает, а сам становится искателем и
-       дальше охотится вместе с остальными. Отметку одометра снимаем
-       прямо сейчас — считаем ему путь с этого момента, а не всю сессию
-       (иначе телепорт-ловля была бы доступна ему сразу же). */
-    st.seekerIds.add(targetId);
-    if (!st.seekerOdo) st.seekerOdo = new Map();
-    st.seekerOdo.set(targetId, target.odo || 0);
-    io.to(room).emit('hsInfected', { id: targetId, name: target.name });
+  /* Зомби apoc-раунда — см. hsZombieAssignDriver/hsApplyApoc. Ведущий
+     клиент (st.zombieDriverId) шлёт сюда позицию, которую у себя посчитал
+     настоящей платформенной физикой (та же геометрия карты, что у любого
+     игрока) — сервер карты не знает вовсе (см. hsPickMap) и физику не
+     проверяет, только транслирует дальше всей комнате через zombieState,
+     как movePlayer транслирует игроков через state. */
+  const limZombie = socketLimiter(30, 200);
+  socket.on('zombiePos', (data) => {
+    if (limZombie()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('hideAndSeek:') !== 0) return;
+    const room = player.room;
+    const st = hsRooms.get(room);
+    if (!st || st.phase !== 'round' || !st.apoc || st.zombieDriverId !== socket.id || !data) return;
+    const x = Math.max(-99999, Math.min(99999, Number(data.x) || 0));
+    const y = Math.max(-99999, Math.min(99999, Number(data.y) || 0));
+    const prev = st.zombiePos;
+    if (prev) {
+      const d = Math.hypot(x - prev.x, y - prev.y);
+      if (d <= MAX_STEP) st.zombieOdo = (st.zombieOdo || 0) + d;
+    }
+    st.zombiePos = { x, y };
+    io.to(room).volatile.emit('zombieState', { x, y });
+  });
 
-    // прячущихся не осталось — раунд можно заканчивать, не дожидаясь таймера
-    const stillHiding = (st.roundMembers || []).some(m => !st.caughtSet.has(m.id));
-    if (!stillHiding) hsEndRoundEarly(room, st);
+  /* Зомби поймал игрока — тот же путь заражения, что и у человека-искателя
+     (hsDoInfect), только источник другой: ведущий клиент сам обнаружил
+     касание (как клиент-искатель делает это для hsCatch) и шлёт сюда ID
+     жертвы. Проверки те же по духу: близость по ПОСЛЕДНЕЙ известной
+     серверу позиции (не той, что прислал сам ведущий в этом же пакете —
+     её тоже можно подделать) и честный путь зомби с прошлой поимки, иначе
+     можно было бы выбрать ведущим себя и телепортировать зомби на жертву. */
+  const limZombieCatch = socketLimiter(8, 30);
+  socket.on('zombieCatch', (data) => {
+    if (limZombieCatch()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('hideAndSeek:') !== 0) return;
+    const room = player.room;
+    const st = hsRooms.get(room);
+    if (!st || st.phase !== 'round' || !st.apoc || st.zombieDriverId !== socket.id) return;
+    const targetId = String((data && data.targetId) || '');
+    if (!targetId || !st.seekerIds || st.seekerIds.has(targetId)) return;
+    if (!st.caughtSet) st.caughtSet = new Set();
+    if (st.caughtSet.has(targetId)) return;
+    const target = gameState.players.get(targetId);
+    if (!target || target.room !== room) return;
+    const zp = st.zombiePos, tp = target.position;
+    if (!zp || !tp) return;
+    if (Math.abs(zp.x - tp.x) > 80 || Math.abs(zp.y - tp.y) > 120) return;
+    const base = st.zombieOdoBase || 0;
+    if ((st.zombieOdo || 0) - base < HS_MIN_DIST) return;
+    st.zombieOdoBase = st.zombieOdo || 0;
+    hsDoInfect(io, room, st, targetId, target);
   });
 
   /* Race: старт запоминаем, финиш проверяем на его существование, ту же

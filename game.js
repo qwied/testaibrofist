@@ -1114,6 +1114,18 @@
   // все, кто сейчас охотится в этом раунде — искатель, выбранный рулеткой,
   // плюс каждый, кого заразили по ходу охоты (см. applyInfected)
   var hsSeekerIds = {};
+  /* Зомби apoc-раунда (см. zombieDriverAssign/zombieState ниже). Ведущий
+     клиент (zombieDriving) считает его физику сам, в движке (см.
+     stepNetZombie() в game.html — у него уже загружена вся карта, как у
+     игрока) и просто транслирует результат; у остальных — только точка
+     для отрисовки, сглаженная тем же буфером, что и чужие игроки
+     (pushSnap/sample), чтобы зомби двигался так же плавно, как они. */
+  var zombieDriving = false, zombieEntity = null;
+  function zombieRoundReset() {
+    if (zombieDriving && window.GAME && GAME.zombieStop) GAME.zombieStop();
+    zombieDriving = false;
+    zombieEntity = null;
+  }
 
   function setRole(role) {
     me.role = role; me.caught = false;
@@ -1629,7 +1641,7 @@
     });
 
     // при обрыве связи серверные фазы недоступны — действуем по своим таймерам
-    socket.on('disconnect', function () { hsSync = false; joined = false; });
+    socket.on('disconnect', function () { hsSync = false; joined = false; zombieRoundReset(); });
 
     // сервер мог поправить имя: сессия сильнее присланного, а гостю
     // нельзя сидеть под чужим зарегистрированным ником
@@ -1794,6 +1806,27 @@
       applyInfected(d.id, d.name);
     });
 
+    /* Сервер выбрал, кто ведёт зомби в этом раунде (см.
+       hsZombieAssignDriver/hsZombieReassignDriver в server.js) — в т.ч.
+       посреди раунда, если прошлый ведущий отключился или сам заразился.
+       x/y — где зомби сейчас (на старте раунда это точка спавна, при
+       передаче — та позиция, где он и был, без прыжка на глазах у всех). */
+    socket.on('zombieDriverAssign', function (d) {
+      if (MODE !== 'hideAndSeek' || !d) return;
+      zombieDriving = true;
+      if (window.GAME && GAME.zombieStart) GAME.zombieStart(Number(d.x) || 0, Number(d.y) || 0);
+      if (!zombieEntity) zombieEntity = { buf: [], tx: d.x, ty: d.y, x: d.x, y: d.y };
+      else { zombieEntity.tx = d.x; zombieEntity.ty = d.y; }
+    });
+
+    // позицию зомби транслирует сервер всем в комнате — рисуем её тем же
+    // сглаживающим буфером, что и чужих игроков (см. GAME.onDraw ниже)
+    socket.on('zombieState', function (d) {
+      if (MODE !== 'hideAndSeek' || !d) return;
+      if (!zombieEntity) zombieEntity = { buf: [], tx: d.x, ty: d.y, x: d.x, y: d.y };
+      pushSnap(zombieEntity, nowMs(), d.x, d.y);
+    });
+
     /* ---------- прятки: серверные события ---------- */
 
     // новый раунд: сервер выбрал искателя и разослал состав рулетки
@@ -1835,7 +1868,8 @@
           if (me.role === 'seeker' && window.GAME && GAME.respawn) GAME.respawn();
         };
         if (!STORY) loadServerMap(d.map, teleportSeeker); else teleportSeeker();
-        log(TR('roundStart', 'Раунд начался! 2 минуты'));
+        log(d.apoc ? TR('roundStartApoc', 'Раунд начался! Зомби уже идёт за кем-то...')
+                   : TR('roundStart', 'Раунд начался! 2 минуты'));
         if (window.BFSound) BFSound.go();
       } else if (d.phase === 'lobby') {
         // дожил до конца раунда прячущимся — личный успех (значения ещё
@@ -1848,6 +1882,10 @@
         me.role = 'hider';
         $('gRoleBox').style.display = 'none';
         clearCaught();
+        // раунд закончился (или ещё не начинался) — зомби, если он был,
+        // больше не актуален; следующий раунд назначит заново (см.
+        // zombieDriverAssign) или не назначит вовсе, если карта не apoc
+        zombieRoundReset();
         // карту комнаты назначает сервер: у всех в комнате она одна
         if (!STORY) loadServerMap(d.map);
       } else if (d.phase === 'storyEnd') {
@@ -1887,6 +1925,11 @@
           hsSeekerIds[id] = true;
           if (id === socket.id) setRole('seeker');
         });
+        // зашли посреди apoc-раунда — зомби уже где-то бегает, рисуем его
+        // сразу по снимку, не дожидаясь следующего zombieState от ведущего
+        if (d.apoc && d.zombiePos) {
+          zombieEntity = { buf: [], tx: d.zombiePos.x, ty: d.zombiePos.y, x: d.zombiePos.x, y: d.zombiePos.y };
+        }
       } else {
         clearCaught();
         if (d.seekerId) {
@@ -1992,6 +2035,27 @@
       });
       checkAllCaught();
     }
+
+    /* Зомби apoc-раунда: веду его физику локально (см. stepNetZombie() в
+       game.html — у меня загружена та же карта, что у любого игрока) и
+       просто транслирую результат остальным через zombiePos/zombieCatch.
+       Цели — те же хайдеры, что и у человека-искателя выше: не заражённые
+       и не уже пойманные. Кого поймал — решает движок сам (см.
+       GAME.zombiePull), я только отправляю то, что он вернул. */
+    if (MODE === 'hideAndSeek' && zombieDriving && phase === 'round' && window.GAME && GAME.zombieSetTargets) {
+      var zTargets = [];
+      Object.keys(others).forEach(function (id) {
+        var o = others[id];
+        if (o.caught || hsSeekerIds[id]) return;
+        zTargets.push({ id: id, x: o.tx, y: o.ty, w: o.w || 30, h: o.h || 100 });
+      });
+      GAME.zombieSetTargets(zTargets);
+      var zr = GAME.zombiePull();
+      if (zr) {
+        socket.emit('zombiePos', { x: Math.round(zr.x), y: Math.round(zr.y) });
+        if (zr.caughtId) socket.emit('zombieCatch', { targetId: zr.caughtId });
+      }
+    }
   }, 33);
 
   /* Раунд заканчивается, как только пойманы все. Таймер после этого
@@ -2078,6 +2142,15 @@
       ctx.restore();
       drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74), !!hsSeekerIds[id]);
     });
+    // зомби apoc-раунда — у всех рисуется по сети (zombieState), ведущий
+    // не исключение: так он выглядит на экране ровно так же, как у всех,
+    // а не на кадр точнее своей же собственной физики
+    if (zombieEntity && MODE === 'hideAndSeek' && phase === 'round' && window.GAME && GAME.drawZombie) {
+      var zs = sample(zombieEntity, rt);
+      if (zs) { zombieEntity.x = zs.x; zombieEntity.y = zs.y; }
+      else { zombieEntity.x += (zombieEntity.tx - zombieEntity.x) * 0.3; zombieEntity.y += (zombieEntity.ty - zombieEntity.y) * 0.3; }
+      GAME.drawZombie(zombieEntity.x, zombieEntity.y);
+    }
     var p = GAME.pl;
     if (GAME.playing && me.name) {
       // свой ник в укрытии показываем бледным — напоминание, что тебя не видно

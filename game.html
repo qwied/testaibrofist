@@ -747,9 +747,9 @@ var PAINT = {
   },
   /* Мертвец — отдельный объект, а не свойство фигуры: это не часть
      геометрии уровня, а противник, и выглядеть он должен собой, а не
-     покрашенным блоком. Идёт к игроку и убивает касанием, но только при
-     модификации Zombie Apocalypse (см. apoc и stepZombies) — в
-     классическом варианте той же карты его на ней нет.
+     покрашенным блоком. На карте — только метка точки спавна (одна, как
+     у игрока); саму охоту ведёт сетевой зомби (см. apoc и stepNetZombie)
+     — в классическом варианте той же карты его на ней нет.
      Разворачивается по ходу движения (_zface), поэтому сразу видно,
      кого он уже заметил. Хитбокс теперь впритык как у игрока (см.
      SIZES.zombie) — силуэт рисуем той же figure(), что и игрока, чтобы
@@ -830,7 +830,7 @@ var TOOLS = [
   {t:"button",     n:"Кнопка",      k:"toolButton",     m:ALL},
   {t:"lever",      n:"Рычаг",       k:"toolLever",      m:ALL},
   {t:"teleport",   n:"Телепорт",    k:"toolTeleport",   m:ALL},
-  /* мертвец из модификации Zombie Apocalypse (см. apoc и stepZombies) —
+  /* мертвец из модификации Zombie Apocalypse (см. apoc и stepNetZombie) —
      только прятки: в гонке модификация не предлагается (см. #apoc ниже
      и TOOL_MODES.zombie в maps.js) */
   {t:"zombie",     n:"Зомби",       k:"toolZombie",     m:"hideAndSeek"},
@@ -918,9 +918,16 @@ var mode = "hideAndSeek", tool = "select", objects = [], sel = null, uid = 1;
    с галочкой «Зомби» в самой игре просто не существуют: карта играется как
    обычная, а не с россыпью блоков там, где стояли мертвецы. */
 var apoc = false;
-var ZOMBIE_MAX = 50;              // больше полусотни мертвецов карта не поднимает
 var ZOMBIE_SPEED = 0.62;          // доля от скорости игрока — от зомби всегда можно убежать
 var ZOMBIE_JUMP = 0.82;           // доля от прыжка игрока — уступ перепрыгнет, стену нет
+/* Сетевой зомби apoc-раунда (см. BRIDGE.zombieStart/zombieSetTargets/
+   zombiePull ниже и game.js): у кого из игроков сервер назначил вести
+   зомби (zombieDriverAssign), у того физика считается здесь же, локально,
+   точно так же, как раньше считалась для objects-зомби в stepZombies() —
+   просто цель теперь не локальный pl, а ближайший из others, и результат
+   не остаётся на этом клиенте, а уходит в сеть (zombiePos). Остальные
+   клиенты зомби не считают вообще — только рисуют его по zombieState. */
+var netZombie = null, netZombieTargets = [], netZombieCaught = null;
 
 /* ══════════════════════════════════════════════════
    ИНДЕКС ОБЪЕКТОВ
@@ -1669,76 +1676,64 @@ function stepPushables(){
    он может только зазевавшегося или загнанного в угол — иначе карта
    превращается в лотерею, а не в испытание.
    ══════════════════════════════════════════════════ */
-function stepZombies(){
-  if(!apoc) return;
-  var live = 0;
-  for(var zi=0; zi<objects.length; zi++){
-    var o = objects[zi];
-    if(o.type !== "zombie") continue;
-    if(++live > ZOMBIE_MAX) break;
+/* Физика сетевого зомби — тот же алгоритм, что раньше был в stepZombies()
+   для objects-зомби (гравитация, столкновения, перелезание через уступ
+   при упоре в стену), только цель — ближайший из netZombieTargets (его
+   обновляет game.js через BRIDGE.zombieSetTargets() по данным others),
+   а не локальный pl. Результат остаётся в netZombie — наружу его забирает
+   BRIDGE.zombiePull(), а отправляет в сеть уже game.js. */
+function stepNetZombie(){
+  if(!netZombie) return;
+  var o = netZombie;
+  var near = nearby(o.x-70, o.y-70, o.w+140, o.h+140), blockers = [], i;
+  for(i=0;i<near.length;i++){ var s = near[i]; if(solid(s)) blockers.push(s); }
 
-    var near = nearby(o.x-70, o.y-70, o.w+140, o.h+140), blockers = [], i;
-    for(i=0;i<near.length;i++){ var s = near[i]; if(s !== o && solid(s)) blockers.push(s); }
-
-    // ---- вертикаль: свободное падение до первой опоры ----
-    o._zvy = (o._zvy||0) + G();
-    var fc = maxFall();
-    if(o._zvy > fc) o._zvy = fc;
-    var yBefore = o.y;
-    o.y += o._zvy;
-    var grounded = false;
-    for(i=0;i<blockers.length;i++){
-      var sv = blockers[i], bbv = bbox(sv);
-      if(o.x >= bbv[2] || o.x+o.w <= bbv[0] || o.y >= bbv[3] || o.y+o.h <= bbv[1]) continue;
-      var spV = spanY(polyOf(sv), o.x+2, o.x+o.w-2);
-      if(!spV || o.y >= spV[1] || o.y+o.h <= spV[0]) continue;
-      if((yBefore+o.h) <= spV[0]+2){ o.y = spV[0]-o.h; o._zvy = 0; grounded = true; }
-    }
-    o._dy = o.y - yBefore;
-
-    // ---- горизонталь: шаг в сторону игрока ----
-    var dx = 0;
-    if(!pl.dead){
-      var toward = (pl.x+pl.w/2) - (o.x+o.w/2);
-      if(Math.abs(toward) > 2){
-        dx = (toward > 0 ? 1 : -1) * maxVX() * ZOMBIE_SPEED;
-        o._zface = toward > 0 ? 1 : -1;
-      }
-    }
-    if(dx !== 0){
-      var xBefore = o.x, wall = false;
-      o.x += dx;
-      for(i=0;i<blockers.length;i++){
-        var sh = blockers[i], bbh = bbox(sh);
-        if(o.y >= bbh[3] || o.y+o.h <= bbh[1]) continue;
-        var spH = spanX(polyOf(sh), o.y+2, o.y+o.h-2);
-        if(!spH) continue;
-        if(dx > 0 && o.x+o.w > spH[0] && xBefore+o.w <= spH[0]+2){ o.x = spH[0]-o.w; wall = true; }
-        else if(dx < 0 && o.x < spH[1] && xBefore >= spH[1]-2){ o.x = spH[1]; wall = true; }
-      }
-      if(wall && grounded) o._zvy = jumpV()*ZOMBIE_JUMP;   // упёрся на земле — перелезает
-      dx = o.x - xBefore;
-    }
-    o._dx = dx;
-
-    if(!pl.dead && overlaps(o, pl.x, pl.y, pl.w, pl.h)) zombieCatch();
+  o._zvy = (o._zvy||0) + G();
+  var fc = maxFall();
+  if(o._zvy > fc) o._zvy = fc;
+  var yBefore = o.y;
+  o.y += o._zvy;
+  var grounded = false;
+  for(i=0;i<blockers.length;i++){
+    var sv = blockers[i], bbv = bbox(sv);
+    if(o.x >= bbv[2] || o.x+o.w <= bbv[0] || o.y >= bbv[3] || o.y+o.h <= bbv[1]) continue;
+    var spV = spanY(polyOf(sv), o.x+2, o.x+o.w-2);
+    if(!spV || o.y >= spV[1] || o.y+o.h <= spV[0]) continue;
+    if((yBefore+o.h) <= spV[0]+2){ o.y = spV[0]-o.h; o._zvy = 0; grounded = true; }
   }
-}
-/* Догнал. В гонке это обычная смерть — через ту же единую точку die(), так
-   что неуязвимость Practice работает как со всякой другой опасностью.
-   В прятках умереть нельзя в принципе (см. die()), и
-   мертвец вместо смерти отбрасывает пойманного на старт: цена сопоставима,
-   а правила режима не ломаются. */
-function zombieCatch(){
-  if(pl.dead || done) return;
-  if(mode !== "hideAndSeek"){ die(); return; }
-  if(godMode) return;
-  if(pl._zHitAt && timeMs - pl._zHitAt < 900) return;   // не отбрасывает каждый кадр
-  pl._zHitAt = timeMs;
-  shake = 10;
-  burst(pl.x+pl.w/2, pl.y+pl.h/2, 18, "#84cc16", 3.6, 30);
-  if(window.BFSound) BFSound.death();
-  respawn();
+
+  // ближайшая по X цель из присланных сетью — та же логика, что раньше
+  // была "цель — единственный локальный pl", только целей теперь много
+  var target = null, bestD = Infinity;
+  for(i=0;i<netZombieTargets.length;i++){
+    var t = netZombieTargets[i];
+    var d = Math.abs((t.x+t.w/2) - (o.x+o.w/2));
+    if(d < bestD){ bestD = d; target = t; }
+  }
+
+  var dx = 0;
+  if(target){
+    var toward = (target.x+target.w/2) - (o.x+o.w/2);
+    if(Math.abs(toward) > 2){
+      dx = (toward > 0 ? 1 : -1) * maxVX() * ZOMBIE_SPEED;
+      o._zface = toward > 0 ? 1 : -1;
+    }
+  }
+  if(dx !== 0){
+    var xBefore = o.x, wall = false;
+    o.x += dx;
+    for(i=0;i<blockers.length;i++){
+      var sh = blockers[i], bbh = bbox(sh);
+      if(o.y >= bbh[3] || o.y+o.h <= bbh[1]) continue;
+      var spH = spanX(polyOf(sh), o.y+2, o.y+o.h-2);
+      if(!spH) continue;
+      if(dx > 0 && o.x+o.w > spH[0] && xBefore+o.w <= spH[0]+2){ o.x = spH[0]-o.w; wall = true; }
+      else if(dx < 0 && o.x < spH[1] && xBefore >= spH[1]-2){ o.x = spH[1]; wall = true; }
+    }
+    if(wall && grounded) o._zvy = jumpV()*ZOMBIE_JUMP;   // упёрся на земле — перелезает
+  }
+
+  if(target && overlaps(o, target.x, target.y, target.w, target.h)) netZombieCaught = target.id;
 }
 
 /* Сколько из (dx,dy) поездки на платформе реально можно проехать, прежде
@@ -2227,7 +2222,7 @@ function step(){
     if(o.type === "lever" && !o._latch){ o._act = !o._act; o._latch = true; drive(o); if(window.BFSound) BFSound.toggle(); }
   });
   laserFeeds();
-  stepZombies();
+  stepNetZombie();
   // не внутри опасности прямо сейчас — можно смело вернуть сюда при смерти
   // в Practice Mode (если умер этим же кадром, pl.dead уже true — не трогаем)
   if(!pl.dead) lastSafePos = {x:pl.x, y:pl.y};
@@ -3540,6 +3535,34 @@ window.GAME = BRIDGE = {
   get mode(){ return mode; },
   get apoc(){ return apoc; },
   toolOK: function(t){ return toolOK(t); },   // автотесты: доступность инструмента (зомби/apoc)
+  /* Сетевой зомби apoc-раунда (см. game.js: zombieDriverAssign/zombiePos/
+     zombieState). zombieStart ставит его в точку спавна и включает
+     физику (см. stepNetZombie() выше), zombieSetTargets обновляет список
+     целей (ближайших хайдеров) — оба вызываются из 33мс-тика game.js,
+     а не из каждого кадра, физика сама идёт на обычной частоте кадров с
+     тем, что было прислано последним. zombiePull — то, что game.js
+     реально отправит на сервер, и кого зомби заразил за этот тик, если
+     заразил вообще. */
+  zombieStart: function(x, y){
+    netZombie = {x:x, y:y, w:SIZES.zombie[0], h:SIZES.zombie[1], vy:0, _zvy:0, _zface:1};
+    netZombieTargets = []; netZombieCaught = null;
+  },
+  zombieStop: function(){ netZombie = null; netZombieTargets = []; netZombieCaught = null; },
+  zombieSetTargets: function(list){ netZombieTargets = list || []; },
+  zombiePull: function(){
+    if(!netZombie) return null;
+    var caught = netZombieCaught; netZombieCaught = null;
+    return {x: netZombie.x, y: netZombie.y, caughtId: caught};
+  },
+  // рисует зомби в заданной мировой точке — так его показывают все клиенты,
+  // не только ведущий (см. zombieState в game.js), той же моделью, что и
+  // метка-спавн в редакторе (см. PAINT.zombie)
+  drawZombie: function(x, y){
+    ctx.save();
+    ctx.translate(x, y);
+    PAINT.zombie({w: SIZES.zombie[0], h: SIZES.zombie[1]});
+    ctx.restore();
+  },
   get done(){ return done; },
   // Practice Mode включается снаружи (game.js) до старта — см. respawn()
   get practice(){ return practiceMode; },
