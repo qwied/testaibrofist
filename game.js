@@ -1127,11 +1127,20 @@
     zombieEntity = null;
   }
 
+  // текущий раунд — apoc (см. d.apoc в hsPhase/hsState): пока он идёт,
+  // заражённые (искатели) выглядят зомби, а не обычной фигуркой —
+  // см. syncMeIsZombie() и GAME.figureZombie в GAME.onDraw ниже
+  var hsApocRound = false;
+  function syncMeIsZombie() {
+    if (window.GAME) GAME.meIsZombie = !!(hsApocRound && me.role === 'seeker');
+  }
+
   function setRole(role) {
     me.role = role; me.caught = false;
     $('gRoleBox').style.display = 'inline';
     $('gRole').textContent = role === 'seeker' ? TR('roleSeeker', 'Искатель') : TR('roleHider', 'Прячется');
     applyColor();
+    syncMeIsZombie();
   }
 
   /* ---------- рулетка искателя (прятки) ----------
@@ -1641,7 +1650,10 @@
     });
 
     // при обрыве связи серверные фазы недоступны — действуем по своим таймерам
-    socket.on('disconnect', function () { hsSync = false; joined = false; zombieRoundReset(); });
+    socket.on('disconnect', function () {
+      hsSync = false; joined = false; zombieRoundReset();
+      hsApocRound = false; syncMeIsZombie();   // не застыть зомби-скином до реконнекта
+    });
 
     // сервер мог поправить имя: сессия сильнее присланного, а гостю
     // нельзя сидеть под чужим зарегистрированным ником
@@ -1836,7 +1848,8 @@
       phase = 'lobby';
       if (d.msLeft) phaseEnds = Date.now() + (Number(d.msLeft) || 0);
       hsWinnerId = null;                 // пока крутится — ролей нет, никого не видно
-      me.role = 'hider';
+      hsApocRound = false;               // рулетку искателя крутят только классические раунды
+      setRole('hider');
       $('gRoleBox').style.display = 'none';
       clearCaught();
       runRoulette(d);
@@ -1857,6 +1870,10 @@
         phase = 'round';
         phaseEnds = Date.now() + (Number(d.msLeft) || ROUND_MS);
         clearCaught();
+        // apoc-раунд: заражённые выглядят зомби (см. syncMeIsZombie) —
+        // у apoc нет искателя-человека, applySeeker ниже не позовут вовсе
+        hsApocRound = !!d.apoc;
+        syncMeIsZombie();
         if (d.seekerId) applySeeker(d.seekerId);
         /* Охота начинается — искатель стартует со своей точки старта, а
            не там, где стоял во время подготовки (мог сам уйти прятаться
@@ -1879,7 +1896,8 @@
         phase = 'lobby';
         phaseEnds = Date.now() + (Number(d.msLeft) || LOBBY_MS);
         hsWinnerId = null;
-        me.role = 'hider';
+        hsApocRound = false;             // лобби — все снова обычные, зомби ещё не назначен
+        setRole('hider');
         $('gRoleBox').style.display = 'none';
         clearCaught();
         // раунд закончился (или ещё не начинался) — зомби, если он был,
@@ -1918,6 +1936,7 @@
         // зашли посреди уже идущей охоты — рулетку не видели и не увидим,
         // шансу тут показывать нечего
         hideChance();
+        hsApocRound = !!d.apoc;
         if (d.seekerId) applySeeker(d.seekerId);
         // догоняем заражённых, добавленных уже после старта раунда —
         // applySeeker выше знает только про исходного искателя рулетки
@@ -1925,12 +1944,14 @@
           hsSeekerIds[id] = true;
           if (id === socket.id) setRole('seeker');
         });
+        syncMeIsZombie();
         // зашли посреди apoc-раунда — зомби уже где-то бегает, рисуем его
         // сразу по снимку, не дожидаясь следующего zombieState от ведущего
         if (d.apoc && d.zombiePos) {
           zombieEntity = { buf: [], tx: d.zombiePos.x, ty: d.zombiePos.y, x: d.zombiePos.x, y: d.zombiePos.y };
         }
       } else {
+        hsApocRound = false;
         clearCaught();
         if (d.seekerId) {
           applySeeker(d.seekerId);
@@ -2138,7 +2159,10 @@
       var w = o.w || 22, h = o.h || 74;
       ctx.save();
       ctx.translate(o.x, o.y);
-      GAME.figure(w, h, o.color || COLOR_NORMAL, true, o.skin || null);
+      // заражён в apoc-раунде — выглядит зомби, а не обычной фигуркой
+      // (см. hsApocRound/hsSeekerIds — тот же набор, что красит полосу под ником)
+      if (hsApocRound && hsSeekerIds[id] && window.GAME && GAME.figureZombie) GAME.figureZombie(w, h);
+      else GAME.figure(w, h, o.color || COLOR_NORMAL, true, o.skin || null);
       ctx.restore();
       drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74), !!hsSeekerIds[id]);
     });

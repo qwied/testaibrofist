@@ -2539,7 +2539,9 @@ function paintFrame(){
     ctx.save(); ctx.translate(pl.x, pl.y);
     // себя в укрытии видно бледным — чужие не видят вообще
     if(pl.hidden) ctx.globalAlpha = 0.35;
-    figure(pl.w, pl.h, (BRIDGE && BRIDGE.myColor) || "#000000", true,
+    // заразился в apoc-раунде — сам теперь выглядишь зомби (см. meIsZombie в game.js)
+    if(BRIDGE && BRIDGE.meIsZombie) PAINT.zombie({w: pl.w, h: pl.h, _zface: pl.face || 1});
+    else figure(pl.w, pl.h, (BRIDGE && BRIDGE.myColor) || "#000000", true,
            (BRIDGE && BRIDGE.mySkin) || null);
     ctx.restore();
   }
@@ -3562,6 +3564,13 @@ window.GAME = BRIDGE = {
     ctx.translate(x, y);
     PAINT.zombie({w: SIZES.zombie[0], h: SIZES.zombie[1]});
     ctx.restore();
+  },
+  /* Заражённый игрок apoc-раунда рисуется той же моделью, что и сам
+     зомби (см. hsApocRound в game.js) — вызывается уже внутри save/
+     translate(o.x,o.y) чужого игрока в GAME.onDraw, поэтому здесь без
+     собственного save/translate, в отличие от drawZombie(x,y) выше. */
+  figureZombie: function(w, h){
+    PAINT.zombie({w: w, h: h});
   },
   get done(){ return done; },
   // Practice Mode включается снаружи (game.js) до старта — см. respawn()
