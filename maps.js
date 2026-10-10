@@ -18,6 +18,9 @@ const MODES = ['hideAndSeek', 'race'];
    в игровые режимы попадают только карты владельца сайта. */
 const { OWNER_ALIASES } = require('./accounts.js');
 const isOwnerName = n => OWNER_ALIASES.indexOf(String(n || '').toLowerCase()) !== -1;
+/* Буквы медалей за время (см. rankForTime в ranks.js). ranks.js сам
+   требует этот файл лениво, внутри build() — цикла загрузки здесь нет. */
+const RANK_LETTERS = require('./ranks.js').RANK_ORDER;
 
 const DAILY_LIMIT = 3;                 // сколько новых карт можно выложить за сутки
 const REWARD      = 10;                // монет за каждую новую опубликованную карту
@@ -74,6 +77,66 @@ function wrongForMode(list, mode) {
 // сколько монет лежит в карте
 function coinsInMap(raw) {
   return objectsOf(raw).filter(o => o.type === 'coin').length;
+}
+
+/* Медали за время на карте (см. rankForTime в ranks.js) — задаёт только
+   владелец сайта, см. /owner/setMapRankTiers ниже. От клиента приходит
+   {БУКВА: секунды}; пустая строка/0/мусор для буквы — порог для неё
+   просто не задан, а не ошибка (поле в форме почистили). Неизвестная
+   буква или не-объект — вот это уже ошибка формы, вся правка отклоняется. */
+function parseLadder(obj) {
+  if (obj === undefined || obj === null) return [];
+  if (typeof obj !== 'object' || Array.isArray(obj)) return false;
+  const out = [];
+  for (const rank of Object.keys(obj)) {
+    if (RANK_LETTERS.indexOf(rank) === -1) return false;
+    const sec = Number(obj[rank]);
+    if (!(sec > 0) || sec > 36000) continue;    // до 10 часов — больше заведомо опечатка, но не аварийная
+    out.push({ rank, ms: Math.round(sec * 1000) });
+  }
+  return out;
+}
+// raw -> внутренний вид rankTiers карты (null — медали с карты сняты, false — вход не распознан)
+function parseRankTiers(raw, mapType) {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) return false;
+  if (mapType === 'race') {
+    const race = parseLadder(raw.race);
+    if (race === false) return false;
+    return race.length ? { race } : null;
+  }
+  const hider = parseLadder(raw.hider);
+  const seeker = parseLadder(raw.seeker);
+  if (hider === false || seeker === false) return false;
+  if (!hider.length && !seeker.length) return null;
+  const out = {};
+  if (hider.length) out.hider = hider;
+  if (seeker.length) out.seeker = seeker;
+  return out;
+}
+
+// медаль ТЕКУЩЕГО зрителя на этой карте — для карточки в Maps Browser
+// (та же лестница, что и в общем ранге, см. medalAvgRace/medalAvgHs)
+function medalOf(m, me) {
+  if (!m.rankTiers || !me) return null;
+  const mapKey = m.author + '|' + m.mapName;
+  const rk = require('./ranks.js');
+  if (m.mapType === 'race') {
+    const ms = me.rcBest && me.rcBest[mapKey];
+    if (!(ms > 0) || !Array.isArray(m.rankTiers.race)) return null;
+    const r = rk.rankForTime(m.rankTiers.race, ms, 'min');
+    return r ? { race: r } : null;
+  }
+  const e = me.hsMapBest && me.hsMapBest[mapKey];
+  if (!e) return null;
+  const out = {};
+  if (Array.isArray(m.rankTiers.hider) && e.hiderMs > 0) {
+    const r = rk.rankForTime(m.rankTiers.hider, e.hiderMs, 'max'); if (r) out.hider = r;
+  }
+  if (Array.isArray(m.rankTiers.seeker) && e.seekerMs > 0) {
+    const r = rk.rankForTime(m.rankTiers.seeker, e.seekerMs, 'min'); if (r) out.seeker = r;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 // счётчики оценок: голоса игроков + ручная правка владельца
@@ -396,7 +459,9 @@ function register(app, getUser, acc, cleanText) {
         myVote: me ? ((m.votes || {})[low(me.name)] || 0) : 0,
         myFavorite: myFavs.indexOf(favKey(m.author, m.mapName)) !== -1,
         inGameModes: Array.isArray(m.inGameModes) ? m.inGameModes : [],
-        commentCount: Array.isArray(m.comments) ? m.comments.length : 0
+        commentCount: Array.isArray(m.comments) ? m.comments.length : 0,
+        rankTiers: m.rankTiers || null,
+        myMedal: medalOf(m, me)
       };
     });
 
@@ -657,6 +722,43 @@ function register(app, getUser, acc, cleanText) {
     res.json({ status: 'success', message: '«' + mapName + '» deleted' });
   });
 
+  // текущие пороги карты — подгрузить форму в owner.js перед правкой
+  app.get('/owner/getMapRankTiers', (req, res) => {
+    const u = getUser(req);
+    if (!u || !isOwnerName(u.name))
+      return res.json({ status: 'error', message: 'Not available' });
+    const m = maps.find(x => low(x.author) === low(req.query.author) && low(x.mapName) === low(req.query.mapName));
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+    res.json({ status: 'success', mapType: m.mapType, rankTiers: m.rankTiers || null });
+  });
+
+  /* Медали за время на карте (см. ranks.js — это добавка к общей формуле
+     ранга, не отдельный ранг). Задаёт ТОЛЬКО владелец сайта, своей
+     панелью в Maps Browser (см. owner.js): лестница порогов "буква ->
+     время в мс", своя для Race (finishMs) и своя для каждой роли в
+     Hide and Seek (hider — дольше лучше, seeker — быстрее лучше). Пустой
+     объект/null тиров для режима карты снимает медали с этой карты. */
+  app.post('/owner/setMapRankTiers', (req, res) => {
+    const u = getUser(req);
+    if (!u || !isOwnerName(u.name))
+      return res.json({ status: 'error', message: 'Not available' });
+    const author = String(req.body.author || '').trim();
+    const mapName = String(req.body.mapName || '').trim();
+    const m = maps.find(x => low(x.author) === low(author) && low(x.mapName) === low(mapName));
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+
+    let raw;
+    try { raw = JSON.parse(String(req.body.tiers || 'null')); }
+    catch (e) { return res.json({ status: 'error', message: 'Bad tiers JSON' }); }
+    const parsed = parseRankTiers(raw, m.mapType);
+    if (parsed === false)
+      return res.json({ status: 'error', message: 'Bad tiers: use rank letters S/A+/A/B+/B/C+/C and times in seconds' });
+
+    m.rankTiers = parsed;   // null — медали с карты снова сняты
+    save();
+    res.json({ status: 'success', rankTiers: m.rankTiers });
+  });
+
   // ---------- карты игрока (вкладка Maps в профиле) ----------
   app.get('/userMaps', (req, res) => {
     const mine = maps.filter(m => low(m.author) === low(req.query.name));
@@ -674,6 +776,11 @@ function register(app, getUser, acc, cleanText) {
 // ---------- доступ для инструментов владельца ----------
 function find(author, mapName) {
   return maps.find(x => low(x.author) === low(author) && low(x.mapName) === low(mapName));
+}
+// копия списка карт — для ranks.js (см. build(): только оттуда и собираются
+// rankTiers всех карт сразу, по одному циклу на пересчёт, а не по карте)
+function allMaps() {
+  return maps.slice();
 }
 /* Владелец задаёт ИТОГОВОЕ число лайков и дизлайков, а не прибавку.
    Считаем, сколько живых голосов уже есть, и подгоняем поправку так,
@@ -738,4 +845,4 @@ function newFromFriends(user) {
   return out;
 }
 
-module.exports = { register, reload: load, MODES, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, renameAuthor };
+module.exports = { register, reload: load, MODES, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, allMaps, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, renameAuthor };

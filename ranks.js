@@ -95,6 +95,80 @@ const BANDS = [
 
 function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
+/* ── МЕДАЛИ ЗА ВРЕМЯ НА КОНКРЕТНОЙ КАРТЕ ──────────────
+   Это ВТОРАЯ, отдельная система поверх описанной выше: не процентиль среди
+   игроков, а буква, которую сам разработчик назначает конкретной карте за
+   конкретное время (см. /owner/setMapRankTiers в maps.js и панель в
+   owner.js). В Race время — это время финиша (то же rcBest, которое уже
+   хранится для процентиля). В Hide and Seek у карты нет единого «времени
+   прохождения» — вместо этого считаются ДВЕ раздельные лестницы: сколько
+   хайдер провёл живым за раунд (дольше — лучше) и сколько искателю
+   потребовалось, чтобы поймать всех (быстрее — лучше); обе ведут к одной и
+   той же букве и при расчёте общего ранга усредняются вместе, без разницы
+   роли (см. medalAvgHs).
+
+   Эти медали — не самостоятельный ранг, а ДОБАВКА к формуле процентиля
+   выше: пока разработчик не расставил пороги ни на одной карте, которую
+   человек проходил, добавка отсутствует и ранг считается ровно как раньше. */
+const RANK_ORDER = BANDS.map((b) => b.rank);               // ['S','A+','A','B+','B','C+','C']
+const MEDAL_WEIGHT = {}; BANDS.forEach((b) => { MEDAL_WEIGHT[b.rank] = b.floor; });
+
+/* dir 'min' — чем МЕНЬШЕ время, тем лучше (финиш гонки, поймать всех
+   искателем); dir 'max' — чем БОЛЬШЕ, тем лучше (прожил хайдером раунд).
+   Идём от S к C — первый порог, который выполняется, и есть медаль;
+   порядок, в котором пороги заданы в tiers, не важен. Ни один порог не
+   выполнен (или лестница для этой роли не задана) — null: карту прошли,
+   но на медаль не наиграли, это не ошибка. */
+function rankForTime(tiers, ms, dir) {
+  if (!Array.isArray(tiers) || !(ms >= 0)) return null;
+  const byRank = {};
+  tiers.forEach((t) => {
+    if (t && RANK_ORDER.indexOf(t.rank) !== -1 && t.ms > 0) byRank[t.rank] = t.ms;
+  });
+  for (let i = 0; i < RANK_ORDER.length; i++) {
+    const r = RANK_ORDER[i], cutoff = byRank[r];
+    if (cutoff === undefined) continue;
+    if (dir === 'max' ? ms >= cutoff : ms <= cutoff) return r;
+  }
+  return null;
+}
+
+// mapsByKey: Map("автор|имя карты" -> m.rankTiers), построенная один раз в build()
+function medalAvgRace(u, mapsByKey) {
+  const rcBest = (u.rcBest && typeof u.rcBest === 'object') ? u.rcBest : {};
+  let sum = 0, n = 0;
+  Object.keys(rcBest).forEach((mapKey) => {
+    const ms = rcBest[mapKey];
+    if (!(ms > 0)) return;
+    const tiers = mapsByKey.get(mapKey);
+    const raceTiers = tiers && tiers.race;
+    if (!Array.isArray(raceTiers) || !raceTiers.length) return;
+    const r = rankForTime(raceTiers, ms, 'min');
+    if (!r) return;
+    sum += MEDAL_WEIGHT[r]; n++;
+  });
+  return n ? sum / n : null;
+}
+
+function medalAvgHs(u, mapsByKey) {
+  const best = (u.hsMapBest && typeof u.hsMapBest === 'object') ? u.hsMapBest : {};
+  let sum = 0, n = 0;
+  Object.keys(best).forEach((mapKey) => {
+    const e = best[mapKey];
+    const tiers = mapsByKey.get(mapKey);
+    if (!e || !tiers) return;
+    if (Array.isArray(tiers.hider) && tiers.hider.length && e.hiderMs > 0) {
+      const r = rankForTime(tiers.hider, e.hiderMs, 'max');
+      if (r) { sum += MEDAL_WEIGHT[r]; n++; }
+    }
+    if (Array.isArray(tiers.seeker) && tiers.seeker.length && e.seekerMs > 0) {
+      const r = rankForTime(tiers.seeker, e.seekerMs, 'min');
+      if (r) { sum += MEDAL_WEIGHT[r]; n++; }
+    }
+  });
+  return n ? sum / n : null;
+}
+
 /* Все лучшие времена по каждой карте — поле, среди которого считается
    место. Карта идёт в зачёт, только если её прошло хотя бы MIN_RUNNERS
    человек: на карте, которую открывал один автор, «первое место» не
@@ -128,8 +202,16 @@ function raceDeclassified(u) {
 }
 
 // оценка навыка в гонке, 0..1; null — сыграно слишком мало
-function raceScore(u, field) {
-  if ((u.rcFin || 0) < RACE_MIN_FIN) return null;
+function raceScore(u, field, mapsByKey) {
+  /* Медали за время (см. выше) — про КОНКРЕТНЫЕ карты, которые разметил
+     владелец, а не про то, сколько всего карт человек прошёл. Если общего
+     опыта мало (ниже RACE_MIN_FIN/MIN_RUNNERS), это не должно прятать уже
+     заработанную медаль: ранг тогда и есть сама медаль, без примеси
+     процентиля. Раньше медаль пропадала целиком, пока человек не набегает
+     общий минимум, — противоречило самому смыслу разметки "ранг даётся за
+     определённые карты". */
+  const medalAvg = mapsByKey ? medalAvgRace(u, mapsByKey) : null;
+  if ((u.rcFin || 0) < RACE_MIN_FIN) return medalAvg;
   const r = (u.rcBest && typeof u.rcBest === 'object') ? u.rcBest : {};
 
   let sum = 0, n = 0;
@@ -142,11 +224,14 @@ function raceScore(u, field) {
     sum += slower / (times.length - 1);
     n++;
   });
-  /* Ни одной карты, на которой есть с кем сравниться, — судить не о чем.
-     Ранга нет вовсе: это честнее, чем выдавать оценку авансом, и заодно
-     ничего не даёт тому, кто «проходит» только собственные карты. */
-  if (!n) return null;
-  return clamp01(0.65 * (sum / n) + 0.35 * clamp01(n / BREADTH_FULL));
+  /* Ни одной карты, на которой есть с кем сравниться, — судить не о чем
+     по процентилю. Но медаль за конкретную карту — это не процентиль,
+     ей сравнение с другими не нужно, так что рангом остаётся она. */
+  if (!n) return medalAvg;
+  const base = clamp01(0.65 * (sum / n) + 0.35 * clamp01(n / BREADTH_FULL));
+  // медали — добавка сверху, а не замена; нет медалей ни на одной
+  // пройденной карте — оценка не меняется ни на сотую
+  return medalAvg === null ? base : clamp01(0.75 * base + 0.25 * medalAvg);
 }
 
 /* Declassified в прятках: раундов сыграно достаточно, а не пережил
@@ -158,14 +243,17 @@ function hsDeclassified(u) {
 }
 
 // оценка навыка в прятках, 0..1; null — сыграно слишком мало
-function hsScore(u) {
+function hsScore(u, mapsByKey) {
+  // та же логика, что в raceScore: медаль за конкретную карту не должна
+  // ждать общего минимума раундов — см. комментарий там
+  const medalAvg = mapsByKey ? medalAvgHs(u, mapsByKey) : null;
   const hide = u.hsHide || 0;
-  if (hide < HS_MIN_ROUNDS) return null;
+  if (hide < HS_MIN_ROUNDS) return medalAvg;
   const surv = clamp01((u.hsSurv || 0) / hide);
   const seek = u.hsSeek || 0;
-  if (seek < HS_MIN_SEEK) return surv;
-  const hunt = clamp01(((u.hsCat || 0) / seek) / CATCH_FULL);
-  return clamp01(0.6 * surv + 0.4 * hunt);
+  const base = seek < HS_MIN_SEEK ? surv
+    : clamp01(0.6 * surv + 0.4 * clamp01(((u.hsCat || 0) / seek) / CATCH_FULL));
+  return medalAvg === null ? base : clamp01(0.75 * base + 0.25 * medalAvg);
 }
 
 /* Declassified НЕ выводится из самой оценки. Это отдельное условие на
@@ -201,11 +289,20 @@ function build(db) {
   const users = Object.values(db.users || {});
   const field = mapField(users);
 
+  // карты с хоть одной лестницей порогов — ключ тот же "автор|имя карты",
+  // которым уже адресуются rcBest/hsMapBest (см. maps.js/server.js)
+  const mapsByKey = new Map();
+  try {
+    require('./maps.js').allMaps().forEach((m) => {
+      if (m.rankTiers) mapsByKey.set(m.author + '|' + m.mapName, m.rankTiers);
+    });
+  } catch (e) { /* maps.js недоступен — считаем ранг без медалей */ }
+
   const race = new Map(), hs = new Map();
   users.forEach((u) => {
-    const rs = raceScore(u, field);
+    const rs = raceScore(u, field, mapsByKey);
     if (rs !== null) race.set(u.name, rs);
-    const hss = hsScore(u);
+    const hss = hsScore(u, mapsByKey);
     if (hss !== null) hs.set(u.name, hss);
   });
 
@@ -268,4 +365,5 @@ function register(app, currentUser, acc) {
 
 module.exports = { register, forName, all, invalidate,
                    raceScore, hsScore, bandFor, mapField,
-                   raceDeclassified, hsDeclassified, BANDS };
+                   raceDeclassified, hsDeclassified, BANDS,
+                   RANK_ORDER, MEDAL_WEIGHT, rankForTime, medalAvgRace, medalAvgHs };
