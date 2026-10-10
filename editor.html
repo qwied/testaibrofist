@@ -2412,7 +2412,7 @@ function paint(o, isSel){
      фигуры. У треугольника рамка ещё и повторяет его силуэт, а не
      bounding box — иначе вокруг наклонного треугольника всегда торчал
      прямоугольник. */
-  if(isSel && o.type !== "spawn"){
+  if(isSel && o.type !== "spawn" && o.type !== "zombie"){
     var k = 1/view.s;
     ctx.globalAlpha = 1;
     ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.6*k; ctx.setLineDash([5*k,4*k]);
@@ -2430,7 +2430,7 @@ function paint(o, isSel){
     ctx.setLineDash([]);
   }
   ctx.restore();
-  if(isSel && o.type !== "spawn"){
+  if(isSel && o.type !== "spawn" && o.type !== "zombie"){
     var k2 = 1/view.s;
     ctx.save();
     ctx.fillStyle = "#fff"; ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.6*k2;
@@ -2784,8 +2784,9 @@ document.getElementById("modes").addEventListener("click", function(e){
       if(o.deadly === undefined && DEADLY_BY_DEFAULT.indexOf(o.type) !== -1) o.deadly = true;
       // «Ищущий» убран из палитры: в старых картах превращаем его в старт
       if(o.type === "seeker") o.type = "spawn";
-      // размер игрока больше не настраивается — приводим старые точки старта
+      // размер игрока и зомби больше не настраивается — приводим старые объекты
       if(o.type === "spawn"){ o.w = SIZES.spawn[0]; o.h = SIZES.spawn[1]; }
+      if(o.type === "zombie"){ o.w = SIZES.zombie[0]; o.h = SIZES.zombie[1]; }
       // Платформа, ротатор, батут, яд и шипы стали свойствами обычных
       // объектов — переносим их поведение, чтобы старые карты играли так же
       if(o.type === "platform"){ o.type = "rect"; o.moves = true;
@@ -2851,8 +2852,8 @@ function grips(o){
   return [{n:"nw",x:o.x,y:o.y},{n:"ne",x:o.x+o.w,y:o.y},{n:"sw",x:o.x,y:o.y+o.h},{n:"se",x:o.x+o.w,y:o.y+o.h}];
 }
 function gripAt(x,y){
-  // у точки старта ручек нет: размер игрока задан движком
-  if(!sel || sel.type === "spawn") return null;
+  // у точки старта и у зомби ручек нет: их размер задан движком
+  if(!sel || sel.type === "spawn" || sel.type === "zombie") return null;
   var r = (document.body.classList.contains("mob") ? 15 : 7)/view.s, g = grips(sel);
   for(var i=0;i<g.length;i++) if(Math.abs(x-g[i].x) <= r && Math.abs(y-g[i].y) <= r) return g[i].n;
   return null;
@@ -3407,15 +3408,19 @@ function inspect(){
 
   num("X", sel.x, function(v){ sel.x = v; });
   num("Y", sel.y, function(v){ sel.y = v; });
-  /* Размер игрока задан движком (30x100) и не редактируется, иначе одна
-     и та же карта проходится по-разному у разных авторов. */
-  if(sel.type !== "spawn"){
+  /* Размер игрока и зомби задан движком (см. SIZES) и не редактируется —
+     иначе одна и та же карта проходилась бы по-разному у разных авторов
+     (игрок) или зомби перестал бы совпадать хитбоксом со своей же
+     моделью (см. figure() в PAINT.zombie). */
+  if(sel.type !== "spawn" && sel.type !== "zombie"){
     num(TR("lblWidth","Ширина"), sel.w, function(v){ sel.w = Math.max(1,v); });
     num(TR("lblHeight","Высота"), sel.h, function(v){ sel.h = Math.max(1,v); });
     num(TR("lblRotation","Поворот"), sel.rot||0, function(v){ sel.rot = v; });
   } else {
     var sr = pr();
-    sr.innerHTML = "<label>" + TR("lblSize","Размер") + "</label><b style='font-size:12px'>20 x 60</b>";
+    var fixedSize = SIZES[sel.type] || [sel.w, sel.h];
+    sr.innerHTML = "<label>" + TR("lblSize","Размер") + "</label><b style='font-size:12px'>" +
+                   fixedSize[0] + " x " + fixedSize[1] + "</b>";
   }
 
   if(sel.type !== "zombie"){          // мертвеца не красят — он рисуется собой
@@ -3816,8 +3821,9 @@ window.GAME = BRIDGE = {
       if(o.deadly === undefined && DEADLY_BY_DEFAULT.indexOf(o.type) !== -1) o.deadly = true;
       // «Ищущий» убран из палитры: в старых картах превращаем его в старт
       if(o.type === "seeker") o.type = "spawn";
-      // размер игрока больше не настраивается — приводим старые точки старта
+      // размер игрока и зомби больше не настраивается — приводим старые объекты
       if(o.type === "spawn"){ o.w = SIZES.spawn[0]; o.h = SIZES.spawn[1]; }
+      if(o.type === "zombie"){ o.w = SIZES.zombie[0]; o.h = SIZES.zombie[1]; }
       // Платформа, ротатор, батут, яд и шипы стали свойствами обычных
       // объектов — переносим их поведение, чтобы старые карты играли так же
       if(o.type === "platform"){ o.type = "rect"; o.moves = true;
