@@ -99,7 +99,7 @@ ok('префаб 20x20',          /rect:\[20,20\], circle:\[20,20\], triangle:\[
 ok('игрок 20x60',           /spawn:\[20,60\]/.test(src) && /var pl = \{x:0,y:0,w:20,h:60,/.test(src));
 ok('гравитация 9',          /var gravityScale = 9;/.test(src));
 ok('ползунка нет',          !/id="grav"/.test(src) && !/id="grav"/.test(game));
-ok('размер игрока не правят', /if\(sel\.type !== "spawn"\)/.test(src));
+ok('размер игрока и зомби не правят', /if\(sel\.type !== "spawn" && sel\.type !== "zombie"\)/.test(src));
 
 // рикошет вместо батута
 console.log('\nрикошет:');
@@ -177,7 +177,7 @@ const maps=fs.readFileSync(__dirname+'/maps.js','utf8');
 ok('сервер принимает старые карты', /water:null/.test(maps));
 
 console.log('\nразмер игрока:');
-ok('ручек у старта нет',    /sel\.type === "spawn"\) return null/.test(src));
+ok('ручек у старта и у зомби нет', /sel\.type === "spawn" \|\| sel\.type === "zombie"\) return null/.test(src));
 ok('рамка без ручек',       /isSel && o\.type !== "spawn"/.test(src));
 
 // прыжок с удержанием
