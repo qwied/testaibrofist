@@ -2894,7 +2894,10 @@ function pasteAt(x, y){
     var exz = findZombie();
     if(exz) objects = objects.filter(function(o){ return o !== exz; });
   }
+  // вставленный портал не наследует связь оригинала — см. pairTeleport
+  if(c.type === "teleport"){ c.targetIds = ""; c.teleExit = false; }
   objects.push(c); sel = c;
+  if(c.type === "teleport") pairTeleport(c);
   markDirty(); inspect();
   return true;
 }
@@ -2930,15 +2933,30 @@ function cPt(cx,cy){ var r = cv.getBoundingClientRect(); return {x:cx-r.left, y:
    вход (оранжевый, запускает перенос), второй — выход (синий, только
    точка прибытия). Свободный вход ищем по пустому targetIds — как
    только второй портал поставлен, пара замыкается сама, без ручного
-   выбора цели (см. teleport-блок в inspect()). Зовётся только из
-   down() — у вставки/дублирования портал остаётся при своих старых
-   связях, как и у любого другого типа. */
+   выбора цели (см. teleport-блок в inspect()). Зовётся из down() при
+   установке нового портала, а также из duplicate()/pasteAt()/Alt-
+   перетаскивания — те СБРАСЫВАЮТ связи копии перед вызовом (см. там же),
+   иначе копия входа тащила бы targetIds оригинала и вела на тот же
+   выход, что и он: два входа на один выход, второй из них нерабочий
+   на вид не отличить от целого (см. removeSel ниже про ту же беду при
+   удалении половины пары). */
 function pairTeleport(o){
   var mate = objects.filter(function(x){
     return x.type === "teleport" && x !== o && !x.teleExit && !x.targetIds;
   })[0];
   if(mate){ o.teleExit = true; mate.targetIds = o.customId; }
   else o.teleExit = false;
+}
+// партнёр портала по паре — вход по его targetIds, или выход, у кого
+// targetIds указывает на НЕГО (см. removeSel/pairTeleport выше)
+function teleportMateOf(o){
+  if(!o || o.type !== "teleport") return null;
+  if(o.teleExit){
+    return objects.filter(function(x){ return x.type === "teleport" && x.targetIds === o.customId; })[0] || null;
+  }
+  var id = (o.targetIds || "").split(",")[0].trim();
+  if(!id) return null;
+  return objects.filter(function(x){ return x.customId === id; })[0] || null;
 }
 function down(x,y,alt,shift){
   if(playing) return;
@@ -2954,7 +2972,11 @@ function down(x,y,alt,shift){
         var c = Object.assign({}, h);
         c.id = uid++;
         if(c.customId) c.customId = "w"+c.id;
-        objects.push(c); h = c;
+        // копия портала не наследует связь оригинала — см. pairTeleport
+        if(c.type === "teleport"){ c.targetIds = ""; c.teleExit = false; }
+        objects.push(c);
+        if(c.type === "teleport") pairTeleport(c);
+        h = c;
       }
       sel = h; drag = {m:"move", ox:x, oy:y, o:{x:h.x,y:h.y}};
     }
@@ -3194,22 +3216,31 @@ function duplicate(){
   var c = JSON.parse(JSON.stringify(sel));
   c.id = uid++; c.x += 20; c.y += 20;
   if(c.customId) c.customId = "w"+c.id;
+  // копия портала не наследует связь оригинала — иначе два входа ведут
+  // на один и тот же выход (см. pairTeleport выше); копия сама ищет
+  // себе пару заново, как будто её только что поставили инструментом
+  if(c.type === "teleport"){ c.targetIds = ""; c.teleExit = false; pairTeleport(c); }
   objects.push(c); sel = c; inspect();
 }
 function removeSel(){
   if(!sel) return;
   commit();
-  // Удаляемый объект мог быть чьей-то целью (customId в targetIds
-  // кнопки/рычага) — без чистки эта ссылка осталась бы висеть в воздухе
-  // и, если тот же ID потом достанется другому объекту, начала бы
-  // управлять им незаметно для автора карты.
-  var deadId = sel.customId;
-  objects = objects.filter(function(o){ return o !== sel; });
-  if(deadId){
+  /* Портал — пара на двоих, не два независимых объекта: половина без
+     другой половины не телепортирует никуда, но выглядит обычным
+     порталом — автор карты узнал бы о поломке только играя её заново.
+     Поэтому удаление ОДНОГО из пары уносит сразу обоих, как одно целое. */
+  var mate = teleportMateOf(sel);
+  // Удаляемый объект (и его портальная пара) мог быть чьей-то целью
+  // (customId в targetIds кнопки/рычага) — без чистки эта ссылка осталась
+  // бы висеть в воздухе и, если тот же ID потом достанется другому
+  // объекту, начала бы управлять им незаметно для автора карты.
+  var deadIds = [sel.customId, mate && mate.customId].filter(Boolean);
+  objects = objects.filter(function(o){ return o !== sel && o !== mate; });
+  if(deadIds.length){
     objects.forEach(function(o){
       if(!o.targetIds) return;
       var left = o.targetIds.split(",").map(function(s){ return s.trim(); })
-        .filter(function(id){ return id && id !== deadId; });
+        .filter(function(id){ return id && deadIds.indexOf(id) === -1; });
       o.targetIds = left.join(",");
     });
   }
@@ -4023,6 +4054,17 @@ requestAnimationFrame(loop);
       if (nearFin !== null) {
         say(TR('spawnCloseTitle','Старт слишком близко к финишу'),
             TR('spawnClosePublishBody','Между ними {n} точек. Отодвинь старт или финиш и попробуй снова.').replace('{n}', nearFin));
+        return;
+      }
+      /* Портал без пары (вход, у которого targetIds так и остался пустым —
+         см. pairTeleport) выглядит как обычный портал, но никуда не ведёт:
+         автор узнал бы об этом только сыграв карту заново. Ловим это здесь,
+         а не только в редакторе, — поломанная связь могла появиться и до
+         недавних правок duplicate()/pasteAt()/removeSel() (старые карты). */
+      var lonelyPortal = objs.filter(function(o){ return o.type === 'teleport' && !o.teleExit && !o.targetIds; });
+      if (lonelyPortal.length) {
+        say(TR('lonelyPortalTitle','Портал без пары'),
+            TR('lonelyPortalBody','На карте есть портал без пары — телепортация не сработает. Поставь ещё один портал: он сам свяжется с этим.'));
         return;
       }
     } catch(e){
