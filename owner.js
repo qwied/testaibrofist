@@ -16,6 +16,17 @@
   var keyOf = function (a, m) {
     return String(a || '').toLowerCase() + '::' + String(m || '').toLowerCase();
   };
+  /* Имя карты идёт через cleanText на сервере (см. server.js), а не через
+     более строгий cleanName, которым чистятся только ники, — "<", ">",
+     "\"" и т.п. из названия карты не вырезаются. Список "в игре" ниже
+     рендерит имя карты и автора прямо панели владельца — без экранирования
+     это был бы stored XSS с правами владельца сайта при первом же открытии
+     панели после того, как такую карту один раз добавили в режим. */
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[c];
+    });
+  };
 
   function post(url, data) {
     var body = Object.keys(data).map(function (k) {
@@ -282,7 +293,7 @@
       el.innerHTML = list.length
         ? list.map(function (x) {
             var m = (x.modes || []).map(function (k) { return MODE_RU[k] || k; }).join(', ');
-            return '· ' + x.mapName + ' <span style="color:#9aa3ad">(' + x.author + ')</span> → ' + m;
+            return '· ' + esc(x.mapName) + ' <span style="color:#9aa3ad">(' + esc(x.author) + ')</span> → ' + esc(m);
           }).join('<br>')
         : '<span style="color:#9aa3ad">nothing added yet</span>';
     }).catch(function () {});
