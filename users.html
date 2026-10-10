@@ -216,15 +216,23 @@
 
   /* ---------- шапка профиля ---------- */
   /* Ранги навыка по режимам (см. ranks.js). Пока сыграно мало, ранга нет —
-     показываем пометку, а не «C»: оценка по паре раундов не оценка. */
+     показываем не голое «нет ранга» (это читается как «фича сломана»), а
+     сколько именно ещё нужно (см. raceProgress/hsProgress) — тот же порог,
+     что и в самой формуле (RACE_MIN_FIN/HS_MIN_ROUNDS). Ранг, выставленный
+     владельцем вручную (см. /owner/setRank), помечен «manual» — звёздочка
+     рядом с буквой, чтобы не выглядело так, будто его насчитала формула. */
   function rankRow(rk) {
     if (!rk) return '';
     var parts = [
-      { k: 'race', title: T('race', 'Race'), v: rk.race },
-      { k: 'hs', title: T('hideAndSeek', 'Hide and Seek'), v: rk.hs }
+      { k: 'race', title: T('race', 'Race'), v: rk.race, prog: rk.raceProgress },
+      { k: 'hs', title: T('hideAndSeek', 'Hide and Seek'), v: rk.hs, prog: rk.hsProgress }
     ].map(function (p) {
       var r = p.v ? p.v.rank : '';
-      var txt = r ? esc(r) : T('rankNone', 'нет ранга');
+      var txt;
+      if (r) txt = esc(r) + (p.v.manual ? ' ★' : '');
+      else if (p.prog && p.prog.need > (p.prog.have || 0))
+        txt = T('rankNeedMore', 'ещё {n}').replace('{n}', p.prog.need - (p.prog.have || 0));
+      else txt = T('rankNone', 'нет ранга');
       return '<span class="upRank' + (r ? '' : ' none') + '" data-r="' + esc(r) + '">'
         + '<span class="upRankMode">' + esc(p.title) + '</span> ' + txt + '</span>';
     }).join('');

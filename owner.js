@@ -136,6 +136,26 @@
       + '<div class="ow-b" id="owVGo">' + T('apply', 'Применить') + '</div>'
       + '<div class="ow-m" id="owVMsg"></div>'
 
+      + '<div class="ow-sub">Manual rank</div>'
+      + '<div class="ow-m" style="text-align:left;color:#6b7280;margin-bottom:4px">'
+      +   'Overrides the automatic S..C/Declassified rank for this mode. '
+      +   'Leave the rank field empty to clear the override and go back to automatic.</div>'
+      + '<input class="ow-i" id="owRName" placeholder="' + T('playerName', 'Ник игрока') + '">'
+      + '<div class="ow-row2">'
+      +   '<select class="ow-i" id="owRMode">'
+      +     '<option value="race">Race</option><option value="hs">Hide and Seek</option>'
+      +   '</select>'
+      +   '<select class="ow-i" id="owRRank">'
+      +     '<option value="">— auto (clear) —</option>'
+      +     '<option value="S">S</option><option value="A+">A+</option><option value="A">A</option>'
+      +     '<option value="B+">B+</option><option value="B">B</option>'
+      +     '<option value="C+">C+</option><option value="C">C</option>'
+      +     '<option value="Declassified">Declassified</option>'
+      +   '</select>'
+      + '</div>'
+      + '<div class="ow-b" id="owRGo">' + T('apply', 'Применить') + '</div>'
+      + '<div class="ow-m" id="owRMsg"></div>'
+
       + '<div class="ow-sub">' + T('addToGame', 'Добавить в игру') + '</div>'
       + '<div class="ow-m" style="text-align:left;color:#6b7280" id="owGList">…</div>'
 
@@ -189,6 +209,18 @@
         m.textContent = r.status === 'success'
           ? 'Likes: ' + r.likes + '   Dislikes: ' + r.dislikes + '   Rating: ' + r.rating
           : (r.message || T('errorTxt', 'Ошибка'));
+      }).catch(function () { m.style.color = 'red'; m.textContent = T('serverDown', 'Сервер недоступен'); });
+    };
+
+    box.querySelector('#owRGo').onclick = function () {
+      var m = box.querySelector('#owRMsg');
+      post('/owner/setRank', {
+        name: box.querySelector('#owRName').value.trim(),
+        mode: box.querySelector('#owRMode').value,
+        rank: box.querySelector('#owRRank').value
+      }).then(function (r) {
+        m.style.color = r.status === 'success' ? '#2e9b2e' : 'red';
+        m.textContent = r.message || '';
       }).catch(function () { m.style.color = 'red'; m.textContent = T('serverDown', 'Сервер недоступен'); });
     };
 

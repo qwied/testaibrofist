@@ -551,6 +551,47 @@ function register(app, acc) {
     res.json({ status: 'success', likes: t.likes, dislikes: t.dislikes, rating: t.rating });
   });
 
+  /* ---------- ручной ранг поверх автоматического (только владелец) ----------
+     Автоматический ранг (см. ranks.js) честно считает по реальной игре, но
+     ему неоткуда взяться у совсем нового профиля или у особого случая,
+     который формула не предусмотрела, — это не поломка, а заданный порог
+     (см. RACE_MIN_FIN/HS_MIN_ROUNDS). Здесь владелец может поставить свою
+     букву вручную, поверх вычисленной: target.rankOverride хранит её
+     отдельно от игровой статистики, build() в ranks.js подставляет её
+     вместо расчётной, если она есть (см. тот же файл). Пустой rank —
+     снять ручную букву и вернуться к автоматической. */
+  app.post('/owner/setRank', (req, res) => {
+    if (!ownerOnly(req, res)) return;
+    const db = getDb();
+    const name = String(req.body.name || '').trim();
+    const target = db.users[key(name)];
+    if (!target) return res.json({ status: 'error', message: 'Player «' + name + '» not found' });
+
+    const mode = String(req.body.mode || '').trim();
+    if (mode !== 'race' && mode !== 'hs')
+      return res.json({ status: 'error', message: 'mode must be "race" or "hs"' });
+
+    const rk = require('./ranks.js');
+    const rank = String(req.body.rank || '').trim();
+    const validRanks = rk.BANDS.map(b => b.rank).concat('Declassified');
+    if (rank && validRanks.indexOf(rank) === -1)
+      return res.json({ status: 'error', message: 'Unknown rank. Use one of: ' + validRanks.join(', ') + ' (or leave empty to clear)' });
+
+    if (!target.rankOverride) target.rankOverride = {};
+    if (rank) target.rankOverride[mode] = rank;
+    else delete target.rankOverride[mode];
+    if (!Object.keys(target.rankOverride).length) delete target.rankOverride;
+
+    saveUsers();
+    rk.invalidate();
+    res.json({
+      status: 'success',
+      message: rank
+        ? '«' + target.name + '» ' + mode + ' rank set to ' + rank
+        : '«' + target.name + '» ' + mode + ' rank override cleared (back to automatic)'
+    });
+  });
+
   // ---------- добавить карту в игровые режимы (только владелец) ----------
   app.post('/owner/mapInGame', (req, res) => {
     if (!ownerOnly(req, res)) return;

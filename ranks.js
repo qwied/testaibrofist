@@ -216,16 +216,29 @@ function build(db) {
   users.forEach((u) => {
     const rs = race.get(u.name), hss = hs.get(u.name);
     const rDec = raceDeclassified(u), hDec = hsDeclassified(u);
+    /* Ручная буква владельца (см. /owner/setRank в extras.js) подменяет
+       только САМ ранг — счётчики (score/finishes/rounds/...) под ней
+       остаются настоящими, не выдуманными, так что видно, что реально
+       наиграно, даже если букву выставили руками. Если игр ещё нет совсем
+       (rs/hss оба undefined, не declassified), ручная буква всё равно
+       действует — это и есть «поставить ранг тому, кто внизу формулы не
+       наберёт», прямая просьба, из-за которой эта подмена тут и есть. */
+    const rOv = u.rankOverride && u.rankOverride.race;
+    const hOv = u.rankOverride && u.rankOverride.hs;
     out.set(u.name.toLowerCase(), {
-      race: (rs === undefined && !rDec) ? null
-        : { rank: rDec ? 'Declassified' : bandFor(placeIn(raceSorted, rs), rs),
+      race: (rs === undefined && !rDec && !rOv) ? null
+        : { rank: rOv || (rDec ? 'Declassified' : bandFor(placeIn(raceSorted, rs), rs)),
             score: Math.round((rs || 0) * 100),
-            finishes: u.rcFin || 0, maps: Object.keys(u.rcBest || {}).length },
-      hs: (hss === undefined && !hDec) ? null
-        : { rank: hDec ? 'Declassified' : bandFor(placeIn(hsSorted, hss), hss),
+            finishes: u.rcFin || 0, maps: Object.keys(u.rcBest || {}).length,
+            manual: !!rOv },
+      raceProgress: { have: u.rcFin || 0, need: RACE_MIN_FIN },
+      hs: (hss === undefined && !hDec && !hOv) ? null
+        : { rank: hOv || (hDec ? 'Declassified' : bandFor(placeIn(hsSorted, hss), hss)),
             score: Math.round((hss || 0) * 100),
             rounds: u.hsHide || 0, survived: u.hsSurv || 0,
-            seekRounds: u.hsSeek || 0, caught: u.hsCat || 0 }
+            seekRounds: u.hsSeek || 0, caught: u.hsCat || 0,
+            manual: !!hOv },
+      hsProgress: { have: u.hsHide || 0, need: HS_MIN_ROUNDS }
     });
   });
   return out;
@@ -238,7 +251,8 @@ function all(db) {
   return cache;
 }
 function forName(db, name) {
-  return all(db).get(String(name || '').toLowerCase()) || { race: null, hs: null };
+  return all(db).get(String(name || '').toLowerCase())
+    || { race: null, hs: null, raceProgress: { have: 0, need: RACE_MIN_FIN }, hsProgress: { have: 0, need: HS_MIN_ROUNDS } };
 }
 function invalidate() { cache = null; }
 
@@ -248,7 +262,7 @@ function register(app, currentUser, acc) {
     const u = name ? acc.getDb().users[acc.key(name)] : currentUser(req);
     if (!u) return res.json({ race: null, hs: null });
     const r = forName(acc.getDb(), u.name);
-    res.json({ name: u.name, race: r.race, hs: r.hs });
+    res.json({ name: u.name, race: r.race, hs: r.hs, raceProgress: r.raceProgress, hsProgress: r.hsProgress });
   });
 }
 
