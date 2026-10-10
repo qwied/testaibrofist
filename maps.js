@@ -238,6 +238,20 @@ function register(app, getUser, acc, cleanText) {
     if (!list.length)
       return res.json({ status: 'error', message: 'Map is corrupted or empty' });
 
+    // objectsOf проверяет только o.type — числовые поля (x/y/w/h) из
+    // чужого JSON долетали бы как есть. Клиентский loadMap() их уже
+    // клэмпит защитно, но это единственная настоящая граница доверия:
+    // без неё гигантское w/h всё равно попадёт на диск и до клэмпа
+    // долетит buildGrid() у ЛЮБОГО, кто откроет карту до обновления
+    // клиента — проще отказать сразу на публикации
+    const badGeom = list.some(o =>
+      !isFinite(o.x) || !isFinite(o.y) || !isFinite(o.w) || !isFinite(o.h) ||
+      Math.abs(o.x) > 100000 || Math.abs(o.y) > 100000 ||
+      o.w < 1 || o.w > 10000 || o.h < 1 || o.h > 10000
+    );
+    if (badGeom)
+      return res.json({ status: 'error', message: 'Map is corrupted: an object has an invalid position or size' });
+
     if (list.length > OBJ_LIMIT)
       return res.json({
         status: 'error',

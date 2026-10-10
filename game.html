@@ -3713,6 +3713,19 @@ window.GAME = BRIDGE = {
     })();
     // в старых картах галочки не было — восстанавливаем прежнее поведение
     objects.forEach(function(o){
+      /* Предохранитель от испорченной/вредоносной карты: сервер поля
+         x/y/w/h вообще не проверяет (см. objectsOf() в maps.js — там
+         только считает объекты и смотрит на o.type), так что гигантское
+         w/h в чужом JSON долетает сюда как есть. Без клэмпа buildGrid()
+         ниже раздувает сетку столкновений на миллионы/миллиарды ячеек
+         (шаг CELL=260 — у объекта шириной 1e9 это ~3.8 млн ячеек по
+         одной только оси) и намертво вешает вкладку любому, кто откроет
+         такую карту, даже просто посмотреть. */
+      o.x = isFinite(o.x) ? Math.max(-100000, Math.min(100000, o.x)) : 0;
+      o.y = isFinite(o.y) ? Math.max(-100000, Math.min(100000, o.y)) : 0;
+      o.w = isFinite(o.w) ? Math.max(1, Math.min(10000, o.w)) : 1;
+      o.h = isFinite(o.h) ? Math.max(1, Math.min(10000, o.h)) : 1;
+      o.rot = isFinite(o.rot) ? o.rot : 0;
       if(o.deadly === undefined && DEADLY_BY_DEFAULT.indexOf(o.type) !== -1) o.deadly = true;
       // «Ищущий» убран из палитры: в старых картах превращаем его в старт
       if(o.type === "seeker") o.type = "spawn";
