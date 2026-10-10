@@ -573,6 +573,7 @@
 
     /* ---------- редактор карт: интерфейс инструмента ---------- */
     edProps: "Properties",
+    edWidgets: "Functions",
     edExit: "Exit",
     edExitTip: "exit game (Esc)",
     hudDeathLabel: "Deaths",
@@ -1224,6 +1225,7 @@
     skin_b_crest_f: "Тлеющий доспех",
     skin_b_check: "Зелёное тело",
     edProps: "Свойства",
+    edWidgets: "Функции",
     edExit: "Выйти",
     edExitTip: "выйти из игры (Esc)",
     hudDeathLabel: "Смерти",

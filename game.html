@@ -282,6 +282,7 @@ body{background:#eef2f8;overflow:hidden}
 <div id="insp" class="panel">
   <div id="inspHead">
     <div class="tab on" data-tab="props" data-i18n="edProps">Свойства</div>
+    <div class="tab" data-tab="widgets" data-i18n="edWidgets">Функции</div>
     <div class="tab" id="inspClose" data-i18n="close" data-i18n-title="close" title="Закрыть">Закрыть</div>
   </div>
   <div id="props"></div>
@@ -3082,14 +3083,25 @@ function removeSel(){
    INSPECTOR
    ══════════════════════════════════════════════════ */
 var props = document.getElementById("props");
+var widgetsEl = document.getElementById("widgets");
+/* Две вкладки инспектора: "Свойства" — положение, размер и порядок
+   (куда объект поставлен), "Функции" — всё остальное, что он УМЕЕТ
+   (цвет, игровые свойства, движение и эффекты, связи). Переключение
+   только показывает/прячет уже построенные панели — inspect() ниже
+   каждый раз заново наполняет ОБЕ, какая бы ни была открыта, поэтому
+   смена вкладки не теряет выбор и не дёргает его обратно на "Свойства"
+   при каждой правке поля. */
 document.getElementById("inspHead").addEventListener("click", function(e){
   if(e.target.id === "inspClose"){ sel = null; inspect(); return; }
   var t = e.target.closest(".tab"); if(!t || !t.dataset.tab) return;
   document.querySelectorAll(".tab").forEach(function(x){ x.classList.toggle("on", x === t); });
   props.style.display = t.dataset.tab === "props" ? "block" : "none";
-  document.getElementById("widgets").style.display = t.dataset.tab === "widgets" ? "block" : "none";
+  widgetsEl.style.display = t.dataset.tab === "widgets" ? "block" : "none";
 });
-function pr(){ var d = document.createElement("div"); d.className = "pRow"; props.appendChild(d); return d; }
+// pr()/grp()/hint() пишут в ту вкладку, которую сейчас наполняет inspect() —
+// см. inspTarget ниже
+var inspTarget = props;
+function pr(){ var d = document.createElement("div"); d.className = "pRow"; inspTarget.appendChild(d); return d; }
 function num(l,v,fn){
   var r = pr(), a = document.createElement("label"); a.textContent = l;
   var i = document.createElement("input"); i.type = "number"; i.value = Math.round(v);
@@ -3143,14 +3155,14 @@ function chk(l,v,fn){
   i.addEventListener("change", function(){ commit(); fn(i.checked); });
   r.appendChild(a); r.appendChild(i);
 }
-function grp(t){ var d = document.createElement("div"); d.className = "grp"; d.textContent = t; props.appendChild(d); }
+function grp(t){ var d = document.createElement("div"); d.className = "grp"; d.textContent = t; inspTarget.appendChild(d); }
 // короткая пояснительная строка под галочкой — там, где само название свойства не всё объясняет
 function hint(t){
   var d = document.createElement("div");
   d.className = "pHelp"; d.style.cursor = "default";
   var b = document.createElement("div");
   b.className = "pHelpBody"; b.style.display = "block"; b.textContent = t;
-  d.appendChild(b); props.appendChild(d);
+  d.appendChild(b); inspTarget.appendChild(d);
 }
 
 // короткое читаемое имя объекта для чипов связей — тот же вид, что в заголовке инспектора
@@ -3206,11 +3218,21 @@ function inspect(){
   if(linkPick && linkPick.from !== sel) linkPick = null;
   if(!sel || playing){ box.style.display = "none"; return; }
   box.style.display = "flex";
+  // наполняем ОБЕ вкладки разом — какая сейчас видна, решает только CSS/
+  // класс .tab.on (см. обработчик клика у #inspHead), inspect() его не трогает
   props.innerHTML = "";
+  widgetsEl.innerHTML = "";
   var T = TOOLS.filter(function(x){ return x.t === sel.type; })[0];
-  var head = document.createElement("div"); head.id = "objTitle";
-  head.innerHTML = (T ? TR(T.k, T.n) : sel.type) + "<span>#" + sel.id + "</span>";
-  props.appendChild(head);
+  var objTitleHTML = (T ? TR(T.k, T.n) : sel.type) + "<span>#" + sel.id + "</span>";
+  function titleEl(){
+    var head = document.createElement("div"); head.id = "objTitle";
+    head.innerHTML = objTitleHTML;
+    return head;
+  }
+
+  /* ---------- вкладка «Свойства»: где объект и в каком порядке ---------- */
+  inspTarget = props;
+  props.appendChild(titleEl());
 
   num("X", sel.x, function(v){ sel.x = v; });
   num("Y", sel.y, function(v){ sel.y = v; });
@@ -3225,6 +3247,21 @@ function inspect(){
     sr.innerHTML = "<label>" + TR("lblSize","Размер") + "</label><b style='font-size:12px'>" +
                    fixedSize[0] + " x " + fixedSize[1] + "</b>";
   }
+
+  grp(TR("grpOrder","Порядок"));
+  var z = document.createElement("div"); z.className = "zBtns";
+  z.innerHTML = "<div data-z='b'>" + TR("zBack","На зад") + "</div><div data-z='f'>" + TR("zFront","Вперёд") + "</div>";
+  z.addEventListener("click", function(e){
+    var b = e.target.closest("[data-z]"); if(!b) return;
+    commit();
+    objects = objects.filter(function(o){ return o !== sel; });
+    b.dataset.z === "f" ? objects.push(sel) : objects.unshift(sel);
+  });
+  props.appendChild(z);
+
+  /* ---------- вкладка «Функции»: что объект умеет и с чем связан ---------- */
+  inspTarget = widgetsEl;
+  widgetsEl.appendChild(titleEl());
 
   if(sel.type !== "zombie"){          // мертвеца не красят — он рисуется собой
     grp(TR("grpAppearance","Внешний вид"));
@@ -3365,17 +3402,6 @@ function inspect(){
   }
   if(sel.type === "laserFeed" || sel.laser)
     num(TR("lblLaserRange","Дальность луча"), sel.range||500, function(v){ sel.range = Math.max(20,v); });
-
-  grp(TR("grpOrder","Порядок"));
-  var z = document.createElement("div"); z.className = "zBtns";
-  z.innerHTML = "<div data-z='b'>" + TR("zBack","На зад") + "</div><div data-z='f'>" + TR("zFront","Вперёд") + "</div>";
-  z.addEventListener("click", function(e){
-    var b = e.target.closest("[data-z]"); if(!b) return;
-    commit();
-    objects = objects.filter(function(o){ return o !== sel; });
-    b.dataset.z === "f" ? objects.push(sel) : objects.unshift(sel);
-  });
-  props.appendChild(z);
 }
 
 /* ══════════════════════════════════════════════════
