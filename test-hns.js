@@ -74,7 +74,7 @@ ok('стоп ровно на победителе',  /var target = seq\.length \
                                 /posOf\(target\)/.test(src));
 ok('укладывается в лобби',      /var spin = Math\.min\(dur - 1100, left - 2400\);/.test(src));
 ok('роль после остановки',      /applySeeker\(d\.winnerId\)/.test(src));
-ok('обрыв связи — свой таймер', /socket\.on\('disconnect', function \(\) \{ hsSync = false; joined = false;.*\}\)/.test(src));
+ok('обрыв связи — свой таймер', /socket\.on\('disconnect', function \(\) \{\s*hsSync = false; joined = false;[\s\S]*?\}\)/.test(src));
 
 console.log('\nодин игрок в комнате — играть можно, паузы нет:');
 ok('фазы waiting в клиенте больше нет', !/d\.phase === 'waiting'/.test(src) &&
