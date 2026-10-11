@@ -188,7 +188,7 @@ const srvS = fs.readFileSync(__dirname + '/server.js', 'utf8');
 ok('robots.txt отдаётся',   /app\.get\('\/robots\.txt'/.test(srvS) && /Sitemap: '/.test(srvS));
 ok('карта сайта отдаётся',  /app\.get\('\/sitemap\.xml'/.test(srvS) && /<urlset/.test(srvS));
 ok('хост берётся из запроса', /function siteOrigin\(req\)/.test(srvS));
-ok('игровые комнаты не индексируются', /Disallow: \/game\.html/.test(srvS));
+ok('игровые комнаты не индексируются', /Disallow: \/game/.test(srvS));
 const pagesHtml = fs.readdirSync(__dirname).filter(f => f.endsWith('.html'));
 ok('canonical на всех страницах', pagesHtml.every(f =>
    /<link rel="canonical" href="https:\/\//.test(fs.readFileSync(__dirname + '/' + f, 'utf8'))));

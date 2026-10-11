@@ -269,13 +269,13 @@ body{background:#eef2f8;overflow:hidden}
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
         <link rel="manifest" href="site.webmanifest">
         <meta name="theme-color" content="#111827">
-        <link rel="canonical" href="https://aibrofist.online/game.html">
+        <link rel="canonical" href="https://aibrofist.online/game">
         <meta name="description" content="An AIBrofist game room.">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="AIBrofist">
         <meta property="og:title" content="AIBrofist — Game">
         <meta property="og:description" content="An AIBrofist game room.">
-        <meta property="og:url" content="https://aibrofist.online/game.html">
+        <meta property="og:url" content="https://aibrofist.online/game">
         <meta property="og:image" content="https://aibrofist.online/preview.png">
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:image" content="https://aibrofist.online/preview.png">
@@ -2636,7 +2636,7 @@ function syncApocBtns(){
    идёт матч. IS_GAME_PAGE решает это по имени файла, один раз — тот же
    приём работает в обеих копиях движка (editor.html/game.html) без
    отдельной ветки кода под каждую. */
-var IS_GAME_PAGE = /\/?game\.html/i.test(location.pathname);
+var IS_GAME_PAGE = /\/?game(\.html)?/i.test(location.pathname);
 function syncApocVisibility(){
   document.getElementById("apoc").style.display =
     (mode === "hideAndSeek" && !IS_GAME_PAGE) ? "flex" : "none";

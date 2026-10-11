@@ -32,15 +32,15 @@
   };
 
   var NAV = [
-    { key: 'leaderboard', href: 'leaderboard.html', txt: 'Leaderboard' },
-    { key: 'mapEditor',   href: 'editor.html',      txt: 'Map Editor' },
-    { key: 'mapsBrowser', href: 'mapsBrowser.html', txt: 'Maps Browser' },
-    { key: 'quests',      href: 'quests.html',      txt: 'Quests' },
-    { key: 'daily',       href: 'daily.html',       txt: 'Daily Reward' },
-    { key: 'story',       href: 'story.html',       txt: 'Story Mode' },
-    { key: 'logs',        href: 'logs.html',        txt: 'Logs' },
-    { key: 'messages',    href: 'messages.html',    txt: 'Messages' },
-    { key: 'avatar',      href: 'avatar.html',      txt: 'Avatar' },
+    { key: 'leaderboard', href: 'leaderboard', txt: 'Leaderboard' },
+    { key: 'mapEditor',   href: 'editor',      txt: 'Map Editor' },
+    { key: 'mapsBrowser', href: 'mapsBrowser', txt: 'Maps Browser' },
+    { key: 'quests',      href: 'quests',      txt: 'Quests' },
+    { key: 'daily',       href: 'daily',       txt: 'Daily Reward' },
+    { key: 'story',       href: 'story',       txt: 'Story Mode' },
+    { key: 'logs',        href: 'logs',        txt: 'Logs' },
+    { key: 'messages',    href: 'messages',    txt: 'Messages' },
+    { key: 'avatar',      href: 'avatar',      txt: 'Avatar' },
     /* Настройки раньше открывались только через клик по аватару внизу —
        незаметно и не на своём месте среди остальных разделов. Теперь это
        обычный пункт бокового меню; сама модалка (account.js) не менялась,
@@ -116,9 +116,9 @@
   function paintDot(key, n, title) {
     var d = document.getElementById('bfDot_' + key);
     if (!d) return;
-    var here = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
-    var mine = (key === 'messages' && here === 'messages.html')
-            || (key === 'mapsBrowser' && here === 'mapsbrowser.html');
+    var here = (location.pathname.split('/').pop() || '').toLowerCase();
+    var mine = (key === 'messages' && here === 'messages')
+            || (key === 'mapsBrowser' && here === 'mapsbrowser');
     if (key === 'messages' && hideChat) n = 0;
     if (!n || mine) { d.className = 'bfNavDot'; d.textContent = ''; d.removeAttribute('title'); return; }
     d.className = 'bfNavDot on';
@@ -155,7 +155,7 @@
     var old = document.querySelector('.header');
     if (old) old.style.display = 'none';
 
-    var here = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    var here = (location.pathname.split('/').pop() || '').toLowerCase();
 
     var head = el('div', 'bfHead');
     head.id = 'bfHead';
@@ -212,6 +212,28 @@
        только уже (см. --sbw-m в ui.css). Прятать его за кнопкой значило
        прятать от игрока половину игры. */
 
+    /* Кнопка сворачивания — только на компьютере (см. .bfSideToggle в
+       ui.css, там же она скрыта на телефоне). Это не тот гамбургер, что
+       убрали выше: тут панель видна по умолчанию, сворачивает её сам
+       игрок по своей инициативе, и кнопка всегда остаётся на виду —
+       свернуть и развернуть можно в любой момент, а не только найти вход. */
+    var sideToggle = el('button', 'bfSideToggle');
+    sideToggle.id = 'bfSideToggle';
+    sideToggle.type = 'button';
+    sideToggle.setAttribute('aria-label', 'Toggle sidebar');
+    sideToggle.innerHTML = ICONS.chevron;
+    document.body.appendChild(sideToggle);
+
+    var sidebarCollapsed = false;
+    try { sidebarCollapsed = localStorage.getItem('bfSidebarCollapsed') === '1'; } catch (e) {}
+    function applySidebarCollapsed(v) {
+      sidebarCollapsed = v;
+      document.body.classList.toggle('bfSidebarCollapsed', v);
+      try { localStorage.setItem('bfSidebarCollapsed', v ? '1' : '0'); } catch (e) {}
+    }
+    applySidebarCollapsed(sidebarCollapsed);
+    sideToggle.addEventListener('click', function () { applySidebarCollapsed(!sidebarCollapsed); });
+
     /* Плавающей кнопки «Messages» больше нет: она висела в правом нижнем
        углу поверх страницы и на телефоне закрывала то, что под ней, —
        кнопку Story Mode на странице Race, PLAY и оценки в Maps Browser,
@@ -267,7 +289,7 @@
     box.appendChild(name);
 
     var p = el('div', 'bfDropItem', T('viewProfile', 'Мой профиль'));
-    p.onclick = function () { location.href = 'users.html?name=' + encodeURIComponent(me.name); };
+    p.onclick = function () { location.href = 'users?name=' + encodeURIComponent(me.name); };
     box.appendChild(p);
 
     // «Настройки» отсюда убраны — теперь свой пункт в боковом меню (см. NAV)

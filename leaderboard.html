@@ -74,13 +74,13 @@
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
         <link rel="manifest" href="site.webmanifest">
         <meta name="theme-color" content="#111827">
-        <link rel="canonical" href="https://aibrofist.online/leaderboard.html">
+        <link rel="canonical" href="https://aibrofist.online/leaderboard">
         <meta name="description" content="Top players by coins and race scores.">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="AIBrofist">
         <meta property="og:title" content="AIBrofist — Leaderboard">
         <meta property="og:description" content="Top players by coins and race scores.">
-        <meta property="og:url" content="https://aibrofist.online/leaderboard.html">
+        <meta property="og:url" content="https://aibrofist.online/leaderboard">
         <meta property="og:image" content="https://aibrofist.online/preview.png">
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:image" content="https://aibrofist.online/preview.png">
@@ -225,7 +225,7 @@
 
         listEl.addEventListener('click', function (e) {
                 var n = e.target.closest('.lbName');
-                if (n) location.href = 'users.html?name=' + encodeURIComponent(n.dataset.n);
+                if (n) location.href = 'users?name=' + encodeURIComponent(n.dataset.n);
         });
 
         load();

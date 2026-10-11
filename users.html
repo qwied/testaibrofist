@@ -133,13 +133,13 @@
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
         <link rel="manifest" href="site.webmanifest">
         <meta name="theme-color" content="#111827">
-        <link rel="canonical" href="https://aibrofist.online/users.html">
+        <link rel="canonical" href="https://aibrofist.online/users">
         <meta name="description" content="Player profiles, friends and their works.">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="AIBrofist">
         <meta property="og:title" content="AIBrofist — Users">
         <meta property="og:description" content="Player profiles, friends and their works.">
-        <meta property="og:url" content="https://aibrofist.online/users.html">
+        <meta property="og:url" content="https://aibrofist.online/users">
         <meta property="og:image" content="https://aibrofist.online/preview.png">
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:image" content="https://aibrofist.online/preview.png">
@@ -248,7 +248,7 @@
       else if (t === '2') acts = '<button data-rel="cancel">' + T('cancelReq', 'Отменить заявку') + '</button>'
                                + '<button class="go" data-rel="accept">' + T('accept', 'Принять') + '</button>';
       else acts = '<button data-rel="add">' + T('addFriend', 'Добавить в друзья') + '</button>';
-      acts += '<a href="messages.html?with=' + encodeURIComponent(who) + '">' + T('msgBtn', 'Message') + '</a>';
+      acts += '<a href="messages?with=' + encodeURIComponent(who) + '">' + T('msgBtn', 'Message') + '</a>';
     }
 
     var s = d.stats || {};
@@ -314,7 +314,7 @@
 
           return '<div class="upRow">'
             + '<div class="ava"><img data-bf-name="' + esc(u.name) + '" alt=""></div>'
-            + '<div class="who"><a href="users.html?name=' + encodeURIComponent(u.name) + '">'
+            + '<div class="who"><a href="users?name=' + encodeURIComponent(u.name) + '">'
             +   esc(u.name) + '</a><span>' + ago(u.lastSeen) + '</span></div>'
             + btn + '</div>';
         }).join('');
@@ -365,7 +365,7 @@
       ? '<div class="bfHint">' + T('noMaps', 'Карт нет') + '</div>'
       : list.map(function (m) {
           return '<div class="upRow">'
-            + '<div class="who"><a href="game.html?view=' + encodeURIComponent(m.mapName)
+            + '<div class="who"><a href="game?view=' + encodeURIComponent(m.mapName)
             +   '&author=' + encodeURIComponent(who) + '">' + esc(m.mapName) + '</a>'
             +   '<span>' + m.mapType + ' · ' + T('colRating', 'рейтинг') + ' ' + m.rating + '</span></div>'
             + (isMe ? '<select class="bfSelect upFolderAssign" data-assign-map="' + esc(m.mapName) + '">'
@@ -457,7 +457,7 @@
 
     var em = e.target.closest && e.target.closest('[data-edit-map]');
     if (em) {
-      location.href = 'editor.html?editMap=' + encodeURIComponent(em.dataset.editMap)
+      location.href = 'editor?editMap=' + encodeURIComponent(em.dataset.editMap)
                      + '&editAuthor=' + encodeURIComponent(who);
       return;
     }
@@ -542,7 +542,7 @@
     get('/searchUser?name=' + encodeURIComponent(q) + (exact ? '&exact=1' : '')).then(function (list) {
       $('upFound').innerHTML = (list && list.length)
         ? '<div class="upFound">' + list.map(function (u) {
-            return '<a href="users.html?name=' + encodeURIComponent(u.name) + '">' + esc(u.name) + '</a>';
+            return '<a href="users?name=' + encodeURIComponent(u.name) + '">' + esc(u.name) + '</a>';
           }).join('') + '</div>'
         : '<div class="bfHint">' + T('nobodyFound', 'Никого не нашлось') + '</div>';
     }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });

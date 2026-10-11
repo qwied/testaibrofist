@@ -84,7 +84,7 @@
     el.addEventListener('click', function (e) {
       var row = e.target.closest ? e.target.closest('.rlRow') : null;
       if (!row || !row.dataset.room) return;
-      location.href = 'game.html?mode=' + encodeURIComponent(mode) + '&room=' + encodeURIComponent(row.dataset.room);
+      location.href = 'game?mode=' + encodeURIComponent(mode) + '&room=' + encodeURIComponent(row.dataset.room);
     });
   }
 

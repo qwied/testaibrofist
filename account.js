@@ -286,7 +286,7 @@
     drawChatPref();
     drawDiscordLink();
     box.querySelector('#bfProfile').onclick = function () {
-      location.href = BASE + 'users.html?name=' + encodeURIComponent(name);
+      location.href = BASE + 'users?name=' + encodeURIComponent(name);
     };
     var passBox = box.querySelector('#bfPassBox');
     var passErr = box.querySelector('#bfPassErr');
@@ -380,7 +380,7 @@
       var items = menu.querySelectorAll('.menu-item');
       if (items[0]) {
         items[0].style.cursor = 'pointer';
-        items[0].onclick = function () { location.href = BASE + 'users.html?name=' + encodeURIComponent(d.name); };
+        items[0].onclick = function () { location.href = BASE + 'users?name=' + encodeURIComponent(d.name); };
       }
       if (items[1]) {
         items[1].style.cursor = 'pointer';

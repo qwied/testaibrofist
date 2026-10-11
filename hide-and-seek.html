@@ -65,13 +65,13 @@
   .mdStory{text-align:center}
 }
 </style>
-        <link rel="canonical" href="https://aibrofist.online/hide-and-seek.html">
+        <link rel="canonical" href="https://aibrofist.online/hide-and-seek">
         <meta name="description" content="Hide and Seek mode: a roulette picks the seeker, the rest hide.">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="AIBrofist">
         <meta property="og:title" content="AIBrofist — Hide and Seek">
         <meta property="og:description" content="Hide and Seek mode: a roulette picks the seeker, the rest hide.">
-        <meta property="og:url" content="https://aibrofist.online/hide-and-seek.html">
+        <meta property="og:url" content="https://aibrofist.online/hide-and-seek">
         <meta property="og:image" content="https://aibrofist.online/preview.png">
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:image" content="https://aibrofist.online/preview.png">
@@ -98,7 +98,7 @@
       <button class="mdPlay" id="mdPlay" data-i18n="play">ИГРАТЬ</button>
       <a class="mdBack" href="/" data-i18n="mdBack">На главную</a>
       <div class="mdStory">
-        <a class="mdStoryBtn" href="story.html?mode=hideAndSeek" data-i18n="storyTxt">Story Mode</a>
+        <a class="mdStoryBtn" href="story?mode=hideAndSeek" data-i18n="storyTxt">Story Mode</a>
         <div class="mdStoryHint" data-i18n="storyHint">Play privately with a friend on any map from Maps Browser.</div>
       </div>
     </div>
@@ -116,7 +116,7 @@
 <script src="roomList.js?v=160"></script>
 <script>
 document.getElementById('mdPlay').onclick = function () {
-  location.href = 'game.html?mode=hideAndSeek';
+  location.href = 'game?mode=hideAndSeek';
 };
 BFRoomList.init(document.getElementById('roomList'), 'hideAndSeek');
 </script>
