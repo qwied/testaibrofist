@@ -134,10 +134,12 @@ function unseedMap() {
       }
       seeker.emit('movePlayer', { position: { x: 895, y: 900, w: 20, h: 60, color: '#111827', say: '', fin: false, hid: false } });
       await sleep(60);
-      const infectedOnHider = once(hider, 'hsInfected', 5000).catch(() => null);
+      // классика: пойманный получает hsOut и не присоединяется к охоте
+      // (см. hsDoInfect в server.js) — hsInfected тут не шлётся вовсе
+      const outOnHider = once(hider, 'hsOut', 5000).catch(() => null);
       seeker.emit('hsCatch', { targetId: hider.id });
-      const ev = await infectedOnHider;
-      ok(!!ev, 'настоящая поимка хайдера дошла', hider.id);
+      const ev = await outOnHider;
+      ok(!!ev, 'настоящая поимка хайдера дошла (hsOut)', hider.id);
     }
 
     const lobbyAgain = once(a, 'hsPhase', 5000).catch(() => null);

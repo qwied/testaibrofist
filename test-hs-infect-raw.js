@@ -1,9 +1,12 @@
-/* Заражение (Task 14) напрямую через сокеты, без браузера и без реальной
-   физики — детерминированный тест серверной логики hsCatch/hsInfected/
-   seekerIds, которую живой Playwright-тест (test-hs-infect-live.js) не
-   может надёжно прогнать вслепую на случайной карте. Раз и навсегда
-   проверяет: заражённый добавляется в seekerIds, обе стороны получают
-   hsInfected, а сервер не падает и продолжает отвечать после этого. */
+/* Поимка в классических прятках (не apoc) напрямую через сокеты, без
+   браузера и без реальной физики — детерминированный тест серверной
+   логики hsCatch/hsOut/seekerIds, которую живой Playwright-тест
+   (test-hs-infect-live.js) не может надёжно прогнать вслепую на случайной
+   карте. Раз и навсегда проверяет: пойманный в классике НЕ присоединяется
+   к охоте (не попадает в seekerIds, в охоту не вступает) — он просто
+   выходит из игры, обе стороны получают hsOut (а не hsInfected — та
+   зарезервирована для apoc-цепочки, см. hsDoInfect в server.js), а сервер
+   не падает и продолжает отвечать после этого. */
 'use strict';
 const { io } = require('socket.io-client');
 const BASE = process.env.BASE || 'http://127.0.0.1:3210';
@@ -66,13 +69,15 @@ function once(socket, event, timeoutMs) {
   seeker.emit('movePlayer', { position: { x: 895, y: 300, w: 20, h: 60, color: '#111827', say: '', fin: false, hid: false } });
   await sleep(60);
 
-  const infectedOnSeeker = once(seeker, 'hsInfected', 5000).catch(() => null);
-  const infectedOnHider = once(hider, 'hsInfected', 5000).catch(() => null);
+  const outOnSeeker = once(seeker, 'hsOut', 5000).catch(() => null);
+  const outOnHider = once(hider, 'hsOut', 5000).catch(() => null);
+  const noInfectOnHider = once(hider, 'hsInfected', 2500).then(() => false).catch(() => true);
   seeker.emit('hsCatch', { targetId: hiderId });
-  const [evSeeker, evHider] = await Promise.all([infectedOnSeeker, infectedOnHider]);
+  const [evSeeker, evHider, stayedOut] = await Promise.all([outOnSeeker, outOnHider, noInfectOnHider]);
 
-  ok(!!evSeeker && evSeeker.id === hiderId, 'искатель получил hsInfected с правильным id', JSON.stringify(evSeeker));
-  ok(!!evHider && evHider.id === hiderId, 'заражённый тоже получил hsInfected', JSON.stringify(evHider));
+  ok(!!evSeeker && evSeeker.id === hiderId, 'искатель получил hsOut с правильным id', JSON.stringify(evSeeker));
+  ok(!!evHider && evHider.id === hiderId, 'пойманный тоже получил hsOut', JSON.stringify(evHider));
+  ok(stayedOut, 'классика не шлёт hsInfected — пойманный не присоединяется к охоте');
 
   // сервер жив и отвечает дальше (не упал от нового кода)
   const pong = once(a, 'pongCheck', 5000);
