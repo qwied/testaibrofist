@@ -75,9 +75,16 @@
        от реального экрана. pointer:coarse — признак самого устройства,
        не страницы, и не ломается этим пином. */
     + '@media (pointer:coarse){body.play.mob .ow-fab{bottom:220px}}'
-    + 'background:linear-gradient(135deg,#1f2937,#111827);color:#fff;border:none;font-size:22px;cursor:pointer;'
-    + 'box-shadow:0 6px 18px rgba(0,0,0,.32);transition:transform .15s,box-shadow .15s}'
-    + '.ow-fab:hover{background:linear-gradient(135deg,#2196F3,#1976d2);transform:translateY(-1px);box-shadow:0 8px 22px rgba(33,150,243,.35)}'
+    /* Раньше фон был фиксированным тёмно-серым (#1f2937/#111827) — на
+       тёмной теме (фон страницы ~#16181d, см. theme.js) кнопка сливалась
+       с подложкой почти целиком, виден был только голый текст без формы.
+       Синий — как у Admin Abuse красный: свой цвет, не зависящий от темы,
+       поэтому кружок виден всегда одинаково. */
+    + 'display:flex;align-items:center;justify-content:center;'
+    + 'background:linear-gradient(135deg,#2196F3,#1976d2);color:#fff;border:none;cursor:pointer;'
+    + 'box-shadow:0 6px 18px rgba(33,150,243,.4);transition:transform .15s,box-shadow .15s}'
+    + '.ow-fab svg{width:21px;height:21px;flex:none}'
+    + '.ow-fab:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(33,150,243,.5)}'
     + '.ow-ov{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;'
     + 'background:rgba(15,23,42,.55);backdrop-filter:blur(1px);z-index:9998;display:none}'
     + '.ow-box{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;margin:auto;width:360px;max-height:86vh;overflow:auto;height:max-content;'
@@ -170,7 +177,11 @@
     var fab = document.createElement('button');
     fab.className = 'ow-fab';
     fab.title = T('ownerTools', 'Инструменты владельца');
-    fab.textContent = T('ownerFab', 'Ред');
+    // карандаш вместо голого текста "Ред" — тот же минималистичный стиль
+    // линий, что у остальных иконок сайта (см. svg() в shell.js)
+    fab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+      + 'stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/>'
+      + '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
     fab.onclick = open;
     document.body.appendChild(fab);
 
@@ -185,6 +196,26 @@
   }
 
   function close() { ov.style.display = 'none'; box.style.display = 'none'; }
+
+  /* Иконки разделов — тот же минималистичный стиль линий, что и везде на
+     сайте (см. svg() в shell.js), вместо эмодзи: на разных ОС/шрифтах один
+     и тот же emoji выглядит по-разному (а где-то — просто квадратом), и
+     визуально не вяжется с остальным интерфейсом, который построен на SVG. */
+  function ic(paths, fill) {
+    return '<svg viewBox="0 0 24 24" width="15" height="15" fill="' + (fill ? 'currentColor' : 'none') + '" '
+      + 'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
+  }
+  var ICN = {
+    coin: ic('<circle cx="12" cy="12" r="9"/><path d="M9.5 15.5c.5 1 1.5 1.5 2.5 1.5 2 0 3-1 3-2.3 0-3-6-1.4-6-4.2 0-1.3 1-2.3 3-2.3 1 0 2 .4 2.5 1.3M12 7v2M12 15v2"/>'),
+    calendar: ic('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 9h18"/>'),
+    star: ic('<path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/>', true),
+    starOutline: ic('<path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/>'),
+    medal: ic('<circle cx="12" cy="15" r="6"/><path d="M9 10.5 7 3h3l2 5"/><path d="M15 10.5 17 3h-3l-2 5"/><path d="M12 12v6"/>'),
+    trophy: ic('<path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4Z"/><path d="M7 5H4a3 3 0 0 0 3 5M17 5h3a3 3 0 0 1-3 5"/>'),
+    gamepad: ic('<rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 11v3M5.5 12.5h3M15.5 11.5h.01M18 13h.01"/>'),
+    save: ic('<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M8 3v5h8V3M7 21v-7h10v7"/>'),
+    close: ic('<path d="M18 6 6 18M6 6l12 12"/>')
+  };
 
   /* Каждый раздел — <details class="ow-acc">, open — список открытых по
      id (persistOpen), чтобы повторное открытие панели не сворачивало
@@ -211,7 +242,7 @@
 
   function open() {
     box.innerHTML =
-        '<div class="ow-x">X</div>'
+        '<div class="ow-x">' + ICN.close + '</div>'
       + '<div class="ow-h2">'
       +   '<div class="ow-h2-ava">' + esc((me.name || '?').slice(0, 1)) + '</div>'
       +   '<div class="ow-h2-txt">'
@@ -220,7 +251,7 @@
       +   '</div>'
       + '</div>'
 
-      + acc('owAccCoins', (window.BFCoin ? BFCoin.svg(15) : '🪙'), T('giveCoins', 'Выдать монеты'),
+      + acc('owAccCoins', (window.BFCoin ? BFCoin.svg(15) : ICN.coin), T('giveCoins', 'Выдать монеты'),
             '<input class="ow-i" id="owCName" placeholder="' + T('playerName', 'Ник игрока') + '">'
           + '<div class="ow-row2">'
           +   '<input class="ow-i" id="owCAmt" type="number" placeholder="' + T('amount', 'Количество') + '">'
@@ -231,13 +262,13 @@
           + '<div class="ow-b" id="owCGo">' + T('apply', 'Применить') + '</div>'
           + '<div class="ow-m" id="owCMsg"></div>')
 
-      + acc('owAccJoin', '📅', T('setJoinDate', 'Дата регистрации'),
+      + acc('owAccJoin', ICN.calendar, T('setJoinDate', 'Дата регистрации'),
             '<input class="ow-i" id="owJName" placeholder="' + T('playerName', 'Ник игрока') + '">'
           + '<input class="ow-i" id="owJDate" type="date">'
           + '<div class="ow-b" id="owJGo">' + T('apply', 'Применить') + '</div>'
           + '<div class="ow-m" id="owJMsg"></div>')
 
-      + acc('owAccVotes', '⭐', T('boostVotes', 'Оценка карты'),
+      + acc('owAccVotes', ICN.star, T('boostVotes', 'Оценка карты'),
             '<div class="ow-hint">These numbers set the final total on the card, not an increment.</div>'
           + '<input class="ow-i" id="owVAuthor" placeholder="' + T('colAuthor', 'Автор') + '">'
           + '<input class="ow-i" id="owVMap" placeholder="' + T('colName', 'Название карты') + '">'
@@ -248,7 +279,7 @@
           + '<div class="ow-b" id="owVGo">' + T('apply', 'Применить') + '</div>'
           + '<div class="ow-m" id="owVMsg"></div>')
 
-      + acc('owAccManualRank', '🏅', 'Manual rank',
+      + acc('owAccManualRank', ICN.medal, 'Manual rank',
             '<div class="ow-hint">Overrides the automatic S..C/Declassified rank for this mode. '
           +   'Leave the rank field empty to clear the override and go back to automatic.</div>'
           + '<input class="ow-i" id="owRName" placeholder="' + T('playerName', 'Ник игрока') + '">'
@@ -267,7 +298,7 @@
           + '<div class="ow-b" id="owRGo">' + T('apply', 'Применить') + '</div>'
           + '<div class="ow-m" id="owRMsg"></div>')
 
-      + acc('owAccMapRank', '🏆', 'Map rank tiers',
+      + acc('owAccMapRank', ICN.trophy, 'Map rank tiers',
             '<div class="ow-hint">Time thresholds for the per-map time medal shown on its card in Maps '
           +   'Browser (separate from the S..C skill rank above — see ranks.js). Click "' + T('mapRankTag', 'Ранг')
           +   '" on a map row in Maps Browser to load it here; empty a field to remove that letter.</div>'
@@ -277,10 +308,10 @@
           + '<div class="ow-b" id="owTGo">' + T('apply', 'Применить') + '</div>'
           + '<div class="ow-m" id="owTMsg"></div>')
 
-      + acc('owAccAddGame', '🎮', T('addToGame', 'Добавить в игру'),
+      + acc('owAccAddGame', ICN.gamepad, T('addToGame', 'Добавить в игру'),
             '<div class="ow-m" style="text-align:left;color:var(--muted)" id="owGList">…</div>')
 
-      + acc('owAccBackup', '💾', 'Backup',
+      + acc('owAccBackup', ICN.save, 'Backup',
             '<div class="ow-hint">One file with everything: accounts, coins, skins, maps, news. '
           +   'Download it before moving to another server — and restore it there in this same panel. '
           +   'Show media larger than 25 MB is not included in the file.</div>'
@@ -452,7 +483,7 @@
 
     var vote = document.createElement('span');
     vote.className = 'ow-tag vote';
-    vote.textContent = '⭐ ' + T('boostVotes', 'Оценка');
+    vote.innerHTML = ICN.star + ' ' + esc(T('boostVotes', 'Оценка'));
     vote.onclick = function (e) {
       e.stopPropagation();
       openWith('owAccVotes');
@@ -463,7 +494,7 @@
 
     var rankTag = document.createElement('span');
     rankTag.className = 'ow-tag rank';
-    rankTag.textContent = '🏆 ' + T('mapRankTag', 'Ранг');
+    rankTag.innerHTML = ICN.trophy + ' ' + esc(T('mapRankTag', 'Ранг'));
     rankTag.onclick = function (e) {
       e.stopPropagation();
       openWith('owAccMapRank');

@@ -66,8 +66,9 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 .apocBtn{padding:7px 12px;border-radius:8px;cursor:pointer;font-size:11.5px;font-weight:600;
   color:var(--muted);transition:.14s;white-space:nowrap}
 .apocBtn:hover{background:#eef2f8;color:var(--ink)}
-.apocBtn.on{background:#16a34a;color:#fff;box-shadow:0 2px 8px rgba(22,163,74,.35)}
-.apocBtn.on[data-apoc="1"]{background:#65a30d;box-shadow:0 2px 8px rgba(101,163,13,.4)}
+/* тот же синий, что у выбора режима (.modeBtn.on) выше — раньше тут был
+   зелёный, отдельный от остального UI безо всякой причины */
+.apocBtn.on{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(59,130,246,.35)}
 
 /* top bar */
 #scene{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;padding:4px;gap:2px;z-index:10}
@@ -304,9 +305,9 @@ body.mob #msg h1{font-size:38px}
 </div>
 
 <div id="hud" class="panel">
-  <div class="stat" data-i18n-title="edTimeTip" title="время забега"><i>⏱</i><span id="sTime">0.0</span></div>
-  <div class="stat" data-i18n-title="edObjTip" title="объектов в карте (максимум 2000)"><i>▦</i><span id="sObj">0</span></div>
-  <div class="stat" data-i18n-title="edDeathTip" title="смертей"><i>✖</i><span id="sDeath">0</span></div>
+  <div class="stat" data-i18n-title="edTimeTip" title="время забега"><i><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6M12 2v3"/></svg></i><span id="sTime">0.0</span></div>
+  <div class="stat" data-i18n-title="edObjTip" title="объектов в карте (максимум 2000)"><i><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></i><span id="sObj">0</span></div>
+  <div class="stat" data-i18n-title="edDeathTip" title="смертей"><i><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></i><span id="sDeath">0</span></div>
   <div id="exitBtn" data-i18n="edExit" data-i18n-title="edExitTip" title="выйти из игры (Esc)">Выйти</div>
 </div>
 <div id="msg"><h1 id="msgT"></h1><p id="msgS"></p></div>

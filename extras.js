@@ -415,14 +415,38 @@ function register(app, acc) {
     const metric = Object.prototype.hasOwnProperty.call(METRICS, req.query.metric)
       ? req.query.metric : 'coins';
     const m = METRICS[metric];
-    const period = req.query.period === 'day' ? 'day' : req.query.period === 'week' ? 'week' : 'all';
-    const windowMs = period === 'day' ? 24 * 60 * 60 * 1000 : period === 'week' ? 7 * 24 * 60 * 60 * 1000 : 0;
+    /* Ранг рядом с именем в таблице: для режимных метрик — ранг того же
+       режима, для монет никакого (монеты про навык ничего не говорят). */
+    const rankMode = metric === 'hs' ? 'hs' : metric === 'score' ? 'race' : null;
+    // сортировка по рангу просят только у режимных метрик — у монет
+    // ранга нет вовсе, незачем даже проверять query для них
+    const sortByRank = !!rankMode && req.query.sort === 'rank';
 
-    const list = windowMs
-      ? sumLog(m.log(), windowMs)
-      : Object.values(db.users)
-          .map(u => ({ name: u.name, amount: u[m.field] || 0 }))
-          .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
+    let list;
+    if (sortByRank) {
+      /* Ранг — не накопительный счётчик (см. ranks.js), а текущая оценка
+         навыка, и периода у него нет: "ранг за эту неделю" не существует,
+         поэтому period здесь не смотрим вовсе — список всегда один и тот
+         же, пока ранги не пересчитаются (кэш ranks.js на минуту). Берём
+         амаунтом именно внутреннюю 0..100 оценку ranks.js, а не очки/score
+         — иначе более скилловый, но менее играющий новичок оказался бы
+         выше по рангу, но с меньшим "amount", чем у строки под ним. */
+      const rk = require('./ranks.js');
+      const RANK_SORT = rk.RANK_ORDER.concat('Declassified');   // индекс — место; меньше — лучше
+      list = Object.values(db.users).map(u => {
+        const r = rk.forName(db, u.name)[rankMode];
+        if (!r) return null;
+        return { name: u.name, amount: r.score, _ri: RANK_SORT.indexOf(r.rank) };
+      }).filter(Boolean).sort((a, b) => a._ri - b._ri || b.amount - a.amount || a.name.localeCompare(b.name));
+    } else {
+      const period = req.query.period === 'day' ? 'day' : req.query.period === 'week' ? 'week' : 'all';
+      const windowMs = period === 'day' ? 24 * 60 * 60 * 1000 : period === 'week' ? 7 * 24 * 60 * 60 * 1000 : 0;
+      list = windowMs
+        ? sumLog(m.log(), windowMs)
+        : Object.values(db.users)
+            .map(u => ({ name: u.name, amount: u[m.field] || 0 }))
+            .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
+    }
 
     const page = paginate(list, req.query.page);
     const me = currentUser(req);
@@ -432,9 +456,6 @@ function register(app, acc) {
       myPlace = idx + 1;
       myAmount = idx !== -1 ? list[idx].amount : 0;
     }
-    /* Ранг рядом с именем в таблице: для режимных метрик — ранг того же
-       режима, для монет никакого (монеты про навык ничего не говорят). */
-    const rankMode = metric === 'hs' ? 'hs' : metric === 'score' ? 'race' : null;
     let ranks = null;
     if (rankMode) {
       const rk = require('./ranks.js');
@@ -445,7 +466,9 @@ function register(app, acc) {
       });
     }
     res.json({
-      top: page.slice, page: page.label, metric: metric, period: period,
+      top: page.slice, page: page.label, metric: metric,
+      period: sortByRank ? null : (req.query.period === 'day' ? 'day' : req.query.period === 'week' ? 'week' : 'all'),
+      sort: sortByRank ? 'rank' : 'amount',
       ranks: ranks,
       me: me ? { name: me.name, amount: myAmount, place: myPlace } : null
     });

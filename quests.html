@@ -75,6 +75,9 @@
     });
   }
   function coinTag() { return window.BFCoin ? BFCoin.svg(15) : ''; }
+  var CHECK = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" '
+    + 'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">'
+    + '<path d="M20 6 9 17l-5-5"/></svg>';
   function post(url, data) {
     return fetch(url, {
       method: 'POST', credentials: 'same-origin',
@@ -97,7 +100,7 @@
       + '<div class="qBarWrap"><div class="qBar" style="width:' + pct + '%"></div></div>'
       + '<div class="qBottom"><div class="qProg">' + q.progress + '/' + q.target + '</div>'
       +   (q.claimed
-            ? '<div class="qClaimed">✓ ' + T('claimed', 'Claimed') + '</div>'
+            ? '<div class="qClaimed">' + CHECK + ' ' + T('claimed', 'Claimed') + '</div>'
             : '<button class="qClaim" data-claim="' + esc(q.id) + '"'
               + (q.progress < q.target ? ' disabled' : '') + '>' + T('claim', 'Claim') + '</button>')
       + '</div></div>';
@@ -109,7 +112,7 @@
       +   '<div class="qReward">+' + b.reward + ' ' + coinTag() + '</div></div>'
       + '<div class="qBottom" style="justify-content:flex-end">'
       +   (b.claimed
-            ? '<div class="qClaimed">✓ ' + T('claimed', 'Claimed') + '</div>'
+            ? '<div class="qClaimed">' + CHECK + ' ' + T('claimed', 'Claimed') + '</div>'
             : '<button class="qClaim" data-claim="bonus"' + (b.available ? '' : ' disabled') + '>'
               + T('claim', 'Claim') + '</button>')
       + '</div></div>';
