@@ -1746,6 +1746,12 @@ function stepZombies(){
       var spV = spanY(polyOf(sv), o.x+2, o.x+o.w-2);
       if(!spV || o.y >= spV[1] || o.y+o.h <= spV[0]) continue;
       if((yBefore+o.h) <= spV[0]+2){ o.y = spV[0]-o.h; o._zvy = 0; grounded = true; }
+      /* Раньше тут не было ответа на удар головой снизу — только посадка
+         сверху. С полным прыжком (ZOMBIE_JUMP=1) зомби теперь реально
+         поднимается во весь свой уступ, и без этой ветки прошивал платформу
+         насквозь по пути вверх — физика, в отличие от игрока (см. fromBelow
+         в step()), просто не умела его останавливать. */
+      else if(o._zvy < 0 && yBefore >= spV[1]-2){ o.y = spV[1]; o._zvy = 0; }
     }
     o._dy = o.y - yBefore;
 
@@ -1763,8 +1769,11 @@ function stepZombies(){
        прыжок наугад может зацепить то, что щуп в один луч не поймал. */
     if(grounded){
       var footY = o.y+o.h, wantJump = false;
-      if(Math.abs(o.x - (o._stuckX===undefined ? o.x : o._stuckX)) > 15){ o._stuckX = o.x; o._stuckT = 0; }
-      else o._stuckT = (o._stuckT||0) + 1;
+      // см. комментарий про anti-stall в game.html (stepNetZombie) — тот же приём
+      if(!pl.dead && Math.abs(toward) > 30){
+        if(Math.abs(o.x - (o._stuckX===undefined ? o.x : o._stuckX)) > 15){ o._stuckX = o.x; o._stuckT = 0; }
+        else o._stuckT = (o._stuckT||0) + 1;
+      } else { o._stuckT = 0; o._stuckX = o.x; }
       if(!pl.dead){
         var targetAbove = (pl.y+pl.h) < (footY-40);
         if(targetAbove) wantJump = true;
@@ -1776,7 +1785,7 @@ function stepZombies(){
           }
           if(!holds) wantJump = true;
         }
-        if(!wantJump && Math.abs(toward) > 30 && o._stuckT > 45){ wantJump = true; o._stuckT = 0; }
+        if(!wantJump && o._stuckT > 45){ wantJump = true; o._stuckT = 0; }
       }
       if(wantJump) o._zvy = jumpV()*ZOMBIE_JUMP;
     }
