@@ -30,7 +30,8 @@
   var LOBBY_MS  = 30000;    // ожидание в Hide and Seek — 30 секунд
 
   var COLOR_NORMAL = '#000000';
-  var COLOR_SEEKER = '#1e6fe0';   // синяя полоса под ником у искателя (не цвет модели)
+  var COLOR_SEEKER = '#1e6fe0';   // синяя полоса под ником у искателя/зомби (не цвет модели)
+  var COLOR_CAUGHT = '#f97316';   // оранжевая полоса — пойман и вышел из игры в классике
 
   var me = { name: '', role: 'hider', caught: false };
 
@@ -1061,13 +1062,6 @@
       GAME.godMode = GOD;
       GAME.flying = FLY;
       GAME.startPlay();
-      /* Просмотр/практика из Maps Browser не заходит в настоящую комнату
-         (см. VIEW в boot() выше) — сервер никогда не пришлёт
-         zombieDriverAssign, и без этого зомби apoc-карты просто стоял бы
-         на месте: сетевая физика (stepNetZombie в game.html) включается
-         только сервером. soloZombie гоняет его локально прямо за
-         тестирующим, тем же алгоритмом, что был у objects-зомби раньше. */
-      if (VIEW && window.GAME) GAME.soloZombie = true;
       finSent = false;
       applyColor();
       /* Сервер должен знать, что забег начался, ДО того как придёт
@@ -1121,18 +1115,6 @@
   // все, кто сейчас охотится в этом раунде — искатель, выбранный рулеткой,
   // плюс каждый, кого заразили по ходу охоты (см. applyInfected)
   var hsSeekerIds = {};
-  /* Зомби apoc-раунда (см. zombieDriverAssign/zombieState ниже). Ведущий
-     клиент (zombieDriving) считает его физику сам, в движке (см.
-     stepNetZombie() в game.html — у него уже загружена вся карта, как у
-     игрока) и просто транслирует результат; у остальных — только точка
-     для отрисовки, сглаженная тем же буфером, что и чужие игроки
-     (pushSnap/sample), чтобы зомби двигался так же плавно, как они. */
-  var zombieDriving = false, zombieEntity = null;
-  function zombieRoundReset() {
-    if (zombieDriving && window.GAME && GAME.zombieStop) GAME.zombieStop();
-    zombieDriving = false;
-    zombieEntity = null;
-  }
 
   // текущий раунд — apoc (см. d.apoc в hsPhase/hsState): пока он идёт,
   // заражённые (искатели) выглядят зомби, а не обычной фигуркой —
@@ -1145,9 +1127,27 @@
   function setRole(role) {
     me.role = role; me.caught = false;
     $('gRoleBox').style.display = 'inline';
-    $('gRole').textContent = role === 'seeker' ? TR('roleSeeker', 'Искатель') : TR('roleHider', 'Прячется');
+    // apoc-раунд называет охотника зомби, а не искателем — та же роль
+    // внутри (seeker), просто другая тема (см. hsApocRound/syncMeIsZombie)
+    $('gRole').textContent = role === 'seeker'
+      ? (hsApocRound ? TR('roleZombie', 'Зомби') : TR('roleSeeker', 'Искатель'))
+      : TR('roleHider', 'Прячется');
     applyColor();
     syncMeIsZombie();
+  }
+
+  /* Классика: пойманный выходит из игры — не присоединяется к охоте, роль
+     не меняется. Видно по оранжевой полосе под ником (см. drawTag), а не
+     по синей, как у искателя/зомби. Событие приходит от сервера (hsOut) —
+     решает только он (см. hsDoInfect в server.js). */
+  function applyOut(id, name) {
+    if (id === socket.id) {
+      me.caught = true;
+      if (window.BFSound) BFSound.death();
+    } else if (others[id]) {
+      others[id].caught = true;
+    }
+    log(TR('hsOut', '{n} пойман и выходит из игры').replace('{n}', esc(name || nameOfId(id))));
   }
 
   /* ---------- рулетка искателя (прятки) ----------
@@ -1311,7 +1311,7 @@
       applySeeker(d.winnerId);
       if (window.BFSound) BFSound.roulLand();
       if (d.winnerId === socket.id) {
-        res.textContent = TR('roulYouSeek', 'Ты — искатель!');
+        res.textContent = d.apoc ? TR('roulYouZombie', 'Ты заражён первым!') : TR('roulYouSeek', 'Ты — искатель!');
         res.classList.add('on');
       }
       /* С этого мгновения комната пропадает с экрана (см. hsHiding в
@@ -1735,7 +1735,7 @@
 
     // при обрыве связи серверные фазы недоступны — действуем по своим таймерам
     socket.on('disconnect', function () {
-      hsSync = false; joined = false; zombieRoundReset();
+      hsSync = false; joined = false;
       hsApocRound = false; syncMeIsZombie();   // не застыть зомби-скином до реконнекта
     });
 
@@ -1902,25 +1902,10 @@
       applyInfected(d.id, d.name);
     });
 
-    /* Сервер выбрал, кто ведёт зомби в этом раунде (см.
-       hsZombieAssignDriver/hsZombieReassignDriver в server.js) — в т.ч.
-       посреди раунда, если прошлый ведущий отключился или сам заразился.
-       x/y — где зомби сейчас (на старте раунда это точка спавна, при
-       передаче — та позиция, где он и был, без прыжка на глазах у всех). */
-    socket.on('zombieDriverAssign', function (d) {
-      if (MODE !== 'hideAndSeek' || !d) return;
-      zombieDriving = true;
-      if (window.GAME && GAME.zombieStart) GAME.zombieStart(Number(d.x) || 0, Number(d.y) || 0);
-      if (!zombieEntity) zombieEntity = { buf: [], tx: d.x, ty: d.y, x: d.x, y: d.y };
-      else { zombieEntity.tx = d.x; zombieEntity.ty = d.y; }
-    });
-
-    // позицию зомби транслирует сервер всем в комнате — рисуем её тем же
-    // сглаживающим буфером, что и чужих игроков (см. GAME.onDraw ниже)
-    socket.on('zombieState', function (d) {
-      if (MODE !== 'hideAndSeek' || !d) return;
-      if (!zombieEntity) zombieEntity = { buf: [], tx: d.x, ty: d.y, x: d.x, y: d.y };
-      pushSnap(zombieEntity, nowMs(), d.x, d.y);
+    // Классика: пойманный просто выходит из игры (см. applyOut/hsDoInfect)
+    socket.on('hsOut', function (d) {
+      if (MODE !== 'hideAndSeek' || !d || !d.id) return;
+      applyOut(d.id, d.name);
     });
 
     /* ---------- прятки: серверные события ---------- */
@@ -1932,15 +1917,24 @@
       phase = 'lobby';
       if (d.msLeft) phaseEnds = Date.now() + (Number(d.msLeft) || 0);
       hsWinnerId = null;                 // пока крутится — ролей нет, никого не видно
-      hsApocRound = false;               // рулетку искателя крутят только классические раунды
+      /* d.apoc уже известен на этом самом событии (см. hsSpin в server.js) —
+         выставляем сразу, а не ждём hsPhase('round'): иначе "пациент ноль"
+         после приземления рулетки на секунды превращался в обычного
+         искателя (синяя полоса/подпись "Искатель" вместо зомби-скина),
+         пока не придёт отдельное событие старта раунда. Преждевременно
+         никого зомби не красит: роль/hsSeekerIds ниже всё равно сброшены
+         на время самого вращения (см. setRole('hider')/clearCaught()). */
+      hsApocRound = !!d.apoc;
       setRole('hider');
       $('gRoleBox').style.display = 'none';
       clearCaught();
-      // сначала короткая рулетка режима ("Classic") — потом, как и раньше,
-      // рулетка искателя. msLeft пересчитываем на момент фактического
-      // запуска — от phaseEnds, а не берём д.msLeft как есть: он успел
-      // устареть на время показа рулетки режима
-      runModeRoulette(false, function () {
+      // сначала короткая рулетка режима (Classic/Zombie Apocalypse) — потом
+      // та же рулетка искателя, что в apoc-раунде выбирает "пациента ноль"
+      // (см. d.apoc — теперь приходит для обоих режимов, см. hsSpin в
+      // server.js). msLeft пересчитываем на момент фактического запуска —
+      // от phaseEnds, а не берём д.msLeft как есть: он успел устареть на
+      // время показа рулетки режима
+      runModeRoulette(!!d.apoc, function () {
         d.msLeft = phaseEnds - Date.now();
         runRoulette(d);
         showChance((d.players) || []);
@@ -1987,23 +1981,19 @@
         phase = 'lobby';
         phaseEnds = Date.now() + (Number(d.msLeft) || LOBBY_MS);
         hsWinnerId = null;
-        hsApocRound = false;             // лобби — все снова обычные, зомби ещё не назначен
+        /* d.apoc уже известен здесь же (этот hsPhase приходит сразу вслед
+           за hsRoulette из той же hsStartLobby на сервере) — выставляем
+           сразу, тем же приёмом и по той же причине, что и в обработчике
+           hsRoulette выше: иначе этот же hardcoded false, придя следом,
+           перетирал бы уже правильно выставленное там значение, пока
+           рулетка ещё крутится, и "пациент ноль" на приземлении рулетки
+           опять получал бы ярлык обычного искателя вместо зомби. */
+        hsApocRound = !!d.apoc;
         setRole('hider');
         $('gRoleBox').style.display = 'none';
         clearCaught();
-        // раунд закончился (или ещё не начинался) — зомби, если он был,
-        // больше не актуален; следующий раунд назначит заново (см.
-        // zombieDriverAssign) или не назначит вовсе, если карта не apoc
-        zombieRoundReset();
         // карту комнаты назначает сервер: у всех в комнате она одна
         if (!STORY) loadServerMap(d.map);
-        /* Объявление режима раунда: классика уже получает рулетку
-           искателя (см. 'hsRoulette' — оно приходит раньше этого самого
-           события, в один приём с сервера) — своя рулетка режима ей не
-           нужна, иначе были бы две подряд. apoc-раунд рулетку искателя
-           никогда не получает (нет человека-искателя, см. hsStartLobby),
-           так что без этого лобби объявляло режим молча. */
-        if (d.apoc) runModeRoulette(true);
       } else if (d.phase === 'storyEnd') {
         // общий лимит времени Story-сессии вышел — сервер обрывает цикл
         // лобби/раунд насовсем (см. hsEndStory в server.js)
@@ -2043,11 +2033,6 @@
           if (id === socket.id) setRole('seeker');
         });
         syncMeIsZombie();
-        // зашли посреди apoc-раунда — зомби уже где-то бегает, рисуем его
-        // сразу по снимку, не дожидаясь следующего zombieState от ведущего
-        if (d.apoc && d.zombiePos) {
-          zombieEntity = { buf: [], tx: d.zombiePos.x, ty: d.zombiePos.y, x: d.zombiePos.x, y: d.zombiePos.y };
-        }
       } else {
         hsApocRound = false;
         clearCaught();
@@ -2154,39 +2139,6 @@
       });
       checkAllCaught();
     }
-
-    /* Зомби apoc-раунда: веду его физику локально (см. stepNetZombie() в
-       game.html — у меня загружена та же карта, что у любого игрока) и
-       просто транслирую результат остальным через zombiePos/zombieCatch.
-       Цели — те же хайдеры, что и у человека-искателя выше: не заражённые
-       и не уже пойманные. Кого поймал — решает движок сам (см.
-       GAME.zombiePull), я только отправляю то, что он вернул.
-
-       Я сам (ведущий зомби) тоже хайдер и тоже должен быть целью — иначе
-       зомби вообще не двигался, если в комнате рядом никого, кроме меня,
-       нет (обычная ситуация при тестировании со второго аккаунта): others
-       — это ТОЛЬКО остальные игроки, свою же позицию сюда раньше не
-       добавляли вовсе. hsDoInfect в server.js уже умеет переназначать
-       ведущего, если поймали именно его (см. hsZombieReassignDriver) —
-       этот путь просто был недостижим без себя же в списке целей. */
-    if (MODE === 'hideAndSeek' && zombieDriving && phase === 'round' && window.GAME && GAME.zombieSetTargets) {
-      var zTargets = [];
-      if (!hsSeekerIds[socket.id] && GAME.pl) {
-        var mp = GAME.pl;
-        zTargets.push({ id: socket.id, x: mp.x, y: mp.y, w: mp.w || 30, h: mp.h || 100 });
-      }
-      Object.keys(others).forEach(function (id) {
-        var o = others[id];
-        if (o.caught || hsSeekerIds[id]) return;
-        zTargets.push({ id: id, x: o.tx, y: o.ty, w: o.w || 30, h: o.h || 100 });
-      });
-      GAME.zombieSetTargets(zTargets);
-      var zr = GAME.zombiePull();
-      if (zr) {
-        socket.emit('zombiePos', { x: Math.round(zr.x), y: Math.round(zr.y) });
-        if (zr.caughtId) socket.emit('zombieCatch', { targetId: zr.caughtId });
-      }
-    }
   }, 33);
 
   /* Раунд заканчивается, как только пойманы все. Таймер после этого
@@ -2274,23 +2226,18 @@
       if (hsApocRound && hsSeekerIds[id] && window.GAME && GAME.figureZombie) GAME.figureZombie(w, h);
       else GAME.figure(w, h, o.color || COLOR_NORMAL, true, o.skin || null);
       ctx.restore();
-      drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74), !!hsSeekerIds[id]);
+      // синяя полоса — охотится (искатель/зомби); оранжевая — пойман и
+      // вышел из игры в классике (см. applyOut); иначе без полосы вовсе
+      drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74),
+              hsSeekerIds[id] ? 'seeker' : (o.caught ? 'out' : ''));
     });
-    // зомби apoc-раунда — у всех рисуется по сети (zombieState), ведущий
-    // не исключение: так он выглядит на экране ровно так же, как у всех,
-    // а не на кадр точнее своей же собственной физики
-    if (zombieEntity && MODE === 'hideAndSeek' && phase === 'round' && window.GAME && GAME.drawZombie) {
-      var zs = sample(zombieEntity, rt);
-      if (zs) { zombieEntity.x = zs.x; zombieEntity.y = zs.y; }
-      else { zombieEntity.x += (zombieEntity.tx - zombieEntity.x) * 0.3; zombieEntity.y += (zombieEntity.ty - zombieEntity.y) * 0.3; }
-      GAME.drawZombie(zombieEntity.x, zombieEntity.y);
-    }
     var p = GAME.pl;
     if (GAME.playing && me.name) {
       // свой ник в укрытии показываем бледным — напоминание, что тебя не видно
       ctx.save();
       if (GAME.hidden) ctx.globalAlpha = 0.35;
-      drawTag(ctx, me.name, typing, p.x + p.w / 2, p.y, p.h, MODE === 'hideAndSeek' && me.role === 'seeker');
+      drawTag(ctx, me.name, typing, p.x + p.w / 2, p.y, p.h,
+              MODE === 'hideAndSeek' && me.role === 'seeker' ? 'seeker' : (MODE === 'hideAndSeek' && me.caught ? 'out' : ''));
       ctx.restore();
     }
 
@@ -2360,7 +2307,7 @@
     ctx.fillText(t, x, y);
   }
 
-  function drawTag(ctx, name, say, cx, topY, h, seeker) {
+  function drawTag(ctx, name, say, cx, topY, h, marker) {
     ctx.save();
     ctx.textAlign = 'center';
     ctx.lineJoin = 'round';
@@ -2377,13 +2324,14 @@
     ctx.fillStyle = '#ffffff';
     ctx.fillText(name, cx, topY + h + 17 * tk);
 
-    /* Роль искателя — не цвет модели, а короткая синяя полоса прямо под
-       ником (см. applyColor/applySeeker/applyInfected). У обычных игроков
-       её нет вовсе. */
-    if (seeker) {
+    /* Роль искателя/зомби — не цвет модели, а короткая полоса прямо под
+       ником (см. applyColor/applySeeker/applyInfected): синяя — охотится,
+       оранжевая — пойман и вышел из игры в классике (см. applyOut). У
+       обычных игроков полосы нет вовсе. */
+    if (marker) {
       var barW = Math.max(24, ctx.measureText(name).width) * tk;
       var barY = topY + h + 21 * tk;
-      ctx.fillStyle = COLOR_SEEKER;
+      ctx.fillStyle = marker === 'out' ? COLOR_CAUGHT : COLOR_SEEKER;
       ctx.fillRect(cx - barW / 2, barY, barW, 3 * tk);
     }
 
