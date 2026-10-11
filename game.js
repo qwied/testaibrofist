@@ -1093,10 +1093,19 @@
   }
 
   // ---------- роли ----------
-  /* Роль больше не красит модель: искателя видно по синей полосе под
-     ником (см. drawTag), а не по цвету фигуры — так его силуэт ничем не
-     выдаёт себя издалека, полоса читается только вблизи, у ника. */
+  /* Классика красит саму модель по роли — синий искатель, оранжевый
+     пойманный (те же COLOR_SEEKER/COLOR_CAUGHT, что уже красят полосу
+     под ником, см. drawTag) — по прямой просьбе: силуэт должен быть
+     виден издалека, а не только у ника вблизи. figure() уже умеет это
+     (см. drawSkinTinted в game.html — перекрашивает даже свой скин-фото),
+     тут только выбор цвета. В apoc цвет модели не играет роли вообще —
+     заражённые рисуются отдельной моделью зомби (см. meIsZombie/
+     figureZombie), поэтому там всегда обычный цвет. */
   function applyColor() {
+    if (MODE === 'hideAndSeek' && !hsApocRound) {
+      if (me.role === 'seeker') { GAME.myColor = COLOR_SEEKER; return; }
+      if (me.caught) { GAME.myColor = COLOR_CAUGHT; return; }
+    }
     GAME.myColor = COLOR_NORMAL;
   }
   /* Заражение (см. applyInfected) живёт ровно один раунд — новый раунд
@@ -1143,6 +1152,7 @@
   function applyOut(id, name) {
     if (id === socket.id) {
       me.caught = true;
+      applyColor();
       if (window.BFSound) BFSound.death();
     } else if (others[id]) {
       others[id].caught = true;
@@ -1313,6 +1323,9 @@
       if (d.winnerId === socket.id) {
         res.textContent = d.apoc ? TR('roulYouZombie', 'Ты заражён первым!') : TR('roulYouSeek', 'Ты — искатель!');
         res.classList.add('on');
+        // классика: сразу на отмеченное место ожидания, если оно есть на
+        // карте (см. teleportToSeekerSpot в game.html) — apoc его не знает
+        if (!d.apoc && window.GAME && GAME.seekerWaitSpot) GAME.seekerWaitSpot();
       }
       /* С этого мгновения комната пропадает с экрана (см. hsHiding в
          onDraw). Без строчки-подсказки это читается как поломка: только
@@ -2034,11 +2047,16 @@
         });
         syncMeIsZombie();
       } else {
-        hsApocRound = false;
+        // d.apoc здесь тоже уже известен (см. тот же фикс в hsRoulette/
+        // hsPhase('lobby') выше) — догоняющему во время apoc-лобби иначе
+        // ненадолго показывало бы обычного искателя вместо зомби
+        hsApocRound = !!d.apoc;
         clearCaught();
         if (d.seekerId) {
           applySeeker(d.seekerId);
           log(TR('roulSeekerIs', 'Искатель: ') + '<b>' + esc(nameOfId(d.seekerId)) + '</b>');
+          // классика: догоняем и ожидание на метке, если она есть на карте
+          if (d.seekerId === socket.id && !hsApocRound && window.GAME && GAME.seekerWaitSpot) GAME.seekerWaitSpot();
         }
       }
     });
