@@ -1743,6 +1743,12 @@ function stepNetZombie(){
     var spV = spanY(polyOf(sv), o.x+2, o.x+o.w-2);
     if(!spV || o.y >= spV[1] || o.y+o.h <= spV[0]) continue;
     if((yBefore+o.h) <= spV[0]+2){ o.y = spV[0]-o.h; o._zvy = 0; grounded = true; }
+    /* Раньше тут не было ответа на удар головой снизу — только посадка
+       сверху. С полным прыжком (ZOMBIE_JUMP=1) зомби теперь реально
+       поднимается во весь свой уступ, и без этой ветки прошивал платформу
+       насквозь по пути вверх — физика, в отличие от игрока (см. fromBelow
+       в step()), просто не умела его останавливать. */
+    else if(o._zvy < 0 && yBefore >= spV[1]-2){ o.y = spV[1]; o._zvy = 0; }
   }
 
   // ближайшая по X цель из присланных сетью — та же логика, что раньше
@@ -1768,8 +1774,16 @@ function stepNetZombie(){
      прыжок наугад может зацепить то, что щуп в один луч не поймал. */
   if(grounded){
     var footY = o.y+o.h, wantJump = false;
-    if(Math.abs(o.x - (o._stuckX===undefined ? o.x : o._stuckX)) > 15){ o._stuckX = o.x; o._stuckT = 0; }
-    else o._stuckT = (o._stuckT||0) + 1;
+    /* Счётчик застревания копим ТОЛЬКО пока реально пытаемся дойти до
+       дальней цели — иначе он тикает и во время простоя (цель рядом/не
+       задана), и стоит задать цель издалека — тут же стреляет лишним
+       прыжком, даже на ровном месте, не успев и шагу ступить в её
+       сторону. Раньше это проявлялось как «зомби прыгнул непонятно
+       зачем на ровной земле и потом не допрыгнул до настоящего разрыва». */
+    if(target && Math.abs(toward) > 30){
+      if(Math.abs(o.x - (o._stuckX===undefined ? o.x : o._stuckX)) > 15){ o._stuckX = o.x; o._stuckT = 0; }
+      else o._stuckT = (o._stuckT||0) + 1;
+    } else { o._stuckT = 0; o._stuckX = o.x; }
     if(target){
       var targetAbove = (target.y+target.h) < (footY-40);
       if(targetAbove) wantJump = true;
@@ -1781,7 +1795,7 @@ function stepNetZombie(){
         }
         if(!holds) wantJump = true;
       }
-      if(!wantJump && Math.abs(toward) > 30 && o._stuckT > 45){ wantJump = true; o._stuckT = 0; }
+      if(!wantJump && o._stuckT > 45){ wantJump = true; o._stuckT = 0; }
     }
     if(wantJump) o._zvy = jumpV()*ZOMBIE_JUMP;
   }
@@ -1851,6 +1865,12 @@ function stepZombiesLocal(){
       var spV = spanY(polyOf(sv), o.x+2, o.x+o.w-2);
       if(!spV || o.y >= spV[1] || o.y+o.h <= spV[0]) continue;
       if((yBefore+o.h) <= spV[0]+2){ o.y = spV[0]-o.h; o._zvy = 0; grounded = true; }
+      /* Раньше тут не было ответа на удар головой снизу — только посадка
+         сверху. С полным прыжком (ZOMBIE_JUMP=1) зомби теперь реально
+         поднимается во весь свой уступ, и без этой ветки прошивал платформу
+         насквозь по пути вверх — физика, в отличие от игрока (см. fromBelow
+         в step()), просто не умела его останавливать. */
+      else if(o._zvy < 0 && yBefore >= spV[1]-2){ o.y = spV[1]; o._zvy = 0; }
     }
 
     // ---- куда идти и нужен ли прыжок (см. тот же приём в stepNetZombie) ----
@@ -1858,8 +1878,11 @@ function stepZombiesLocal(){
     if(!pl.dead) toward = (pl.x+pl.w/2) - (o.x+o.w/2);
     if(grounded){
       var footY = o.y+o.h, wantJump = false;
-      if(Math.abs(o.x - (o._stuckX===undefined ? o.x : o._stuckX)) > 15){ o._stuckX = o.x; o._stuckT = 0; }
-      else o._stuckT = (o._stuckT||0) + 1;
+      // см. комментарий про anti-stall в stepNetZombie выше — тот же приём
+      if(!pl.dead && Math.abs(toward) > 30){
+        if(Math.abs(o.x - (o._stuckX===undefined ? o.x : o._stuckX)) > 15){ o._stuckX = o.x; o._stuckT = 0; }
+        else o._stuckT = (o._stuckT||0) + 1;
+      } else { o._stuckT = 0; o._stuckX = o.x; }
       if(!pl.dead){
         var targetAbove = (pl.y+pl.h) < (footY-40);
         if(targetAbove) wantJump = true;
@@ -1871,7 +1894,7 @@ function stepZombiesLocal(){
           }
           if(!holds) wantJump = true;
         }
-        if(!wantJump && Math.abs(toward) > 30 && o._stuckT > 45){ wantJump = true; o._stuckT = 0; }
+        if(!wantJump && o._stuckT > 45){ wantJump = true; o._stuckT = 0; }
       }
       if(wantJump) o._zvy = jumpV()*ZOMBIE_JUMP;
     }
