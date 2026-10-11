@@ -900,7 +900,7 @@ var SIZES = {
   button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
   zombie:[30,100],                 // впритык как у игрока — по прямой просьбе
   checkpoint:[40,104], finishline:[52,126], spawn:[30,100],
-  teleport:[36,36]
+  teleport:[30,100]                 // тоже впритык как у игрока — по прямой просьбе
 };
 var SOLID  = ["rect","circle","triangle"];
 /* Раньше яд, шипы и ротатор убивали просто потому, что так называются.
@@ -1739,28 +1739,42 @@ function stepNetZombie(){
     if(d < bestD){ bestD = d; target = t; }
   }
 
-  var dx = 0;
-  if(target){
-    var toward = (target.x+target.w/2) - (o.x+o.w/2);
-    if(Math.abs(toward) > 2){
-      dx = (toward > 0 ? 1 : -1) * maxVX() * ZOMBIE_SPEED;
-      o._zface = toward > 0 ? 1 : -1;
+  // ---- куда идти и нужен ли прыжок ----
+  var toward = 0;
+  if(target) toward = (target.x+target.w/2) - (o.x+o.w/2);
+  /* Решаем прыжок ОТДЕЛЬНО от горизонтального шага, а не внутри «если есть
+     dx» — иначе зомби, оказавшись ровно под целью (toward ~ 0, шагать
+     некуда), никогда и не пробовал прыгнуть вверх: стоял под уступом и
+     «тупил», хотя цель была прямо над ним. Теперь: цель явно выше —
+     прыгаем всегда, независимо от того, есть ли вообще горизонтальный
+     снос; иначе — щуп на шаг вперёд (край платформы/разрыв пола, holds
+     ниже), прыгаем, если там нет опоры. Плюс anti-stall: если дольше
+     секунды не продвигаемся к дальней цели, хотя ничего явно не мешало —
+     прыжок наугад может зацепить то, что щуп в один луч не поймал. */
+  if(grounded){
+    var footY = o.y+o.h, wantJump = false;
+    if(Math.abs(o.x - (o._stuckX===undefined ? o.x : o._stuckX)) > 15){ o._stuckX = o.x; o._stuckT = 0; }
+    else o._stuckT = (o._stuckT||0) + 1;
+    if(target){
+      var targetAbove = (target.y+target.h) < (footY-40);
+      if(targetAbove) wantJump = true;
+      else if(Math.abs(toward) > 2){
+        var aheadX = o.x + (toward>0 ? o.w+10 : -10), holds = false;
+        for(i=0;i<blockers.length;i++){
+          var spF = spanY(polyOf(blockers[i]), aheadX-3, aheadX+3);
+          if(spF && spF[0] >= footY-4 && spF[0] <= footY+30){ holds = true; break; }
+        }
+        if(!holds) wantJump = true;
+      }
+      if(!wantJump && Math.abs(toward) > 30 && o._stuckT > 45){ wantJump = true; o._stuckT = 0; }
     }
+    if(wantJump) o._zvy = jumpV()*ZOMBIE_JUMP;
   }
-  /* Умнее слепого «упёрся — прыгнул»: пока ещё стоим на земле, смотрим,
-     устоим ли мы там, куда сейчас шагнём (край платформы/разрыв пола —
-     см. holds ниже), и отдельно — не засел ли сам зомби ниже цели (та же
-     проверка высоты, что игрок делает сам, когда видит уступ над собой).
-     Прыгаем ДО шага, а не после столкновения — так зомби перепрыгивает
-     разрыв, а не падает в него, и карабкается к цели, а не стоит под ней. */
-  if(dx !== 0 && grounded){
-    var aheadX = o.x + (dx>0 ? o.w+10 : -10), footY = o.y+o.h, holds = false;
-    for(i=0;i<blockers.length;i++){
-      var spF = spanY(polyOf(blockers[i]), aheadX-3, aheadX+3);
-      if(spF && spF[0] >= footY-4 && spF[0] <= footY+30){ holds = true; break; }
-    }
-    var targetAbove = target && (target.y+target.h) < (footY-40);
-    if(!holds || targetAbove) o._zvy = jumpV()*ZOMBIE_JUMP;
+
+  var dx = 0;
+  if(target && Math.abs(toward) > 2){
+    dx = (toward > 0 ? 1 : -1) * maxVX() * ZOMBIE_SPEED;
+    o._zface = toward > 0 ? 1 : -1;
   }
   if(dx !== 0){
     var xBefore = o.x, wall = false;
@@ -1824,22 +1838,33 @@ function stepZombiesLocal(){
       if((yBefore+o.h) <= spV[0]+2){ o.y = spV[0]-o.h; o._zvy = 0; grounded = true; }
     }
 
-    var dx = 0;
-    if(!pl.dead){
-      var toward = (pl.x+pl.w/2) - (o.x+o.w/2);
-      if(Math.abs(toward) > 2){
-        dx = (toward > 0 ? 1 : -1) * maxVX() * ZOMBIE_SPEED;
-        o._zface = toward > 0 ? 1 : -1;
+    // ---- куда идти и нужен ли прыжок (см. тот же приём в stepNetZombie) ----
+    var toward = 0;
+    if(!pl.dead) toward = (pl.x+pl.w/2) - (o.x+o.w/2);
+    if(grounded){
+      var footY = o.y+o.h, wantJump = false;
+      if(Math.abs(o.x - (o._stuckX===undefined ? o.x : o._stuckX)) > 15){ o._stuckX = o.x; o._stuckT = 0; }
+      else o._stuckT = (o._stuckT||0) + 1;
+      if(!pl.dead){
+        var targetAbove = (pl.y+pl.h) < (footY-40);
+        if(targetAbove) wantJump = true;
+        else if(Math.abs(toward) > 2){
+          var aheadX = o.x + (toward>0 ? o.w+10 : -10), holds = false;
+          for(i=0;i<blockers.length;i++){
+            var spF = spanY(polyOf(blockers[i]), aheadX-3, aheadX+3);
+            if(spF && spF[0] >= footY-4 && spF[0] <= footY+30){ holds = true; break; }
+          }
+          if(!holds) wantJump = true;
+        }
+        if(!wantJump && Math.abs(toward) > 30 && o._stuckT > 45){ wantJump = true; o._stuckT = 0; }
       }
+      if(wantJump) o._zvy = jumpV()*ZOMBIE_JUMP;
     }
-    if(dx !== 0 && grounded){
-      var aheadX = o.x + (dx>0 ? o.w+10 : -10), footY = o.y+o.h, holds = false;
-      for(i=0;i<blockers.length;i++){
-        var spF = spanY(polyOf(blockers[i]), aheadX-3, aheadX+3);
-        if(spF && spF[0] >= footY-4 && spF[0] <= footY+30){ holds = true; break; }
-      }
-      var targetAbove = !pl.dead && (pl.y+pl.h) < (footY-40);
-      if(!holds || targetAbove) o._zvy = jumpV()*ZOMBIE_JUMP;
+
+    var dx = 0;
+    if(!pl.dead && Math.abs(toward) > 2){
+      dx = (toward > 0 ? 1 : -1) * maxVX() * ZOMBIE_SPEED;
+      o._zface = toward > 0 ? 1 : -1;
     }
     if(dx !== 0){
       var xBefore = o.x, wall = false;
@@ -3885,7 +3910,7 @@ window.GAME = BRIDGE = {
       if(o.type === "seeker") o.type = "spawn";
       // размер игрока и зомби больше не настраивается — приводим старые объекты
       if(o.type === "spawn"){ o.w = SIZES.spawn[0]; o.h = SIZES.spawn[1]; }
-      if(o.type === "zombie"){ o.w = SIZES.zombie[0]; o.h = SIZES.zombie[1]; }
+      if(o.type === "zombie" || o.type === "teleport"){ o.w = SIZES[o.type][0]; o.h = SIZES[o.type][1]; }
       // Платформа, ротатор, батут, яд и шипы стали свойствами обычных
       // объектов — переносим их поведение, чтобы старые карты играли так же
       if(o.type === "platform"){ o.type = "rect"; o.moves = true;
