@@ -699,10 +699,13 @@ var PAINT = {
     /* Хитбокс портала теперь впритык под игрока (30x100 — см. SIZES) и
        поэтому не квадратный, но кольцо должно оставаться ровным кругом,
        а не вытягиваться в длинный овал вслед за хитбоксом: rx/ry берём
-       по МЕНЬШЕЙ стороне и центрируем в фактическом боксе — весь
+       по БОЛЬШЕЙ стороне (рост игрока, 100), а не по меньшей (его
+       ширина, 30) — иначе кольцо получается размером только с ширину
+       игрока и выглядит заметно мельче него самого, хотя хитбокс и
+       правда совпадает 1:1. Центрируем в фактическом боксе — весь
        остальной рисунок (языки, искры) ниже уже не трогает o.w/o.h
        напрямую, только эти rx/ry/rm. */
-    var cx = o.w/2, cy = o.h/2, rm = Math.min(o.w,o.h)/2, rx = rm, ry = rm;
+    var cx = o.w/2, cy = o.h/2, rm = Math.max(o.w,o.h)/2, rx = rm, ry = rm;
     var exit = !!o.teleExit;
     var cBright = exit ? "#bae6fd" : "#fed7aa";
     var cMid    = exit ? "#38bdf8" : "#fb923c";
@@ -800,6 +803,12 @@ var PAINT = {
     ctx.fillRect(w/2 - headD*0.27 - eyeS/2, eyeY, eyeS, eyeS);
     ctx.fillRect(w/2 + headD*0.27 - eyeS/2, eyeY, eyeS, eyeS);
   },
+  /* Место ожидания искателя (классика) — та же модель, тот же приём, что
+     у мертвеца выше, просто цвет искателя (COLOR_SEEKER), а не зелёный.
+     Только метка для автора карты: во время игры не рисуется вовсе (см.
+     "playing && ... seekerSpot" ниже) — на этом месте уже стоит настоящий
+     искатель, второй фигуры там быть не должно. */
+  seekerSpot: function(o){ figure(o.w, o.h, COLOR_SEEKER); },
   // приёмник — только ориентир для автора карты, в игровую логику не входит
   laserReceiver: function(o){
     ctx.fillStyle = C.stone3; rr(0,0,o.w,o.h,3); ctx.fill();
@@ -862,6 +871,12 @@ var TOOLS = [
      модификация не предлагается (см. #apoc ниже и TOOL_MODES.zombie в
      maps.js) */
   {t:"zombie",     n:"Зомби",       k:"toolZombie",     m:"hideAndSeek"},
+  /* Необязательная метка только для классики (см. toolOK ниже — зеркало
+     ограничения zombie, только наоборот): где искатель стоит и ждёт во
+     время лобби/пряток, прежде чем в начале раунда телепортироваться на
+     обычный спавн вместе со всеми (см. findSeekerSpot/applySeeker в
+     game.js). Без метки — прежнее поведение, искатель сразу на спавне. */
+  {t:"seekerSpot", n:"Место искателя", k:"toolSeekerSpot", m:"hideAndSeek"},
   /* Лазер (старая идея из обратной связи) — не отдельный инструмент, а
      галочка «Лазер» на обычном блоке/круге/треугольнике (см. Game
      Properties в inspect() и laserFeeds() в step()): включает связанные
@@ -895,6 +910,7 @@ var COLORS = {
   rect:INK, circle:INK, triangle:INK, text:INK,
   button:INK, lever:INK, laserFeed:INK, laserReceiver:INK,
   zombie:"",                       // мертвец всегда зелёный — красить его нечем и незачем
+  seekerSpot:"",                   // всегда синий, как и сам искатель — красить нечем
   checkpoint:"", finishline:"", spawn:INK, teleport:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
@@ -907,6 +923,7 @@ var SIZES = {
   rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24],
   button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
   zombie:[30,100],                 // впритык как у игрока — по прямой просьбе
+  seekerSpot:[30,100],              // тоже впритык как у игрока
   checkpoint:[40,104], finishline:[52,126], spawn:[30,100],
   teleport:[30,100]                 // тоже впритык как у игрока — по прямой просьбе
 };
@@ -1254,6 +1271,10 @@ function findSpawn(){ for(var i=0;i<objects.length;i++) if(objects[i].type === "
    стартует ИИ-охотник (см. apoc и заражение в сетевой части), а не
    самостоятельный объект со своей обычной физикой. */
 function findZombie(){ for(var i=0;i<objects.length;i++) if(objects[i].type === "zombie") return objects[i]; return null; }
+/* Необязательная метка только для классики — см. TOOLS/teleportToSeekerSpot
+   ниже. Та же логика "один на карту, как spawn/zombie", просто не
+   обязательна: без неё искатель просто сразу на обычном спавне. */
+function findSeekerSpot(){ for(var i=0;i<objects.length;i++) if(objects[i].type === "seekerSpot") return objects[i]; return null; }
 function play(){
   var sp = findSpawn();
   if(!sp){ dialog(TR("noSpawnTitle","Нет точки старта"), TR("noSpawnBody","Поставь инструмент «Точка старта», потом жми ▶."), null); return; }
@@ -1300,6 +1321,21 @@ function respawn(){
   pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
   pl.rideOn = null; pl.grab = null; grabCd = 0;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
+}
+/* Классика: игрок, которого рулетка только что назначила искателем, ждёт
+   раунд не на обычном спавне среди всех, а в отдельно отмеченном месте
+   (см. findSeekerSpot/TOOLS) — пока это лобби, его всё равно никто не
+   видит (см. hsHiding в game.js). В начале раунда респаун на обычный
+   спавн уже делает существующий teleportSeeker (см. hsPhase('round') в
+   game.js) — отдельно телепортировать обратно тут не нужно. Без метки на
+   карте — no-op, искатель остаётся там, где уже стоит. */
+function teleportToSeekerSpot(){
+  var sp = findSeekerSpot();
+  if(!sp) return false;
+  pl.x = sp.x; pl.y = sp.y; pl.vx = 0; pl.vy = 0;
+  pl.rideOn = null; pl.grab = null; grabCd = 0;
+  stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
+  return true;
 }
 function die(){
   // в прятках умереть нельзя вообще — единая точка входа для любой смерти
@@ -2334,7 +2370,7 @@ function paint(o, isSel){
      раз и есть полный прямоугольник w×h (даже если нарисованная иконка
      кажется круглой или узкой), так что рамка-прямоугольник для них
      честная, а не заглушка. */
-  if(isSel && o.type !== "spawn" && o.type !== "zombie"){
+  if(isSel && o.type !== "spawn" && o.type !== "zombie" && o.type !== "seekerSpot"){
     var k = 1/view.s;
     ctx.globalAlpha = 1;
     ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.6*k; ctx.setLineDash([5*k,4*k]);
@@ -2356,7 +2392,7 @@ function paint(o, isSel){
     ctx.setLineDash([]);
   }
   ctx.restore();
-  if(isSel && o.type !== "spawn" && o.type !== "zombie"){
+  if(isSel && o.type !== "spawn" && o.type !== "zombie" && o.type !== "seekerSpot"){
     var k2 = 1/view.s;
     ctx.save();
     ctx.fillStyle = "#fff"; ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.6*k2;
@@ -2403,6 +2439,9 @@ function paintFrame(){
     if(playing && ro.type === "spawn") continue;
     // классический вариант карты: мертвецов на ней нет (см. apoc)
     if(playing && !apoc && ro.type === "zombie") continue;
+    // то же самое для места ожидания искателя — там уже стоит настоящий
+    // искатель (см. teleportToSeekerSpot), вторую фигуру не рисуем
+    if(playing && ro.type === "seekerSpot") continue;
     paint(ro, !playing && ro === sel); drawn++;
   }
   /* Луч рисуется отдельным проходом, не в PAINT.laserFeed: его трасса (с
@@ -2616,6 +2655,17 @@ document.getElementById("apoc").addEventListener("click", function(e){
               TR("zombieDroppedBody","Зомби есть только при модификации «Zombie Apocalypse». Ctrl+Z вернёт их обратно."));
       setTimeout(hideMsg, 2600);
     }
+  } else {
+    // и наоборот: место искателя — только классика, в apoc его тоже убираем
+    var dropS = objects.filter(function(o){ return o.type === "seekerSpot"; });
+    if(dropS.length){
+      commit();
+      objects = objects.filter(function(o){ return o.type !== "seekerSpot"; });
+      sel = null; markDirty(); indexMovers();
+      showMsg(TR("droppedObjsTitle","Убрано объектов: {n}").replace("{n}", dropS.length),
+              TR("seekerSpotDroppedBody","Место искателя есть только в классике. Ctrl+Z вернёт его обратно."));
+      setTimeout(hideMsg, 2600);
+    }
   }
 });
 
@@ -2686,12 +2736,16 @@ function toolOK(t){
   var e = document.querySelector('.tool[data-tool="'+t+'"]');
   if(!e) return false;
   if(t === "zombie" && !apoc) return false;
+  // зеркально: место искателя — только классика, в apoc у искателя нет
+  // отдельной точки ожидания (заражённые и так выглядят зомби)
+  if(t === "seekerSpot" && apoc) return false;
   return e.dataset.modes.split(" ").indexOf(mode) !== -1;
 }
 function syncTools(){
   document.querySelectorAll(".tool").forEach(function(t){
     var ok = t.dataset.modes.split(" ").indexOf(mode) !== -1;
     if(t.dataset.tool === "zombie" && !apoc) ok = false;
+    if(t.dataset.tool === "seekerSpot" && apoc) ok = false;
     t.style.display = ok ? "flex" : "none";
   });
 }
@@ -2832,6 +2886,9 @@ function down(x,y,shift){
   }
   if(tool === "zombie"){
     var exz = findZombie(); if(exz) objects = objects.filter(function(o){ return o !== exz; });
+  }
+  if(tool === "seekerSpot"){
+    var exs = findSeekerSpot(); if(exs) objects = objects.filter(function(o){ return o !== exs; });
   }
   var d = SIZES[tool] || [50,50];
   var o = mk(tool, x, y, 1, 1);
@@ -3239,7 +3296,7 @@ function inspect(){
   num("X", sel.x, function(v){ sel.x = v; });
   num("Y", sel.y, function(v){ sel.y = v; });
   /* Размер игрока и зомби задан движком (см. SIZES) и не редактируется. */
-  if(sel.type !== "spawn" && sel.type !== "zombie"){
+  if(sel.type !== "spawn" && sel.type !== "zombie" && sel.type !== "seekerSpot"){
     num(TR("lblWidth","Ширина"), sel.w, function(v){ sel.w = Math.max(1,v); });
     num(TR("lblHeight","Высота"), sel.h, function(v){ sel.h = Math.max(1,v); });
     num(TR("lblRotation","Поворот"), sel.rot||0, function(v){ sel.rot = v; });
@@ -3265,7 +3322,7 @@ function inspect(){
   inspTarget = widgetsEl;
   widgetsEl.appendChild(titleEl());
 
-  if(sel.type !== "zombie"){          // мертвеца не красят — он рисуется собой
+  if(sel.type !== "zombie" && sel.type !== "seekerSpot"){   // их не красят — они рисуются собой
     grp(TR("grpAppearance","Внешний вид"));
     var r = pr();
     r.innerHTML = "<label>" + TR("lblColor","Цвет") + "</label>";
@@ -3310,7 +3367,7 @@ function inspect(){
   grp(TR("grpGameProps","Игровые свойства"));
   /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Яд»
      там бы включала свойство, которое физика всё равно игнорирует. */
-  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline","zombie","teleport"].indexOf(sel.type) === -1)
+  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline","zombie","teleport","seekerSpot"].indexOf(sel.type) === -1)
     chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
   if(SOLID.indexOf(sel.type) !== -1)
     chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; });
@@ -3381,6 +3438,8 @@ function inspect(){
   // мертвец — отдельный объект; из свойств ему нужна одна подсказка
   if(sel.type === "zombie")
     hint(TR("zombieHint","Обязательная метка для модификации Zombie Apocalypse — без неё её нельзя включить. Самого зомби тут не будет: им становится один из игроков, выбранный рулеткой в начале раунда."));
+  if(sel.type === "seekerSpot")
+    hint(TR("seekerSpotHint","Необязательная метка только для классики: здесь искатель ждёт во время пряток, пока не началась охота. С началом раунда он телепортируется на обычную точку старта, как и все."));
   /* Портал спаривается сам при постановке (см. pairTeleport()) — тут
      только показываем текущее состояние пары, выбирать цель вручную
      больше негде и незачем. */
@@ -3550,6 +3609,9 @@ window.GAME = BRIDGE = {
   figure: figure,
   mySkin: null,
   play: play, stop: stop, respawn: respawn,
+  // классика: искатель ждёт раунд в отмеченном месте, если оно есть на
+  // карте (см. teleportToSeekerSpot/applySeeker в game.js)
+  seekerWaitSpot: teleportToSeekerSpot,
   step: step,                     // один шаг физики — нужен автотестам
   stepAlways: stepAlways,         // тик вне забега — для автотестов
   zoomAt: zoomAt,                   // камера — тесты предела отдаления
@@ -3613,6 +3675,8 @@ window.GAME = BRIDGE = {
     // syncTools выше); в геймплее он и так уже неактивен при !apoc
     // (см. "playing && !apoc" в step()), просто убираем его из карты
     if(!apoc) objects = objects.filter(function(o){ return o.type !== "zombie"; });
+    // и наоборот — место искателя есть только в классике
+    if(apoc) objects = objects.filter(function(o){ return o.type !== "seekerSpot"; });
     /* Самодельные/очень старые карты не всегда проставляют id. nearby()
        различает объекты именно по id (see комментарий там про телепорт
        на статичной геометрии) — два объекта без id схлопывались в один
@@ -3642,7 +3706,7 @@ window.GAME = BRIDGE = {
       if(o.type === "seeker") o.type = "spawn";
       // размер игрока и зомби больше не настраивается — приводим старые объекты
       if(o.type === "spawn"){ o.w = SIZES.spawn[0]; o.h = SIZES.spawn[1]; }
-      if(o.type === "zombie" || o.type === "teleport"){ o.w = SIZES[o.type][0]; o.h = SIZES[o.type][1]; }
+      if(o.type === "zombie" || o.type === "teleport" || o.type === "seekerSpot"){ o.w = SIZES[o.type][0]; o.h = SIZES[o.type][1]; }
       // Платформа, ротатор, батут, яд и шипы стали свойствами обычных
       // объектов — переносим их поведение, чтобы старые карты играли так же
       if(o.type === "platform"){ o.type = "rect"; o.moves = true;
