@@ -30,8 +30,8 @@
   var LOBBY_MS  = 30000;    // ожидание в Hide and Seek — 30 секунд
 
   var COLOR_NORMAL = '#000000';
-  var COLOR_SEEKER = '#1e6fe0';   // синяя полоса под ником у искателя/зомби (не цвет модели)
-  var COLOR_CAUGHT = '#f97316';   // оранжевая полоса — пойман и вышел из игры в классике
+  var COLOR_SEEKER = '#1e6fe0';   // цвет модели искателя в классике (см. applyColor)
+  var COLOR_CAUGHT = '#f97316';   // цвет модели пойманного в классике (см. applyColor)
 
   var me = { name: '', role: 'hider', caught: false };
 
@@ -1094,13 +1094,12 @@
 
   // ---------- роли ----------
   /* Классика красит саму модель по роли — синий искатель, оранжевый
-     пойманный (те же COLOR_SEEKER/COLOR_CAUGHT, что уже красят полосу
-     под ником, см. drawTag) — по прямой просьбе: силуэт должен быть
-     виден издалека, а не только у ника вблизи. figure() уже умеет это
-     (см. drawSkinTinted в game.html — перекрашивает даже свой скин-фото),
-     тут только выбор цвета. В apoc цвет модели не играет роли вообще —
-     заражённые рисуются отдельной моделью зомби (см. meIsZombie/
-     figureZombie), поэтому там всегда обычный цвет. */
+     пойманный — силуэт должен быть виден издалека, а не только у ника
+     вблизи. figure() уже умеет это (см. drawSkinTinted в game.html —
+     перекрашивает даже свой скин-фото), тут только выбор цвета. В apoc
+     цвет модели не играет роли вообще — заражённые рисуются отдельной
+     моделью зомби (см. meIsZombie/figureZombie), поэтому там всегда
+     обычный цвет. */
   function applyColor() {
     if (MODE === 'hideAndSeek' && !hsApocRound) {
       if (me.role === 'seeker') { GAME.myColor = COLOR_SEEKER; return; }
@@ -2244,18 +2243,14 @@
       if (hsApocRound && hsSeekerIds[id] && window.GAME && GAME.figureZombie) GAME.figureZombie(w, h);
       else GAME.figure(w, h, o.color || COLOR_NORMAL, true, o.skin || null);
       ctx.restore();
-      // синяя полоса — охотится (искатель/зомби); оранжевая — пойман и
-      // вышел из игры в классике (см. applyOut); иначе без полосы вовсе
-      drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74),
-              hsSeekerIds[id] ? 'seeker' : (o.caught ? 'out' : ''));
+      drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74));
     });
     var p = GAME.pl;
     if (GAME.playing && me.name) {
       // свой ник в укрытии показываем бледным — напоминание, что тебя не видно
       ctx.save();
       if (GAME.hidden) ctx.globalAlpha = 0.35;
-      drawTag(ctx, me.name, typing, p.x + p.w / 2, p.y, p.h,
-              MODE === 'hideAndSeek' && me.role === 'seeker' ? 'seeker' : (MODE === 'hideAndSeek' && me.caught ? 'out' : ''));
+      drawTag(ctx, me.name, typing, p.x + p.w / 2, p.y, p.h);
       ctx.restore();
     }
 
@@ -2325,7 +2320,13 @@
     ctx.fillText(t, x, y);
   }
 
-  function drawTag(ctx, name, say, cx, topY, h, marker) {
+  /* Роль раньше показывала короткая полоса прямо под ником (синяя —
+     искатель/зомби, оранжевая — пойман и вышел из игры в классике) —
+     убрана по прямой просьбе: саму роль теперь и так видно по модели
+     целиком (цвет фигуры в классике, см. applyColor; модель зомби в
+     apoc, см. figureZombie/meIsZombie) — полоса стала лишним дублем,
+     вдобавок бессмысленно синей поверх уже зелёной модели зомби. */
+  function drawTag(ctx, name, say, cx, topY, h) {
     ctx.save();
     ctx.textAlign = 'center';
     ctx.lineJoin = 'round';
@@ -2341,17 +2342,6 @@
     ctx.strokeText(name, cx, topY + h + 17 * tk);
     ctx.fillStyle = '#ffffff';
     ctx.fillText(name, cx, topY + h + 17 * tk);
-
-    /* Роль искателя/зомби — не цвет модели, а короткая полоса прямо под
-       ником (см. applyColor/applySeeker/applyInfected): синяя — охотится,
-       оранжевая — пойман и вышел из игры в классике (см. applyOut). У
-       обычных игроков полосы нет вовсе. */
-    if (marker) {
-      var barW = Math.max(24, ctx.measureText(name).width) * tk;
-      var barY = topY + h + 21 * tk;
-      ctx.fillStyle = marker === 'out' ? COLOR_CAUGHT : COLOR_SEEKER;
-      ctx.fillRect(cx - barW / 2, barY, barW, 3 * tk);
-    }
 
     // отправленная реплика плавно уплывает вверх и тает —
     // и не пропадает от того, что игрок уже набирает следующую
