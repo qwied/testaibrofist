@@ -447,7 +447,7 @@
     lbPeriodWeek: "This Week",
     lbPeriodAll: "All Time",
     lbCoinsUnit: "coins",
-    lbScoreUnit: "points",
+    lbScoreUnit: "scores",
     lbPrev: "Previous page",
     lbNext: "Next page",
 

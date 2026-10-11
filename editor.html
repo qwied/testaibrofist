@@ -3572,9 +3572,15 @@ function inspect(){
 
   grp(TR("grpGameProps","Игровые свойства"));
   /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Яд»
-     там бы включала свойство, которое физика всё равно игнорирует. */
-  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline","zombie","teleport","seekerSpot"].indexOf(sel.type) === -1)
-    chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
+     там бы включала свойство, которое физика всё равно игнорирует. Вместо
+     того чтобы просто молчать (галочка была здесь секунду назад на Race —
+     выглядит как «пропала»), объясняем, куда она делась. */
+  if(["spawn","checkpoint","finishline","zombie","teleport","seekerSpot"].indexOf(sel.type) === -1){
+    if(mode !== "hideAndSeek")
+      chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
+    else
+      hint(TR("deadlyHsHint","В режиме Hide and Seek умереть нельзя, поэтому «Яд» здесь не показывается — он ни на что не повлияет. Переключись на Race (кнопка над инструментами), чтобы объект убивал."));
+  }
   if(SOLID.indexOf(sel.type) !== -1)
     chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; });
   /* Прятки: за таким объектом игрок исчезает для искателя вместе с ником.

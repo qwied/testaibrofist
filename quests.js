@@ -122,7 +122,10 @@ function register(app, acc) {
   accRef = acc;
   const { currentUser, save } = acc;
 
-  app.get('/quests', (req, res) => {
+  // путь не '/quests' — тот уже занят маршрутом, отдающим страницу
+  // quests.html (см. PAGE_FILES в server.js); с тем же путём для API
+  // express всегда отдавал бы HTML вместо JSON, и фронт падал в catch
+  app.get('/quests/status', (req, res) => {
     const u = currentUser(req);
     if (!u) return res.json({ guest: true, quests: [], bonus: null, msLeft: 0 });
     const v = view(u);

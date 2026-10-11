@@ -19,7 +19,11 @@
   .avRow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .avRow input[type=color]{width:44px;height:38px;padding:2px;border:1px solid var(--line);
     border-radius:8px;cursor:pointer;background:var(--panel)}
-  .avPrice{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-size:13px}
+  /* Внутри синей кнопки var(--muted) (серый) почти не виден — здесь не
+     карточка на фоне страницы, а бейдж на синей кнопке, поэтому свой
+     контраст: белый текст на лёгкой белой подложке, а не общий muted. */
+  .avPrice{display:inline-flex;align-items:center;gap:5px;color:#fff;font-size:13px;
+    background:rgba(255,255,255,.22);padding:2px 9px;border-radius:20px}
   .avErr{font-size:13px;margin-top:8px;min-height:16px}
   .avErr.bad{color:var(--red)}
   .avErr.good{color:var(--green)}
