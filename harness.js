@@ -48,6 +48,7 @@ __export({ objects: function(){return objects;}, setObjects: function(a){objects
   indexMovers: function(){return indexMovers();}, jumpV: function(){return jumpV();},
   G: function(){return G();}, gravityScale: function(){return gravityScale;},
   playing: function(){return playing;}, setPlaying: function(v){playing=v;},
+  mode: function(){return mode;}, setMode: function(v){mode=v;},
   done: function(){return done;}, pushFromMovers: function(){return typeof pushFromMovers==='function';},
   JUMP_H: function(){return JUMP_H;}, coy: function(){return coy;}, buf: function(){return buf;},
   startRun: function(){
