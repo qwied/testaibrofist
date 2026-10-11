@@ -116,7 +116,7 @@
   }
 
   function load() {
-    fetch('/quests', { credentials: 'same-origin' })
+    fetch('/quests/status', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (d.guest) {

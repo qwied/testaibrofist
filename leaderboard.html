@@ -142,7 +142,11 @@
         function amountHtml(n) {
                 if (state.metric === 'coins')
                         return '<div class="lbCoins">' + n + ' ' + (window.BFCoin ? BFCoin.svg(15) : '') + '</div>';
-                var badge = state.metric === 'hs' ? T('hideAndSeek', 'Hide and Seek') : T('race', 'Race');
+                // раньше тут были «Race»/«Hide and Seek» — лишнее: режим и так
+                // видно по выбранной вкладке выше, а на каждой строке это
+                // просто дублировалось; тот же ярлык, что и на профиле (см.
+                // raceScoresTitle), чтобы термин совпадал по всему сайту
+                var badge = T('raceScoresTitle', 'Scores');
                 return '<div class="lbCoins score"><span class="lbScoreBadge">' + esc(badge) + '</span>' + n + '</div>';
         }
         // ранг приходит вместе со страницей, только для режимных таблиц
