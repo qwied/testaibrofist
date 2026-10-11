@@ -188,7 +188,9 @@
       <option value="dislikes" data-i18n="sortDislikes">Sort by dislikes</option>
       <option value="oldest" data-i18n="sortOldest">Sort by oldest</option>
     </select>
-    <label class="mbFavOnly"><input type="checkbox" id="mbFavOnly"> <span data-i18n="favOnly">★ Только избранные</span></label>
+    <label class="mbFavOnly"><input type="checkbox" id="mbFavOnly">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/></svg>
+      <span data-i18n="favOnly">Только избранные</span></label>
     <button class="bfBtn go" id="mbGo" data-i18n="refresh">Обновить</button>
   </div>
 
@@ -251,6 +253,11 @@
       return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c];
     });
   }
+  var STAR_ON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">'
+    + '<path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/></svg>';
+  var STAR_OFF = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" '
+    + 'stroke-linecap="round" stroke-linejoin="round">'
+    + '<path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/></svg>';
   function msg(t, ok) {
     var m = $('mbMsg');
     m.textContent = t; m.style.color = ok ? 'var(--green)' : 'var(--red)';
@@ -308,7 +315,7 @@
       + '<div class="mbRowMain">'
       + '<div class="mbName" title="' + esc(m.mapName) + '">'
       +   '<button class="mbFav' + (m.myFavorite ? ' on' : '') + '" data-fav="1" title="'
-      +     T('favToggle', 'В избранное') + '">' + (m.myFavorite ? '★' : '☆') + '</button>'
+      +     T('favToggle', 'В избранное') + '">' + (m.myFavorite ? STAR_ON : STAR_OFF) + '</button>'
       +   '<span>' + esc(m.mapName) + '</span></div>'
       + '<div class="mbRate ' + rc + '">' + m.rating + '</div>'
       + '<div class="mbAuthor"><a href="users?name=' + encodeURIComponent(m.author) + '">'
@@ -405,7 +412,7 @@
         .then(function (x) {
           if (x.status !== 'success') { msg(x.message || T('errorTxt', 'Ошибка')); return; }
           f.classList.toggle('on', x.myFavorite);
-          f.textContent = x.myFavorite ? '★' : '☆';
+          f.innerHTML = x.myFavorite ? STAR_ON : STAR_OFF;
           if ($('mbFavOnly').checked && !x.myFavorite) load();
         }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
       return;

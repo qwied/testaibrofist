@@ -43,7 +43,10 @@
   box.id = 'genBox';
   box.className = 'panel';
   box.innerHTML =
-      '<div id="genHead">Помощник<div class="x" id="genClose">✕</div></div>'
+      '<div id="genHead">Помощник<div class="x" id="genClose">'
+    + '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" '
+    + 'stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>'
+    + '</div></div>'
     + '<div id="genBody"></div>';
   document.body.appendChild(box);
 

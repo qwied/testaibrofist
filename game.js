@@ -2413,11 +2413,11 @@
       var name = mm[2].trim();
       if (mm[1].toLowerCase() === 'mute') {
         speak(me.name, muteName(name)
-          ? TR('chatMutedYou', '🔇 Заглушил {n}').replace('{n}', name)
+          ? TR('chatMutedYou', 'Заглушил {n}').replace('{n}', name)
           : TR('chatAlreadyMuted', '{n} уже заглушён у тебя').replace('{n}', name));
       } else {
         speak(me.name, unmuteName(name)
-          ? TR('chatUnmutedYou', '🔊 Снял заглушение с {n}').replace('{n}', name)
+          ? TR('chatUnmutedYou', 'Снял заглушение с {n}').replace('{n}', name)
           : TR('chatNotMuted', '{n} и не был заглушён').replace('{n}', name));
       }
       return true;

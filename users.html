@@ -229,7 +229,9 @@
       { k: 'hs', title: T('hideAndSeek', 'Hide and Seek'), v: rk.hs }
     ].map(function (p) {
       var r = p.v ? p.v.rank : '';
-      var txt = r ? esc(r) + (p.v.manual ? ' ★' : '') : T('rankNone', 'нет ранга');
+      var manualMark = ' <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" style="vertical-align:1px">'
+        + '<path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/></svg>';
+      var txt = r ? esc(r) + (p.v.manual ? manualMark : '') : T('rankNone', 'нет ранга');
       return '<span class="upRank' + (r ? '' : ' none') + '" data-r="' + esc(r) + '">'
         + '<span class="upRankMode">' + esc(p.title) + '</span> ' + txt + '</span>';
     }).join('');
