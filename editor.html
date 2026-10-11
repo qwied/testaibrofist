@@ -2276,7 +2276,14 @@ function teleportTarget(src){
 }
 /* Лазер — тот же принцип, что и кнопка (см. drive() выше): «нажат», пока
    игрок перекрывает луч, отпущен, как только сошёл. Трасса луча (с учётом
-   отражений от стен с «Рикошетом») считается в computeLaserPath(). */
+   отражений от стен с «Рикошетом») считается в computeLaserPath().
+
+   «Яд» на излучателе делает опасным сам луч, а не только блок-излучатель:
+   без этого галочка «Яд (убивает)» на лазере ловила бы игрока только
+   впритык к самому блоку — отдельная протяжённая трасса луча никак не
+   проверялась на столкновение. hit уже значит «луч сейчас упирается
+   именно в игрока» (см. tPlayer в computeLaserPath), поэтому просто
+   убиваем тем же hit, которым лазер обычно включает цели. */
 function laserFeeds(){
   for(var i=0;i<objects.length;i++){
     var o = objects[i];
@@ -2284,6 +2291,7 @@ function laserFeeds(){
     var path = computeLaserPath(o);
     o._beamPts = path.pts;
     var hit = path.hit;
+    if(hit && o.deadly) die();
     if(hit && !o._act){ o._act = true; drive(o); if(window.BFSound) BFSound.toggle(); }
     else if(!hit && o._act){ o._act = false; drive(o); }
   }
@@ -3651,6 +3659,8 @@ function inspect(){
       if(v && !sel.range) sel.range = 500;
       inspect();
     });
+    if(sel.laser)
+      hint(TR("laserDeadlyHint","Включи ещё и «Яд (убивает)» выше — тогда опасен весь луч, а не только сам блок-излучатель: смерть в любой точке трассы, пока она не перекрыта стеной."));
   }
   // мертвец — отдельный объект; из свойств ему нужна одна подсказка
   if(sel.type === "zombie")

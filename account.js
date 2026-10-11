@@ -13,35 +13,39 @@
        кликабельны и видны поверх затемнения. */
     + '.bf-ov{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;'
     + 'background:rgba(0,0,0,.5);z-index:9998;display:none}'
+    /* max-height уже стоял, но без overflow содержимое, которое не влезло
+       (например, развёрнутая карточка «Темы закрыты» — она заметно выше
+       уже купленных тем), просто вылезало за рамку окна вместо прокрутки:
+       нижние кнопки обрезало краем экрана, до них было не достать. */
     + '.bf-box{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;margin:auto;width:320px;height:max-content;max-height:90vh;background:var(--panel);'
-    + 'border:3px solid var(--line);border-radius:8px;padding:26px 30px 22px;color:var(--ink);z-index:9999;display:none;'
-    + 'font-family:sans-serif;box-sizing:border-box}'
+    + 'border:3px solid var(--line);border-radius:8px;padding:18px 26px 16px;color:var(--ink);z-index:9999;display:none;'
+    + 'font-family:sans-serif;box-sizing:border-box;overflow-y:auto;overflow-x:hidden}'
     + '.bf-x{position:absolute;right:5px;top:4px;border:1px solid;border-radius:31px;font-size:14px;'
     + 'padding:4px 8px;color:red;background:var(--panel);cursor:pointer;line-height:1}'
-    + '.bf-t{text-align:center;font-size:16px;color:var(--muted);margin-bottom:6px}'
-    + '.bf-b{border:1px solid #2196F3;border-radius:3px;text-align:center;font-size:17px;padding:11px 0;'
-    + 'margin:11px 0;box-shadow:0 6px 1px -5px rgba(15,23,42,.18);display:block;color:var(--ink);background:var(--panel);cursor:pointer}'
+    + '.bf-t{text-align:center;font-size:16px;color:var(--muted);margin-bottom:4px}'
+    + '.bf-b{border:1px solid #2196F3;border-radius:3px;text-align:center;font-size:17px;padding:9px 0;'
+    + 'margin:7px 0;box-shadow:0 6px 1px -5px rgba(15,23,42,.18);display:block;color:var(--ink);background:var(--panel);cursor:pointer}'
     + '.bf-b:hover{background:#2196F3;color:#fff}'
-    + '.bf-i{border:1px solid var(--line);border-radius:3px;text-align:center;font-size:17px;padding:11px 0;'
-    + 'margin:10px 0;display:block;color:var(--ink);background:var(--panel);width:100%;box-sizing:border-box}'
+    + '.bf-i{border:1px solid var(--line);border-radius:3px;text-align:center;font-size:17px;padding:9px 0;'
+    + 'margin:7px 0;display:block;color:var(--ink);background:var(--panel);width:100%;box-sizing:border-box}'
     + '.bf-e{text-align:center;font-size:12px;color:red;min-height:15px;margin-bottom:4px}'
-    + '.bf-h{text-align:center;font-size:11px;color:var(--muted);margin-top:-4px}'
+    + '.bf-h{text-align:center;font-size:11px;color:var(--muted);line-height:1.35;margin-top:-2px}'
     + '.bf-back{position:absolute;left:5px;top:4px;border:1px solid;border-radius:28px;font-size:14px;'
     + 'padding:4px 9px;color:var(--ink);background:var(--panel);cursor:pointer;line-height:1}'
     /* Тема и язык переехали сюда со страницы Themes: две настройки вида
        в одном окне, а не в отдельных пунктах бокового меню. */
     + '.bf-sec{font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);'
-    + 'margin:16px 0 7px;padding-top:13px;border-top:1px solid var(--line)}'
+    + 'margin:11px 0 5px;padding-top:9px;border-top:1px solid var(--line)}'
     + '.bf-row{display:flex;gap:8px}'
     + '.bf-opt{flex:1;border:1px solid var(--line);border-radius:6px;text-align:center;font-size:14px;'
-    + 'padding:9px 0;color:var(--ink);background:var(--panel);cursor:pointer;box-sizing:border-box}'
+    + 'padding:7px 0;color:var(--ink);background:var(--panel);cursor:pointer;box-sizing:border-box}'
     + '.bf-opt:hover{border-color:#2196F3}'
     + '.bf-opt.on{border-color:#2196F3;background:#2196F3;color:#fff;font-weight:700}'
     + '.bf-opt[disabled]{opacity:.5;cursor:default}'
-    + '.bf-lock{border:1px dashed var(--line);border-radius:6px;padding:10px 12px;text-align:center;'
-    + 'font-size:12px;color:var(--muted);line-height:1.45}'
-    + '.bf-lock b{display:block;color:var(--ink);font-size:13px;margin-bottom:3px}'
-    + '.bf-lock .bf-b{margin:9px 0 0;font-size:14px;padding:8px 0}';
+    + '.bf-lock{border:1px dashed var(--line);border-radius:6px;padding:8px 10px;text-align:center;'
+    + 'font-size:12px;color:var(--muted);line-height:1.35}'
+    + '.bf-lock b{display:block;color:var(--ink);font-size:13px;margin-bottom:2px}'
+    + '.bf-lock .bf-b{margin:7px 0 0;font-size:14px;padding:7px 0}';
 
   var s = document.createElement('style');
   s.textContent = css;
