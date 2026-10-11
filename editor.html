@@ -1742,6 +1742,22 @@ function stepZombies(){
         o._zface = toward > 0 ? 1 : -1;
       }
     }
+    /* Умнее слепого «упёрся — прыгнул»: пока ещё стоим на земле, смотрим,
+       устоим ли мы там, куда сейчас шагнём (край платформы/разрыв пола —
+       см. holds ниже), и отдельно — не засел ли сам зомби ниже игрока
+       (та же проверка высоты, что игрок делает сам, завидев уступ над
+       собой). Прыгаем ДО шага, а не после столкновения — так зомби
+       перепрыгивает разрыв, а не падает в него, и карабкается к игроку,
+       а не стоит под ним. */
+    if(dx !== 0 && grounded){
+      var aheadX = o.x + (dx>0 ? o.w+10 : -10), footY = o.y+o.h, holds = false;
+      for(i=0;i<blockers.length;i++){
+        var spF = spanY(polyOf(blockers[i]), aheadX-3, aheadX+3);
+        if(spF && spF[0] >= footY-4 && spF[0] <= footY+30){ holds = true; break; }
+      }
+      var targetAbove = !pl.dead && (pl.y+pl.h) < (footY-40);
+      if(!holds || targetAbove) o._zvy = jumpV()*ZOMBIE_JUMP;
+    }
     if(dx !== 0){
       var xBefore = o.x, wall = false;
       o.x += dx;
@@ -1757,6 +1773,24 @@ function stepZombies(){
       dx = o.x - xBefore;
     }
     o._dx = dx;
+
+    /* Портал переносит зомби точно так же, как игрока (см. teleportTarget()
+       в step()) — иначе от погони хватало забежать в портал: зомби, в
+       отличие от игрока, через него не проходил и просто терял цель. */
+    if(timeMs >= (o.teleCooldown||0)){
+      for(i=0;i<near.length;i++){
+        var tp = near[i];
+        if(tp.type !== "teleport" || !overlaps(tp, o.x, o.y, o.w, o.h)) continue;
+        var teleDst = teleportTarget(tp);
+        if(teleDst){
+          o.x = teleDst.x + teleDst.w/2 - o.w/2; o.y = teleDst.y + teleDst.h - o.h;
+          o._zvy = 0;
+          o.teleCooldown = timeMs + TELEPORT_COOLDOWN_MS;
+          burst(teleDst.x+teleDst.w/2, teleDst.y+teleDst.h/2, 16, C.tele1, 3, 32);
+        }
+        break;
+      }
+    }
 
     if(!pl.dead && overlaps(o, pl.x, pl.y, pl.w, pl.h)) zombieCatch();
   }

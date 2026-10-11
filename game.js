@@ -1061,6 +1061,13 @@
       GAME.godMode = GOD;
       GAME.flying = FLY;
       GAME.startPlay();
+      /* Просмотр/практика из Maps Browser не заходит в настоящую комнату
+         (см. VIEW в boot() выше) — сервер никогда не пришлёт
+         zombieDriverAssign, и без этого зомби apoc-карты просто стоял бы
+         на месте: сетевая физика (stepNetZombie в game.html) включается
+         только сервером. soloZombie гоняет его локально прямо за
+         тестирующим, тем же алгоритмом, что был у objects-зомби раньше. */
+      if (VIEW && window.GAME) GAME.soloZombie = true;
       finSent = false;
       applyColor();
       /* Сервер должен знать, что забег начался, ДО того как придёт
@@ -2153,9 +2160,21 @@
        просто транслирую результат остальным через zombiePos/zombieCatch.
        Цели — те же хайдеры, что и у человека-искателя выше: не заражённые
        и не уже пойманные. Кого поймал — решает движок сам (см.
-       GAME.zombiePull), я только отправляю то, что он вернул. */
+       GAME.zombiePull), я только отправляю то, что он вернул.
+
+       Я сам (ведущий зомби) тоже хайдер и тоже должен быть целью — иначе
+       зомби вообще не двигался, если в комнате рядом никого, кроме меня,
+       нет (обычная ситуация при тестировании со второго аккаунта): others
+       — это ТОЛЬКО остальные игроки, свою же позицию сюда раньше не
+       добавляли вовсе. hsDoInfect в server.js уже умеет переназначать
+       ведущего, если поймали именно его (см. hsZombieReassignDriver) —
+       этот путь просто был недостижим без себя же в списке целей. */
     if (MODE === 'hideAndSeek' && zombieDriving && phase === 'round' && window.GAME && GAME.zombieSetTargets) {
       var zTargets = [];
+      if (!hsSeekerIds[socket.id] && GAME.pl) {
+        var mp = GAME.pl;
+        zTargets.push({ id: socket.id, x: mp.x, y: mp.y, w: mp.w || 30, h: mp.h || 100 });
+      }
       Object.keys(others).forEach(function (id) {
         var o = others[id];
         if (o.caught || hsSeekerIds[id]) return;
