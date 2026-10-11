@@ -99,20 +99,52 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 /* inspector */
 #insp{position:fixed;right:14px;top:50%;transform:translateY(-50%);width:248px;z-index:10;display:none;
   max-height:78vh;overflow:hidden;display:none;flex-direction:column}
-#inspHead{display:flex;padding:4px;gap:2px;border-bottom:1px solid var(--line)}
-.tab{flex:1;text-align:center;padding:7px 0;border-radius:8px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
-.tab.on{background:#eef2f8;color:var(--ink)}
-#props,#widgets{padding:10px 12px;overflow-y:auto;font-size:12.5px}
+#inspHead{display:flex;align-items:center;padding:4px;gap:2px;border-bottom:1px solid var(--line)}
+.tab{flex:1;text-align:center;padding:7px 0;border-radius:8px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer}
+/* активная вкладка — чёрная, не синяя: сам редактор держит отдельную,
+   монохромную палитру (белый холст, чёрные акценты), отличную от
+   голубых акцентов остального сайта — так его и присылали в макете. */
+.tab.on{background:#111827;color:#fff}
+/* flex-child, не absolute: при 4 вкладках (вместо прежних 2) абсолютный
+   крестик наезжал на текст последней вкладки — flex сам резервирует
+   под него место вместо того, чтобы вкладки занимали всю строку. */
+#inspClose{flex:none;width:22px;height:22px;display:flex;align-items:center;
+  justify-content:center;border-radius:50%;color:var(--muted);cursor:pointer}
+#inspClose:hover{background:#fee2e2;color:#dc2626}
+#inspClose svg{width:12px;height:12px}
+/* Копия/Удалить — не в полях самого объекта, а над вкладками: это
+   действия НАД объектом целиком, а не одно из его свойств. duplicate()/
+   removeSel() уже существовали (горячие клавиши) — тут их впервые видно. */
+#inspActs{display:flex;gap:6px;padding:9px 12px 0}
+#inspActs div{flex:1;text-align:center;padding:7px 0;border-radius:8px;font-size:11.5px;font-weight:600;
+  cursor:pointer;border:1px solid var(--line);color:var(--ink);display:flex;align-items:center;
+  justify-content:center;gap:5px}
+#inspActs div svg{width:12px;height:12px;flex:none}
+#inspActs #inspDup:hover{background:#f4f6fa}
+#inspActs #inspDel{color:#dc2626;border-color:#fecaca}
+#inspActs #inspDel:hover{background:#fef2f2}
+#visuals,#passive,#active,#automatic{padding:10px 12px;overflow-y:auto;font-size:12.5px}
 #objTitle{display:flex;align-items:center;gap:8px;font-weight:700;font-size:12px;letter-spacing:.4px;
   text-transform:uppercase;color:var(--accent);margin-bottom:9px}
 #objTitle span{margin-left:auto;color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0}
 .pRow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0}
 .pRow label{color:#5b6472;font-size:12px}
+.chkLabel{display:flex;flex-direction:column;gap:2px;min-width:0}
+.chkDesc{font-size:10.5px;color:var(--muted);line-height:1.35}
 .pRow input[type=number],.pRow input[type=text],.pRow select{width:94px;padding:5px 8px;border:1px solid var(--line);
   border-radius:7px;font-size:12px;font-family:inherit;color:var(--ink);background:#fafbfd;outline:none}
 .pRow input:focus,.pRow select:focus{border-color:var(--accent);background:#fff}
 .pRow input[type=color]{width:44px;height:26px;padding:1px;border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer}
-.pRow input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
+/* Переключатель-пилюля вместо обычного чекбокса — тот же квадратный
+   инпут, просто перерисован через appearance:none, чтобы не тащить для
+   этого JS-виджет: разметка (chk() в скрипте ниже) не меняется. */
+.pRow input[type=checkbox]{appearance:none;-webkit-appearance:none;width:34px;height:20px;border-radius:20px;
+  background:#e5e7eb;border:1px solid var(--line);position:relative;cursor:pointer;flex:none;
+  transition:background .15s}
+.pRow input[type=checkbox]::before{content:"";position:absolute;top:1px;left:1px;width:16px;height:16px;
+  border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+.pRow input[type=checkbox]:checked{background:#111827;border-color:#111827}
+.pRow input[type=checkbox]:checked::before{transform:translateX(14px)}
 .pRow input[type=range]{width:100px;accent-color:var(--accent)}
 /* объяснение связей механизмов — свёрнуто, разворачивается по клику */
 .pHelp{margin:6px 0 2px}
@@ -245,9 +277,7 @@ body.mob .tool{width:42px;height:42px}
 body.mob .tool canvas{width:26px;height:26px}
 body.mob .tool[data-tip]:hover::after{display:none}
 body.mob #insp{left:8px;right:8px;width:auto;top:auto;bottom:64px;transform:none;max-height:34vh}
-body.mob #props,body.mob #widgets{max-height:26vh}
-#inspClose{flex:0 0 34px;color:#dc2626;font-size:14px}
-#inspClose:hover{background:#fee2e2}
+body.mob #visuals,body.mob #passive,body.mob #active,body.mob #automatic{max-height:26vh}
 body.mob #hint{display:none}
 body.mob #zoomBox{bottom:68px;right:8px}
 body.mob #msg h1{font-size:38px}
@@ -290,12 +320,28 @@ body.mob #msg h1{font-size:38px}
 
 <div id="insp" class="panel">
   <div id="inspHead">
-    <div class="tab on" data-tab="props" data-i18n="edProps">Свойства</div>
-    <div class="tab" data-tab="widgets" data-i18n="edWidgets">Функции</div>
-    <div class="tab" id="inspClose" data-i18n="close" data-i18n-title="close" title="Закрыть">Закрыть</div>
+    <div class="tab on" data-tab="visuals" data-i18n="edVisuals">Visuals</div>
+    <div class="tab" data-tab="passive" data-i18n="edPassive">Passive</div>
+    <div class="tab" data-tab="active" data-i18n="edActive">Active</div>
+    <div class="tab" data-tab="automatic" data-i18n="edAutomatic">Automatic</div>
+    <div id="inspClose" data-i18n-title="close" title="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </div>
   </div>
-  <div id="props"></div>
-  <div id="widgets" style="display:none"></div>
+  <div id="inspActs">
+    <div id="inspDup" data-i18n-title="edCopy" title="Copy">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>
+      <span data-i18n="edCopy">Copy</span>
+    </div>
+    <div id="inspDel" data-i18n-title="edDelete" title="Delete">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+      <span data-i18n="edDelete">Delete</span>
+    </div>
+  </div>
+  <div id="visuals"></div>
+  <div id="passive" style="display:none"></div>
+  <div id="active" style="display:none"></div>
+  <div id="automatic" style="display:none"></div>
 </div>
 
 <div id="zoomBox" class="panel">
@@ -3287,8 +3333,10 @@ function removeSel(){
 /* ══════════════════════════════════════════════════
    INSPECTOR
    ══════════════════════════════════════════════════ */
-var props = document.getElementById("props");
-var widgetsEl = document.getElementById("widgets");
+var visualsEl = document.getElementById("visuals");
+var passiveEl = document.getElementById("passive");
+var activeEl = document.getElementById("active");
+var automaticEl = document.getElementById("automatic");
 /* Две вкладки инспектора: "Свойства" — положение, размер и порядок
    (куда объект поставлен), "Функции" — всё остальное, что он УМЕЕТ
    (цвет, игровые свойства, движение и эффекты, связи). Переключение
@@ -3296,16 +3344,22 @@ var widgetsEl = document.getElementById("widgets");
    каждый раз заново наполняет ОБЕ, какая бы ни была открыта, поэтому
    смена вкладки не теряет выбор и не дёргает его обратно на "Свойства"
    при каждой правке поля. */
+var INSP_TABS = ["visuals","passive","active","automatic"];
 document.getElementById("inspHead").addEventListener("click", function(e){
-  if(e.target.id === "inspClose"){ sel = null; inspect(); return; }
+  if(e.target.closest("#inspClose")){ sel = null; inspect(); return; }
   var t = e.target.closest(".tab"); if(!t || !t.dataset.tab) return;
   document.querySelectorAll(".tab").forEach(function(x){ x.classList.toggle("on", x === t); });
-  props.style.display = t.dataset.tab === "props" ? "block" : "none";
-  widgetsEl.style.display = t.dataset.tab === "widgets" ? "block" : "none";
+  INSP_TABS.forEach(function(name){
+    document.getElementById(name).style.display = t.dataset.tab === name ? "block" : "none";
+  });
+});
+document.getElementById("inspActs").addEventListener("click", function(e){
+  if(e.target.closest("#inspDup")) duplicate();
+  else if(e.target.closest("#inspDel")) removeSel();
 });
 // pr()/grp()/hint() пишут в ту вкладку, которую сейчас наполняет inspect() —
 // см. inspTarget ниже
-var inspTarget = props;
+var inspTarget = visualsEl;
 function pr(){ var d = document.createElement("div"); d.className = "pRow"; inspTarget.appendChild(d); return d; }
 function num(l,v,fn){
   var r = pr(), a = document.createElement("label"); a.textContent = l;
@@ -3410,11 +3464,16 @@ function txtClear(l,v,fn){
   wrap.appendChild(i); wrap.appendChild(clr);
   r.appendChild(a); r.appendChild(wrap);
 }
-function chk(l,v,fn){
-  var r = pr(), a = document.createElement("label"); a.textContent = l;
+// desc — необязательная серая строка-пояснение под названием (как в
+// макете: "Bouncing / Reflects off the touched face"); без неё — как раньше
+function chk(l,v,fn,desc){
+  var r = pr();
+  var lwrap = document.createElement("div"); lwrap.className = "chkLabel";
+  var a = document.createElement("label"); a.textContent = l; lwrap.appendChild(a);
+  if(desc){ var dd = document.createElement("div"); dd.className = "chkDesc"; dd.textContent = desc; lwrap.appendChild(dd); }
   var i = document.createElement("input"); i.type = "checkbox"; i.checked = !!v;
   i.addEventListener("change", function(){ commit(); fn(i.checked); });
-  r.appendChild(a); r.appendChild(i);
+  r.appendChild(lwrap); r.appendChild(i);
 }
 function grp(t){ var d = document.createElement("div"); d.className = "grp"; d.textContent = t; inspTarget.appendChild(d); }
 // короткая пояснительная строка под галочкой — там, где само название свойства не всё объясняет
@@ -3479,10 +3538,9 @@ function inspect(){
   if(linkPick && linkPick.from !== sel) linkPick = null;
   if(!sel || playing){ box.style.display = "none"; return; }
   box.style.display = "flex";
-  // наполняем ОБЕ вкладки разом — какая сейчас видна, решает только CSS/
-  // класс .tab.on (см. обработчик клика у #inspHead), inspect() его не трогает
-  props.innerHTML = "";
-  widgetsEl.innerHTML = "";
+  // наполняем ВСЕ ЧЕТЫРЕ вкладки разом — какая сейчас видна, решает только
+  // CSS/класс .tab.on (см. обработчик клика у #inspHead), inspect() его не трогает
+  visualsEl.innerHTML = ""; passiveEl.innerHTML = ""; activeEl.innerHTML = ""; automaticEl.innerHTML = "";
   var T = TOOLS.filter(function(x){ return x.t === sel.type; })[0];
   var objTitleHTML = (T ? TR(T.k, T.n) : sel.type) + "<span>#" + sel.id + "</span>";
   function titleEl(){
@@ -3491,9 +3549,9 @@ function inspect(){
     return head;
   }
 
-  /* ---------- вкладка «Свойства»: где объект и в каком порядке ---------- */
-  inspTarget = props;
-  props.appendChild(titleEl());
+  /* ---------- вкладка Visuals: где объект, как выглядит, в каком порядке --- */
+  inspTarget = visualsEl;
+  visualsEl.appendChild(titleEl());
 
   num("X", sel.x, function(v){ sel.x = v; });
   num("Y", sel.y, function(v){ sel.y = v; });
@@ -3513,21 +3571,6 @@ function inspect(){
     sr.innerHTML = "<label>" + TR("lblSize","Размер") + "</label><b style='font-size:12px'>" +
                    fixedSize[0] + " x " + fixedSize[1] + "</b>";
   }
-
-  grp(TR("grpOrder","Порядок"));
-  var z = document.createElement("div"); z.className = "zBtns";
-  z.innerHTML = "<div data-z='b'>" + TR("zBack","На зад") + "</div><div data-z='f'>" + TR("zFront","Вперёд") + "</div>";
-  z.addEventListener("click", function(e){
-    var b = e.target.closest("[data-z]"); if(!b) return;
-    commit();
-    objects = objects.filter(function(o){ return o !== sel; });
-    b.dataset.z === "f" ? objects.push(sel) : objects.unshift(sel);
-  });
-  props.appendChild(z);
-
-  /* ---------- вкладка «Функции»: что объект умеет и с чем связан ---------- */
-  inspTarget = widgetsEl;
-  widgetsEl.appendChild(titleEl());
 
   if(sel.type !== "zombie" && sel.type !== "seekerSpot"){   // их не красят — они рисуются собой
     grp(TR("grpAppearance","Внешний вид"));
@@ -3571,40 +3614,51 @@ function inspect(){
     fontField(TR("lblFont","Шрифт"), sel.font, function(v){ sel.font = v; });
   }
 
-  grp(TR("grpGameProps","Игровые свойства"));
-  /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Яд»
-     там бы включала свойство, которое физика всё равно игнорирует. Вместо
-     того чтобы просто молчать (галочка была здесь секунду назад на Race —
-     выглядит как «пропала»), объясняем, куда она делась. */
-  if(["spawn","checkpoint","finishline","zombie","teleport","seekerSpot"].indexOf(sel.type) === -1){
-    if(mode !== "hideAndSeek")
-      chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
-    else
-      hint(TR("deadlyHsHint","В режиме Hide and Seek умереть нельзя, поэтому «Яд» здесь не показывается — он ни на что не повлияет. Переключись на Race (кнопка над инструментами), чтобы объект убивал."));
-  }
-  if(SOLID.indexOf(sel.type) !== -1)
-    chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; });
+  grp(TR("grpOrder","Порядок"));
+  var z = document.createElement("div"); z.className = "zBtns";
+  z.innerHTML = "<div data-z='b'>" + TR("zBack","На зад") + "</div><div data-z='f'>" + TR("zFront","Вперёд") + "</div>";
+  z.addEventListener("click", function(e){
+    var b = e.target.closest("[data-z]"); if(!b) return;
+    commit();
+    objects = objects.filter(function(o){ return o !== sel; });
+    b.dataset.z === "f" ? objects.push(sel) : objects.unshift(sel);
+  });
+  visualsEl.appendChild(z);
+
+  // мертвец/место искателя — отдельные маркеры; их «функции» объясняет
+  // не галочка, а короткая подсказка прямо тут, рядом с именем объекта
+  if(sel.type === "zombie")
+    hint(TR("zombieHint","Обязательная метка для модификации Zombie Apocalypse — без неё её нельзя включить. Самого зомби тут не будет: им становится один из игроков, выбранный рулеткой в начале раунда."));
+  if(sel.type === "seekerSpot")
+    hint(TR("seekerSpotHint","Необязательная метка только для классики: здесь искатель ждёт во время пряток, пока не началась охота. С началом раунда он телепортируется на обычную точку старта, как и все."));
+
+  /* ---------- вкладка Passive: состояния, которые просто есть у объекта,
+     без действия игрока или самого объекта каждый кадр ---------- */
+  inspTarget = passiveEl;
+  passiveEl.appendChild(titleEl());
+
   /* Прятки: за таким объектом игрок исчезает для искателя вместе с ником.
      Коллизии у него нет — иначе внутрь не зайти. */
   if(SOLID.indexOf(sel.type) !== -1 && mode === "hideAndSeek")
-    chk(TR("chkHideSpot","Укрытие для пряток"), !!sel.hideSpot, function(v){ sel.hideSpot = v; });
-  /* Бустер: стоя на этой платформе, игрок бежит быстрее или медленнее
-     базовой скорости (см. platBoost() в физике). 0 — без изменений,
-     хранить его в объекте незачем. Работает на любой платформе — не
-     только подвижной, — поэтому вынесен из блока «рикошет/толкаемость»
-     ниже, который относится только к сочетающимся друг с другом
-     свойствам движения. */
-  if(SOLID.indexOf(sel.type) !== -1)
-    speedMul(TR("lblSpeedMul","Множитель скорости игрока"), sel.speedMul || 0,
-        function(v){ sel.speedMul = v || undefined; });
+    chk(TR("chkHideSpot","Укрытие для пряток"), !!sel.hideSpot, function(v){ sel.hideSpot = v; },
+        TR("descHideSpot","Игрок исчезает здесь во время пряток"));
+  if(LINKED.indexOf(sel.type) !== -1 && SOLID.indexOf(sel.type) !== -1)
+    chk(TR("chkStartsOpen","Открыт сначала (проходим)"), sel.startsOpen, function(v){ sel.startsOpen = v; });
+  if(!passiveEl.querySelector(".pRow"))
+    hint(TR("passiveEmptyHint","У этого объекта нет пассивных свойств."));
+
+  /* ---------- вкладка Active: что объект делает сам, каждый кадр --------- */
+  inspTarget = activeEl;
+  activeEl.appendChild(titleEl());
+
   /* Рикошет, толкаемость, движение и вращение — свойства, а не отдельные
      объекты. Любой блок, круг или треугольник можно сделать отражающим,
      толкаемым, подвижным или крутящимся. */
   if(SOLID.indexOf(sel.type) !== -1){
-    grp(TR("grpMovement","Движение и эффекты"));
     /* Рикошет вместо батута: удар отражается от той грани, в которую
        попал игрок, а не подбрасывает его всегда вверх. */
-    chk(TR("chkRicochet","Рикошет"), !!sel.ricochet, function(v){ sel.ricochet = v; inspect(); });
+    chk(TR("chkRicochet","Рикошет"), !!sel.ricochet, function(v){ sel.ricochet = v; inspect(); },
+        TR("descBouncing","Отражает от той грани, в которую попал игрок"));
     /* Сила отскока: 1 — вернуть с той же скоростью, больше — подбросить
        сильнее. Направление берётся от той грани, в которую попал игрок,
        поэтому наклонный батут отправляет по диагонали. */
@@ -3623,7 +3677,7 @@ function inspect(){
         sel.moves = false; sel.spins = false;
       }
       inspect();
-    });
+    }, TR("descPhysics","Объект двигается от толчка игрока"));
     if(sel.pushable)
       rng(TR("lblMass","Масса"), sel.mass === undefined ? 1 : sel.mass, 0.2, 5, 0.1,
           function(v){ sel.mass = v; });
@@ -3636,7 +3690,7 @@ function inspect(){
           sel.pushable = false;
         }
         inspect();
-      });
+      }, TR("descLift","Движется по траектории. На нём можно кататься."));
       if(sel.moves){
         num(TR("lblMoveX","Ход по X"), sel.moveX||0, function(v){ sel.moveX = v; });
         num(TR("lblMoveY","Ход по Y"), sel.moveY||0, function(v){ sel.moveY = v; });
@@ -3647,7 +3701,7 @@ function inspect(){
         sel.spins = v;
         if(v){ if(!sel.spin) sel.spin = 2; sel.pushable = false; }
         inspect();
-      });
+      }, TR("descRotation","Объект крутится сам"));
       if(sel.spins) num(TR("lblSpinSpeed","Скорость вращения"), sel.spin||2, function(v){ sel.spin = v; });
     }
 
@@ -3655,7 +3709,8 @@ function inspect(){
        не трогает: значения w/h у объекта не меняются, только масштаб
        рисунка. Поэтому, в отличие от Двигается/Вращается, ничего не
        гасит и не гасится толкаемостью — конфликтовать здесь нечему. */
-    chk(TR("chkPulse","Изменение размера"), !!sel.pulse, function(v){ sel.pulse = v; inspect(); });
+    chk(TR("chkPulse","Изменение размера"), !!sel.pulse, function(v){ sel.pulse = v; inspect(); },
+        TR("descPulse","Пульсирует между двумя размерами"));
 
     /* Лазер — тоже свойство фигуры, а не отдельный объект (см. laserFeeds()
        в step()): включает связанные через «Цели» объекты, пока луч из этой
@@ -3665,15 +3720,13 @@ function inspect(){
       sel.laser = v;
       if(v && !sel.range) sel.range = 500;
       inspect();
-    });
+    }, TR("descLaser","Работает как кнопка, пока луч перекрыт игроком"));
     if(sel.laser)
-      hint(TR("laserDeadlyHint","Включи ещё и «Яд (убивает)» выше — тогда опасен весь луч, а не только сам блок-излучатель: смерть в любой точке трассы, пока она не перекрыта стеной."));
+      hint(TR("laserDeadlyHint","Включи ещё и «Яд (убивает)» на вкладке Automatic — тогда опасен весь луч, а не только сам блок-излучатель: смерть в любой точке трассы, пока она не перекрыта стеной."));
   }
-  // мертвец — отдельный объект; из свойств ему нужна одна подсказка
-  if(sel.type === "zombie")
-    hint(TR("zombieHint","Обязательная метка для модификации Zombie Apocalypse — без неё её нельзя включить. Самого зомби тут не будет: им становится один из игроков, выбранный рулеткой в начале раунда."));
-  if(sel.type === "seekerSpot")
-    hint(TR("seekerSpotHint","Необязательная метка только для классики: здесь искатель ждёт во время пряток, пока не началась охота. С началом раунда он телепортируется на обычную точку старта, как и все."));
+  if(sel.type === "laserFeed" || sel.laser)
+    num(TR("lblLaserRange","Дальность луча"), sel.range||500, function(v){ sel.range = Math.max(20,v); });
+
   /* Портал спаривается сам при постановке (см. pairTeleport()) — тут
      только показываем текущее состояние пары, выбирать цель вручную
      больше негде и незачем. */
@@ -3692,11 +3745,37 @@ function inspect(){
     txt("ID", sel.customId, function(v){ sel.customId = v; });
     if(sel.type === "button" || sel.type === "lever" || sel.type === "laserFeed" || sel.laser)
       linkPicker(sel);
-    if(SOLID.indexOf(sel.type) !== -1)
-      chk(TR("chkStartsOpen","Открыт сначала (проходим)"), sel.startsOpen, function(v){ sel.startsOpen = v; });
   }
-  if(sel.type === "laserFeed" || sel.laser)
-    num(TR("lblLaserRange","Дальность луча"), sel.range||500, function(v){ sel.range = Math.max(20,v); });
+  if(!activeEl.querySelector(".pRow, .lnkChips, .lnkAdd"))
+    hint(TR("activeEmptyHint","У этого объекта нет активных свойств."));
+
+  /* ---------- вкладка Automatic: правила окружения — не анимация самого
+     объекта, а то, как он действует на игрока по умолчанию ---------- */
+  inspTarget = automaticEl;
+  automaticEl.appendChild(titleEl());
+
+  /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Опасный»
+     там бы включала свойство, которое физика всё равно игнорирует. Вместо
+     того чтобы просто молчать (галочка была здесь секунду назад на Race —
+     выглядит как «пропала»), объясняем, куда она делась. */
+  if(["spawn","checkpoint","finishline","zombie","teleport","seekerSpot"].indexOf(sel.type) === -1){
+    if(mode !== "hideAndSeek")
+      chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; },
+          TR("descDangerous","Касание мгновенно убивает игрока"));
+    else
+      hint(TR("deadlyHsHint","В режиме Hide and Seek умереть нельзя, поэтому «Яд (убивает)» здесь не показывается — он ни на что не повлияет. Переключись на Race (кнопка над инструментами), чтобы объект убивал."));
+  }
+  /* Бустер: стоя на этой платформе, игрок бежит быстрее или медленнее
+     базовой скорости (см. platBoost() в физике). 0 — без изменений,
+     хранить его в объекте незачем. */
+  if(SOLID.indexOf(sel.type) !== -1)
+    speedMul(TR("lblSpeedMul","Множитель скорости игрока"), sel.speedMul || 0,
+        function(v){ sel.speedMul = v || undefined; });
+  if(SOLID.indexOf(sel.type) !== -1)
+    chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; },
+        TR("descCollision","Выключи, чтобы игрок проходил сквозь"));
+  if(!automaticEl.querySelector(".pRow"))
+    hint(TR("automaticEmptyHint","У этого объекта нет автоматических свойств."));
 }
 
 /* ══════════════════════════════════════════════════
