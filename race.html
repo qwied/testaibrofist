@@ -65,13 +65,13 @@
   .mdStory{text-align:center}
 }
 </style>
-        <link rel="canonical" href="https://aibrofist.online/race.html">
+        <link rel="canonical" href="https://aibrofist.online/race">
         <meta name="description" content="Race mode: everyone runs for the flag at once.">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="AIBrofist">
         <meta property="og:title" content="AIBrofist — Race">
         <meta property="og:description" content="Race mode: everyone runs for the flag at once.">
-        <meta property="og:url" content="https://aibrofist.online/race.html">
+        <meta property="og:url" content="https://aibrofist.online/race">
         <meta property="og:image" content="https://aibrofist.online/preview.png">
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:image" content="https://aibrofist.online/preview.png">
@@ -96,7 +96,7 @@
       <button class="mdPlay" id="mdPlay" data-i18n="play">ИГРАТЬ</button>
       <a class="mdBack" href="/" data-i18n="mdBack">На главную</a>
       <div class="mdStory">
-        <a class="mdStoryBtn" href="story.html?mode=race" data-i18n="storyTxt">Story Mode</a>
+        <a class="mdStoryBtn" href="story?mode=race" data-i18n="storyTxt">Story Mode</a>
         <div class="mdStoryHint" data-i18n="storyHint">Play privately with a friend on any map from Maps Browser.</div>
       </div>
     </div>
@@ -114,7 +114,7 @@
 <script src="roomList.js?v=160"></script>
 <script>
 document.getElementById('mdPlay').onclick = function () {
-  location.href = 'game.html?mode=race';
+  location.href = 'game?mode=race';
 };
 BFRoomList.init(document.getElementById('roomList'), 'race');
 </script>

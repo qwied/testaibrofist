@@ -47,13 +47,13 @@
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
         <link rel="manifest" href="site.webmanifest">
         <meta name="theme-color" content="#111827">
-        <link rel="canonical" href="https://aibrofist.online/story.html">
+        <link rel="canonical" href="https://aibrofist.online/story">
         <meta name="description" content="Story Mode — invite a friend to a private match on a chosen map.">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="AIBrofist">
         <meta property="og:title" content="AIBrofist — Story Mode">
         <meta property="og:description" content="Story Mode — invite a friend to a private match on a chosen map.">
-        <meta property="og:url" content="https://aibrofist.online/story.html">
+        <meta property="og:url" content="https://aibrofist.online/story">
         <meta property="og:image" content="https://aibrofist.online/preview.png">
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:image" content="https://aibrofist.online/preview.png">
@@ -233,7 +233,7 @@
     post('/story/create', { author: picked.author, mapName: picked.mapName, limitMin: limitMin }).then(function (r) {
       if (r.status !== 'success') { msg(r.message || T('errorTxt', 'Ошибка')); return; }
       // режим в ссылке — тот, что вернул сервер: его определила сама карта
-      var url = location.origin + '/game.html?mode=' + encodeURIComponent(r.mode || picked.mapType)
+      var url = location.origin + '/game?mode=' + encodeURIComponent(r.mode || picked.mapType)
               + '&story=1&room=' + encodeURIComponent(r.room);
       $('stLinkUrl').value = url;
       $('stLink').classList.add('on');

@@ -5,31 +5,31 @@
   'use strict';
 
   var ROUTES = {
-    'hide and seek':        'hide-and-seek.html',
-    'race':                 'race.html',
-    'гонка':                'race.html',
-    'прятки':               'hide-and-seek.html',
-    'map editor':           'editor.html',
-    'editor':               'editor.html',
+    'hide and seek':        'hide-and-seek',
+    'race':                 'race',
+    'гонка':                'race',
+    'прятки':               'hide-and-seek',
+    'map editor':           'editor',
+    'editor':               'editor',
     'skin editor':          'skinEditor.html',
     'редактор скинов':      'skinEditor.html',
-    'maps browser':         'mapsBrowser.html',
-    'browser':              'mapsBrowser.html',
+    'maps browser':         'mapsBrowser',
+    'browser':              'mapsBrowser',
     'skins browser':        'skinsBrowser.html',
     'обзор скинов':         'skinsBrowser.html',
-    'shop':                 'avatar.html',
-    'магазин':              'avatar.html',
-    'logs':                 'logs.html',
-    'новости':              'logs.html',
-    'avatar':               'avatar.html',
-    'аватар':               'avatar.html',
-    'leaderboards':         'leaderboard.html',
-    'leaderboard':          'leaderboard.html',
-    'таблица лидеров':      'leaderboard.html',
-    'supporters':           'leaderboard.html',
-    'editor tutorial':      'editor.html',
-    'privacy policy':       'logs.html',
-    'terms & conditions':   'logs.html'
+    'shop':                 'avatar',
+    'магазин':              'avatar',
+    'logs':                 'logs',
+    'новости':              'logs',
+    'avatar':               'avatar',
+    'аватар':               'avatar',
+    'leaderboards':         'leaderboard',
+    'leaderboard':          'leaderboard',
+    'таблица лидеров':      'leaderboard',
+    'supporters':           'leaderboard',
+    'editor tutorial':      'editor',
+    'privacy policy':       'logs',
+    'terms & conditions':   'logs'
   };
 
   var MENU_LABELS = ['menu', 'меню', 'menü', 'menú', '菜单'];
@@ -38,11 +38,11 @@
      раньше клик искал ROUTES[переведённый текст], и на любом языке,
      кроме русского и английского, карточка переставала вести куда-либо:
      ни одного перевода не было в ROUTES. */
-  var MODE_ROUTES = { hideAndSeek: 'hide-and-seek.html', race: 'race.html' };
+  var MODE_ROUTES = { hideAndSeek: 'hide-and-seek', race: 'race' };
 
   function go(target) {
     if (typeof target === 'string') { location.href = target; return; }
-    if (target && target.play) location.href = 'game.html?mode=' + target.play;
+    if (target && target.play) location.href = 'game?mode=' + target.play;
   }
 
   function toast(text) {

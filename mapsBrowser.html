@@ -148,13 +148,13 @@
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
         <link rel="manifest" href="site.webmanifest">
         <meta name="theme-color" content="#111827">
-        <link rel="canonical" href="https://aibrofist.online/mapsBrowser.html">
+        <link rel="canonical" href="https://aibrofist.online/mapsBrowser">
         <meta name="description" content="Player-made maps: rating, authors and modes.">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="AIBrofist">
         <meta property="og:title" content="AIBrofist — Maps Browser">
         <meta property="og:description" content="Player-made maps: rating, authors and modes.">
-        <meta property="og:url" content="https://aibrofist.online/mapsBrowser.html">
+        <meta property="og:url" content="https://aibrofist.online/mapsBrowser">
         <meta property="og:image" content="https://aibrofist.online/preview.png">
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:image" content="https://aibrofist.online/preview.png">
@@ -311,7 +311,7 @@
       +     T('favToggle', 'В избранное') + '">' + (m.myFavorite ? '★' : '☆') + '</button>'
       +   '<span>' + esc(m.mapName) + '</span></div>'
       + '<div class="mbRate ' + rc + '">' + m.rating + '</div>'
-      + '<div class="mbAuthor"><a href="users.html?name=' + encodeURIComponent(m.author) + '">'
+      + '<div class="mbAuthor"><a href="users?name=' + encodeURIComponent(m.author) + '">'
       +   esc(m.author) + '</a></div>'
       + '<div class="mbDate">' + when(m.date) + '</div>'
       + '<div class="mbVote">'
@@ -524,7 +524,7 @@
      Теперь карта открывается поверх списка на весь экран: страница
      и адрес остаются Maps Browser. */
   function openPlay(mapName, author, practice, god, fly) {
-    $('mbFrame').src = 'game.html?view=' + encodeURIComponent(mapName)
+    $('mbFrame').src = 'game?view=' + encodeURIComponent(mapName)
                      + '&author=' + encodeURIComponent(author)
                      + (practice ? '&practice=1' : '')
                      + (god ? '&god=1' : '')

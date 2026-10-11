@@ -100,6 +100,30 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 .bfProfileName{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;flex:1 1 auto;min-width:0}
 
+/* Кнопка сворачивания сайдбара — только на компьютере (см. медиа-запрос
+   ниже): на телефоне панель и так узкая колонка без гамбургера, прятать
+   её там нечем и незачем (см. комментарий у мобильного блока в shell.js —
+   прошлый гамбургер прятал половину игры). Сама кнопка живёт вне .bfHead,
+   прямо в body, — иначе она уехала бы за экран вместе с панелью и нечем
+   было бы развернуть её обратно. Стрелка — тот же ICONS.chevron, что и у
+   строки профиля, просто повёрнута: «‹» раскрытая панель (жми — свернёт),
+   «›» свёрнутая (жми — откроет). */
+.bfSideToggle{position:fixed;top:18px;z-index:71;width:26px;height:26px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;
+  border:1px solid var(--sb-line);background:var(--panel);color:var(--sb-muted);
+  box-shadow:0 2px 8px rgba(15,23,42,.14);transition:left .2s ease}
+.bfSideToggle:hover{color:var(--blue);border-color:var(--blue)}
+.bfSideToggle svg{width:13px;height:13px;transition:transform .2s ease;transform:rotate(180deg)}
+body.bfSidebarCollapsed .bfSideToggle svg{transform:none}
+.bfHead{transition:transform .2s ease}
+body.bfHasSidebar{transition:padding-left .2s ease}
+@media (min-width:861px){
+  .bfSideToggle{left:calc(var(--sbw) - 13px)}
+  body.bfSidebarCollapsed .bfHead{transform:translateX(-100%)}
+  body.bfSidebarCollapsed.bfHasSidebar{padding-left:0}
+  body.bfSidebarCollapsed .bfSideToggle{left:10px}
+}
+
 /* Плавающей кнопки «Messages» больше нет (раздел переехал в меню, см.
    shell.js). Стиль оставлен на время: у кого в браузере ещё лежит старый
    shell.js, тот получит новую разметку и старый скрипт вперемешку. */
@@ -208,6 +232,7 @@ body.bfHasSidebar{padding-left:var(--sbw)}
    уменьшенной ширины, отступов и шрифта, чтобы странице оставалось
    место. Гамбургера нет вовсе. */
 @media (max-width:860px){
+  .bfSideToggle{display:none}
   .bfHead{width:var(--sbw-m);padding:10px 5px;gap:1px}
   body.bfHasSidebar{padding-left:var(--sbw-m)}
   .bfBrand{padding:2px 4px 10px;gap:5px}

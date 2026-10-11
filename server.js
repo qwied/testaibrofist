@@ -210,7 +210,7 @@ app.get('/robots.txt', (req, res) => {
     'User-agent: *',
     'Allow: /',
     // игровые комнаты и профили в выдаче не нужны: их бесконечно много
-    'Disallow: /game.html',
+    'Disallow: /game',
     'Sitemap: ' + siteOrigin(req) + '/sitemap.xml',
     ''
   ].join('\n'));
@@ -218,9 +218,9 @@ app.get('/robots.txt', (req, res) => {
 
 app.get('/sitemap.xml', (req, res) => {
   const base = siteOrigin(req);
-  const pages = ['/', '/hide-and-seek.html', '/race.html', '/mapsBrowser.html',
-                 '/editor.html', '/leaderboard.html', '/logs.html',
-                 '/users.html', '/quests.html', '/daily.html'];
+  const pages = ['/', '/hide-and-seek', '/race', '/mapsBrowser',
+                 '/editor', '/leaderboard', '/logs',
+                 '/users', '/quests', '/daily'];
   res.set('Content-Type', 'application/xml; charset=utf-8');
   res.set('Cache-Control', 'public, max-age=3600');
   res.send('<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -235,6 +235,21 @@ app.get('/favicon.ico', (req, res) => {
   res.sendFile(path.join(__dirname, 'favicon.ico'));
 });
 
+/* Чистые адреса без .html — index.html сюда не входит, у него отдельный
+   маршрут на "/" (см. ниже). Старые прямые ссылки на файл (закладки,
+   уже проиндексированные поисковиком страницы) не ломаем — 301 уводит
+   на короткий адрес, а не отдаёт 404; query-строка (?mode=.../?room=...
+   у game.html, ?name=... у users.html и т.п.) просто едет дальше как
+   есть, оба маршрута на неё вообще не смотрят. Сам редирект нужен
+   раньше express.static (см. ниже) — иначе static успеет отдать файл
+   первым, до того как маршрут до него доберётся. */
+const PAGE_FILES = ['avatar', 'daily', 'editor', 'game', 'hide-and-seek',
+  'leaderboard', 'logs', 'mapsBrowser', 'messages', 'quests', 'race', 'story', 'users'];
+app.get(PAGE_FILES.map(p => '/' + p + '.html'), (req, res) => {
+  const qs = req.originalUrl.split('?')[1];
+  res.redirect(301, req.path.slice(0, -5) + (qs ? '?' + qs : ''));
+});
+
 /* Страницы и скрипты приложения (.html/.js в корне) без явного
    Cache-Control браузер вправе показывать из кэша часами без единого
    обращения к серверу (эвристическое кэширование по Last-Modified) —
@@ -243,11 +258,17 @@ app.get('/favicon.ico', (req, res) => {
    только требует сперва спросить сервер, не устарела ли она (дешёвая
    проверка по ETag, без повторной скачки, если файл не менялся). */
 app.use((req, res, next) => {
-  if (req.path === '/' || /\.(html|js|css)$/i.test(req.path)) res.set('Cache-Control', 'no-cache');
+  if (req.path === '/' || /\.(html|js|css)$/i.test(req.path)
+      || PAGE_FILES.indexOf(req.path.slice(1)) !== -1) res.set('Cache-Control', 'no-cache');
   next();
 });
 app.use(express.static(__dirname));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+
+// те же страницы, но уже по чистому адресу (см. редирект с .html выше)
+app.get(PAGE_FILES.map(p => '/' + p), (req, res) => {
+  res.sendFile(path.join(__dirname, req.path.slice(1) + '.html'));
+});
 
 /* Режимов Two Player Adventure и Sandbox в игре нет: страницы удалены,
    остались только Hide and Seek и Race. Старые ссылки и закладки уводим
@@ -388,11 +409,11 @@ app.get('/api/online', (req, res) => {
   res.json({ modes, total });
 });
 
-app.get('/editor/index.html', (req, res) => res.redirect('/editor.html'));
-app.get('/supporters/index.html', (req, res) => res.redirect('/leaderboard.html'));
-app.get('/users/index.html', (req, res) => res.redirect('/users.html' + (req.originalUrl.split('?')[1] ? '?' + req.originalUrl.split('?')[1] : '')));
-app.get('/mapsBrowser/index.html', (req, res) => res.redirect('/mapsBrowser.html'));
-app.get('/editor/tutorial.html', (req, res) => res.redirect('/editor.html'));
+app.get('/editor/index.html', (req, res) => res.redirect('/editor'));
+app.get('/supporters/index.html', (req, res) => res.redirect('/leaderboard'));
+app.get('/users/index.html', (req, res) => res.redirect('/users' + (req.originalUrl.split('?')[1] ? '?' + req.originalUrl.split('?')[1] : '')));
+app.get('/mapsBrowser/index.html', (req, res) => res.redirect('/mapsBrowser'));
+app.get('/editor/tutorial.html', (req, res) => res.redirect('/editor'));
 
 // если аватарка не найдена — отдаём стандартную
 

@@ -100,7 +100,7 @@
     // 2) строка списка друзей / таблицы: ник рядом
     var row = el.closest && el.closest('.user-item, .maps-row, .lbRow, .bfCard, .sbCard');
     if (row) {
-      var n = row.querySelector('.user-name, .map-author-row, .lbName, .sbAuthor a, a[href*="users.html?name="]');
+      var n = row.querySelector('.user-name, .map-author-row, .lbName, .sbAuthor a, a[href*="users?name="]');
       if (n) {
         var href = n.getAttribute && n.getAttribute('href');
         if (href && href.indexOf('name=') !== -1)

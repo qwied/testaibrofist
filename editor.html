@@ -266,13 +266,13 @@ body.mob #msg h1{font-size:38px}
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
         <link rel="manifest" href="site.webmanifest">
         <meta name="theme-color" content="#111827">
-        <link rel="canonical" href="https://aibrofist.online/editor.html">
+        <link rel="canonical" href="https://aibrofist.online/editor">
         <meta name="description" content="Map Editor: build your own map and publish it in the game.">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="AIBrofist">
         <meta property="og:title" content="AIBrofist — Map Editor">
         <meta property="og:description" content="Map Editor: build your own map and publish it in the game.">
-        <meta property="og:url" content="https://aibrofist.online/editor.html">
+        <meta property="og:url" content="https://aibrofist.online/editor">
         <meta property="og:image" content="https://aibrofist.online/preview.png">
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:image" content="https://aibrofist.online/preview.png">
@@ -2638,7 +2638,7 @@ function syncApocBtns(){
    идёт матч. IS_GAME_PAGE решает это по имени файла, один раз — тот же
    приём работает в обеих копиях движка (editor.html/game.html) без
    отдельной ветки кода под каждую. */
-var IS_GAME_PAGE = /\/?game\.html/i.test(location.pathname);
+var IS_GAME_PAGE = /\/?game(\.html)?/i.test(location.pathname);
 function syncApocVisibility(){
   document.getElementById("apoc").style.display =
     (mode === "hideAndSeek" && !IS_GAME_PAGE) ? "flex" : "none";
@@ -4133,7 +4133,7 @@ requestAnimationFrame(loop);
         if (r.status === 'success') {
           if (window.BFSound) BFSound.coin();
           say(TR('publishSuccessTitle','Карта опубликована'), r.message + ' Открыть Maps Browser?',
-              function(){ location.href = '/mapsBrowser.html'; });
+              function(){ location.href = '/mapsBrowser'; });
         } else if (r.status === 'exists') {
           say(TR('publishExistsTitle','Карта уже есть'), r.message, function(){ send(name, true); });
         } else {
