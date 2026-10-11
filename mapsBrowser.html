@@ -52,7 +52,12 @@
 .mbRow{display:flex;flex-direction:column;gap:8px;
   padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel,#fff)}
 .mbRow:hover{border-color:var(--blue)}
-.mbRowMain{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px 124px;gap:10px;align-items:center}
+/* minmax(0,…) вместо голого Nfr — иначе грид отказывался сжимать колонку
+   ниже естественной ширины её текста (имя карты/автора/даты) и на узких
+   экранах выталкивал Vote/Play за пределы страницы вместо того, чтобы
+   обрезать текст многоточием (для этого и стоит text-overflow:ellipsis
+   у .mbName/.mbAuthor — он не срабатывал без этого). */
+.mbRowMain{display:grid;grid-template-columns:minmax(0,2fr) 92px minmax(0,1.2fr) minmax(0,1.1fr) 150px 124px;gap:10px;align-items:center}
 .mbName{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;min-width:0}
 .mbName span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Звезда и чекбокс — единственные два элемента на странице без своего
