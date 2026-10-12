@@ -368,8 +368,14 @@ body.mob #msg h1{font-size:38px}
   body.mob #tools{left:calc(8px + env(safe-area-inset-left,0px));right:auto;
     top:calc(104px + env(safe-area-inset-top,0px));bottom:auto;
     max-height:calc(100vh - 112px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+    /* в Safari 100vh — высота БЕЗ его панелей; dvh — то, что видно сейчас */
+    max-height:calc(100dvh - 112px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
     width:156px;flex-direction:row;flex-wrap:wrap;align-content:flex-start;justify-content:flex-start;
     overflow-y:auto;border-radius:14px;padding:6px}
+  /* в «Гонке» строки модификации нет — инструменты встают на её место */
+  body.mob.noApoc #tools{top:calc(54px + env(safe-area-inset-top,0px));
+    max-height:calc(100vh - 62px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+    max-height:calc(100dvh - 62px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
   body.mob #insp{left:auto;width:240px;top:calc(54px + env(safe-area-inset-top,0px));
     bottom:calc(8px + env(safe-area-inset-bottom,0px));max-height:none}
   body.mob #visuals,body.mob #passive,body.mob #active,body.mob #automatic{max-height:none;flex:1 1 auto;min-height:0}
@@ -379,15 +385,15 @@ body.mob #msg h1{font-size:38px}
 }
 </style>
         <script src="offline.js?v=2"></script>
-<script src="device.js?v=160"></script>
-        <script src="sound.js?v=160"></script>
-        <script src="skinRender.js?v=160"></script>
-        <script src="skinCanvas.js?v=160"></script>
-        <script src="gifuct.bundle.js?v=160"></script>
-        <script src="gifPlayer.js?v=160"></script>
-        <script src="coin.js?v=160"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=160">
-        <script src="theme.js?v=160"></script>
+<script src="device.js?v=161"></script>
+        <script src="sound.js?v=161"></script>
+        <script src="skinRender.js?v=161"></script>
+        <script src="skinCanvas.js?v=161"></script>
+        <script src="gifuct.bundle.js?v=161"></script>
+        <script src="gifPlayer.js?v=161"></script>
+        <script src="coin.js?v=161"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=161">
+        <script src="theme.js?v=161"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -2947,8 +2953,10 @@ function syncApocBtns(){
    отдельной ветки кода под каждую. */
 var IS_GAME_PAGE = /\/?game(\.html)?/i.test(location.pathname);
 function syncApocVisibility(){
-  document.getElementById("apoc").style.display =
-    (mode === "hideAndSeek" && !IS_GAME_PAGE) ? "flex" : "none";
+  var on = mode === "hideAndSeek" && !IS_GAME_PAGE;
+  document.getElementById("apoc").style.display = on ? "flex" : "none";
+  // телефон боком: без этой строки инструменты поднимаются на её место
+  document.body.classList.toggle("noApoc", !on);
 }
 syncApocVisibility();
 document.getElementById("apoc").addEventListener("click", function(e){
@@ -4446,12 +4454,16 @@ document.getElementById("file").addEventListener("change", function(e){
       objects.forEach(cleanLift);
       uid = objects.reduce(function(m2,o){ return Math.max(m2,(o.id||0)+1); },1);
       mode = d.mode || "hideAndSeek";
-      apoc = !!d.apoc;                 // в старых картах модификации не было — классика
+      // как в loadMap(): старые режимы открываем как прятки, а модификации
+      // в гонке не бывает, что бы ни лежало в файле
+      if(mode === "sandbox" || mode === "twoPlayer") mode = "hideAndSeek";
+      apoc = (mode === "hideAndSeek") && !!d.apoc;   // в старых картах модификации не было — классика
       if(d.gravity !== undefined){
         // гравитация из старой карты игнорируется: она всегда 9
       }
       document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
       syncApocBtns();
+      syncApocVisibility();
       objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid" && o.type !== "coin" && o.type !== "superGate"; });
       // зомби существует только при модификации Zombie Apocalypse — см. ту же проверку в loadMap()
       if(!apoc) objects = objects.filter(function(o){ return o.type !== "zombie"; });
@@ -4682,12 +4694,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=160"></script>
-<script src="abuseShow.js?v=160" defer></script>
-<script src="editorHelp.js?v=160"></script>
-<script src="editorAI.js?v=160" defer></script>
-<script src="account.js?v=160" defer></script>
-<script src="owner.js?v=160" defer></script>
+<script src="i18n.js?v=161"></script>
+<script src="abuseShow.js?v=161" defer></script>
+<script src="editorHelp.js?v=161"></script>
+<script src="editorAI.js?v=161" defer></script>
+<script src="account.js?v=161" defer></script>
+<script src="owner.js?v=161" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -4803,7 +4815,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=160" defer></script>
+        <script src="skinAvatar.js?v=161" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */
