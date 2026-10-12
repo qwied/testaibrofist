@@ -78,8 +78,12 @@
     b.innerHTML = '<svg viewBox="0 0 24 24">' + SPARK + '</svg>';
     b.onclick = toggle;
     var play = document.getElementById('bPlay');
-    if (play) { scene.insertBefore(sep, play); scene.insertBefore(b, play); }
-    else { scene.appendChild(sep); scene.appendChild(b); }
+    // перед «Играть» в редакторе уже стоит свой разделитель — второй рядом
+    // с ним рисовал двойную черту «сетка | | помощник»
+    var prev = play ? play.previousElementSibling : scene.lastElementChild;
+    var needSep = !(prev && prev.className === 'sep');
+    if (play) { if (needSep) scene.insertBefore(sep, play); scene.insertBefore(b, play); }
+    else { if (needSep) scene.appendChild(sep); scene.appendChild(b); }
   }
 
   function toggle() {
