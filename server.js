@@ -1434,7 +1434,7 @@ app.get('*', (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AIBrofist</title><style>body{font-family:sans-serif;display:flex;height:100vh;margin:0;
 align-items:center;justify-content:center;flex-direction:column;gap:14px;color:#191919;text-align:center;padding:20px}
-a,button{border:1px solid #2196F3;border-radius:4px;padding:11px 22px;background:#fff;color:#000;
+a,button{border:1px solid #111827;border-radius:4px;padding:11px 22px;background:#fff;color:#000;
 text-decoration:none;font-size:16px;cursor:pointer}</style></head><body>
 <h2>This section isn't ready yet</h2>
 <p style="color:#777;margin:0">There's no such page in the game yet.</p>

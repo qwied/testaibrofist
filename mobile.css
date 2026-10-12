@@ -3,7 +3,7 @@
    Компьютерный вид не меняется — все правила внутри @media. */
 
 /* --- общее для сенсорных экранов --- */
-html.is-touch * { -webkit-tap-highlight-color: rgba(33,150,243,.2); }
+html.is-touch * { -webkit-tap-highlight-color: rgba(17,24,39,.15); }
 html.is-touch .card:hover,
 html.is-touch .play-button:hover,
 html.is-touch .refresh-button:hover { background: inherit; }
@@ -329,32 +329,24 @@ html.is-touch .refresh-button:hover { background: inherit; }
   .tabs::-webkit-scrollbar, .profile-tabs::-webkit-scrollbar { display: none; }
 }
 
-/* ---------- редактор карт ---------- */
-@media (max-width: 900px) {
-  /* палитра инструментов прокручивается, а не обрезается */
-  .toolbar, .tools, #tools {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    flex-wrap: nowrap !important;
-  }
-  .toolbar::-webkit-scrollbar, .tools::-webkit-scrollbar, #tools::-webkit-scrollbar { display: none; }
-
-  /* кнопка публикации не должна перекрывать холст и палитру */
-  body > button[style*="position:fixed"],
-  body > button[style*="position: fixed"] {
-    font-size: 13px !important;
-    padding: 9px 14px !important;
-  }
-}
+/* ---------- редактор карт ----------
+   #tools/#scene/#insp/#modes/#apoc теперь полностью управляются своими
+   правилами внутри editor.html/game.html (два ряда вместо прокрутки
+   вбок — весь функционал виден и нажимаем сразу, без свайпа). Раньше
+   здесь был !important-оверрайд на overflow-x/flex-wrap:nowrap,
+   который и не давал вкладкам перейти на два ряда. Кнопка публикации
+   перестала быть отдельным position:fixed элементом (переехала в
+   #scene), так что правило под неё по селектору на инлайновый style
+   больше ни на что не попадает — тоже убрано. */
 
 /* ---------- кнопка инструментов владельца ---------- */
 @media (max-width: 900px) {
   .ow-fab { width: 46px !important; height: 46px !important; font-size: 19px !important; }
 }
 
-/* редактор: поднимаем кнопку выше панели инструментов */
-html[data-page="editor"] .ow-fab { bottom: 96px !important; }
+/* редактор: поднимаем кнопку выше панели инструментов (#tools теперь
+   в два ряда вместо одного — ей нужно больше места снизу) */
+html[data-page="editor"] .ow-fab { bottom: 144px !important; }
 
 /* ---------- удобные касания ---------- */
 @media (max-width: 900px) {
@@ -461,8 +453,6 @@ html.is-mobile body.play .ow-fab, html.is-tablet body.play .ow-fab { bottom: 220
 /* редактор: панели не должны наезжать друг на друга */
 @media (max-width: 900px){
   #modes{ max-width: calc(100vw - 16px) !important; }
-  /* строка режимов и строка инструментов не перекрывают кнопку публикации */
-  #scene{ padding-right: 4px !important; }
 }
 /* панель владельца не садится на кнопку публикации */
 html[data-page="editor"] .ow-fab{ z-index: 18 !important; }

@@ -356,7 +356,7 @@
         + '</div>'
         + (isMe ? '<div class="upFolderForm" id="upFolderForm" style="display:none">'
             +   '<input class="bfInput" id="upFolderName" maxlength="30" placeholder="' + T('folderNamePh', 'Название папки') + '">'
-            +   '<input type="color" id="upFolderColor" value="#3b82f6">'
+            +   '<input type="color" id="upFolderColor" value="#111827">'
             +   '<button class="go" id="upFolderSave">' + T('save', 'Сохранить') + '</button>'
             +   '<button class="bad" id="upFolderDelete" style="display:none">' + T('removeTxt', 'Удалить') + '</button>'
             +   '<button id="upFolderCancel">' + T('cancel', 'Отмена') + '</button>'
@@ -408,7 +408,7 @@
   function openFolderForm(folder) {
     editingFolderId = folder ? folder.id : null;
     $('upFolderName').value = folder ? folder.name : '';
-    $('upFolderColor').value = folder ? folder.color : '#3b82f6';
+    $('upFolderColor').value = folder ? folder.color : '#111827';
     $('upFolderDelete').style.display = folder ? '' : 'none';
     $('upFolderForm').style.display = 'flex';
   }
