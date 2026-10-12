@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <script>
 /* Телефон: редактор в компьютерной раскладке, масштабированный под экран.
-   Ширина страницы подбирается так, чтобы раскладка влезала: боком — 921px
-   в ширину (режимы слева + панель сцены по центру) и 420px в высоту,
-   стоя — 548px (панель сцены целиком); вырез экрана вычитается. На
-   планшете и компьютере ничего не меняется. */
+   Ширина страницы подбирается так, чтобы раскладка влезала (боком нужно
+   921×420px: режимы слева + панель сцены по центру, стоя — 548px: панель
+   сцены целиком), и ещё примерно на 10% с запасом — чтобы панели были
+   чуть мельче: боком 1030×470, стоя 595 (меньше 600 — иначе isPhoneView
+   перестанет считать экран телефонным и камера пробы уровня сменится);
+   вырез экрана вычитается. На планшете и компьютере ничего не меняется. */
 (function(){
   if(!window.matchMedia || !window.screen || !matchMedia("(pointer:coarse)").matches) return;
   var sw = screen.width, sh = screen.height;
@@ -23,7 +25,7 @@
       L = parseFloat(cs.paddingLeft) * px || 0; R = parseFloat(cs.paddingRight) * px || 0;
       T = parseFloat(cs.paddingTop) * px || 0;  B = parseFloat(cs.paddingBottom) * px || 0;
     }
-    var k = land ? Math.min((dw - L - R) / 921, (dh - T - B) / 420) : (dw - L - R) / 548;
+    var k = land ? Math.min((dw - L - R) / 1030, (dh - T - B) / 470) : (dw - L - R) / 595;
     k = Math.min(1, k);
     var c = "width=" + Math.round(dw / k) + ", initial-scale=" + k.toFixed(4) + ", minimum-scale=" + k.toFixed(4) +
             ", maximum-scale=" + k.toFixed(4) + ", user-scalable=no, viewport-fit=cover";
@@ -343,15 +345,15 @@ body.mob .tool[data-tip]:hover::after{display:none}
 body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=2"></script>
-<script src="device.js?v=163"></script>
-        <script src="sound.js?v=163"></script>
-        <script src="skinRender.js?v=163"></script>
-        <script src="skinCanvas.js?v=163"></script>
-        <script src="gifuct.bundle.js?v=163"></script>
-        <script src="gifPlayer.js?v=163"></script>
-        <script src="coin.js?v=163"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=163">
-        <script src="theme.js?v=163"></script>
+<script src="device.js?v=164"></script>
+        <script src="sound.js?v=164"></script>
+        <script src="skinRender.js?v=164"></script>
+        <script src="skinCanvas.js?v=164"></script>
+        <script src="gifuct.bundle.js?v=164"></script>
+        <script src="gifPlayer.js?v=164"></script>
+        <script src="coin.js?v=164"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=164">
+        <script src="theme.js?v=164"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -4652,12 +4654,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=163"></script>
-<script src="abuseShow.js?v=163" defer></script>
-<script src="editorHelp.js?v=163"></script>
-<script src="editorAI.js?v=163" defer></script>
-<script src="account.js?v=163" defer></script>
-<script src="owner.js?v=163" defer></script>
+<script src="i18n.js?v=164"></script>
+<script src="abuseShow.js?v=164" defer></script>
+<script src="editorHelp.js?v=164"></script>
+<script src="editorAI.js?v=164" defer></script>
+<script src="account.js?v=164" defer></script>
+<script src="owner.js?v=164" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -4773,7 +4775,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=163" defer></script>
+        <script src="skinAvatar.js?v=164" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */
