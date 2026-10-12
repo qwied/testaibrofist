@@ -616,7 +616,7 @@ function register(app, getUser, acc, cleanText) {
     if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const name = String(req.body.name || '').trim().slice(0, 30);
     if (!name) return res.json({ status: 'error', message: 'Name required' });
-    const color = HEX_COLOR.test(req.body.color) ? req.body.color : '#3b82f6';
+    const color = HEX_COLOR.test(req.body.color) ? req.body.color : '#111827';
     u.mapFolders = Array.isArray(u.mapFolders) ? u.mapFolders : [];
     if (u.mapFolders.length >= 30) return res.json({ status: 'error', message: 'Too many folders' });
     const id = String(u.mapFolders.reduce((mx, f) => Math.max(mx, parseInt(f.id, 10) || 0), 0) + 1);

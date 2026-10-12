@@ -150,6 +150,24 @@
 .mbDel{border:1px solid var(--red);color:var(--red);background:var(--panel);border-radius:8px;
   padding:9px 15px;font-size:13px;cursor:pointer}
 .mbDel:hover{background:var(--red);color:#fff}
+
+/* На узком экране строка карты складывается в карточку в два столбца
+   вместо шести колонок в один ряд — Play и Vote видны сразу, без
+   свайпа вбок. Колонки-заголовки (.mbHeadCols) при табличной раскладке
+   не нужны — у каждого поля уже есть подпись по месту. */
+@media (max-width:900px){
+  .mbScroll{overflow-x:visible}
+  .mbScrollInner{width:auto;min-width:0}
+  .mbHeadCols{display:none}
+  .mbRowMain{grid-template-columns:1fr 1fr;row-gap:10px;
+    grid-template-areas:"name name" "author date" "rate vote" "play play"}
+  .mbName{grid-area:name}
+  .mbAuthor{grid-area:author}
+  .mbDate{grid-area:date;text-align:right}
+  .mbRate{grid-area:rate;text-align:left}
+  .mbVote{grid-area:vote}
+  .mbPlay{grid-area:play}
+}
 </style>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">

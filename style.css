@@ -170,8 +170,8 @@ body{
 }
 
 .card:hover div{
-    border-color: var(--blue, #2196F3);
-    color: var(--blue, #2196F3);
+    border-color: var(--blue, #111827);
+    color: var(--blue, #111827);
 }
 
 

@@ -79,12 +79,15 @@
        тёмной теме (фон страницы ~#16181d, см. theme.js) кнопка сливалась
        с подложкой почти целиком, виден был только голый текст без формы.
        Синий — как у Admin Abuse красный: свой цвет, не зависящий от темы,
-       поэтому кружок виден всегда одинаково. */
+       поэтому кружок виден всегда одинаково. Строгий дизайн — тот же
+       смысл, но чёрный вместо синего: тёмная тема здесь всё равно не
+       страница theme.js (см. .ow-fab в theme.js, свой p.dark), а светлая
+       разметка редактора/игры, где чёрный на белом читается прекрасно. */
     + 'display:flex;align-items:center;justify-content:center;'
-    + 'background:linear-gradient(135deg,#2196F3,#1976d2);color:#fff;border:none;cursor:pointer;'
-    + 'box-shadow:0 6px 18px rgba(33,150,243,.4);transition:transform .15s,box-shadow .15s}'
+    + 'background:#111827;color:#fff;border:none;cursor:pointer;'
+    + 'box-shadow:0 6px 18px rgba(17,24,39,.4);transition:transform .15s,box-shadow .15s}'
     + '.ow-fab svg{width:21px;height:21px;flex:none}'
-    + '.ow-fab:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(33,150,243,.5)}'
+    + '.ow-fab:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(17,24,39,.5)}'
     + '.ow-ov{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;'
     + 'background:rgba(15,23,42,.55);backdrop-filter:blur(1px);z-index:9998;display:none}'
     + '.ow-box{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;margin:auto;width:360px;max-height:86vh;overflow:auto;height:max-content;'
@@ -99,17 +102,17 @@
        видно, что это именно его персональная панель, а не общая настройка. */
     + '.ow-h2{display:flex;align-items:center;gap:10px;margin:2px 26px 14px 2px;padding-bottom:12px;border-bottom:1px solid var(--line)}'
     + '.ow-h2-ava{width:36px;height:36px;border-radius:50%;flex:0 0 36px;display:flex;align-items:center;justify-content:center;'
-    + 'background:linear-gradient(135deg,#7c3aed,#2196F3);color:#fff;font-size:15px;font-weight:700;text-transform:uppercase}'
+    + 'background:#111827;color:#fff;font-size:15px;font-weight:700;text-transform:uppercase}'
     + '.ow-h2-txt{flex:1;min-width:0;overflow:hidden}'
     + '.ow-h2-title{font-size:14.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
     + '.ow-h2-sub{font-size:11.5px;color:var(--muted)}'
     + '.ow-sub{font-size:12px;font-weight:700;color:var(--muted);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.03em}'
     + '.ow-i{border:1px solid var(--line);border-radius:8px;font-size:14.5px;padding:9px 11px;margin:6px 0;'
     + 'display:block;width:100%;box-sizing:border-box;background:var(--panel);color:var(--ink);transition:border-color .15s}'
-    + '.ow-i:focus{outline:none;border-color:#2196F3}'
-    + '.ow-b{border:1px solid #2196F3;border-radius:8px;text-align:center;font-size:14.5px;font-weight:600;padding:9px 0;'
-    + 'margin:8px 0 4px;display:block;width:100%;background:var(--panel);color:#2196F3;cursor:pointer;transition:background .15s,color .15s}'
-    + '.ow-b:hover{background:#2196F3;color:#fff}'
+    + '.ow-i:focus{outline:none;border-color:#111827}'
+    + '.ow-b{border:1px solid #111827;border-radius:8px;text-align:center;font-size:14.5px;font-weight:600;padding:9px 0;'
+    + 'margin:8px 0 4px;display:block;width:100%;background:var(--panel);color:#111827;cursor:pointer;transition:background .15s,color .15s}'
+    + '.ow-b:hover{background:#111827;color:#fff}'
     + '.ow-m{text-align:center;font-size:12.5px;min-height:16px;margin-top:2px}'
     + '.ow-row2{display:flex;gap:8px}.ow-row2 .ow-i{margin:6px 0}'
     + '.ow-hint{text-align:left;color:var(--muted);font-size:11.5px;line-height:1.4;margin:0 0 6px}'
@@ -122,7 +125,7 @@
     + '.ow-acc > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:9px;'
     + 'padding:11px 12px;font-size:13.5px;font-weight:600;color:var(--ink);user-select:none}'
     + '.ow-acc > summary::-webkit-details-marker{display:none}'
-    + '.ow-acc > summary:hover{background:rgba(33,150,243,.07)}'
+    + '.ow-acc > summary:hover{background:rgba(17,24,39,.07)}'
     + '.ow-acc-icon{width:24px;height:24px;flex:0 0 24px;display:flex;align-items:center;justify-content:center;font-size:14px}'
     + '.ow-acc-chev{margin-left:auto;color:var(--muted);font-size:11px;transition:transform .15s}'
     + '.ow-acc[open] .ow-acc-chev{transform:rotate(90deg)}'
@@ -136,8 +139,8 @@
     + '.ow-ladder-rank{width:34px;flex:0 0 34px;height:26px;border-radius:7px;display:flex;align-items:center;'
     + 'justify-content:center;font-size:12px;font-weight:700;border:1px solid var(--line);color:var(--muted)}'
     + '.ow-ladder-rank[data-r="S"]{color:var(--panel,#fff);background:var(--ink,#111827);border-color:var(--ink,#111827)}'
-    + '.ow-ladder-rank[data-r="A+"],.ow-ladder-rank[data-r="A"]{color:#fff;background:#2196F3;border-color:#2196F3}'
-    + '.ow-ladder-rank[data-r="B+"],.ow-ladder-rank[data-r="B"]{color:#2196F3;border-color:#2196F3}'
+    + '.ow-ladder-rank[data-r="A+"],.ow-ladder-rank[data-r="A"]{color:#fff;background:#111827;border-color:#111827}'
+    + '.ow-ladder-rank[data-r="B+"],.ow-ladder-rank[data-r="B"]{color:#111827;border-color:#111827}'
     + '.ow-ladder-row .ow-i{margin:0;flex:1}'
     + '.ow-tag{display:inline-flex;align-items:center;gap:3px;border:1px solid;border-radius:14px;padding:4px 10px;font-size:11.5px;'
     + 'font-weight:600;cursor:pointer;margin-left:5px;background:var(--panel);white-space:nowrap;transition:background .15s,color .15s}'
@@ -149,7 +152,7 @@
     + '.ow-modes{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;width:100%;align-items:center}'
     + '.ow-mode{border:1px solid #94a3b8;color:#475569;border-radius:12px;padding:4px 9px;'
     + 'font-size:11px;font-weight:600;cursor:pointer;background:var(--panel);white-space:nowrap;transition:background .15s,color .15s}'
-    + '.ow-mode:hover{border-color:#2196F3;color:#2196F3}'
+    + '.ow-mode:hover{border-color:#111827;color:#111827}'
     + '.ow-mode.on{background:#2e9b2e;border-color:#2e9b2e;color:#fff}'
     + '@media(max-width:640px){.ow-box{width:calc(100vw - 24px)}.ow-fab{right:12px;bottom:78px}}'
     /* Резерв места внизу страницы под обе фиксированные кнопки (эту и
