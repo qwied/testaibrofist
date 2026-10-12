@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>AIBrofist — Leaderboards</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <link rel="stylesheet" type="text/css" href="style.css?v=165">
+        <script src="offline.js?v=2"></script>
+<script src="device.js?v=165"></script>
+        <script src="sound.js?v=165"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=165">
+        <style>
+                /* Обёртка страницы обычно .bfWrap, 1080px, как у остальных
+                   разделов — но на этой странице теперь до двух колонок
+                   рядом (очки и ранг, см. .lbGrid ниже), и 1080px делает их
+                   тесными. Раздвигаем шире именно тут, через более
+                   specific override; глобальные 1080px в ui.css остаются
+                   нетронутыми для всех остальных страниц. */
+                /* селектор body .bfWrap (не просто .bfWrap) — этот блок идёт
+                   в <head> РАНЬШЕ <link href="ui.css">, а у него тот же класс
+                   с 1080px; при равной специфичности позже подключённый
+                   файл победил бы, поэтому добавляем "body" ради перевеса */
+                body .bfWrap{max-width:1600px}
+                /* Сам список игроков в полную ширину растягивать незачем —
+                   он читается как список, а не как таблица, поэтому у
+                   каждой колонки свой потолок ширины, а не вся страница. */
+                .lbCol{flex:1 1 420px;max-width:640px;min-width:0}
+                .lbGrid{display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start}
+                .lbColTitle{font-weight:700;font-size:14px;margin-bottom:10px;
+                        color:var(--ink);display:flex;align-items:center;gap:6px}
+                .lbColTitle svg{width:15px;height:15px;color:var(--blue)}
+                .lbRow{display:flex;align-items:center;gap:12px;padding:11px 12px;border-bottom:1px solid #eef1f5}
+                .lbRow.me{background:#eaf4ff;border-radius:6px}
+                .lbPlace{width:34px;text-align:center;font-weight:bold;color:#8b93a1;flex:0 0 auto}
+                .lbRow:nth-child(1) .lbPlace{color:#e2a600;font-size:19px}
+                .lbRow:nth-child(2) .lbPlace{color:#9aa3ad;font-size:17px}
+                .lbRow:nth-child(3) .lbPlace{color:#c08457;font-size:17px}
+                .lbAva{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);overflow:hidden;flex:0 0 auto}
+                .lbAva img{width:100%;display:block}
+                .lbName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                        color:var(--ink);cursor:pointer}
+                .lbName:hover{text-decoration:underline}
+                .lbCoins{font-weight:bold;color:#e2a600;flex:0 0 auto;display:flex;align-items:center;gap:6px}
+                .lbCoins.score{color:var(--blue)}
+                /* тот же приём, что .upScoreBadge на profile: «Scores» рядом с
+                   числом у каждой строки, а не отдельным заголовком над списком.
+                   Маленькая звезда внутри — тот же язык иконок, что и везде на
+                   сайте (см. svg() в shell.js), а не голая цветная плашка. */
+                .lbScoreBadge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px 3px 8px;
+                        border-radius:16px;font-size:10.5px;
+                        font-weight:700;color:#fff;background:var(--blue);text-transform:uppercase;letter-spacing:.02em}
+                .lbScoreBadge svg{width:10px;height:10px;flex:none}
+                /* Ранг навыка рядом с именем — только в режимных таблицах:
+                   монеты о мастерстве ничего не говорят (см. /getLeaderboard).
+                   Только синий/чёрный/белый (тёмная тема — синий/серый/белый),
+                   как и весь остальной сайт: раньше S/A/B/C были каждый своим
+                   цветом (золотой/красный/фиолетовый/серый) и не складывались
+                   в единую лесенку — теперь редкость ранга видна по НАСЫЩЕННОСТИ
+                   одного и того же акцента, а не по случайному набору цветов. */
+                .lbRank{flex:0 0 auto;min-width:30px;text-align:center;padding:2px 7px;border-radius:7px;
+                        font-size:11px;font-weight:800;letter-spacing:.02em;
+                        border:1px solid var(--line);color:var(--muted);background:var(--soft)}
+                /* та же плашка, крупнее — в колонке "по рангу" (.lbGrid) ранг
+                   и есть весь смысл строки, а не мелкая деталь сбоку от очков */
+                .lbRank.big{min-width:46px;padding:5px 12px;font-size:13.5px;border-radius:9px}
+                .lbRank.big[data-r="Declassified"]{font-size:10.5px}
+                .lbRank[data-r="S"]{color:var(--panel);background:var(--ink);border-color:var(--ink)}
+                .lbRank[data-r="A+"],.lbRank[data-r="A"]{color:#fff;background:var(--blue);border-color:var(--blue)}
+                .lbRank[data-r="B+"],.lbRank[data-r="B"]{color:var(--blue);background:transparent;border-color:var(--blue)}
+                .lbRank[data-r="Declassified"]{color:var(--muted);background:transparent;border-color:var(--line);
+                        font-size:9.5px;font-weight:700}
+                .mine{margin-top:22px;padding:13px;border:1px dashed #cfd6de;border-radius:8px;
+                        color:#5b6570;font-size:14px;text-align:center}
+                .empty{color:#8b93a1;text-align:center;padding:50px 10px}
+
+                .lbTabs{display:flex;gap:7px;margin-bottom:10px;flex-wrap:wrap}
+                .lbTab{padding:7px 15px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;
+                        color:#5b6570;background:#f0f3f7;border:1px solid transparent;user-select:none}
+                .lbTab.on{color:#fff;background:var(--blue);border-color:var(--blue)}
+                .lbPeriodTabs{margin-bottom:20px}
+
+                .lbPager{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px}
+                .lbArrow{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--panel);
+                        color:var(--ink);font-size:18px;cursor:pointer;display:flex;align-items:center;
+                        justify-content:center;box-shadow:0 6px 16px -10px rgba(15,23,42,.35)}
+                .lbArrow:hover:not(:disabled){background:var(--soft);border-color:var(--blue);color:var(--blue)}
+                .lbArrow:disabled{opacity:.35;cursor:default}
+                @media (pointer:coarse){ .lbArrow{width:44px;height:44px} }
+                .lbPageLabel{color:#8b93a1;font-size:13px;min-width:40px;text-align:center}
+        </style>
+        <link rel="stylesheet" href="ui.css?v=165">
+        <script src="theme.js?v=165"></script>
+        <link rel="icon" href="favicon.ico" sizes="any">
+        <link rel="icon" type="image/svg+xml" href="favicon.svg">
+        <link rel="apple-touch-icon" href="apple-touch-icon.png">
+        <link rel="manifest" href="site.webmanifest">
+        <meta name="theme-color" content="#111827">
+        <link rel="canonical" href="https://aibrofist.online/leaderboard">
+        <meta name="description" content="Top players by coins and race scores.">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Leaderboard">
+        <meta property="og:description" content="Top players by coins and race scores.">
+        <meta property="og:url" content="https://aibrofist.online/leaderboard">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+<div class="container"></div>
+
+<div class="bfWrap">
+        <div class="bfTitle" data-i18n="leaderboard">Таблица лидеров</div>
+        <div class="bfSub" id="lbSub" data-i18n="lbSub">Обновляется автоматически</div>
+
+        <div class="lbTabs" id="lbMetricTabs">
+                <div class="lbTab on" data-metric="coins" data-i18n="lbTabCoins">Монеты</div>
+                <div class="lbTab" data-metric="score" data-i18n="race">Race</div>
+                <div class="lbTab" data-metric="hs" data-i18n="hideAndSeek">Hide and Seek</div>
+        </div>
+        <div class="lbTabs lbPeriodTabs" id="lbPeriodTabs">
+                <div class="lbTab" data-period="day" data-i18n="lbPeriodDay">Сегодня</div>
+                <div class="lbTab" data-period="week" data-i18n="lbPeriodWeek">За неделю</div>
+                <div class="lbTab on" data-period="all" data-i18n="lbPeriodAll">За всё время</div>
+        </div>
+
+        <div class="lbGrid">
+                <div class="lbCol">
+                        <div id="lbList"><div class="empty" data-i18n="loading">Загрузка…</div></div>
+
+                        <div class="lbPager" id="lbPager" style="display:none">
+                                <button class="lbArrow" id="lbPrev" aria-label="Previous page">‹</button>
+                                <span class="lbPageLabel" id="lbPageLabel"></span>
+                                <button class="lbArrow" id="lbNext" aria-label="Next page">›</button>
+                        </div>
+
+                        <div id="lbMine" class="mine" style="display:none"></div>
+                </div>
+
+                <!-- Только для Race/Hide and Seek — у монет нет ранга навыка.
+                     Отдельная (не страничная) топ-10: это дополнение к основному
+                     списку, а не вторая такая же таблица, поэтому без пейджера. -->
+                <div class="lbCol" id="lbRankCol" style="display:none">
+                        <div class="lbColTitle" id="lbRankTitle"></div>
+                        <div id="lbRankList"></div>
+                        <div id="lbRankMine" class="mine" style="display:none"></div>
+                </div>
+        </div>
+</div>
+
+<script src="account.js?v=165" defer></script>
+<script>
+(function () {
+        var listEl = document.getElementById('lbList');
+        var mineEl = document.getElementById('lbMine');
+        var pagerEl = document.getElementById('lbPager');
+        var pageLabelEl = document.getElementById('lbPageLabel');
+        var prevBtn = document.getElementById('lbPrev');
+        var nextBtn = document.getElementById('lbNext');
+        var rankColEl = document.getElementById('lbRankCol');
+        var rankTitleEl = document.getElementById('lbRankTitle');
+        var rankListEl = document.getElementById('lbRankList');
+        var rankMineEl = document.getElementById('lbRankMine');
+        var STAR = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/></svg>';
+        var MEDAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+                + 'stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="15" r="6"/>'
+                + '<path d="M9 10.5 7 3h3l2 5"/><path d="M15 10.5 17 3h-3l-2 5"/><path d="M12 12v6"/></svg>';
+
+        var state = { metric: 'coins', period: 'all', page: 1 };
+
+        /* переводы строк этого скрипта; i18n.js грузится позже — без него русский запасной вариант */
+        function T(k, f) {
+                try { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; } catch (e) { return f; }
+        }
+
+        function esc(s) { return String(s).replace(/[&<>"]/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+        function unit() {
+                return state.metric === 'coins' ? T('lbCoinsUnit', 'монет') : T('lbScoreUnit', 'очков');
+        }
+        function amountHtml(n) {
+                if (state.metric === 'coins')
+                        return '<div class="lbCoins">' + n + ' ' + (window.BFCoin ? BFCoin.svg(15) : '') + '</div>';
+                // раньше тут были «Race»/«Hide and Seek» — лишнее: режим и так
+                // видно по выбранной вкладке выше, а на каждой строке это
+                // просто дублировалось; тот же ярлык, что и на профиле (см.
+                // raceScoresTitle), чтобы термин совпадал по всему сайту
+                var badge = T('raceScoresTitle', 'Scores');
+                return '<div class="lbCoins score"><span class="lbScoreBadge">' + STAR + esc(badge) + '</span>' + n + '</div>';
+        }
+        // ранг приходит вместе со страницей, только для режимных таблиц;
+        // big — крупный вариант плашки для колонки "по рангу" (.lbRankCol)
+        function rankHtml(name, ranks, big) {
+                var r = ranks && ranks[name];
+                if (!r) return '';
+                var short = r === 'Declassified' ? 'D' : r;
+                return '<div class="lbRank' + (big ? ' big' : '') + '" data-r="' + esc(r) + '" title="' + esc(r) + '">'
+                        + (big ? esc(r) : esc(short)) + '</div>';
+        }
+        function rowHtml(u2, ranks, mine, place, big) {
+                return '<div class="lbRow' + (mine ? ' me' : '') + '">'
+                        + '<div class="lbPlace">' + place + '</div>'
+                        + '<div class="lbAva"><img src="/avatar/0.png" alt="" data-bf-name="' + esc(u2.name) + '"></div>'
+                        + '<div class="lbName" data-n="' + esc(u2.name) + '">' + esc(u2.name) + '</div>'
+                        + rankHtml(u2.name, ranks, big)
+                        + (big ? '' : amountHtml(u2.amount)) + '</div>';
+        }
+
+        function load() {
+                listEl.innerHTML = '<div class="empty">' + T('loading', 'Загрузка…') + '</div>';
+                pagerEl.style.display = 'none';
+                var u = '/getLeaderboard?metric=' + encodeURIComponent(state.metric)
+                        + '&period=' + encodeURIComponent(state.period)
+                        + '&page=' + state.page;
+                fetch(u, { credentials: 'same-origin' })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) {
+                                var top = d.top || [];
+                                var per = d.page || '1/1';
+                                var parts = String(per).split('/');
+                                var cur = parseInt(parts[0], 10) || 1;
+                                var total = parseInt(parts[1], 10) || 1;
+                                state.page = cur;
+
+                                if (!top.length && cur === 1) {
+                                        listEl.innerHTML = '<div class="empty">' + T('lbEmpty', 'Тут пока никого нет') + '</div>';
+                                } else {
+                                        listEl.innerHTML = top.map(function (u2, i) {
+                                                var mine = d.me && d.me.name === u2.name;
+                                                var place = (cur - 1) * 10 + i + 1;
+                                                return rowHtml(u2, d.ranks, mine, place, false);
+                                        }).join('');
+                                }
+
+                                pagerEl.style.display = total > 1 ? 'flex' : 'none';
+                                pageLabelEl.textContent = cur + ' / ' + total;
+                                prevBtn.disabled = cur <= 1;
+                                nextBtn.disabled = cur >= total;
+
+                                if (d.me) {
+                                        mineEl.style.display = 'block';
+                                        mineEl.textContent = d.me.place > 0
+                                                ? T('lbPlaceN', 'Ты на {n} месте · {t}').replace('{n}', d.me.place).replace('{t}', d.me.amount + ' ' + unit())
+                                                : T('lbYouHave', 'У тебя {t}').replace('{t}', d.me.amount + ' ' + unit());
+                                } else {
+                                        mineEl.style.display = 'block';
+                                        mineEl.textContent = T('signForCoins', 'Войди в аккаунт, чтобы монеты и очки сохранялись');
+                                }
+                        })
+                        .catch(function () { listEl.innerHTML = '<div class="empty">' + T('loadFailed', 'Не удалось загрузить') + '</div>'; });
+        }
+
+        /* Вторая колонка — топ по РАНГУ навыка, а не по накопленным очкам
+           (см. комментарий у sortByRank в extras.js): быстро набивший очки
+           новичок и скилловый, но малоиграющий, ветеран иначе выглядели бы
+           одинаково "лучшими". У монет ранга нет вовсе — колонку прячем.
+           Не страничная (всегда первая десятка) — это дополнение к основному
+           списку, а не второй такой же список с пагинацией. */
+        function loadRanks() {
+                if (state.metric === 'coins') { rankColEl.style.display = 'none'; return; }
+                rankColEl.style.display = 'block';
+                rankTitleEl.innerHTML = MEDAL + ' ' + T('lbRankColTitle', 'Top Ranks');
+                rankListEl.innerHTML = '<div class="empty">' + T('loading', 'Загрузка…') + '</div>';
+                var u = '/getLeaderboard?metric=' + encodeURIComponent(state.metric) + '&sort=rank&page=1';
+                fetch(u, { credentials: 'same-origin' })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) {
+                                var top = d.top || [];
+                                if (!top.length) {
+                                        rankListEl.innerHTML = '<div class="empty">' + T('lbRankEmpty', 'Пока никто не наиграл на ранг') + '</div>';
+                                } else {
+                                        rankListEl.innerHTML = top.map(function (u2, i) {
+                                                var mine = d.me && d.me.name === u2.name;
+                                                return rowHtml(u2, d.ranks, mine, i + 1, true);
+                                        }).join('');
+                                }
+                                if (d.me) {
+                                        rankMineEl.style.display = 'block';
+                                        rankMineEl.textContent = d.me.place > 0
+                                                ? T('lbRankPlaceN', 'Your rank place: #{n}').replace('{n}', d.me.place)
+                                                : T('lbRankNone', 'Keep playing to earn a rank');
+                                } else {
+                                        rankMineEl.style.display = 'none';
+                                }
+                        })
+                        .catch(function () { rankListEl.innerHTML = '<div class="empty">' + T('loadFailed', 'Не удалось загрузить') + '</div>'; });
+        }
+
+        document.getElementById('lbMetricTabs').addEventListener('click', function (e) {
+                var t = e.target.closest && e.target.closest('.lbTab');
+                if (!t || !t.dataset.metric) return;
+                if (state.metric === t.dataset.metric) return;
+                Array.prototype.forEach.call(this.querySelectorAll('.lbTab'), function (x) { x.classList.toggle('on', x === t); });
+                state.metric = t.dataset.metric;
+                state.page = 1;
+                load();
+                loadRanks();
+        });
+        document.getElementById('lbPeriodTabs').addEventListener('click', function (e) {
+                var t = e.target.closest && e.target.closest('.lbTab');
+                if (!t || !t.dataset.period) return;
+                if (state.period === t.dataset.period) return;
+                Array.prototype.forEach.call(this.querySelectorAll('.lbTab'), function (x) { x.classList.toggle('on', x === t); });
+                state.period = t.dataset.period;
+                state.page = 1;
+                load();
+        });
+        prevBtn.addEventListener('click', function () { if (state.page > 1) { state.page--; load(); } });
+        nextBtn.addEventListener('click', function () { state.page++; load(); });
+
+        function nameClick(e) {
+                var n = e.target.closest('.lbName');
+                if (n) location.href = 'users?name=' + encodeURIComponent(n.dataset.n);
+        }
+        listEl.addEventListener('click', nameClick);
+        rankListEl.addEventListener('click', nameClick);
+
+        load();
+        loadRanks();
+        setInterval(function () { load(); loadRanks(); }, 15000);
+})();
+</script>
+        <script src="i18n.js?v=165"></script>
+        <script src="owner.js?v=165" defer></script>
+        <script src="coin.js?v=165"></script>
+        <script src="skinRender.js?v=165"></script>
+        <script src="skinAvatar.js?v=165" defer></script>
+        <script src="shell.js?v=165"></script>
+<script src="abuseShow.js?v=165" defer></script>
+</body>
+</html>

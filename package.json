@@ -1,0 +1,25 @@
+{
+  "name": "brofist-multiplayer-1200",
+  "version": "2.0.0",
+  "description": "Brofist.io Multiplayer - Up to 1200+ players",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "echo 'no build step: plain Node/Express server, see CLAUDE.md'",
+    "test:offline": "node test-offline.js"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs": "^4.22.0",
+    "express": "^4.22.2",
+    "gifuct-js": "^2.1.2",
+    "jpeg-js": "^0.4.4",
+    "nsfwjs": "^4.3.0",
+    "pngjs": "^7.0.0",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
+  }
+}

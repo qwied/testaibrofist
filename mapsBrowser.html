@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIBrofist — Maps Browser</title>
+<!-- Раньше тут была зафиксированная ширина 1280 (без своей мобильной
+     раскладки, телефон просто показывал всё в масштабе ~0.3) — из-за
+     этого страница выглядела «слишком отдалённой». Сама раскладка
+     (.mbScroll{overflow-x:auto}) и так уже была рассчитана на прокрутку
+     вбок для Play/Vote на узких экранах — её просто не было видно за
+     фактором масштаба. Теперь полноразмерный масштаб 1:1, а колонки
+     Play/Vote доступны свайпом вбок внутри каждой строки, как и раньше. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="ui.css?v=165">
+<script src="offline.js?v=2"></script>
+<script src="theme.js?v=165"></script>
+<script src="device.js?v=165"></script>
+<script src="sound.js?v=165"></script>
+<style>
+.mbFilters{display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:9px;margin-bottom:6px;align-items:center}
+.mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
+.mbFilters .bfBtn{margin-bottom:0;width:auto;padding:11px 22px}
+
+/* Вся таблица — шапка-колонки и список карт — одно целое: на телефоне
+   они едут по горизонтали СИНХРОННО, одним общим скроллом .mbScroll,
+   а не так, что каждая карточка листается отдельно сама по себе — это
+   была бы уже не "та же таблица, что на компьютере", а россыпь никак
+   не связанных друг с другом кусков. Пейджер — единственное, что
+   прокрутку не ловит: это управление страницей, а не колонка таблицы. */
+.mbTable{display:flex;flex-direction:column}
+.mbHead{display:flex;align-items:center;justify-content:flex-end;gap:10px;
+  padding:4px 16px 12px;border-bottom:1px solid var(--line)}
+.mbHead .bfPager{margin:0;gap:8px}
+.mbHead .bfPager button{width:34px;height:34px;font-size:14px}
+.mbHead .bfPager span{font-weight:700;color:var(--ink)}
+/* .mbScroll — единственное место прокрутки: шапка-колонки и список карт
+   внутри него едут строго синхронно, одним куском, как и положено одной
+   таблице, а не так, что каждая карточка листается сама по себе.
+   .mbScrollInner шириной по содержимому (width:max-content) — поэтому
+   обычные блочные .mbHeadCols/.mbList ниже передают свою настоящую
+   ширину наверх вместо того, чтобы обрезаться раньше времени;
+   min-width:100% держит его на всю ширину экрана, пока содержимое и
+   так помещается (как на компьютере). min-width:0 на самом .mbScroll —
+   чтобы он, в отличие от .mbScrollInner, умел сжаться до ширины
+   экрана, а не раздувать вбок всю страницу. */
+.mbScroll{overflow-x:auto;min-width:0;-webkit-overflow-scrolling:touch}
+.mbScrollInner{width:max-content;min-width:100%}
+.mbHeadCols{display:grid;grid-template-columns:2fr 92px 1.2fr 1.1fr 150px 124px;gap:10px;
+  padding:14px 16px 10px;font-size:13px;font-weight:700;color:var(--blue)}
+.mbList{display:flex;flex-direction:column;gap:12px;padding:0 16px 4px}
+/* .mbRow — само окошко карты (рамка, фон, отступ вокруг всего).
+   .mbRowMain — его строка колонок (Name/Rating/Author/Date/Vote/Play) —
+   РОВНО та же сетка, что и у .mbHeadCols и что на компьютере, никаких
+   отдельных уменьшенных версий под телефон. */
+.mbRow{display:flex;flex-direction:column;gap:8px;
+  padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel,#fff)}
+.mbRow:hover{border-color:var(--blue)}
+/* minmax(0,…) вместо голого Nfr — иначе грид отказывался сжимать колонку
+   ниже естественной ширины её текста (имя карты/автора/даты) и на узких
+   экранах выталкивал Vote/Play за пределы страницы вместо того, чтобы
+   обрезать текст многоточием (для этого и стоит text-overflow:ellipsis
+   у .mbName/.mbAuthor — он не срабатывал без этого). */
+.mbRowMain{display:grid;grid-template-columns:minmax(0,2fr) 92px minmax(0,1.2fr) minmax(0,1.1fr) 150px 124px;gap:10px;align-items:center}
+.mbName{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;min-width:0}
+.mbName span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Звезда и чекбокс — единственные два элемента на странице без своего
+   текста рядом, поэтому у них меньше всего места под палец. min-width/
+   min-height держат площадь нажатия 28px и больше, а сам глиф остаётся
+   того же размера — визуально страница не меняется. */
+.mbFav{flex:0 0 auto;border:none;background:none;padding:0;font-size:17px;line-height:1;
+  cursor:pointer;color:var(--line);min-width:28px;min-height:28px;
+  display:flex;align-items:center;justify-content:center}
+.mbFav:hover{color:#e2a600}
+.mbFav.on{color:#e2a600}
+.mbFavOnly{display:flex;align-items:center;gap:7px;font-size:13.5px;color:var(--muted);
+  white-space:nowrap;cursor:pointer;user-select:none}
+.mbFavOnly input{width:19px;height:19px;cursor:pointer;accent-color:var(--blue)}
+/* Рейтинг — одно число: лайки минус дизлайки.
+   Выше нуля — зелёным, ниже нуля — красным, ноль — нейтральный. */
+.mbRate{font-weight:700;font-size:16.5px;text-align:center}
+.mbRate.pos{color:var(--green)} .mbRate.neg{color:var(--red)} .mbRate.zero{color:var(--muted)}
+.mbAuthor{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mbAuthor a{color:var(--blue);text-decoration:none}
+.mbDate{color:var(--muted);font-size:13.5px;white-space:nowrap}
+/* оценки карты: те же кнопки, что и в браузере скинов */
+.mbVote{display:flex;gap:6px}
+.mbVote button{flex:1;font-size:13px;padding:9px 0;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel,#fff);color:var(--muted);cursor:pointer;min-height:40px}
+.mbVote button:hover{border-color:var(--blue);color:var(--blue)}
+.mbVote button.up.on{border-color:var(--green);color:var(--green);background:#f0fdf4}
+.mbVote button.down.on{border-color:var(--red);color:var(--red);background:#fef2f2}
+
+.mbPlay{width:100%;padding:11px 0;border-radius:22px;border:1px solid var(--blue);
+  background:var(--panel,#fff);color:var(--blue);cursor:pointer;font-weight:700;letter-spacing:.2px}
+.mbPlay:hover{background:var(--blue);color:#fff}
+.mbExtra{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* Свой ряд под остальными колонками — сетка карточки жёстко на 6 колонок,
+   чек-бокс тут лишний седьмой; проще и надёжнее вынести под низ, чем
+   пересчитывать grid-template-columns. */
+.mbPractice{grid-column:1/-1;display:flex;align-items:center;gap:6px;
+  font-size:12.5px;color:var(--muted,#6b7280);cursor:pointer;user-select:none}
+.mbPractice input{cursor:pointer;margin:0}
+/* Неуязвимость/полёт — подопции Practice, поэтому появляются только когда
+   она отмечена (progressive disclosure), а не отдельным пунктом наравне. */
+.mbPracticeOpts{grid-column:1/-1;display:flex;gap:14px;padding-left:20px}
+
+/* Комментарии под картой — своя строка, раскрывается по клику */
+.mbCommentsToggle{grid-column:1/-1;justify-self:start;display:flex;align-items:center;gap:5px;
+  border:none;background:none;padding:2px 0;color:var(--muted,#6b7280);font-size:12.5px;cursor:pointer}
+.mbCommentsToggle:hover{color:var(--blue)}
+.mbCommentsToggle svg{width:14px;height:14px;display:block}
+.mbComments{grid-column:1/-1;border-top:1px solid var(--line);padding-top:10px;margin-top:2px}
+.mbCommentItem{padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.mbCommentItem:last-child{border-bottom:none}
+.mbCommentHead{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.mbCommentAuthor{font-weight:700;color:var(--ink,#111827)}
+.mbCommentDate{color:var(--muted,#6b7280);font-size:11.5px}
+.mbCommentDel{margin-left:auto;border:none;background:none;color:var(--red,#e74c3c);
+  cursor:pointer;font-size:11.5px;padding:0}
+.mbCommentText{white-space:pre-wrap;word-break:break-word;color:var(--ink,#111827)}
+.mbCommentForm{display:flex;gap:8px;margin-top:8px;align-items:flex-start}
+.mbCommentForm textarea{flex:1;resize:vertical;min-height:38px;max-height:120px;padding:8px 10px;
+  border:1px solid var(--line);border-radius:8px;font:13px inherit;background:var(--panel,#fff);
+  color:var(--ink,#111827)}
+.mbCommentForm button{border:1px solid var(--blue);background:#fff;color:var(--blue);
+  border-radius:8px;padding:0 14px;font-weight:600;cursor:pointer;align-self:stretch}
+.mbCommentForm button:hover{background:var(--blue);color:#fff}
+.mbCommentSignIn{color:var(--muted,#6b7280);font-size:12.5px}
+
+/* Медали за время (см. ranks.js/owner.js) — лестница порогов, которую
+   расставляет владелец сайта, и буква, которую уже заработал сам
+   зритель. Те же цвета по буквам, что и в профиле (users.html, .upRank),
+   своя копия: страницы разные, общего стиля между ними нет. */
+.mbMedals{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  font-size:12px;color:var(--muted,#6b7280)}
+.mbMedalGroup{display:inline-flex;gap:5px;align-items:center;flex-wrap:wrap}
+.mbMedalPill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:12px;
+  border:1px solid var(--line);white-space:nowrap}
+.mbMedalPill[data-r="S"]{color:var(--panel,#fff);background:var(--ink,#111827);border-color:var(--ink,#111827)}
+.mbMedalPill[data-r="A+"],.mbMedalPill[data-r="A"]{color:#fff;background:var(--blue);border-color:var(--blue)}
+.mbMedalPill[data-r="B+"],.mbMedalPill[data-r="B"]{color:var(--blue);background:transparent;border-color:var(--blue)}
+.mbMedalMine{font-weight:700}
+
+/* Проигрывание карты прямо в Maps Browser: страница не покидается,
+   адрес остаётся прежним, игра занимает весь экран. */
+.mbOverlay{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;z-index:1000;display:none;background:rgba(15,23,42,.72)}
+.mbOverlay.open{display:block}
+.mbWindow{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;background:var(--panel);overflow:hidden}
+.mbFrame{width:100%;height:100%;border:0}
+.mbDel{border:1px solid var(--red);color:var(--red);background:var(--panel);border-radius:8px;
+  padding:9px 15px;font-size:13px;cursor:pointer}
+.mbDel:hover{background:var(--red);color:#fff}
+
+/* На узком экране строка карты складывается в карточку в два столбца
+   вместо шести колонок в один ряд — Play и Vote видны сразу, без
+   свайпа вбок. Колонки-заголовки (.mbHeadCols) при табличной раскладке
+   не нужны — у каждого поля уже есть подпись по месту. */
+@media (max-width:900px), (orientation:landscape) and (max-height:500px){
+  .mbScroll{overflow-x:visible}
+  .mbScrollInner{width:auto;min-width:0}
+  .mbHeadCols{display:none}
+  .mbRowMain{grid-template-columns:1fr 1fr;row-gap:10px;
+    grid-template-areas:"name name" "author date" "rate vote" "play play"}
+  .mbName{grid-area:name}
+  .mbAuthor{grid-area:author}
+  .mbDate{grid-area:date;text-align:right}
+  .mbRate{grid-area:rate;text-align:left}
+  .mbVote{grid-area:vote}
+  .mbPlay{grid-area:play}
+  /* Фильтры в пять колонок сжимали выпадашки до 26px (текста не видно),
+     а «Обновить» уезжал за правый край. Здесь — по два в ряд, кнопка
+     на всю ширину. */
+  .mbFilters{grid-template-columns:1fr 1fr}
+  .mbFilters .bfBtn{grid-column:1/-1;width:100%}
+}
+/* палец: звезда, оценки, чекбоксы с подписью, листалка и ник автора —
+   площадь нажатия не меньше 44×44 */
+@media (pointer:coarse){
+  .mbFav{min-width:44px;min-height:44px}
+  .mbVote button,.mbFavOnly,.mbPractice,.mbCommentsToggle{min-height:44px}
+  .mbVote button{min-width:44px}
+  .mbFavOnly input,.mbPractice input{width:20px;height:20px}
+  .mbHead .bfPager button{width:44px;height:44px}
+  .mbAuthor a{display:block;line-height:44px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+</style>
+        <link rel="icon" href="favicon.ico" sizes="any">
+        <link rel="icon" type="image/svg+xml" href="favicon.svg">
+        <link rel="apple-touch-icon" href="apple-touch-icon.png">
+        <link rel="manifest" href="site.webmanifest">
+        <meta name="theme-color" content="#111827">
+        <link rel="canonical" href="https://aibrofist.online/mapsBrowser">
+        <meta name="description" content="Player-made maps: rating, authors and modes.">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Maps Browser">
+        <meta property="og:description" content="Player-made maps: rating, authors and modes.">
+        <meta property="og:url" content="https://aibrofist.online/mapsBrowser">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<style>
+/* Плашка «друзья выложили новые карты»: видна только тем, у кого такие
+   карты правда есть, и гаснет сама, как только страница отметила их
+   просмотренными (см. /maps/seen). */
+.mbNew{display:none;align-items:center;gap:9px;margin:-4px 0 14px;padding:10px 13px;
+  border:1px solid var(--green);border-radius:10px;background:var(--soft);font-size:13.5px;color:var(--ink)}
+.mbNew.on{display:flex}
+.mbNew b{color:var(--green)}
+</style>
+<div class="bfWrap">
+  <div class="bfTitle" data-i18n="mapsBrowser">Maps Browser</div>
+  <div class="bfSub" data-i18n="mapsSub">Карты игроков. Открывайте, играйте и оценивайте.</div>
+  <div class="mbNew" id="mbNew"></div>
+
+  <div class="mbFilters">
+    <select class="bfSelect" id="mbMode">
+      <option value="" data-i18n="modeAll">Режим: все</option>
+      <option value="hideAndSeek" data-i18n="hideAndSeek">Прятки</option>
+      <option value="race" data-i18n="race">Гонка</option>
+    </select>
+    <input class="bfInput" id="mbAuthor" data-i18n-ph="colAuthor" placeholder="Автор">
+    <select class="bfSelect" id="mbSort">
+      <option value="date" data-i18n="sortDate">Сортировать по дате</option>
+      <option value="rating" data-i18n="sortRating">Сортировать по рейтингу</option>
+      <option value="dislikes" data-i18n="sortDislikes">Sort by dislikes</option>
+      <option value="oldest" data-i18n="sortOldest">Sort by oldest</option>
+    </select>
+    <label class="mbFavOnly"><input type="checkbox" id="mbFavOnly">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/></svg>
+      <span data-i18n="favOnly">Только избранные</span></label>
+    <button class="bfBtn go" id="mbGo" data-i18n="refresh">Обновить</button>
+  </div>
+
+  <div class="mbTable">
+    <div class="mbHead">
+      <div class="bfPager">
+        <button id="mbPrev">&lt;</button><span id="mbPage">1/1</span><button id="mbNext">&gt;</button>
+      </div>
+    </div>
+    <div class="mbScroll"><div class="mbScrollInner">
+      <div class="mbHeadCols">
+        <div data-i18n="colName">Название</div>
+        <div data-i18n="colRating" style="text-align:center">Рейтинг</div>
+        <div data-i18n="colAuthor">Автор</div>
+        <div data-i18n="colDate">Дата</div>
+        <div data-i18n="colVote">Голос</div>
+        <div></div>
+      </div>
+      <div id="mbList"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
+    </div></div>
+  </div>
+  <div class="bfMsg" id="mbMsg"></div>
+</div>
+
+<div class="mbOverlay" id="mbOverlay">
+  <div class="mbWindow">
+    <iframe class="mbFrame" id="mbFrame" title="Map"></iframe>
+  </div>
+</div>
+
+<link rel="stylesheet" href="mobile.css?v=165">
+<script src="i18n.js?v=165"></script>
+<script src="coin.js?v=165"></script>
+<script src="skinRender.js?v=165"></script>
+<script src="skinAvatar.js?v=165" defer></script>
+<script src="shell.js?v=165"></script>
+<script src="abuseShow.js?v=165" defer></script>
+<script src="account.js?v=165" defer></script>
+<script src="owner.js?v=165" defer></script>
+<script>
+(function () {
+  'use strict';
+  var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; };
+  var $ = function (id) { return document.getElementById(id); };
+  var page = 1, pages = 1, me = null;
+
+  var THUMB_UP = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+    + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">'
+    + '<path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>';
+  var THUMB_DOWN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+    + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">'
+    + '<path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>';
+  var COMMENT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 '
+    + '8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 '
+    + '8.48 0 0 1 8 8v.5z"/></svg>';
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c];
+    });
+  }
+  var STAR_ON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">'
+    + '<path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/></svg>';
+  var STAR_OFF = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" '
+    + 'stroke-linecap="round" stroke-linejoin="round">'
+    + '<path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/></svg>';
+  function msg(t, ok) {
+    var m = $('mbMsg');
+    m.textContent = t; m.style.color = ok ? 'var(--green)' : 'var(--red)';
+    clearTimeout(msg._t); msg._t = setTimeout(function () { m.textContent = ''; }, 4000);
+  }
+  function post(url, data) {
+    return fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: Object.keys(data).map(function (k) {
+        return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
+      }).join('&')
+    }).then(function (r) { return r.json(); });
+  }
+  function when(ms) {
+    var d = new Date(ms);
+    // сайт всегда на английском — формат даты не зависит от локали браузера
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US',
+      { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  /* Медали за время (см. rankForTime в ranks.js) — лестницу порогов задаёт
+     владелец сайта (см. "Ранг" в owner.js), m.rankTiers/m.myMedal приходят
+     прямо в /getMaps. Один и тот же порядок букв, что и везде в игре. */
+  var RANK_ORDER = ['S', 'A+', 'A', 'B+', 'B', 'C+', 'C'];
+  function ladderText(tiers, dir) {
+    var byRank = {}; (tiers || []).forEach(function (t) { byRank[t.rank] = t.ms; });
+    return RANK_ORDER.filter(function (r) { return byRank[r] > 0; }).map(function (r) {
+      return esc(r) + (dir === 'max' ? '≥' : '≤') + Math.round(byRank[r] / 100) / 10 + 's';
+    }).join(' · ');
+  }
+  function medalsRow(m) {
+    if (!m.rankTiers) return '';
+    var mine = m.myMedal || {};
+    var groups = [];
+    if (m.mapType === 'race' && m.rankTiers.race) {
+      groups.push({ label: T('mapRankRace', 'Finish'), txt: ladderText(m.rankTiers.race, 'min'), mine: mine.race });
+    }
+    if (m.rankTiers.hider) groups.push({ label: T('mapRankHider', 'Hider'), txt: ladderText(m.rankTiers.hider, 'max'), mine: mine.hider });
+    if (m.rankTiers.seeker) groups.push({ label: T('mapRankSeeker', 'Seeker'), txt: ladderText(m.rankTiers.seeker, 'min'), mine: mine.seeker });
+    if (!groups.length) return '';
+    return '<div class="mbMedals">' + groups.map(function (g) {
+      return '<span class="mbMedalGroup">' + esc(g.label) + ': ' + g.txt
+        + (g.mine ? ' <span class="mbMedalPill mbMedalMine" data-r="' + esc(g.mine) + '">'
+                   + T('mapRankYours', 'your best') + ' ' + esc(g.mine) + '</span>' : '')
+        + '</span>';
+    }).join('') + '</div>';
+  }
+
+  function row(m) {
+    var mine = me && !me.guest &&
+               String(me.name).toLowerCase() === String(m.author).toLowerCase();
+    var rc = m.rating > 0 ? 'pos' : (m.rating < 0 ? 'neg' : 'zero');
+    return '<div class="mbRow" data-map="' + esc(m.mapName) + '" data-author="' + esc(m.author) + '" data-type="' + esc(m.mapType) + '">'
+      + '<div class="mbRowMain">'
+      + '<div class="mbName" title="' + esc(m.mapName) + '">'
+      +   '<button class="mbFav' + (m.myFavorite ? ' on' : '') + '" data-fav="1" title="'
+      +     T('favToggle', 'В избранное') + '">' + (m.myFavorite ? STAR_ON : STAR_OFF) + '</button>'
+      +   '<span>' + esc(m.mapName) + '</span></div>'
+      + '<div class="mbRate ' + rc + '">' + m.rating + '</div>'
+      + '<div class="mbAuthor"><a href="users?name=' + encodeURIComponent(m.author) + '">'
+      +   esc(m.author) + '</a></div>'
+      + '<div class="mbDate">' + when(m.date) + '</div>'
+      + '<div class="mbVote">'
+      +   '<button class="up' + (m.myVote > 0 ? ' on' : '') + '" data-vote="1">'
+      +     THUMB_UP + ' ' + m.likes + '</button>'
+      +   '<button class="down' + (m.myVote < 0 ? ' on' : '') + '" data-vote="-1">'
+      +     THUMB_DOWN + ' ' + m.dislikes + '</button>'
+      + '</div>'
+      + '<button class="mbPlay" data-play="1">' + T('play', 'Играть') + '</button>'
+      + '</div>'
+      + medalsRow(m)
+      + '<label class="mbPractice" title="' + T('practiceHint', 'Умирая, возвращаешься туда, где умер, а не на старт')
+      +   '"><input type="checkbox" data-practice="1"> ' + T('practiceTxt', 'Practice') + '</label>'
+      + '<span class="mbPracticeOpts" style="display:none">'
+      +   '<label class="mbPractice" title="' + T('godHint', 'Не умираешь от опасностей и падения за карту')
+      +     '"><input type="checkbox" data-god="1"> ' + T('godTxt', 'Неуязвимость') + '</label>'
+      +   '<label class="mbPractice" title="' + T('flyHint', 'Свободный полёт вместо прыжка и гравитации')
+      +     '"><input type="checkbox" data-fly="1"> ' + T('flyTxt', 'Полёт') + '</label>'
+      + '</span>'
+      + '<button class="mbCommentsToggle" data-comments-toggle="1" data-count="' + (m.commentCount || 0) + '">' + COMMENT_ICON
+      +   ' <span>' + T('commentsTxt', 'Комментарии') + ' (' + (m.commentCount || 0) + ')</span></button>'
+      + '<div class="mbComments" style="display:none">'
+      +   '<div class="mbCommentsList"></div>'
+      +   (me && !me.guest
+            ? '<div class="mbCommentForm"><textarea maxlength="300" placeholder="'
+              + T('commentPh', 'Написать комментарий…') + '"></textarea>'
+              + '<button data-comment-send="1">' + T('send', 'Отправить') + '</button></div>'
+            : '<div class="mbCommentSignIn">' + T('signInToComment', 'Войдите, чтобы оставить комментарий') + '</div>')
+      + '</div>'
+      + (mine ? '<div class="mbExtra"><button class="mbDel" data-del="1">'
+                + T('removeTxt', 'Удалить') + '</button></div>' : '')
+      + '</div>';
+  }
+
+  function load() {
+    $('mbList').innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
+    var q = '?page=' + page
+          + '&mapType=' + encodeURIComponent($('mbMode').value)
+          + '&author=' + encodeURIComponent($('mbAuthor').value.trim())
+          + '&sortBy=' + $('mbSort').value
+          + '&favoritesOnly=' + ($('mbFavOnly').checked ? '1' : '0');
+    fetch('/getMapsForList' + q, { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var lbl = String(d.page || '1/1').split('/');
+        page = parseInt(lbl[0], 10) || 1;
+        pages = parseInt(lbl[1], 10) || d.pages || 1;
+        $('mbPage').textContent = page + '/' + pages;
+        $('mbPrev').disabled = page <= 1;
+        $('mbNext').disabled = page >= pages;
+        $('mbList').innerHTML = (d.maps && d.maps.length)
+          ? '<div class="mbList">' + d.maps.map(row).join('') + '</div>'
+          : '<div class="bfHint">' + T('noMaps', 'Карты не найдены') + '</div>';
+        // панель владельца дорисует свои кнопки, если она загружена
+        window.dispatchEvent(new CustomEvent('bf-maps-drawn', { detail: { maps: d.maps || [] } }));
+      })
+      .catch(function () {
+        $('mbList').innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>';
+      });
+  }
+
+  // Неуязвимость/полёт видны, только пока отмечена сама Practice — иначе
+  // включённые галочки простаивают, а карточка выглядит захламлённой.
+  document.addEventListener('change', function (e) {
+    if (!e.target.matches('[data-practice]')) return;
+    var r = e.target.closest('.mbRow');
+    var opts = r && r.querySelector('.mbPracticeOpts');
+    if (!opts) return;
+    opts.style.display = e.target.checked ? 'flex' : 'none';
+    if (!e.target.checked) {
+      Array.prototype.forEach.call(opts.querySelectorAll('input[type=checkbox]'), function (cb) { cb.checked = false; });
+    }
+  });
+
+  document.addEventListener('click', function (e) {
+    var r = e.target.closest && e.target.closest('.mbRow');
+    if (!r) return;
+
+    if (e.target.closest('[data-play]')) {
+      var pc = r.querySelector('[data-practice]');
+      var practiceOn = !!(pc && pc.checked);
+      var gc = r.querySelector('[data-god]'), fc = r.querySelector('[data-fly]');
+      openPlay(r.dataset.map, r.dataset.author, practiceOn,
+        practiceOn && !!(gc && gc.checked), practiceOn && !!(fc && fc.checked));
+      return;
+    }
+
+    var f = e.target.closest('[data-fav]');
+    if (f) {
+      post('/mapFavorite', { author: r.dataset.author, mapName: r.dataset.map })
+        .then(function (x) {
+          if (x.status !== 'success') { msg(x.message || T('errorTxt', 'Ошибка')); return; }
+          f.classList.toggle('on', x.myFavorite);
+          f.innerHTML = x.myFavorite ? STAR_ON : STAR_OFF;
+          if ($('mbFavOnly').checked && !x.myFavorite) load();
+        }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var v = e.target.closest('[data-vote]');
+    if (v) {
+      post('/uploadVote', {
+        author: r.dataset.author, mapName: r.dataset.map, vote: v.dataset.vote
+      }).then(function (x) {
+        if (x.status !== 'success') { msg(x.message || T('errorTxt', 'Ошибка')); return; }
+        load();
+      }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var del = e.target.closest('[data-del]');
+    if (del) {
+      // удаление в два касания — чтобы карта не пропала от случайного тапа
+      if (del.dataset.armed !== '1') {
+        del.dataset.armed = '1';
+        del.textContent = T('confirmDel', 'Точно удалить?');
+        setTimeout(function () {
+          if (del.dataset.armed === '1') {
+            del.dataset.armed = ''; del.textContent = T('removeTxt', 'Удалить');
+          }
+        }, 4000);
+        return;
+      }
+      post('/removeMap', { mapName: r.dataset.map, author: r.dataset.author })
+        .then(function (x) {
+          if (x.status === 'success') { msg(T('deleted', 'Карта удалена'), true); load(); }
+          else msg(x.message || T('errorTxt', 'Ошибка'));
+        })
+        .catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var ct = e.target.closest('[data-comments-toggle]');
+    if (ct) {
+      var panel = r.querySelector('.mbComments');
+      var open = panel.style.display !== 'none';
+      panel.style.display = open ? 'none' : 'block';
+      if (!open && !panel.dataset.loaded) loadComments(r, panel);
+      return;
+    }
+
+    var send = e.target.closest('[data-comment-send]');
+    if (send) {
+      var ta = r.querySelector('.mbCommentForm textarea');
+      var text = (ta.value || '').trim();
+      if (!text) return;
+      send.disabled = true;
+      post('/addMapComment', { author: r.dataset.author, mapName: r.dataset.map, text: text })
+        .then(function (x) {
+          send.disabled = false;
+          if (x.status !== 'success') { msg(x.message || T('errorTxt', 'Ошибка')); return; }
+          ta.value = '';
+          var list = r.querySelector('.mbCommentsList');
+          if (!list.querySelector('.mbCommentItem')) list.innerHTML = '';
+          list.insertAdjacentHTML('beforeend', commentHtml(x.comment));
+          bumpCommentCount(r, 1);
+        })
+        .catch(function () { send.disabled = false; msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var cdel = e.target.closest('[data-comment-del]');
+    if (cdel) {
+      post('/deleteMapComment', { author: r.dataset.author, mapName: r.dataset.map, id: cdel.dataset.id })
+        .then(function (x) {
+          if (x.status !== 'success') { msg(x.message || T('errorTxt', 'Ошибка')); return; }
+          var list = r.querySelector('.mbCommentsList');
+          cdel.closest('.mbCommentItem').remove();
+          if (!list.querySelector('.mbCommentItem')) list.innerHTML = '<div class="bfHint">' + T('noComments', 'Пока нет комментариев') + '</div>';
+          bumpCommentCount(r, -1);
+        })
+        .catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+    }
+  });
+
+  function bumpCommentCount(r, delta) {
+    var btn = r.querySelector('[data-comments-toggle]');
+    var n = Math.max(0, (parseInt(btn.dataset.count, 10) || 0) + delta);
+    btn.dataset.count = n;
+    btn.querySelector('span').textContent = T('commentsTxt', 'Комментарии') + ' (' + n + ')';
+  }
+
+  function commentHtml(c) {
+    return '<div class="mbCommentItem"><div class="mbCommentHead">'
+      + '<span class="mbCommentAuthor">' + esc(c.author) + '</span>'
+      + '<span class="mbCommentDate">' + when(c.date) + '</span>'
+      + (c.canDelete ? '<button class="mbCommentDel" data-comment-del="1" data-id="' + esc(c.id) + '">'
+          + T('removeTxt', 'Удалить') + '</button>' : '')
+      + '</div><div class="mbCommentText">' + esc(c.text) + '</div></div>';
+  }
+
+  function loadComments(r, panel) {
+    var list = panel.querySelector('.mbCommentsList');
+    list.innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
+    fetch('/getMapComments?author=' + encodeURIComponent(r.dataset.author)
+        + '&mapName=' + encodeURIComponent(r.dataset.map), { credentials: 'same-origin' })
+      .then(function (resp) { return resp.json(); })
+      .then(function (d) {
+        panel.dataset.loaded = '1';
+        var comments = d.comments || [];
+        list.innerHTML = comments.length
+          ? comments.map(commentHtml).join('')
+          : '<div class="bfHint">' + T('noComments', 'Пока нет комментариев') + '</div>';
+      })
+      .catch(function () { list.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
+  }
+
+  /* ---- проигрывание карты внутри Maps Browser ----
+     Раньше PLAY уводил на game.html — ссылка в адресной строке менялась.
+     Теперь карта открывается поверх списка на весь экран: страница
+     и адрес остаются Maps Browser. */
+  function openPlay(mapName, author, practice, god, fly) {
+    $('mbFrame').src = 'game?view=' + encodeURIComponent(mapName)
+                     + '&author=' + encodeURIComponent(author)
+                     + (practice ? '&practice=1' : '')
+                     + (god ? '&god=1' : '')
+                     + (fly ? '&fly=1' : '');
+    $('mbOverlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closePlay() {
+    $('mbOverlay').classList.remove('open');
+    $('mbFrame').src = 'about:blank';   // игра в кадре останавливается
+    document.body.style.overflow = '';
+  }
+  $('mbOverlay').addEventListener('click', function (e) {
+    if (e.target === this) closePlay();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && $('mbOverlay').classList.contains('open')) closePlay();
+  });
+  // без верхней плашки с «Закрыть» выйти можно только кнопкой «Меню» самой
+  // игры — она внутри iframe и достаёт нас этим сообщением (см. gExit в game.js)
+  window.addEventListener('message', function (e) {
+    if (e.origin === location.origin && e.data && e.data.type === 'bfClosePractice') closePlay();
+  });
+
+  $('mbGo').onclick = function () { page = 1; load(); };
+  $('mbPrev').onclick = function () { if (page > 1) { page--; load(); } };
+  $('mbNext').onclick = function () { if (page < pages) { page++; load(); } };
+  $('mbMode').onchange = function () { page = 1; load(); };
+  $('mbSort').onchange = function () { page = 1; load(); };
+  $('mbFavOnly').onchange = function () { page = 1; load(); };
+  $('mbAuthor').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { page = 1; load(); }
+  });
+
+  /* Новые карты друзей. Сводку берём из того же /notifications, что
+     подсвечивает пункт меню, — чтобы плашка и значок всегда говорили
+     одно и то же. Сразу после показа отмечаем карты просмотренными:
+     игрок уже здесь, значок в меню должен погаснуть. */
+  function showNewMaps() {
+    fetch('/notifications', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var mp = (d && d.maps) || {};
+        if (mp.count) {
+          var who = (mp.authors || []).join(', ');
+          // одна карта и несколько — разные формы, иначе выходит «1 Новые карты»
+          var lbl = mp.count === 1 ? T('newMapFrom', 'New map from')
+                                   : T('newMapsFrom', 'New maps from');
+          $('mbNew').innerHTML = '<b>' + mp.count + '</b> ' + lbl + ' ' + esc(who);
+          $('mbNew').classList.add('on');
+        }
+        /* Отметку двигаем на КАЖДОМ заходе, а не только когда есть что
+           показать: именно первый заход и заводит точку отсчёта, от
+           которой считаются «новые» карты. Без этого у игрока, который
+           ещё ни разу сюда не заходил, отметки нет, и уведомление не
+           появится никогда. */
+        if (d && !d.guest) {
+          return fetch('/maps/seen', { method: 'POST', credentials: 'same-origin' })
+            .then(function () {
+              if (window.BFShell && BFShell.refreshNotifications) BFShell.refreshNotifications();
+            });
+        }
+      })
+      .catch(function () {});
+  }
+
+  fetch('/whoAmI', { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { me = d; load(); showNewMaps(); })
+    .catch(load);
+
+  window.addEventListener('bf-lang', load);
+})();
+</script>
+</body>
+</html>

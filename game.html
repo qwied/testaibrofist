@@ -1,0 +1,3875 @@
+<!DOCTYPE html>
+<html data-page="editor" lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<!-- Заголовок вкладки переставляется на конкретный режим сразу же в
+     game.js (там уже известен MODE из query-параметра) — этот вариант
+     виден только на долю секунды, пока скрипты не выполнились. Раньше
+     тут было унаследованное от editor.html «Map Editor» — неверно для
+     страницы самой игры, а после переключения режима так и оставалось. -->
+<title>AIBrofist — Game</title>
+<style>
+:root{
+  --accent:#111827; --accent-dark:#000000; --ink:#1e2530; --muted:#8b93a1;
+  --line:#dfe3ea; --panel:#ffffff; --shadow:0 6px 24px rgba(23,32,50,.10), 0 1px 3px rgba(23,32,50,.08);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;overflow:hidden;height:100%;width:100%;touch-action:none;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  background:#f4f6fa;color:var(--ink);-webkit-font-smoothing:antialiased}
+canvas{display:block;position:absolute;inset:0;touch-action:none}
+
+/* ===== мобильная раскладка редактора ===== */
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1100px){
+  #modes{top:8px;left:8px;right:8px;overflow-x:auto;max-width:calc(100vw - 16px);
+    -webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #modes::-webkit-scrollbar{display:none}
+  .modeBtn{padding:9px 11px;font-size:12px;white-space:nowrap}
+  #apoc{top:54px;left:8px;right:8px;overflow-x:auto;max-width:calc(100vw - 16px);
+    -webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #apoc::-webkit-scrollbar{display:none}
+  .apocBtn{padding:8px 10px;font-size:11px;white-space:nowrap}
+
+  #scene{top:auto;bottom:70px;left:50%;transform:translateX(-50%);
+    max-width:calc(100vw - 16px);overflow-x:auto;scrollbar-width:none}
+  #scene::-webkit-scrollbar{display:none}
+
+  #tools{left:0;right:0;top:auto;bottom:0;transform:none;width:auto;max-height:none;
+    flex-direction:row;overflow-x:auto;overflow-y:hidden;padding:6px 8px;
+    border-radius:0;gap:4px;scrollbar-width:none}
+  #tools::-webkit-scrollbar{display:none}
+  #tools > *{flex:0 0 auto}
+
+  /* панель свойств раньше растягивалась почти на весь экран и закрывала
+     карту белым — теперь это невысокий лист над панелью инструментов */
+  #insp{right:8px;left:8px;top:auto;bottom:64px;transform:none;width:auto;
+    max-height:34vh;border-radius:12px;z-index:20}
+  #props,#widgets{max-height:26vh}
+  #widgets{font-size:13.5px;padding:12px 14px}
+
+  #zIn,#zOut,#zLabel{padding:10px 12px}
+}
+/* пальцем удобнее целиться по крупным кнопкам */
+@media (pointer: coarse){
+  .sBtn,.tBtn,#tools > div{min-width:44px;min-height:44px}
+}
+
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);user-select:none}
+
+/* modes */
+#modes{position:fixed;top:14px;left:14px;display:flex;padding:4px;gap:2px;z-index:10}
+.modeBtn{padding:8px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;
+  color:var(--muted);transition:.14s;white-space:nowrap}
+.modeBtn:hover{background:#eef2f8;color:var(--ink)}
+.modeBtn.on{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(17,24,39,.3)}
+/* Модификация карты — отдельной строкой под режимом: режим решает, какие
+   объекты вообще есть, а модификация — по каким правилам в них играют. */
+#apoc{position:fixed;top:62px;left:14px;display:flex;padding:4px;gap:2px;z-index:10}
+.apocBtn{padding:7px 12px;border-radius:8px;cursor:pointer;font-size:11.5px;font-weight:600;
+  color:var(--muted);transition:.14s;white-space:nowrap}
+.apocBtn:hover{background:#eef2f8;color:var(--ink)}
+.apocBtn.on{background:#16a34a;color:#fff;box-shadow:0 2px 8px rgba(22,163,74,.35)}
+.apocBtn.on[data-apoc="1"]{background:#65a30d;box-shadow:0 2px 8px rgba(101,163,13,.4)}
+
+/* top bar */
+#scene{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;padding:4px;gap:2px;z-index:10}
+.sBtn{width:42px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;transition:.14s;position:relative}
+.sBtn:hover{background:#eef2f8}
+.sBtn:active{transform:scale(.93)}
+.sBtn svg{width:19px;height:19px;stroke:var(--ink);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.sBtn.play svg{fill:#16a34a;stroke:#16a34a}
+.sBtn.on{background:var(--accent)}
+.sBtn.on svg{stroke:#fff;fill:none}
+.sep{width:1px;background:var(--line);margin:6px 3px}
+.sBtn[data-tip]:hover::after{content:attr(data-tip);position:absolute;top:42px;left:50%;transform:translateX(-50%);
+  background:#1e2530;color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none}
+
+/* tools */
+#tools{position:fixed;left:14px;top:50%;transform:translateY(-50%);width:46px;padding:5px;
+  display:flex;flex-direction:column;gap:2px;z-index:10;max-height:82vh;overflow-y:auto;scrollbar-width:thin}
+#tools::-webkit-scrollbar{width:0}
+.tool{width:36px;height:36px;display:none;align-items:center;justify-content:center;border-radius:8px;
+  cursor:pointer;transition:.12s;flex-shrink:0;position:relative}
+.tool:hover{background:#eef2f8}
+.tool.on{background:var(--accent);box-shadow:0 2px 8px rgba(17,24,39,.3)}
+.tool canvas{position:static;width:24px;height:24px;pointer-events:none}
+.tool.on canvas{filter:brightness(0) invert(1)}
+.tool[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:44px;top:50%;transform:translateY(-50%);
+  background:#1e2530;color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:30;pointer-events:none}
+
+/* inspector */
+#insp{position:fixed;right:14px;top:50%;transform:translateY(-50%);width:248px;z-index:10;display:none;
+  max-height:78vh;overflow:hidden;display:none;flex-direction:column}
+#inspHead{display:flex;padding:4px;gap:2px;border-bottom:1px solid var(--line)}
+.tab{flex:1;text-align:center;padding:7px 0;border-radius:8px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
+.tab.on{background:#eef2f8;color:var(--ink)}
+#props,#widgets{padding:10px 12px;overflow-y:auto;font-size:12.5px}
+#objTitle{display:flex;align-items:center;gap:8px;font-weight:700;font-size:12px;letter-spacing:.4px;
+  text-transform:uppercase;color:var(--accent);margin-bottom:9px}
+#objTitle span{margin-left:auto;color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0}
+.pRow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0}
+.pRow label{color:#5b6472;font-size:12px}
+.pRow input[type=number],.pRow input[type=text],.pRow select{width:94px;padding:5px 8px;border:1px solid var(--line);
+  border-radius:7px;font-size:12px;font-family:inherit;color:var(--ink);background:#fafbfd;outline:none}
+.pRow input:focus,.pRow select:focus{border-color:var(--accent);background:#fff}
+.pRow input[type=color]{width:44px;height:26px;padding:1px;border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer}
+.pRow input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
+.pRow input[type=range]{width:100px;accent-color:var(--accent)}
+/* объяснение связей механизмов — свёрнуто, разворачивается по клику */
+.pHelp{margin:6px 0 2px}
+.pHelpHead{font-size:11.5px;color:var(--accent);cursor:pointer;padding:6px 0;user-select:none}
+.pHelpBody{display:none;font-size:11.5px;line-height:1.7;color:#5b6673;
+  background:#f6f8fb;border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-top:4px}
+.pHelpBody code{background:#e6ebf2;border-radius:4px;padding:1px 5px;font-size:11px}
+.grp{margin:13px 0 5px;padding-top:9px;border-top:1px solid var(--line);font-size:10.5px;font-weight:700;
+  letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+.pClearWrap{display:flex;align-items:center;gap:5px}
+.pClearBtn{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:6px;
+  width:24px;height:24px;line-height:1;cursor:pointer;font-size:14px;flex:0 0 auto;padding:0}
+.pClearBtn:hover{background:#ef4444;color:#fff;border-color:#ef4444}
+.zBtns{display:flex;gap:5px;margin-top:5px}
+.zBtns div{flex:1;text-align:center;padding:6px 0;border:1px solid var(--line);border-radius:7px;
+  font-size:11px;cursor:pointer;background:#fafbfd}
+.zBtns div:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* Связи кликом: уже выбранные цели — чипами, добавление — одной кнопкой вместо ручного ввода ID */
+.lnkChips{display:flex;flex-wrap:wrap;gap:5px}
+.lnkEmpty{font-size:11px;color:var(--muted)}
+.lnkChip{display:inline-flex;align-items:center;gap:4px;background:#eef2f8;border:1px solid var(--line);
+  border-radius:999px;padding:3px 4px 3px 9px;font-size:11px;color:var(--ink)}
+.lnkChipX{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;
+  width:16px;height:16px;line-height:1;border-radius:50%;padding:0}
+.lnkChipX:hover{background:#ef4444;color:#fff}
+.lnkAdd{text-align:center;padding:7px 0;border:1px dashed var(--line);border-radius:7px;
+  font-size:11.5px;cursor:pointer;background:#fafbfd;color:var(--accent)}
+.lnkAdd:hover{background:#eef2f8}
+.lnkAdd.on{background:var(--accent);border-style:solid;color:#fff}
+#widgets{color:#5b6472;line-height:1.65}
+#widgets code{background:#eef2f8;padding:1px 5px;border-radius:4px;font-size:11px;color:var(--accent-dark)}
+#widgets b{color:var(--ink)}
+
+/* bottom-left cluster */
+
+/* zoom */
+#zoomBox{position:fixed;right:14px;bottom:14px;display:flex;padding:3px;z-index:11}
+.zBtn{min-width:32px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:7px;
+  cursor:pointer;font-size:15px;color:#5b6472;transition:.12s}
+.zBtn:hover{background:#eef2f8;color:var(--ink)}
+#zLabel{font-size:12px;font-weight:600;min-width:48px}
+
+/* play */
+body.play #tools,body.play #insp,body.play #modes,body.play #zoomBox,body.play #hint,body.play #apoc{display:none!important}
+#hud{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:12;
+  padding:8px 10px;align-items:center;gap:6px}
+body.play #hud{display:flex}
+.stat{display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:8px;background:#f4f6fa;font-size:12.5px;font-weight:600}
+.stat i{font-style:normal;font-size:13px}
+#exitBtn{padding:6px 13px;border-radius:8px;background:#fee2e2;color:#dc2626;font-size:12px;
+  font-weight:600;cursor:pointer;transition:.14s}
+#exitBtn:hover{background:#dc2626;color:#fff}
+#msg{position:fixed;top:42%;left:50%;transform:translate(-50%,-50%) scale(.9);z-index:13;text-align:center;
+  display:none;pointer-events:none;opacity:0;transition:.32s cubic-bezier(.2,1.2,.3,1)}
+#msg.show{display:block;opacity:1;transform:translate(-50%,-50%) scale(1)}
+#msg h1{margin:0;font-size:52px;font-weight:800;letter-spacing:-1.5px;
+  background:linear-gradient(180deg,#fbbf24,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 3px 10px rgba(245,158,11,.35))}
+#msg p{margin:8px 0 0;font-size:13.5px;color:#5b6472;font-weight:500}
+
+#pad{display:none;position:fixed;bottom:0;left:0;right:0;z-index:13;
+  padding:0 18px calc(20px + env(safe-area-inset-bottom));justify-content:space-between;pointer-events:none}
+body.play.mob #pad{display:flex}
+/* Пад в настоящих CSS-пикселях: viewport теперь width=device-width, и
+   растягивать его обратно (бывший --padZoom = 1280/screen.width под
+   старый пин на 1280px) больше нельзя — на телефоне кнопки выходили
+   втрое больше и правая уезжала за край экрана. */
+.padG{display:flex;gap:13px;pointer-events:auto}
+/* стрелки — SVG, а не символы ◀/▶: на телефонах те рисовались цветными эмодзи */
+.pBtn svg{width:40%;height:40%;display:block;fill:currentColor}
+.pBtn{width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.9);border:1px solid var(--line);
+  box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:23px;color:#5b6472;
+  user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.pBtn:active{background:var(--accent);color:#fff;transform:scale(.93)}
+#pJump{width:78px;height:78px;font-size:13px;font-weight:800;letter-spacing:.5px}
+.pBtn{touch-action:none;-webkit-touch-callout:none}
+/* на телефоне кнопки крупнее: играют большими пальцами, и ничего не должно
+   залезать под системные полосы iPhone (чёлка сбоку в альбомной, жесты снизу) */
+@media (pointer:coarse){
+  #pad{padding-left:calc(18px + env(safe-area-inset-left,0px));
+    padding-right:calc(18px + env(safe-area-inset-right,0px));
+    padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+  .padG{gap:15px}
+  .pBtn{width:74px;height:74px;font-size:26px}
+  #pJump{width:92px;height:92px;font-size:14px}
+}
+
+/* dialog */
+#dlg{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;z-index:200;display:none}
+#dlg .bd{position:absolute;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;background:rgba(15,23,42,.5);backdrop-filter:blur(3px)}
+#dlg .card{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:300px;max-width:430px;
+  background:#fff;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.3);padding:20px 22px}
+#dlg h3{margin:0 0 7px;font-size:15px}
+#dlg p{margin:0 0 16px;font-size:13px;color:#5b6472;line-height:1.6}
+#dlg .acts{display:flex;gap:8px;justify-content:flex-end}
+#dIn{width:100%;box-sizing:border-box;padding:11px 12px;margin:0 0 14px;border:1px solid var(--line);
+  border-radius:9px;font-size:16px;font-family:inherit;color:var(--ink);background:#fafbfd;outline:none}
+#dIn:focus{border-color:var(--accent);background:#fff}
+#dlg button{padding:8px 15px;border:1px solid var(--line);background:#fff;border-radius:8px;font-size:12.5px;
+  font-family:inherit;font-weight:600;cursor:pointer}
+#dlg .ok{background:var(--accent);color:#fff;border-color:var(--accent)}
+#file{display:none}
+
+/* mobile */
+/* На телефоне панели режима и модификации стоят ПОД верхней панелью, а не
+   на ней. Раньше #modes и #scene оба висели на top:8px и просто лежали друг
+   на друге: в точке вкладок «Прятки/Гонка» оказывалась кнопка сохранения,
+   и переключить режим с телефона было физически нельзя. */
+body.mob #modes{top:66px;bottom:auto;left:8px;right:8px;padding:3px}
+body.mob .modeBtn{padding:8px 9px;font-size:11px}
+body.mob #apoc{top:110px;bottom:auto;left:8px;right:8px;padding:3px}
+body.mob .apocBtn{padding:7px 9px;font-size:11px}
+/* Верхняя панель заканчивается ДО кнопки публикации. Она стоит в правом
+   верхнем углу сама по себе (#bfPublish, position:fixed, z-index:19), а
+   панель прокручивается по горизонтали — и на телефоне прокрученная
+   панель уводила кнопку «Играть» ровно под неё: из 44px кнопки 41 был
+   перекрыт, и нажатие попадало в «Опубликовать» вместо запуска карты. */
+body.mob #scene{top:8px;bottom:auto;padding:3px;left:8px;right:62px;transform:none;max-width:none}
+body.mob .sBtn{width:38px;height:34px}
+body.mob #tools{left:0;right:0;bottom:0;top:auto;transform:none;width:100%;max-height:none;flex-direction:row;
+  border-radius:16px 16px 0 0;max-height:none;height:58px;overflow-x:auto;overflow-y:hidden;padding:6px 8px;gap:4px}
+body.mob .tool{width:42px;height:42px}
+body.mob .tool canvas{width:26px;height:26px}
+body.mob .tool[data-tip]:hover::after{display:none}
+body.mob #insp{left:8px;right:8px;width:auto;top:auto;bottom:64px;transform:none;max-height:34vh}
+body.mob #props,body.mob #widgets{max-height:26vh}
+#inspClose{flex:0 0 34px;color:#dc2626;font-size:14px}
+#inspClose:hover{background:#fee2e2}
+body.mob #hint{display:none}
+body.mob #zoomBox{bottom:68px;right:8px}
+body.mob #msg h1{font-size:38px}
+#tools,#insp,#modes,#scene,#stats,#bPlay,#exitBtn,
+#zoomBox,#hint,#hud,#file{display:none !important}
+body{background:#eef2f8;overflow:hidden}
+</style>
+        <script src="offline.js?v=2"></script>
+<script src="device.js?v=165"></script>
+        <script src="sound.js?v=165"></script>
+        <script src="skinRender.js?v=165"></script>
+        <script src="skinCanvas.js?v=165"></script>
+        <script src="gifuct.bundle.js?v=165"></script>
+        <script src="gifPlayer.js?v=165"></script>
+        <script src="coin.js?v=165"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=165">
+        <script src="theme.js?v=165"></script>
+        <link rel="icon" href="favicon.ico" sizes="any">
+        <link rel="icon" type="image/svg+xml" href="favicon.svg">
+        <link rel="apple-touch-icon" href="apple-touch-icon.png">
+        <link rel="manifest" href="site.webmanifest">
+        <meta name="theme-color" content="#111827">
+        <link rel="canonical" href="https://aibrofist.online/game">
+        <meta name="description" content="An AIBrofist game room.">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Game">
+        <meta property="og:description" content="An AIBrofist game room.">
+        <meta property="og:url" content="https://aibrofist.online/game">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<div id="modes" class="panel"></div>
+<div id="apoc" class="panel"></div>
+<div id="scene" class="panel"></div>
+<div id="tools" class="panel"></div>
+
+<div id="insp" class="panel">
+  <div id="inspHead">
+    <div class="tab on" data-tab="props" data-i18n="edProps">Свойства</div>
+    <div class="tab" data-tab="widgets" data-i18n="edWidgets">Функции</div>
+    <div class="tab" id="inspClose" data-i18n="close" data-i18n-title="close" title="Закрыть">Закрыть</div>
+  </div>
+  <div id="props"></div>
+  <div id="widgets" style="display:none"></div>
+</div>
+
+<div id="zoomBox" class="panel">
+  <div class="zBtn" id="zOut">−</div>
+  <div class="zBtn" id="zLabel">100%</div>
+  <div class="zBtn" id="zIn">+</div>
+</div>
+
+<div id="hud" class="panel">
+  <div id="exitBtn" data-i18n="edExit">Выйти</div>
+  <div class="stat"><i><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6M12 2v3"/></svg></i><span id="sTime">0.0</span></div>
+  <div class="stat" data-i18n-title="edDeathTip" title="смертей"><i data-i18n="hudDeathLabel">Смерти</i><span id="sDeath">0</span></div>
+</div>
+<div id="msg"><h1 id="msgT"></h1><p id="msgS"></p></div>
+
+<div id="pad">
+  <div class="padG"><div class="pBtn" id="pLeft" aria-label="Left"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 4.5 6.5 12 16 19.5z"/></svg></div><div class="pBtn" id="pRight" aria-label="Right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4.5 17.5 12 8 19.5z"/></svg></div></div>
+  <div class="padG"><div class="pBtn" id="pJump">JUMP</div></div>
+</div>
+
+<div id="dlg">
+  <div class="bd"></div>
+  <div class="card"><h3 id="dT"></h3><p id="dM"></p>
+    <input id="dIn" type="text" style="display:none">
+    <div class="acts"><button id="dNo" data-i18n="cancel">Отмена</button><button class="ok" id="dOk" data-i18n="ok">OK</button></div></div>
+</div>
+
+<input type="file" id="file" accept=".txt,.json">
+<canvas id="c"></canvas>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* T — локальная переменная под инструмент в inspect(), поэтому у перевода
+   здесь отдельное имя (как в game.js). */
+var TR = function (k, f) {
+  return (window.I18N && window.I18N.t(k) !== k) ? window.I18N.t(k) : (f || k);
+};
+
+/* ══════════════════════════════════════════════════
+   ENVIRONMENT
+   ══════════════════════════════════════════════════ */
+var isMob = function(){
+  return matchMedia("(pointer:coarse)").matches || innerWidth <= 860 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+};
+function syncMob(){ document.body.classList.toggle("mob", isMob()); }
+syncMob(); addEventListener("resize", syncMob); addEventListener("orientationchange", syncMob);
+
+var cv = document.getElementById("c"), ctx = cv.getContext("2d");
+/* Адаптивное разрешение (v103): если устройство не тянет (кадр дороже 30 мс),
+   холст рисуется в уменьшенном разрешении — на слабых телефонах это
+   единственный способ удержать 30+ FPS. Как только тянет — качество
+   возвращается до полного. */
+var DPR_BASE = Math.min(2, devicePixelRatio || 1);
+var QUALITY = 1;                              // 1 — полное разрешение
+var DPR = DPR_BASE;
+function resize(){
+  DPR = DPR_BASE * QUALITY;
+  cv.width = Math.round(innerWidth * DPR); cv.height = Math.round(innerHeight * DPR);
+  cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px";
+  bgGrad = null;                              // фон пересоздаётся под новый размер
+  // окно сменило размер — пересчитываем общий для всех масштаб игры
+  if(typeof playing !== "undefined" && playing && typeof playZoom === "function") view.s = playZoom();
+  /* Смена cv.width/height выше уже очистила холст (так устроен canvas) —
+     без немедленной перерисовки на экране на один кадр мелькала бы
+     пустота: заметно при входе в режим на телефоне, где надзор за FPS
+     часто снижает качество прямо на старте. */
+  paintFrame();
+}
+addEventListener("resize", resize);
+/* поворот телефона: innerWidth/innerHeight меняются позже самого события,
+   поэтому пересчитываем холст с задержкой — иначе карта остаётся в старом
+   формате до первого случайного скролла */
+addEventListener("orientationchange", function(){ setTimeout(resize, 300); setTimeout(resize, 800); });
+var VW = function(){ return cv.width / DPR; }, VH = function(){ return cv.height / DPR; };
+
+/* ══════════════════════════════════════════════════
+   MODEL DEFINITIONS  — every shape drawn by hand
+   ══════════════════════════════════════════════════ */
+var C = {
+  stone1:"#4b5563", stone2:"#374151", stone3:"#1f2937",
+  wood1:"#b45309", wood2:"#92400e",
+  poison1:"#4ade80", poison2:"#16a34a", poison3:"#15803d",
+  metal1:"#cbd5e1", metal2:"#94a3b8", metal3:"#64748b",
+  spring1:"#c084fc", spring2:"#9333ea",
+  gate1:"#60a5fa", gate2:"#2563eb",
+  gold1:"#fde047", gold2:"#f59e0b",
+  red1:"#f87171", red2:"#dc2626",
+  tele1:"#22d3ee", tele2:"#0e7490",
+  ink:"#000000"
+};
+/* Плоская заливка вместо градиента. Объекты выглядели «масляными»
+   из-за переливов и бликов — теперь это просто цвет. */
+function grad(x0,y0,x1,y1,a,b){ return a; }
+function rr(x,y,w,h,r){
+  r = Math.min(r, Math.abs(w)/2, Math.abs(h)/2);
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(x,y,w,h,r);
+  else{
+    ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+  }
+}
+/* the player figure — clean silhouette from the reference art */
+var FIG_GAP = 0.049;
+var SKIN_IMGS = {};
+function skinImage(src){
+  if(!src) return null;
+  var im = SKIN_IMGS[src];
+  if(!im){ im = SKIN_IMGS[src] = new Image(); im.crossOrigin = "anonymous"; im.src = src; }
+  return (im.complete && im.naturalWidth) ? im : null;
+}
+
+// поле вокруг фигуры для рисунков из нового Skin Editor (kind
+// 'accessory2') — доли ширины/высоты фигуры, те же числа, что и
+// ACC2_* в skinRender.js (запасной вариант — на случай, если тот
+// скрипт почему-то не успел загрузиться раньше этого кадра)
+function acc2Box(w, h){
+  var S = window.BFSkin;
+  var baseW = (S && S.ACC2_BASE_W) || 28, baseH = (S && S.ACC2_BASE_H) || 92;
+  var mL = (S && S.ACC2_MARGIN_L) || 50, mR = (S && S.ACC2_MARGIN_R) || 50, mT = (S && S.ACC2_MARGIN_T) || 50;
+  return {
+    x: -(mL / baseW) * w, y: -(mT / baseH) * h,
+    w: ((mL + baseW + mR) / baseW) * w, h: ((mT + baseH) / baseH) * h
+  };
+}
+
+// .gif грузится и рисуется совсем иначе, чем обычная картинка (см. gifPlayer.js) —
+// ctx.drawImage() для неё всегда рисует только первый кадр, анимация мимо canvas не идёт
+function isGifUrl(url) { return /\.gif(\?|#|$)/i.test(url || ''); }
+
+/* Те же цвета роли, что и в game.js (COLOR_SEEKER/COLOR_CAUGHT) — этот
+   файл их не импортирует (отдельный скрипт), но раз figure() получает уже
+   готовый col, сюда достаточно знать сами значения, чтобы отличить «это
+   цвет роли, нужно заметно перекрасить скин» от «это чей-то обычный цвет
+   силуэта, скин не трогаем». */
+var COLOR_SEEKER = '#1e6fe0', COLOR_CAUGHT = '#f97316';
+
+/* Раньше загруженный игроком скин (фото/GIF) заменял фигуру целиком и
+   никогда не красился в цвет роли — искателя и пойманного было не
+   отличить от обычного игрока, если у них стоит своя картинка вместо
+   силуэта. Перекрашиваем не прямо на игровом холсте (там позади фигуры
+   уже нарисована карта — заливка задела бы и её), а на отдельном
+   маленьком офскрин-канвасе: рисуем туда картинку, поверх заливаем
+   цветом с source-atop (ложится только там, где сама картинка
+   непрозрачна — форма скина не квадратом красится, а по силуэту) и
+   отдаём готовый результат одним обычным drawImage. */
+var tintCanvas = document.createElement('canvas');
+var tintCtx = tintCanvas.getContext('2d');
+function drawSkinTinted(src, dx, dy, dw, dh, tintColor){
+  var iw = Math.max(1, Math.round(dw)), ih = Math.max(1, Math.round(dh));
+  if(tintCanvas.width !== iw || tintCanvas.height !== ih){ tintCanvas.width = iw; tintCanvas.height = ih; }
+  else tintCtx.clearRect(0, 0, iw, ih);
+  tintCtx.drawImage(src, 0, 0, iw, ih);
+  tintCtx.globalCompositeOperation = "source-atop";
+  tintCtx.globalAlpha = 0.7;             // заметно, но текстуру самого фото ещё чуть видно
+  tintCtx.fillStyle = tintColor;
+  tintCtx.fillRect(0, 0, iw, ih);
+  tintCtx.globalCompositeOperation = "source-over";
+  tintCtx.globalAlpha = 1;
+  ctx.drawImage(tintCanvas, dx, dy, dw, dh);
+}
+
+function figure(w,h,col,accent,skin){
+  var d = w, top = d + h*FIG_GAP, bodyH = Math.max(0, h - top);
+  var isGif = !!skin && !!skin.img && isGifUrl(skin.img);
+  var pic = (skin && skin.img && !isGif) ? skinImage(skin.img) : null;
+  var gifFrame = (isGif && window.GifPlayer) ? GifPlayer.frameAt(skin.img, performance.now()) : null;
+  var gifDims = isGif && window.GifPlayer ? GifPlayer.dims(skin.img) : null;
+  var isAcc = !!skin && (window.BFSkin ? window.BFSkin.isAccessoryKind(skin.kind)
+                                        : (skin.kind === 'accessory' || skin.kind === 'accessory2'));
+  // готовая картинка от владельца (не рисунок из Skin Editor) по-прежнему
+  // заменяет фигуру целиком — пока GIF ещё не декодирован, gifFrame будет
+  // null и ниже нарисуется обычный силуэт, как и для ещё не загруженной pic
+  if((pic || (gifFrame && gifDims)) && !isAcc){
+    var natW = gifFrame ? gifDims.width : pic.naturalWidth;
+    var natH = gifFrame ? gifDims.height : pic.naturalHeight;
+    /* Хитбокс игрока узкий и высокий (30x100) — почти любая обычная
+       картинка (квадратная, портрет, тем более пейзаж) намного шире
+       этого относительно своей высоты. Раньше картинку вписывали в
+       хитбокс целиком (Math.min) — она сжималась до крошечной полоски
+       внизу. Потом пробовали заполнить хитбокс целиком (Math.max) с
+       обрезкой лишнего — получалось нормального размера, но обрезало
+       почти всё по ширине, и на самой картинке был не виден толком
+       никто (щель в пару кадров, а не всё лицо).
+       Теперь — высота картинки ВСЕГДА равна росту обычного игрока (как
+       и должно быть — «стандартный размер по хитбоксам»), а ширина
+       считается из пропорций самой картинки и НЕ обрезается: если
+       картинка шире хитбокса — она просто торчит по бокам, как уже
+       давно торчат широкие шляпы/плечи у accessory2. Ограничиваем
+       только совсем крайний случай (панорама) — иначе один скин мог бы
+       закрыть половину экрана. */
+    var SKIN_IMG_MAX_WIDE = 3;   // во сколько раз шире хитбокса можно быть
+    var pw = natW * (h / natH), ph = h;
+    var maxW = w * SKIN_IMG_MAX_WIDE;
+    if(pw > maxW){ ph = natH * (maxW / natW); pw = maxW; }
+    var dx = (w-pw)/2, dy = h-ph;
+    if(col === COLOR_SEEKER || col === COLOR_CAUGHT) drawSkinTinted(gifFrame || pic, dx, dy, pw, ph, col);
+    else ctx.drawImage(gifFrame || pic, dx, dy, pw, ph);
+    return;
+  }
+  if(skin && window.BFSkinCanvas) BFSkinCanvas.behind(ctx, w, h, skin);
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.arc(w/2, d/2, d/2, 0, 6.2832); ctx.fill();
+  if(bodyH > 0) ctx.fillRect(0, top, w, bodyH);
+  /* Рисунок из Skin Editor поверх фигуры — можно закрасить и голову с
+     телом (тогда игровой цвет роли под ними не виден), не только
+     аксессуары вокруг. 'accessory' — старый формат, точно по контуру
+     (0,0,w,h), для уже опубликованных скинов. 'accessory2' — новый,
+     с полем вокруг для шляп/ушей/широких деталей. */
+  if(pic && skin.kind === 'accessory') ctx.drawImage(pic, 0, 0, w, h);
+  else if(pic && skin.kind === 'accessory2'){
+    var b = acc2Box(w, h);
+    ctx.drawImage(pic, b.x, b.y, b.w, b.h);
+  }
+  if(skin && window.BFSkinCanvas) BFSkinCanvas.front(ctx, w, h, skin);
+}
+
+/* Заливка прямоугольника/круга/треугольника: плоский цвет, а если
+   включён o.gradient — простой двухцветный линейный переход слева
+   направо (в локальных координатах, так что вместе с поворотом объекта
+   переход тоже поворачивается). Без бликов и глянца — именно то, что
+   когда-то сделало декоративные объекты «масляными» (см. grad() ниже,
+   он для НИХ теперь всегда просто первый цвет); тут это только сама
+   заливка, без rgba(255,255,255,..) поверх. */
+function shapeFill(o){
+  // «Смена цвета» перебивает и обычную заливку, и градиент — см. галочку
+  // в инспекторе, там же гасится одно другим, чтобы не путать автора.
+  if(o.colorCycle && playing) return "hsl(" + Math.round(o._hue||0) + ",70%,50%)";
+  if(!o.gradient || !o.fill2) return o.fill || C.ink;
+  var g = ctx.createLinearGradient(0,0,o.w,0);
+  g.addColorStop(0, o.fill || C.ink);
+  g.addColorStop(1, o.fill2);
+  return g;
+}
+/* Линза лазера — общий рисунок для старого отдельного объекта laserFeed
+   и для той же самой линзы на обычной фигуре со свойством «Лазер»
+   (см. paint()): мягкое свечение позади, пока луч перекрыт, плюс сама
+   линза с ободком. */
+function laserLens(cx, cy, r, active){
+  if(active){
+    var halo = ctx.createRadialGradient(cx,cy,0, cx,cy,r*3.4);
+    halo.addColorStop(0, "rgba(239,68,68,.55)");
+    halo.addColorStop(1, "rgba(239,68,68,0)");
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(cx,cy,r*3.4,0,6.2832); ctx.fill();
+  }
+  ctx.fillStyle = active ? "#fca5a5" : "#7f1d1d";
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,6.2832); ctx.fill();
+  ctx.strokeStyle = active ? "#ef4444" : "#450a0a"; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(cx,cy,r*1.7,0,6.2832); ctx.stroke();
+}
+/* Each painter draws the object in its own local space (0,0 → w,h). */
+var PAINT = {
+  rect: function(o){
+    ctx.fillStyle = shapeFill(o);
+    ctx.fillRect(0,0,o.w,o.h);
+  },
+  circle: function(o){
+    ctx.fillStyle = shapeFill(o);
+    ctx.beginPath(); ctx.ellipse(o.w/2,o.h/2,o.w/2,o.h/2,0,0,6.2832); ctx.fill();
+  },
+  triangle: function(o){
+    ctx.fillStyle = shapeFill(o);
+    ctx.beginPath(); ctx.moveTo(o.w/2,0); ctx.lineTo(o.w,o.h); ctx.lineTo(0,o.h); ctx.closePath(); ctx.fill();
+  },
+  text: function(o){
+    ctx.fillStyle = o.fill || C.ink;
+    ctx.font = "800 " + Math.max(9,o.h) + "px " + ((FONTS[o.font] || FONTS.sans).css);
+    ctx.textBaseline = "top";
+    ctx.fillText(o.text || "Text", 0, 0);
+  },
+  spawn: function(o){ figure(o.w,o.h, o.fill || C.ink, true, (BRIDGE && BRIDGE.mySkin) || null); },
+  seeker: function(o){
+    figure(o.w,o.h, o.fill || "#b91c1c", true);
+    ctx.fillStyle = "#fff";                      // seeker gets eyes so he reads as the hunter
+    ctx.beginPath(); ctx.arc(o.w*0.34,o.w*0.46,o.w*0.1,0,6.2832); ctx.fill();
+    ctx.beginPath(); ctx.arc(o.w*0.66,o.w*0.46,o.w*0.1,0,6.2832); ctx.fill();
+  },
+  poison: function(o){
+    var t = anim*0.055;
+    ctx.fillStyle = grad(0,o.h*0.2,0,o.h,C.poison1,C.poison3);
+    ctx.beginPath(); ctx.moveTo(0,o.h*0.34);
+    var steps = Math.max(3, Math.round(o.w/22));
+    for(var i=0;i<steps;i++){
+      var x0 = o.w*i/steps, x1 = o.w*(i+1)/steps;
+      ctx.quadraticCurveTo((x0+x1)/2, o.h*0.34 + Math.sin(t+i*1.3)*o.h*0.26 - o.h*0.16, x1, o.h*0.34);
+    }
+    ctx.lineTo(o.w,o.h); ctx.lineTo(0,o.h); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.34)";     // bubbles
+    for(var b=0;b<Math.max(2,o.w/40);b++){
+      var bx = ((b*37)%Math.max(1,o.w-8))+4;
+      var by = o.h*0.9 - ((anim*0.6 + b*30) % (o.h*0.6));
+      ctx.beginPath(); ctx.arc(bx,by,1.6+ (b%2),0,6.2832); ctx.fill();
+    }
+  },
+  spike: function(o){
+    var n = Math.max(2, Math.round(o.w/15));
+    ctx.fillStyle = grad(0,0,0,o.h,C.metal1,C.metal3);
+    for(var s=0;s<n;s++){
+      ctx.beginPath();
+      ctx.moveTo(o.w*s/n, o.h); ctx.lineTo(o.w*(s+0.5)/n, 0); ctx.lineTo(o.w*(s+1)/n, o.h);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = "rgba(255,255,255,.5)";
+    for(var s2=0;s2<n;s2++){
+      ctx.beginPath(); ctx.moveTo(o.w*(s2+0.5)/n, 0);
+      ctx.lineTo(o.w*(s2+0.36)/n, o.h); ctx.lineTo(o.w*(s2+0.46)/n, o.h); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = C.stone3; ctx.fillRect(0, o.h-Math.max(2,o.h*0.13), o.w, Math.max(2,o.h*0.13));
+  },
+  bounce: function(o){
+    var sq = o._squash || 0;                     // squashes when the player lands
+    var h = o.h * (1 - sq*0.45), y = o.h - h;
+    ctx.fillStyle = C.stone3;
+    rr(o.w*0.06, o.h-Math.max(3,o.h*0.22), o.w*0.88, Math.max(3,o.h*0.22), 2); ctx.fill();
+    ctx.strokeStyle = C.metal2; ctx.lineWidth = Math.max(1.6, o.h*0.11);  // coil
+    ctx.beginPath();
+    for(var i=0;i<=10;i++){
+      var yy = y + h*0.42 + (h*0.42)*i/10, xx = o.w*(i%2?0.32:0.68);
+      i===0 ? ctx.moveTo(xx,yy) : ctx.lineTo(xx,yy);
+    }
+    ctx.stroke();
+    ctx.fillStyle = grad(0,y,0,y+h*0.5,C.spring1,C.spring2);
+    rr(0, y, o.w, Math.max(4,h*0.44), Math.min(o.w/2,h*0.22)); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = Math.max(1.4,o.h*0.1);
+    ctx.lineCap = "round"; ctx.beginPath();
+    ctx.moveTo(o.w*0.33, y+h*0.3); ctx.lineTo(o.w*0.5, y+h*0.1); ctx.lineTo(o.w*0.67, y+h*0.3);
+    ctx.stroke(); ctx.lineCap = "butt";
+  },
+  platform: function(o){
+    ctx.fillStyle = grad(0,0,0,o.h,C.metal2,C.metal3);
+    rr(0,0,o.w,o.h,Math.min(4,o.h/3)); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.4)"; ctx.fillRect(0,0,o.w,Math.max(1.5,o.h*0.16));
+    ctx.fillStyle = "rgba(0,0,0,.22)";           // tread marks
+    for(var i=6;i<o.w-4;i+=13) ctx.fillRect(i, o.h*0.42, 5, Math.max(2,o.h*0.3));
+  },
+  door: function(o){
+    ctx.fillStyle = grad(0,0,o.w,0,C.wood1,C.wood2);
+    rr(0,0,o.w,o.h,Math.min(o.w*0.14,6)); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.25)"; ctx.lineWidth = 1.4;
+    rr(o.w*0.16,o.h*0.09,o.w*0.68,o.h*0.36,3); ctx.stroke();
+    rr(o.w*0.16,o.h*0.54,o.w*0.68,o.h*0.36,3); ctx.stroke();
+    ctx.fillStyle = C.gold1;
+    ctx.beginPath(); ctx.arc(o.w*0.8,o.h*0.52,Math.max(2,o.w*0.07),0,6.2832); ctx.fill();
+  },
+  /* Плоский стиль по образцу — тёмная база, поверх неё красная плашка,
+     которая при нажатии "утапливается" вниз. Раньше тут был o._active,
+     которого нигде в коде не существует (реально переключает o._act,
+     см. step()/drive()) — кнопка никогда не меняла вид при нажатии. */
+  button: function(o){
+    var pressed = o._act;
+    ctx.fillStyle = "#111827";
+    rr(0, o.h*0.52, o.w, o.h*0.48, Math.min(5,o.w*0.14)); ctx.fill();
+    var capH = o.h*0.42, capY = pressed ? o.h*0.38 : o.h*0.1;
+    ctx.fillStyle = "#f16d63";
+    rr(o.w*0.1, capY, o.w*0.8, capH, Math.min(7,capH*0.45)); ctx.fill();
+  },
+  /* Тот же баг с o._active чинится здесь же — реальный флаг o._act. */
+  lever: function(o){
+    var on = o._act;
+    ctx.fillStyle = "#111827";
+    rr(0, o.h*0.8, o.w, o.h*0.2, Math.min(4,o.w*0.14)); ctx.fill();
+    ctx.save();
+    ctx.translate(o.w*0.5, o.h*0.82);
+    ctx.rotate(on ? -0.5 : 0.5);
+    ctx.strokeStyle = "#64748b";
+    ctx.lineWidth = Math.max(2, o.w*0.17);
+    ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-o.h*0.72); ctx.stroke();
+    ctx.fillStyle = "#f16d63";
+    ctx.beginPath(); ctx.arc(0,-o.h*0.72,Math.max(3,o.w*0.27),0,6.2832); ctx.fill();
+    ctx.restore();
+  },
+  /* Портал — не платформа, а зона касания (см. teleportTarget() в step()):
+     наступил на площадку — оказался на её паре, чей ID указан в «Целях».
+     o.teleExit различает вход (оранжевый) и выход (синий) — чисто
+     визуально, на саму телепортацию не влияет (она всё равно работает
+     по ID/Целям, см. teleportTarget()); настраивается галочкой в
+     инспекторе. Чёрная "дыра" с огненной рамкой вокруг — под стиль
+     референса: языки пламени гуще и шире прежних (14 вместо 9,
+     перекрывают друг друга), плюс сплошное кольцо под ними убирает
+     просветы между языками у самого основания — рамка читается цельной,
+     а не рассыпается на отдельные "запятые". Яркий тонкий контур у края
+     дыры и редкие искры наружу добавляют глубины. */
+  teleport: function(o){
+    /* Хитбокс портала теперь впритык под игрока (30x100 — см. SIZES) и
+       поэтому не квадратный, но кольцо должно оставаться ровным кругом,
+       а не вытягиваться в длинный овал вслед за хитбоксом: rx/ry берём
+       по БОЛЬШЕЙ стороне (рост игрока, 100), а не по меньшей (его
+       ширина, 30) — иначе кольцо получается размером только с ширину
+       игрока и выглядит заметно мельче него самого, хотя хитбокс и
+       правда совпадает 1:1. Центрируем в фактическом боксе — весь
+       остальной рисунок (языки, искры) ниже уже не трогает o.w/o.h
+       напрямую, только эти rx/ry/rm. */
+    var cx = o.w/2, cy = o.h/2, rm = Math.max(o.w,o.h)/2, rx = rm, ry = rm;
+    var exit = !!o.teleExit;
+    var cBright = exit ? "#bae6fd" : "#fed7aa";
+    var cMid    = exit ? "#38bdf8" : "#fb923c";
+    var cDeep   = exit ? "#0369a1" : "#9a3412";
+    ctx.save();
+    var glow = ctx.createRadialGradient(cx,cy,rm*0.55, cx,cy, Math.max(rx,ry)*1.35);
+    glow.addColorStop(0, cMid+"55"); glow.addColorStop(1, cMid+"00");
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx*1.35,ry*1.35,0,0,6.2832); ctx.fill();
+    /* Языки пламени — закруглённые капли неравной длины: золотой угол
+       (2.4 рад) даёт разброс по кругу без видимой симметрии
+       "шестерёнки". Без lighter-блендинга — иначе перекрытия
+       высветляются почти до белого и цвет теряется. */
+    var n = 14, i;
+    for(i=0;i<n;i++){
+      var seed = i*2.399963;
+      var a = seed;
+      var flick = 0.6 + 0.4*Math.sin(anim*0.1 + i*2.7);
+      var len = rm * (0.32 + 0.13*Math.sin(seed*5)) * (0.7+0.5*flick);
+      var spread = 0.26 + 0.05*Math.sin(seed*7);
+      var b1x = cx+Math.cos(a-spread)*rx*0.84, b1y = cy+Math.sin(a-spread)*ry*0.84;
+      var b2x = cx+Math.cos(a+spread)*rx*0.84, b2y = cy+Math.sin(a+spread)*ry*0.84;
+      var tx = cx+Math.cos(a)*(rx+len), ty = cy+Math.sin(a)*(ry+len);
+      var mx = cx+Math.cos(a)*(rx+len*0.5), my = cy+Math.sin(a)*(ry+len*0.5);
+      var fg = ctx.createRadialGradient(cx+Math.cos(a)*rx*0.84, cy+Math.sin(a)*ry*0.84, 0, tx, ty, len);
+      fg.addColorStop(0, cDeep); fg.addColorStop(0.45, cMid); fg.addColorStop(1, cBright+"00");
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(b1x,b1y);
+      ctx.quadraticCurveTo(mx + (b1x-mx)*0.3, my + (b1y-my)*0.3, tx, ty);
+      ctx.quadraticCurveTo(mx + (b2x-mx)*0.3, my + (b2y-my)*0.3, b2x, b2y);
+      ctx.closePath(); ctx.fill();
+    }
+    // сплошное кольцо у основания языков — закрывает просветы между ними
+    ctx.strokeStyle = cMid;
+    ctx.lineWidth = Math.max(1.8, rm*0.22);
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx*0.86,ry*0.86,0,0,6.2832); ctx.stroke();
+    // яркий тонкий контур у самого края дыры
+    ctx.strokeStyle = cBright;
+    ctx.lineWidth = Math.max(1.2, rm*0.1);
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx*0.76,ry*0.76,0,0,6.2832); ctx.stroke();
+    // искры — мелкие частицы, улетающие наружу от кольца по кругу через anim
+    ctx.fillStyle = cBright;
+    var sparks = 5;
+    for(i=0;i<sparks;i++){
+      var sPhase = (anim*0.7 + i*53) % 46;
+      var sAlpha = Math.max(0, 1 - sPhase/46);
+      if(sAlpha <= 0.02) continue;
+      var sa = i*2.75;
+      var sDist = rm*1.05 + sPhase*0.5;
+      ctx.globalAlpha = sAlpha*0.85;
+      ctx.beginPath();
+      ctx.arc(cx+Math.cos(sa)*sDist, cy+Math.sin(sa)*sDist*(ry/rx), Math.max(0.8, rm*0.045), 0, 6.2832);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#05070a";
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx*0.68,ry*0.68,0,0,6.2832); ctx.fill();
+    ctx.restore();
+  },
+  /* Излучатель светится ярче, пока луч перекрыт игроком (o._act — тот же
+     флаг, что у кнопки/рычага, см. laserFeeds() в step()). Линза смотрит
+     вдоль локальной +x — тот же «вперёд», что и поворот объекта (o.rot). */
+  laserFeed: function(o){
+    ctx.fillStyle = C.stone3; rr(0,0,o.w,o.h,3); ctx.fill();
+    var r = Math.max(2.5, Math.min(o.w,o.h)*0.22), cx = o.w*0.82, cy = o.h/2;
+    laserLens(cx, cy, r, !!o._act);
+  },
+  /* Мертвец — отдельный объект, а не свойство фигуры: это не часть
+     геометрии уровня, а то, во что превращается заражённый игрок (см.
+     hsApocRound/figureZombie в game.js) — "пациент ноль" выбирается
+     рулеткой среди игроков, не рождается из этой метки. На карте она
+     нужна только как обязательное условие включить модификацию (одна,
+     как у игрока) — в классическом варианте той же карты её нет.
+     Разворачивается по ходу движения (_zface), поэтому сразу видно,
+     куда идёт заражённый. Хитбокс впритык как у игрока (см.
+     SIZES.zombie) — силуэт рисуем той же figure(), что и игрока, чтобы
+     форма совпадала буквально, а не просто размером; зомби узнаётся по
+     цвету, квадратным красным глазам и рваному краю одежды. */
+  zombie: function(o){
+    var w = o.w, h = o.h;
+    if(o._zface < 0){ ctx.translate(w, 0); ctx.scale(-1, 1); }
+    figure(w, h, "#55722c");
+    var headD = w;
+    ctx.fillStyle = "#3f5720";
+    ctx.beginPath();
+    ctx.moveTo(0, h*0.62);
+    ctx.lineTo(w*0.16, h*0.7);
+    ctx.lineTo(0, h*0.78);
+    ctx.lineTo(w*0.14, h*0.9);
+    ctx.lineTo(0, h);
+    ctx.closePath(); ctx.fill();
+    var eyeS = Math.max(2, headD*0.17), eyeY = headD*0.42;
+    ctx.fillStyle = "#b91c1c";
+    ctx.fillRect(w/2 - headD*0.27 - eyeS/2, eyeY, eyeS, eyeS);
+    ctx.fillRect(w/2 + headD*0.27 - eyeS/2, eyeY, eyeS, eyeS);
+  },
+  /* Место ожидания искателя (классика) — та же модель, тот же приём, что
+     у мертвеца выше, просто цвет искателя (COLOR_SEEKER), а не зелёный.
+     Только метка для автора карты: во время игры не рисуется вовсе (см.
+     "playing && ... seekerSpot" ниже) — на этом месте уже стоит настоящий
+     искатель, второй фигуры там быть не должно. */
+  seekerSpot: function(o){ figure(o.w, o.h, COLOR_SEEKER); },
+  // приёмник — только ориентир для автора карты, в игровую логику не входит
+  laserReceiver: function(o){
+    ctx.fillStyle = C.stone3; rr(0,0,o.w,o.h,3); ctx.fill();
+    var r = Math.max(2.5, Math.min(o.w,o.h)*0.24), cx = o.w/2, cy = o.h/2;
+    ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,6.2832); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx-r,cy); ctx.lineTo(cx+r,cy); ctx.moveTo(cx,cy-r); ctx.lineTo(cx,cy+r); ctx.stroke();
+  },
+  rotator: function(o){
+    ctx.fillStyle = grad(0,0,0,o.h,"#a78bfa","#6d28d9");
+    rr(0,0,o.w,o.h,o.h/2); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.3)";
+    rr(o.w*0.06,o.h*0.18,o.w*0.88,Math.max(1.4,o.h*0.22),o.h*0.11); ctx.fill();
+    ctx.fillStyle = "#4c1d95";
+    ctx.beginPath(); ctx.arc(o.w/2,o.h/2,Math.max(3,o.h*0.72),0,6.2832); ctx.fill();
+    ctx.fillStyle = "#c4b5fd";
+    ctx.beginPath(); ctx.arc(o.w/2,o.h/2,Math.max(1.5,o.h*0.3),0,6.2832); ctx.fill();
+  },
+  checkpoint: function(o){
+    var pole = Math.max(2.5, o.w*0.15);
+    ctx.fillStyle = C.stone2; rr(0,0,pole,o.h,1); ctx.fill();
+    var wave = o._reached ? Math.sin(anim*0.13)*o.h*0.035 : 0;
+    ctx.fillStyle = o._reached ? grad(0,0,0,o.h*0.4,"#4ade80","#16a34a") : grad(0,0,0,o.h*0.4,C.red1,C.red2);
+    ctx.beginPath(); ctx.moveTo(pole, o.h*0.04);
+    ctx.quadraticCurveTo(o.w*0.6, o.h*0.1+wave, o.w, o.h*0.2);
+    ctx.quadraticCurveTo(o.w*0.6, o.h*0.3-wave, pole, o.h*0.4);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = C.stone3; rr(-o.w*0.1, o.h-Math.max(3,o.h*0.06), o.w*0.5, Math.max(3,o.h*0.06), 2); ctx.fill();
+  },
+  finishline: function(o){
+    var cs = Math.max(5, Math.min(o.w, o.h)/5);
+    for(var y=0;y<o.h;y+=cs) for(var x=0;x<o.w;x+=cs){
+      ctx.fillStyle = (((x/cs|0)+(y/cs|0))%2===0) ? "#1f2937" : "#f9fafb";
+      ctx.fillRect(x,y,Math.min(cs,o.w-x),Math.min(cs,o.h-y));
+    }
+    ctx.strokeStyle = C.stone3; ctx.lineWidth = 1.6; ctx.strokeRect(.8,.8,o.w-1.6,o.h-1.6);
+  },
+};
+
+/* ══════════════════════════════════════════════════
+   TOOL TABLE
+   ══════════════════════════════════════════════════ */
+var ALL = "hideAndSeek race";
+/* У каждого режима свои объекты. Общие есть везде, остальные привязаны
+   к одному режиму и в другом просто не существуют — ни в палитре,
+   ни при загрузке карты, ни при публикации (это проверяет сервер). */
+var TOOLS = [
+  {t:"select",     n:"Выделение",   k:"toolSelect",     m:ALL},
+  {t:"hand",       n:"Рука (двигать карту)", k:"toolHand", m:ALL},
+  {t:"rect",       n:"Блок",        k:"toolBlock",      m:ALL},
+  {t:"circle",     n:"Круг",        k:"toolCircle",     m:ALL},
+  {t:"triangle",   n:"Треугольник", k:"toolTriangle",   m:ALL},
+  {t:"text",       n:"Текст",       k:"toolText",       m:ALL},
+  {t:"spawn",      n:"Точка старта",k:"toolSpawn",      m:ALL},
+  {t:"button",     n:"Кнопка",      k:"toolButton",     m:ALL},
+  {t:"lever",      n:"Рычаг",       k:"toolLever",      m:ALL},
+  {t:"teleport",   n:"Телепорт",    k:"toolTeleport",   m:ALL},
+  /* метка модификации Zombie Apocalypse — без неё карту не включить в
+     этот режим (см. hsApplyApoc в server.js); только прятки: в гонке
+     модификация не предлагается (см. #apoc ниже и TOOL_MODES.zombie в
+     maps.js) */
+  {t:"zombie",     n:"Зомби",       k:"toolZombie",     m:"hideAndSeek"},
+  /* Необязательная метка только для классики (см. toolOK ниже — зеркало
+     ограничения zombie, только наоборот): где искатель стоит и ждёт во
+     время лобби/пряток, прежде чем в начале раунда телепортироваться на
+     обычный спавн вместе со всеми (см. findSeekerSpot/applySeeker в
+     game.js). Без метки — прежнее поведение, искатель сразу на спавне. */
+  {t:"seekerSpot", n:"Место искателя", k:"toolSeekerSpot", m:"hideAndSeek"},
+  /* Лазер (старая идея из обратной связи) — не отдельный инструмент, а
+     галочка «Лазер» на обычном блоке/круге/треугольнике (см. Game
+     Properties в inspect() и laserFeeds() в step()): включает связанные
+     объекты, пока луч из фигуры перекрыт игроком. Палитра инструментов
+     и так длинная, отдельные значки под это не заводим.
+     Типы laserFeed/laserReceiver из прежней версии остаются
+     зарегистрированы ниже (COLORS/SIZES/PAINT/LINKED) ради старых карт,
+     которые их уже используют — просто без своей кнопки в палитре. */
+  // только гонка
+  {t:"checkpoint", n:"Чекпоинт",    k:"toolCheckpoint", m:"race"},
+  {t:"finishline", n:"Финиш",       k:"toolFinish",     m:"race"}
+];
+var MODE_OF = {};
+TOOLS.forEach(function(T){ MODE_OF[T.t] = T.m; });
+/* Монеты убраны из редактора совсем: награда в Race теперь фиксированная
+   случайная выдача за прохождение карты, а не сбор с неё (см. game.js).
+   "none" не совпадает ни с одним режимом — allowedIn() отбраковывает
+   монету и при смене режима в редакторе, и при публикации старой карты,
+   где она осталась в JSON. */
+MODE_OF.coin = "none";
+function allowedIn(type, m){
+  var s = MODE_OF[type];
+  return !s || s.split(" ").indexOf(m) !== -1;
+}
+var OBJ_LIMIT = 2000;   // максимум объектов в карте, одинаково во всех режимах
+/* Строительные объекты по умолчанию чёрные — как сам игрок.
+   Опасные и служебные оставлены цветными: чёрные шипы на чёрном блоке
+   игрок просто не заметит, и карта станет нечестной. */
+var INK = "#000000";
+var COLORS = {
+  rect:INK, circle:INK, triangle:INK, text:INK,
+  button:INK, lever:INK, laserFeed:INK, laserReceiver:INK,
+  zombie:"",                       // мертвец всегда зелёный — красить его нечем и незачем
+  seekerSpot:"",                   // всегда синий, как и сам искатель — красить нечем
+  checkpoint:"", finishline:"", spawn:INK, teleport:""
+};
+/* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
+   Игрок 30x100 (круг-голова радиуса 15 над телом 30x65, см. FIG_GAP
+   в figure()) — по прямой просьбе, замена прежних 20x60. Checkpoint/
+   finishline увеличены на ту же разницу в ширине и высоте, что были у
+   них над старым игроком, — дверь остаётся «чуть просторнее игрока»,
+   а не наоборот. */
+var SIZES = {
+  rect:[20,20], circle:[20,20], triangle:[20,20], text:[70,24],
+  button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
+  zombie:[30,100],                 // впритык как у игрока — по прямой просьбе
+  seekerSpot:[30,100],              // тоже впритык как у игрока
+  checkpoint:[40,104], finishline:[52,126], spawn:[30,100],
+  teleport:[30,100]                 // тоже впритык как у игрока — по прямой просьбе
+};
+var SOLID  = ["rect","circle","triangle"];
+/* Раньше яд, шипы и ротатор убивали просто потому, что так называются.
+   Теперь смертельность — свойство объекта: галочка «Яд» есть у каждого,
+   и её можно снять хоть с самого яда. Модели остались как были. */
+var HAZARD = [];
+var DEADLY_BY_DEFAULT = [];
+/* Ворота и укрытие убраны, но механика связей осталась: цель кнопки или
+   рычага — теперь любой обычный блок, круг или треугольник. */
+var LINKED = ["rect","circle","triangle","button","lever","laserFeed","teleport"];
+/* Шрифты для текстового объекта (см. text: в PAINT и панель свойств):
+   раньше единственным способом получить не-обычный шрифт было слепить
+   текст на стороннем «генераторе шрифтов» из юникод-символов-подделок
+   под букву и вставить готовую строку — subject просил именно убрать
+   этот лишний шаг. Только системные шрифты — без них шрифт менялся бы
+   не сразу, а через сетевую загрузку, и на офлайн-технике вообще никак.
+   Первый — старый вид по умолчанию, старые карты ничего не теряют. */
+var FONTS = {
+  sans:   {k:"fontSans",   n:"Обычный",           css:"-apple-system,Segoe UI,Roboto,sans-serif"},
+  serif:  {k:"fontSerif",  n:"С засечками",       css:"Georgia,'Times New Roman',serif"},
+  mono:   {k:"fontMono",   n:"Моноширинный",      css:"'Courier New',monospace"},
+  comic:  {k:"fontComic",  n:"Рукописный",        css:"'Comic Sans MS','Comic Sans',cursive"},
+  impact: {k:"fontImpact", n:"Плакатный",         css:"Impact,'Arial Narrow Bold',sans-serif"},
+  script: {k:"fontScript", n:"Курсив",            css:"'Brush Script MT','Segoe Script',cursive"}
+};
+var FONT_KEYS = Object.keys(FONTS);
+
+/* ══════════════════════════════════════════════════
+   STATE
+   ══════════════════════════════════════════════════ */
+var mode = "hideAndSeek", tool = "select", objects = [], sel = null, uid = 1;
+/* Модификация карты (см. «Zombie Apocalypse» в панели под режимом). Режим
+   решает, какие объекты существуют; модификация — по каким правилам в них
+   играют, и работает в обоих режимах. При выключенной модификации фигуры
+   с галочкой «Зомби» в самой игре просто не существуют: карта играется как
+   обычная, а не с россыпью блоков там, где стояли мертвецы. */
+var apoc = false;
+
+/* ══════════════════════════════════════════════════
+   ИНДЕКС ОБЪЕКТОВ
+   На больших картах перебирать все 2000 объектов каждый кадр дорого.
+   Раскладываем их по сетке ячеек и берём только те, что рядом.
+   ══════════════════════════════════════════════════ */
+var CELL = 260, grid = null, gridDirty = true;
+function markDirty(){ gridDirty = true; }
+function buildGrid(){
+  grid = {};
+  for(var i=0;i<objects.length;i++){
+    var o = objects[i], bb = bbox(o);
+    var cx0 = Math.floor(bb[0]/CELL), cx1 = Math.floor(bb[2]/CELL);
+    var cy0 = Math.floor(bb[1]/CELL), cy1 = Math.floor(bb[3]/CELL);
+    for(var cx=cx0; cx<=cx1; cx++)
+      for(var cy=cy0; cy<=cy1; cy++){
+        var k = cx + ":" + cy;
+        (grid[k] || (grid[k] = [])).push(o);
+      }
+  }
+  gridDirty = false;
+}
+/* Только что созданный объект добавляем в сетку точечно: капли струи
+   увидят новую клетку в тот же кадр, а полная перестройка индекса
+   откладывается до конца кадра. */
+function gridAdd(o){
+  if(gridDirty || !grid || typeof grid !== "object") return;
+  var bb = bbox(o);
+  var cx0 = Math.floor(bb[0]/CELL), cx1 = Math.floor(bb[2]/CELL);
+  var cy0 = Math.floor(bb[1]/CELL), cy1 = Math.floor(bb[3]/CELL);
+  for(var cx=cx0; cx<=cx1; cx++)
+    for(var cy=cy0; cy<=cy1; cy++){
+      var k = cx + ":" + cy;
+      (grid[k] || (grid[k] = [])).push(o);
+    }
+}
+function nearby(x, y, w, h){
+  var i, o;
+  if(gridDirty || !grid) buildGrid();
+  var seen = {}, out = [];
+  var cx0 = Math.floor(x/CELL), cx1 = Math.floor((x+w)/CELL);
+  var cy0 = Math.floor(y/CELL), cy1 = Math.floor((y+h)/CELL);
+  for(var cx=cx0; cx<=cx1; cx++)
+    for(var cy=cy0; cy<=cy1; cy++){
+      var list = grid[cx + ":" + cy];
+      if(!list) continue;
+      for(i=0;i<list.length;i++){
+        o = list[i];
+        if(seen[o.id]) continue;
+        seen[o.id] = 1; out.push(o);
+      }
+    }
+  // платформы и ротаторы меняют клетку каждый кадр, поэтому в сетке им
+  // верить нельзя — берём их напрямую, но только те, что реально рядом
+  for(i=0;i<movers.length;i++){
+    o = movers[i];
+    if(seen[o.id]) continue;
+    var mb = bbox(o);
+    if(mb[2] < x || mb[0] > x+w || mb[3] < y || mb[1] > y+h) continue;
+    seen[o.id] = 1; out.push(o);
+  }
+  /* Порядок обязан быть один и тот же всегда. Сетка отдаёт объекты в
+     порядке обхода клеток, а он меняется от того, в какой клетке сейчас
+     стоит игрок, — и столкновения с теми же самыми блоками разбирались
+     по-разному в зависимости от координаты. Это и был телепорт: игрок
+     шёл по полу внутри широкого блока, пересекал границу клетки, пол и
+     блок менялись местами в списке, и его сбрасывало на 60 px вниз.
+     Сортировка по id (порядок объектов в карте) делает разбор
+     одинаковым в любой точке карты. */
+  out.sort(function(a, b){ return (a.id || 0) - (b.id || 0); });
+  return out;
+}
+var movers = [];
+function indexMovers(){
+  // толкаемые объекты тоже меняют клетку каждый кадр, как платформы и
+  // роторы — тем же способом обходим устаревающую сетку (см. nearby)
+  movers = objects.filter(function(o){ return o.moves || o.spins || o.pushable; });
+}
+function overLimit(extra){
+  if(objects.length + (extra||1) <= OBJ_LIMIT) return false;
+  showMsg(TR("objLimitTitle","Предел " + OBJ_LIMIT + " объектов").replace("{n}", OBJ_LIMIT),
+          TR("objLimitBody","В карте уже " + objects.length + ". Удалите лишнее, чтобы добавить новое.").replace("{n}", objects.length));
+  setTimeout(hideMsg, 2200);
+  return true;
+}
+var playing = false, anim = 0, grid = true, GRID = 10;
+/* Гравитация одинакова во всех картах: менять её больше нельзя,
+   иначе одна и та же карта играется по-разному у разных авторов. */
+var gravityScale = 9;
+var view = {s:1, x:0, y:0};
+
+function mk(type,x,y,w,h){
+  var o = {id:uid++, type:type, x:x, y:y, w:w, h:h, rot:0, fill:COLORS[type]||"",
+           deadly: DEADLY_BY_DEFAULT.indexOf(type) !== -1};
+  if(type === "text") o.text = "Text";
+
+  if(type === "button" || type === "lever" || type === "teleport"){ o.customId = "w"+o.id; o.targetIds = ""; }
+  return o;
+}
+function demo(){
+  uid = 1;
+  var a = [];
+  a.push(mk("rect",280,520,280,44));        // ground A
+  a.push(mk("rect",280,452,28,70));         // back wall
+  a.push(Object.assign(mk("rect",560,568,120,22), {deadly:true, fill:"#16a34a"}));
+  a.push(Object.assign(mk("rect",590,542,60,18), {bouncy:true, fill:"#a855f7"}));
+  a.push(mk("rect",680,520,280,44));        // ground B
+  a.push(mk("checkpoint",700,456,30,64));
+  a.push(Object.assign(mk("rect",840,498,60,22), {deadly:true, fill:"#94a3b8"}));
+  a.push(mk("rect",880,408,90,20));         // bonus ledge, over ground B
+  a.push(mk("rect",1050,520,220,44));       // ground C
+  a.push(mk("finishline",1180,360,50,160)); // tall gate — can't be jumped over
+  a.push(mk("rect",1250,360,24,160));       // end wall
+  a.push(mk("spawn",320,446,22,74));
+  return a;
+}
+objects = demo();
+
+/* ══════════════════════════════════════════════════
+   UNDO / REDO
+   ══════════════════════════════════════════════════ */
+var undoStack = [], redoStack = [];
+function snap(){ return JSON.stringify({o: objects.map(function(o){
+  var c = {}; for(var k in o) if(k[0] !== "_") c[k] = o[k]; return c;
+})}); }
+function commit(){
+  undoStack.push(snap()); if(undoStack.length > 80) undoStack.shift();
+  redoStack.length = 0;
+}
+function restore(json){
+  var d = JSON.parse(json);
+  objects = d.o;
+  uid = objects.reduce(function(m,o){ return Math.max(m,(o.id||0)+1); },1);
+  sel = null; inspect();
+}
+function undo(){ if(!undoStack.length) return; redoStack.push(snap()); restore(undoStack.pop()); }
+function redo(){ if(!redoStack.length) return; undoStack.push(snap()); restore(redoStack.pop()); }
+
+/* ══════════════════════════════════════════════════
+   CAMERA
+   ══════════════════════════════════════════════════ */
+function toWorld(sx,sy){ return {x:(sx-view.x)/view.s, y:(sy-view.y)/view.s}; }
+function zoomAt(sx,sy,f){
+  var b = toWorld(sx,sy);
+  /* Границы зума: вверх — до 4000% (предохранитель от бесконечности,
+     на которой обрывается матрица холста), вниз — до 20%: дальше карта
+     теряется из виду, и работать с ней всё равно невозможно. */
+  view.s = Math.min(4000, Math.max(0.2, view.s*f));
+  view.x = sx - b.x*view.s; view.y = sy - b.y*view.s;
+  document.getElementById("zLabel").textContent = Math.round(view.s*100)+"%";
+}
+function resetView(){ view.s = 1; view.x = 0; view.y = 0; document.getElementById("zLabel").textContent = "100%"; }
+
+/* ══════════════════════════════════════════════════
+   PARTICLES
+   ══════════════════════════════════════════════════ */
+var parts = [];
+function burst(x,y,n,col,spd,life){
+  for(var i=0;i<n;i++){
+    var a = Math.random()*6.2832, v = spd*(0.35+Math.random());
+    parts.push({x:x,y:y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-1,life:life,max:life,c:col,r:1.4+Math.random()*2.4});
+  }
+}
+function puff(x,y,n){
+  for(var i=0;i<n;i++)
+    parts.push({x:x+(Math.random()-.5)*14,y:y,vx:(Math.random()-.5)*1.8,vy:-Math.random()*1.1,
+                life:22,max:22,c:"#cbd5e1",r:2+Math.random()*2.6});
+}
+function stepParts(){
+  for(var i=parts.length-1;i>=0;i--){
+    var p = parts[i];
+    p.x += p.vx; p.y += p.vy;
+    if(p.f){ p.vy -= 0.014; p.vx *= 0.97; }   // пузыри не падают, а всплывают
+    else { p.vy += 0.24; p.vx *= 0.98; }
+    p.life--;
+    if(p.life <= 0) parts.splice(i,1);
+  }
+}
+function drawParts(){
+  parts.forEach(function(p){
+    ctx.globalAlpha = Math.max(0, p.life/p.max);
+    ctx.fillStyle = p.c;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.2832); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+/* ══════════════════════════════════════════════════
+   PHYSICS  — gravity driven by the slider, exactly like the original editor
+   ══════════════════════════════════════════════════ */
+/* Высота прыжка теперь ПОСТОЯННАЯ и не зависит от удержания кнопки —
+   это был явный запрос: держать JUMP дольше не должно давать прыжок
+   выше. Раньше высота была переменной (короткий тап ~133px, зажатая
+   кнопка ~161px) специально ради карт с точным платформингом на шипах
+   (см. Spike Mayhem), где нужен именно короткий прыжок, — но теперь
+   и держащий, и тапающий получают одинаковый прыжок: подъём всегда
+   обрывается через MIN_HOLD кадров (см. ниже, теперь это потолок самой
+   формулы jumpV()/G(), а не ранний обрыв), удержание кнопки после
+   этого момента больше ничего не даёт. */
+/* Подбор сверялся замерами на стенде, а не на глаз. Что изменилось и
+   что осталось прежним (кадры при 60 fps):
+
+     разгон до макс.   7 -> 1 кадр      скорость сразу, без разбега
+     тормозной путь      0 px            отпустил — встал, без скольжения
+     высота прыжка 122.9 -> 148.5 px     MIN_HOLD 7 -> 25, см. выше
+     скорость бега    4.93               без изменений
+     время в воздухе 38 -> 47 кадров     выше прыжок — дольше в воздухе
+     дальность прыжка 192 -> 237 px      та же скорость бега, но дольше
+                                         в воздухе — значит и дальше;
+                                         проходы с шипами стали чуть
+                                         легче, это и был смысл правки
+     падение с 600px    66 кадров        без изменений (обычное падение
+                                         MIN_HOLD не трогает)
+
+   Управление держим резким с обоих концов: нажал — сразу полная
+   скорость, отпустил — сразу ноль.
+
+   Сначала пробовали иначе. Добавляли плавный разгон (шаг 0.45 за кадр),
+   мягкий прыжок (гравитация 0.052 с поправкой MAX_VX) и проскальзывание
+   при отпускании (FRIC 0.82, 22 px наката). Скорость бега и падения от
+   этого не менялись, но разгон стал вдвое дольше, а время в воздухе на
+   8% больше — игра начинала ощущаться замедленной. Откатывали по
+   частям, и в итоге не осталось ничего: ни разгона, ни наката.
+
+   FRIC = 0 значит, что на земле vx умножается на ноль — персонаж встаёт
+   как вкопанный в тот же кадр, когда отпускаешь кнопку. AIR теперь тоже
+   0 — по тому же запросу «без скольжения нигде»: отпустил кнопку в
+   прыжке — горизонтальная скорость гасится так же мгновенно, как на
+   земле. Подъём/падение (вертикаль, jumpV()/G()) этим не затронуты —
+   глохнет только горизонтальный разгон. Константа MOVE_A и функция
+   moveA() удалены вместе с разгоном — больше их никто не звал. */
+var JUMP_H = 155, MAX_VX = 6.2, FRIC = 0, AIR = 0,
+    /* Подбор по месту: 5.2 — медленно, 10.4 (x2) — «как будто бегает»,
+       7 — всё ещё быстровато, осели на 6.2. */
+    FALL_MULT = 1.2,   // гравитация на спуске сильнее, чем на подъёме —
+                        // прыжок ощутимо быстрее падает вниз после вершины
+                        // дуги, вместо того чтобы зависать в воздухе; чем
+                        // выше значение, тем падение быстрее (1.0 — падение
+                        // как подъём, без ускорения)
+    COYOTE = 6, BUFFER = 7, WALL_SLIDE = 2.2, WALL_VX = 6.2, STEP_UP = 16,
+    /* MIN_HOLD обрывал подъём так рано (7 кадров), что реальная высота
+       прыжка была 122.9 px вместо заданных JUMP_H=155 — прыжок явно не
+       дотягивал («еле как на блок запрыгивает»), и это стало ещё
+       заметнее после роста игрока с 20x60 до 30x100: та же высота
+       прыжка относительно выросшего тела стала визуально меньше. 25
+       кадров — это уже потолок самой формулы jumpV()/G() (дальше держать
+       незачем: с MIN_HOLD=1000 высота та же 148.5 px), так что прыжок
+       теперь поднимается на столько, на сколько и был рассчитан, а не
+       обрывается раньше времени. Сам механизм (обрыв подъёма через
+       MIN_HOLD кадров, высота не зависит от удержания кнопки) не тронут. */
+    MIN_HOLD = 25,
+    /* Цепляние за уступ: прыжок впритык к углу блока раньше либо
+       отскакивал, либо медленно «протискивал» игрока по STEP_UP за кадр
+       (см. ветку uPen<=dPen ниже) — несколько кадров вязкого ползанья
+       читались как баг. Теперь такое касание сразу ловится явным
+       состоянием pl.grab (см. tryGrab() в step()), а не доедается общей
+       веткой угла. GRAB_ZONE — на сколько кромка блока может быть выше
+       головы игрока и всё ещё цепляться (бросок впритык не всегда
+       попадает ровно в кромку). GRAB_COOLDOWN — кадров до повторного
+       захвата после отпускания/залезания, чтобы не хвататься обратно
+       в тот же кадр, пока хитбоксы ещё соприкасаются. */
+    GRAB_ZONE = 16, GRAB_COOLDOWN = 10,
+    STUCK_WINDOW = 150;   // окно сторожа застревания в прятках — см. respawn()/step()
+/* Портал: без паузы игрок телепортировался бы туда-обратно каждый кадр —
+   площадка прибытия сама попадает в зону касания площадки отправления
+   (обе одного размера, куда ни попади). Полсекунды с запасом — портал
+   и так срабатывает мгновенно на глаз, лишний кадр-другой не заметен. */
+var TELEPORT_COOLDOWN_MS = 500;
+// Practice: ручной режим полёта — вертикальная скорость вместо гравитации/прыжка
+var FLY_SPEED = 3.6;
+function G(){ return gravityScale * 0.062; }          // 9 → 0.558 px/кадр²
+function jumpV(){ return -Math.sqrt(2 * Math.max(0.02, G()) * JUMP_H); }  // constant hop height
+/* Heavier gravity shortens airtime, so speed scales with it — otherwise a map
+   built at gravity 10 becomes physically unjumpable at 30. Reach stays constant. */
+function gk(){ return Math.max(0.45, Math.sqrt(Math.max(0.02, G()) / 0.62)); }
+function maxVX(){ return MAX_VX * gk(); }
+function wallVX(){ return WALL_VX * gk(); }
+function maxFall(){ return 12 + gravityScale * 0.8; }
+/* Множитель скорости платформы («Бустеры» из редактора) — см. editor.html
+   для полного объяснения аддитивной формулы и порога 0.05. */
+function platBoost(o){ return (o && o.speedMul) ? Math.max(0.05, 1 + (+o.speedMul || 0)) : 1; }
+
+var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,selfJump:false,hidden:false,
+  rideOn:null, standPlat:null, teleCooldown:0, grab:null, kick:0,
+};
+var keys = {l:false,r:false,u:false};
+var coy = 0, buf = 0, hold = 0, grabCd = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
+/* Practice Mode (только Race, включается снаружи через GAME.practice —
+   см. game.js): смерть возвращает не на спавн/чекпоинт, а на последнюю
+   позицию, где игрок ТОЧНО не касался опасности — «где умер», но не
+   внутри самого шипа/яда, а на шаг до него. */
+var practiceMode = false, lastSafePos = {x:0,y:0};
+/* Практика без риска: неуязвимость (die() вообще не срабатывает) и
+   полёт (гравитация/прыжок заменяются ручной вертикальной скоростью) —
+   оба переключаются снаружи (game.js), независимо друг от друга и от
+   самого practiceMode, но кнопки для них видны игроку только в Practice. */
+var godMode = false, flyMode = false;
+/* Сторож застревания в прятках — см. комментарий у STUCK_WINDOW ниже. */
+var stuckFrames = 0, stuckAir = 0, stuckHeld = 0, stuckMinX = 0, stuckMaxX = 0, stuckMinY = 0, stuckMaxY = 0;
+var deaths = 0, timeMs = 0, shake = 0, acc = 0, last = 0, lastStepAt = -9999;
+
+/* Где игрок относительно воды: верхняя кромка, под водой ли голова
+   и не кислота ли это. Считается по тем же объектам, что и коллизии. */
+function findSpawn(){ for(var i=0;i<objects.length;i++) if(objects[i].type === "spawn") return objects[i]; return null; }
+/* Зомби в карте теперь один, как и точка старта — он просто метка, откуда
+   стартует ИИ-охотник (см. apoc и заражение в сетевой части), а не
+   самостоятельный объект со своей обычной физикой. */
+function findZombie(){ for(var i=0;i<objects.length;i++) if(objects[i].type === "zombie") return objects[i]; return null; }
+/* Необязательная метка только для классики — см. TOOLS/teleportToSeekerSpot
+   ниже. Та же логика "один на карту, как spawn/zombie", просто не
+   обязательна: без неё искатель просто сразу на обычном спавне. */
+function findSeekerSpot(){ for(var i=0;i<objects.length;i++) if(objects[i].type === "seekerSpot") return objects[i]; return null; }
+function play(){
+  var sp = findSpawn();
+  if(!sp){ dialog(TR("noSpawnTitle","Нет точки старта"), TR("noSpawnBody","Поставь инструмент «Точка старта», потом жми «Играть»."), null); return; }
+  playing = true; done = false; deaths = 0; timeMs = 0; parts.length = 0;
+  // одинаковый участок мира у всех игроков (см. playZoom)
+  view.s = playZoom();
+  indexMovers(); markDirty();
+  // размер игрока задан движком и не редактируется
+  pl.w = SIZES.spawn[0]; pl.h = SIZES.spawn[1];
+  spawnPt = {x:sp.x, y:sp.y};
+  lastSafePos = {x:sp.x, y:sp.y};
+  objects.forEach(function(o){
+    o._hx = o.x; o._hy = o.y; o._t = 0; o._act = !!o.startsOpen;
+    o._reached = false; o._spin = 0; o._squash = 0; o._pulseT = 0; o._hue = 0;
+  });
+  respawn();
+  document.body.classList.add("play");
+  sel = null; inspect(); hideMsg(); last = 0; acc = 0; stat();
+}
+function stop(){
+  playing = false; document.body.classList.remove("play"); hideMsg(); parts.length = 0;
+  objects.forEach(function(o){ if(o._hx !== undefined){ o.x = o._hx; o.y = o._hy; }
+    o._act = false; o._reached = false; o._spin = 0; o._got = false; });
+  resetView();
+}
+/* Перезапуск забега без перезагрузки страницы: монеты, время, смерти
+   и все собранные предметы возвращаются на место, карта не трогается.
+   Раньше это было размазано по обработчику клавиши R, поэтому после
+   финиша пройти карту заново можно было только с клавиатуры. */
+function restartRun(){
+  done = false; hideMsg();
+  timeMs = 0; deaths = 0;
+  objects.forEach(function(o){
+    o._reached = false;
+    o._act = !!o.startsOpen; o._latch = false;
+  });
+  var sp = findSpawn();
+  if(sp){ spawnPt = {x:sp.x, y:sp.y}; lastSafePos = {x:sp.x, y:sp.y}; }
+  stat(); respawn();
+}
+
+function respawn(){
+  var p = (practiceMode && mode === "race") ? lastSafePos : spawnPt;
+  pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
+  pl.rideOn = null; pl.grab = null; grabCd = 0; pl.kick = 0;
+  stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
+}
+/* Классика: игрок, которого рулетка только что назначила искателем, ждёт
+   раунд не на обычном спавне среди всех, а в отдельно отмеченном месте
+   (см. findSeekerSpot/TOOLS) — пока это лобби, его всё равно никто не
+   видит (см. hsHiding в game.js). В начале раунда респаун на обычный
+   спавн уже делает существующий teleportSeeker (см. hsPhase('round') в
+   game.js) — отдельно телепортировать обратно тут не нужно. Без метки на
+   карте — no-op, искатель остаётся там, где уже стоит. */
+function teleportToSeekerSpot(){
+  var sp = findSeekerSpot();
+  if(!sp) return false;
+  pl.x = sp.x; pl.y = sp.y; pl.vx = 0; pl.vy = 0;
+  pl.rideOn = null; pl.grab = null; grabCd = 0; pl.kick = 0;
+  stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
+  return true;
+}
+function die(){
+  // в прятках умереть нельзя вообще — единая точка входа для любой смерти
+  if(mode === "hideAndSeek") return;
+  if(godMode) return;   // Practice: неуязвимость — та же единая точка входа
+  if(pl.dead || done) return;
+  pl.dead = true; deaths++; shake = 13; stat();
+  if(window.BFSound) BFSound.death();
+  burst(pl.x+pl.w/2, pl.y+pl.h/2, 22, "#ef4444", 4.4, 34);
+  setTimeout(function(){ if(playing) respawn(); }, 300);
+}
+function stat(){
+  document.getElementById("sDeath").textContent = deaths;
+}
+function showMsg(t,s){
+  document.getElementById("msgT").textContent = t;
+  document.getElementById("msgS").textContent = s;
+  var m = document.getElementById("msg"); m.style.display = "block";
+  requestAnimationFrame(function(){ m.classList.add("show"); });
+}
+function hideMsg(){ var m = document.getElementById("msg"); m.classList.remove("show"); m.style.display = "none"; }
+
+/* «Открыт» — объект, который включила кнопка или рычаг: он становится
+   полупрозрачным и проходимым. Сами кнопка и рычаг так не исчезают. */
+var opened = function(o){ return o.type !== "button" && o.type !== "lever" && !!o._act; };
+
+/* Все ли игроки уже в двери. В одиночном прогоне редактора игрок один,
+   поэтому условие выполняется сразу. В сетевой игре список приходит
+   из game.js через GAME.others. */
+function allAtDoor(o){
+  var others = (BRIDGE && BRIDGE.others) ? BRIDGE.others() : null;
+  if(!others || !others.length) return true;
+  for(var i = 0; i < others.length; i++){
+    var p = others[i];
+    if(!p || p.gone) continue;
+    if(!overlaps(o, p.x, p.y, p.w || 22, p.h || 74)) return false;
+  }
+  return true;
+}
+/* Укрытие для пряток игрок проходит насквозь — иначе за него не спрятаться.
+   Ядовитый объект тоже не solid: иначе физика сначала аккуратно ставит
+   игрока на крышку (как на обычный блок), а проверка на смерть ниже видит
+   уже НЕ пересекающиеся хитбоксы — и на верхушке шипа можно стоять живым.
+   Без solid игрок проваливается в хитбокс, где его и находит die(). */
+/* SOLID — только блок, круг и треугольник, поэтому мертвец (свой тип
+   "zombie") стеной не бывает сам по себе: сквозь него проходят и умирают
+   от касания, а без модификации его на карте вообще нет. */
+var solid  = function(o){ return SOLID.indexOf(o.type) !== -1 && !opened(o)
+                              && o.ghost !== true && o.hideSpot !== true
+                              && o.deadly !== true; };
+var hazard = function(o){ return o.deadly === true && !opened(o); };
+function hit(ax,ay,aw,ah,bx,by,bw,bh){ return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by; }
+
+/* ══════════════════════════════════════════════════
+   ХИТБОКСЫ
+   Раньше столкновения считались по прямоугольнику вокруг объекта,
+   поэтому круг ловил игрока за углы, треугольник был стеной, а ротатор
+   вращался только на картинке. Теперь у каждого объекта настоящий
+   многоугольник, который поворачивается вместе с ним.
+   ══════════════════════════════════════════════════ */
+var CIRCLE_SIDES = 32;   // чем больше сторон, тем точнее хитбокс круга
+/* Рикошет — полное отражение импульса от той грани, в которую попал игрок.
+   Коэффициент чуть меньше единицы, иначе отскок копится до бесконечности. */
+var RICO_K = 0.96, RICO_MIN = 2.2, RICO_CAP = 26;
+/* Боковой отскок держится RICO_KICK кадров: без этого уже следующий кадр
+   ставил pl.vx = dir*maxVX() по зажатой стрелке и стирал отражённую
+   скорость — игрока, упёршегося в бок, не отталкивало вовсе. */
+var RICO_KICK = 16, RICO_KICK_DECAY = 0.95;
+
+/* Отскок считается от настоящей грани объекта, а не от осей экрана.
+   Ищем ближайшее ребро многоугольника и берём его наружную нормаль —
+   поэтому от лежащего батута отбрасывает вверх, от стоящего вбок,
+   а от повёрнутого под тем углом, под каким он стоит. */
+function faceNormal(o, px, py){
+  var pts = polyOf(o), n = pts.length;
+  var best = 1e9, nx = 0, ny = -1, i;
+  for(i=0;i<n;i++){
+    var a = pts[i], b = pts[(i+1)%n];
+    var ex = b[0]-a[0], ey = b[1]-a[1];
+    var len2 = ex*ex + ey*ey;
+    if(len2 < 0.0001) continue;
+    // ближайшая точка ребра к центру игрока
+    var t = ((px-a[0])*ex + (py-a[1])*ey) / len2;
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    var qx = a[0] + ex*t, qy = a[1] + ey*t;
+    var d = (px-qx)*(px-qx) + (py-qy)*(py-qy);
+    if(d >= best) continue;
+    best = d;
+    // нормаль к ребру, развёрнутая наружу — в сторону игрока
+    var len = Math.sqrt(len2);
+    var cx = -ey/len, cy = ex/len;
+    if((px-qx)*cx + (py-qy)*cy < 0){ cx = -cx; cy = -cy; }
+    nx = cx; ny = cy;
+  }
+  return [nx, ny];
+}
+
+/* Отражение импульса от грани. Сила берётся из свойства объекта:
+   1 — как пришёл, больше — подбрасывает сильнее. cx/cy — точка касания;
+   без неё грань ищется от центра игрока, а он у высокого игрока рядом
+   с низким блоком ближе к крышке, чем к боку, — боковой удар отражался
+   как удар сверху и игрок продолжал идти в блок. */
+function ricochet(o, cx, cy){
+  var px = pl.x + pl.w/2, py = pl.y + pl.h/2;
+  var nv = faceNormal(o, cx === undefined ? px : cx, cy === undefined ? py : cy);
+  var vx = pl.vx, vy = pl.vy;
+  var dot = vx*nv[0] + vy*nv[1];
+  if(dot > 0) dot = 0;                       // уже летим прочь — не разгоняем
+  var k = RICO_K * (o.power === undefined ? 1 : o.power);
+  var rx = (vx - 2*dot*nv[0]) * k;
+  var ry = (vy - 2*dot*nv[1]) * k;
+  var sp = Math.sqrt(rx*rx + ry*ry);
+  if(sp > RICO_CAP){ rx = rx/sp*RICO_CAP; ry = ry/sp*RICO_CAP; }
+  pl.vx = rx; pl.vy = ry;
+  /* coy обнуляем: иначе сразу после отскока остаётся «монетка времени»
+     от касания земли и игрок прыгает второй раз прямо в воздухе. */
+  pl.ground = false; pl.wall = 0; pl.selfJump = false; coy = 0; buf = 0;
+  if(Math.abs(nv[0]) > 0.5) pl.kick = RICO_KICK;
+  o._squash = 1;
+  puff(px - nv[0]*pl.w*0.5, py - nv[1]*pl.h*0.5, 8);
+  if(window.BFSound) BFSound.bounce();
+}
+
+function rawPoly(o){
+  var pts, i, a;
+  if(o.type === "triangle"){
+    pts = [[o.w/2,0],[o.w,o.h],[0,o.h]];
+  } else if(o.type === "circle"){
+    pts = [];
+    for(i=0;i<CIRCLE_SIDES;i++){
+      a = i/CIRCLE_SIDES*6.2831853;
+      pts.push([o.w/2 + Math.cos(a)*o.w/2, o.h/2 + Math.sin(a)*o.h/2]);
+    }
+  } else {
+    pts = [[0,0],[o.w,0],[o.w,o.h],[0,o.h]];
+  }
+  return pts;
+}
+
+// многоугольник в мировых координатах; пересчитывается только при изменениях
+function polyOf(o){
+  var ang = (o.spins && playing) ? (o._spin || 0) : (o.rot||0)*Math.PI/180;
+  var key = o.x + "," + o.y + "," + o.w + "," + o.h + "," + ang.toFixed(4) + "," + o.type;
+  if(o._pk === key) return o._poly;
+
+  var base = rawPoly(o), cx = o.w/2, cy = o.h/2, out = [], i, p, dx, dy;
+  var s = Math.sin(ang), c = Math.cos(ang);
+  for(i=0;i<base.length;i++){
+    p = base[i];
+    if(ang){
+      dx = p[0]-cx; dy = p[1]-cy;
+      out.push([o.x + cx + dx*c - dy*s, o.y + cy + dx*s + dy*c]);
+    } else {
+      out.push([o.x + p[0], o.y + p[1]]);
+    }
+  }
+  o._pk = key; o._poly = out;
+  // габариты для быстрой отбраковки
+  var x0=1/0,y0=1/0,x1=-1/0,y1=-1/0;
+  for(i=0;i<out.length;i++){
+    if(out[i][0]<x0)x0=out[i][0]; if(out[i][0]>x1)x1=out[i][0];
+    if(out[i][1]<y0)y0=out[i][1]; if(out[i][1]>y1)y1=out[i][1];
+  }
+  o._bb = [x0,y0,x1,y1];
+  return out;
+}
+function bbox(o){ polyOf(o); return o._bb; }
+
+// ширина фигуры в горизонтальной полосе [y0,y1] — нужна для движения по X
+function spanX(pts, y0, y1){
+  var lo=1/0, hi=-1/0, n=pts.length, i, a, b, t, x;
+  for(i=0;i<n;i++){
+    a = pts[i]; b = pts[(i+1)%n];
+    if(a[1] >= y0 && a[1] <= y1){ if(a[0]<lo)lo=a[0]; if(a[0]>hi)hi=a[0]; }
+    if((a[1]-y0)*(b[1]-y0) < 0){ t=(y0-a[1])/(b[1]-a[1]); x=a[0]+(b[0]-a[0])*t; if(x<lo)lo=x; if(x>hi)hi=x; }
+    if((a[1]-y1)*(b[1]-y1) < 0){ t=(y1-a[1])/(b[1]-a[1]); x=a[0]+(b[0]-a[0])*t; if(x<lo)lo=x; if(x>hi)hi=x; }
+  }
+  return lo<=hi ? [lo,hi] : null;
+}
+
+// высота фигуры в вертикальной полосе [x0,x1] — нужна для движения по Y
+function spanY(pts, x0, x1){
+  var lo=1/0, hi=-1/0, n=pts.length, i, a, b, t, y;
+  for(i=0;i<n;i++){
+    a = pts[i]; b = pts[(i+1)%n];
+    if(a[0] >= x0 && a[0] <= x1){ if(a[1]<lo)lo=a[1]; if(a[1]>hi)hi=a[1]; }
+    if((a[0]-x0)*(b[0]-x0) < 0){ t=(x0-a[0])/(b[0]-a[0]); y=a[1]+(b[1]-a[1])*t; if(y<lo)lo=y; if(y>hi)hi=y; }
+    if((a[0]-x1)*(b[0]-x1) < 0){ t=(x1-a[0])/(b[0]-a[0]); y=a[1]+(b[1]-a[1])*t; if(y<lo)lo=y; if(y>hi)hi=y; }
+  }
+  return lo<=hi ? [lo,hi] : null;
+}
+
+// настоящее пересечение игрока с фигурой (для шипов, монет, кнопок)
+function overlaps(o, x, y, w, h){
+  var bb = bbox(o);
+  if(x >= bb[2] || x+w <= bb[0] || y >= bb[3] || y+h <= bb[1]) return false;
+  var sp = spanX(polyOf(o), y + 2, y + h - 2);
+  return !!sp && x < sp[1] && x+w > sp[0];
+}
+
+// точка внутри фигуры — для выделения в редакторе
+function inside(o, x, y){
+  var pts = polyOf(o), n = pts.length, i, j, r = false;
+  for(i=0, j=n-1; i<n; j=i++){
+    if(((pts[i][1] > y) !== (pts[j][1] > y)) &&
+       (x < (pts[j][0]-pts[i][0])*(y-pts[i][1])/(pts[j][1]-pts[i][1]) + pts[i][0])) r = !r;
+  }
+  return r;
+}
+
+/* Отрезок пересекает прямоугольник? Лазеру нужно это, а не «точка внутри
+   фигуры» — луч бьёт вдоль всей своей длины, а не в одной точке.
+   Стандартный parametric clip (Liang–Barsky) по четырём полуплоскостям
+   прямоугольника; rx1/ry1 — дальняя точка отрезка, попавшая в рамки,
+   нужна только чтобы обрезать луч ровно по игроку при отрисовке. */
+function segHitsRect(x0, y0, x1, y1, rx, ry, rw, rh){
+  var t0 = 0, t1 = 1, dx = x1-x0, dy = y1-y0;
+  function clip(p, q){
+    if(p === 0) return q >= 0;
+    var r = q/p;
+    if(p < 0){ if(r > t1) return false; if(r > t0) t0 = r; }
+    else { if(r < t0) return false; if(r < t1) t1 = r; }
+    return true;
+  }
+  if(clip(-dx, x0-rx) && clip(dx, rx+rw-x0) && clip(-dy, y0-ry) && clip(dy, ry+rh-y0))
+    return t0 <= t1 ? t0 : null;
+  return null;
+}
+
+// параметр t пересечения отрезка (x1,y1)-(x2,y2) с отрезком (x3,y3)-(x4,y4), иначе null
+function segSegT(x1,y1,x2,y2, x3,y3,x4,y4){
+  var d1x = x2-x1, d1y = y2-y1, d2x = x4-x3, d2y = y4-y3;
+  var denom = d1x*d2y - d1y*d2x;
+  if(Math.abs(denom) < 1e-9) return null;
+  var t = ((x3-x1)*d2y - (y3-y1)*d2x) / denom;
+  var u = ((x3-x1)*d1y - (y3-y1)*d1x) / denom;
+  if(t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return t;
+}
+// ближайшее пересечение отрезка с настоящим (повёрнутым) многоугольником стены
+function raySegHitsPoly(x0,y0,x1,y1, poly){
+  var n = poly.length, best = null;
+  for(var i=0;i<n;i++){
+    var a = poly[i], b = poly[(i+1)%n];
+    var t = segSegT(x0,y0,x1,y1, a[0],a[1], b[0],b[1]);
+    if(t !== null && (best === null || t < best)) best = t;
+  }
+  return best;
+}
+/* Пока луч не бьёт по прямой одним отрезком, он не огибал стены и не
+   отражался — это и просил поправить фидбек. Теперь трасса строится по
+   настоящей физике: любая сплошная стена (solid(), та же проверка, что
+   и у движения игрока) её либо глушит, либо, если у неё включён
+   «Рикошет», отражает под тем же углом, под каким луч в неё влетел
+   (faceNormal — та самая нормаль грани, что и у батута). Ограничение
+   числа отскоков — только страховка от вечного цикла между двух
+   параллельных зеркал. */
+var LASER_MAX_BOUNCES = 6;
+function computeLaserPath(o){
+  var ox = o.x+o.w/2, oy = o.y+o.h/2, rad = (o.rot||0)*Math.PI/180;
+  var dx = Math.cos(rad), dy = Math.sin(rad), remaining = o.range||500;
+  var pts = [{x:ox, y:oy}], hit = false, b, i;
+  for(b=0; b<=LASER_MAX_BOUNCES; b++){
+    var ex = ox+dx*remaining, ey = oy+dy*remaining;
+    var tPlayer = (playing && !pl.dead) ? segHitsRect(ox,oy,ex,ey, pl.x,pl.y,pl.w,pl.h) : null;
+    var bestT = null, bestObj = null;
+    for(i=0;i<objects.length;i++){
+      var w = objects[i];
+      if(w === o || !solid(w)) continue;
+      var bb = bbox(w);
+      if(segHitsRect(ox,oy,ex,ey, bb[0],bb[1], bb[2]-bb[0], bb[3]-bb[1]) === null) continue;
+      var t = raySegHitsPoly(ox,oy,ex,ey, polyOf(w));
+      if(t !== null && (bestT === null || t < bestT)){ bestT = t; bestObj = w; }
+    }
+    if(tPlayer !== null && (bestT === null || tPlayer <= bestT)){
+      pts.push({x: ox+(ex-ox)*tPlayer, y: oy+(ey-oy)*tPlayer});
+      hit = true;
+      break;
+    }
+    if(bestT !== null){
+      var hx = ox+(ex-ox)*bestT, hy = oy+(ey-oy)*bestT;
+      pts.push({x:hx, y:hy});
+      if(!bestObj.ricochet || b === LASER_MAX_BOUNCES) break;
+      var nrm = faceNormal(bestObj, hx, hy);
+      var dot = dx*nrm[0] + dy*nrm[1];
+      var rx = dx-2*dot*nrm[0], ry = dy-2*dot*nrm[1], rl = Math.sqrt(rx*rx+ry*ry)||1;
+      dx = rx/rl; dy = ry/rl;
+      remaining = remaining*(1-bestT);
+      ox = hx+dx*0.05; oy = hy+dy*0.05;   // микроотступ, чтобы не отразиться от той же грани ещё раз в этой же точке
+      continue;
+    }
+    pts.push({x: ex, y: ey});
+    break;
+  }
+  return {pts: pts, hit: hit};
+}
+
+/* ══════════════════════════════════════════════════
+   ТОЛКАЕМЫЕ ОБЪЕКТЫ
+   «Толкается» — свойство, как «Рикошет» или «Двигается»: доступно
+   любой сплошной фигуре (блок, круг, треугольник), а не отдельный
+   объект. У такой фигуры своя мини-физика: падает под той же
+   гравитацией, что и игрок, и стоит на любой твёрдой поверхности.
+   Игрок толкает её, упираясь сбоку, — чем больше «Масса», тем
+   медленнее едет.
+   С игроком и остальной картой она общается ровно так же, как
+   движущаяся платформа (через o._dx/o._dy): весь код, который умеет
+   стоять на платформе, ехать вместе с ней и упираться сбоку, не
+   тронут и работает бесплатно — фигуре просто дали ещё один источник
+   движения, посчитанный не синусоидой, а физикой. */
+var PUSH_BASE = 2.6;   // px/кадр при массе 1 — столько же, сколько катится обычный блок
+function pushSpeed(mass){
+  var m = Math.max(0.2, mass || 1);
+  /* Толкаемая фигура физически не может ехать быстрее, чем идёт сам
+     игрок — иначе она обгоняет его, разрывает контакт, и на следующем
+     кадре игрок догоняет уже неподвижную фигуру и упирается в неё как
+     в стену (толчок дёргался: кадр едет — кадр стоит намертво).
+     Потолок в maxVX() гарантирует, что она всегда остаётся впритык. */
+  return Math.max(0.15, Math.min(maxVX(), PUSH_BASE / m));
+}
+function stepPushables(){
+  for(var bi=0; bi<objects.length; bi++){
+    var o = objects[bi];
+    if(!o.pushable){ continue; }
+    if(opened(o)){ o._dx = 0; o._dy = 0; continue; }
+
+    var near = nearby(o.x-60, o.y-60, o.w+120, o.h+120), blockers = [], i;
+    for(i=0;i<near.length;i++){
+      var s = near[i];
+      if(s !== o && solid(s)) blockers.push(s);
+    }
+
+    // ---- вертикаль: свободное падение до первой опоры ----
+    o._vy = (o._vy||0) + G();
+    var fc = maxFall();
+    if(o._vy > fc) o._vy = fc;
+    var yBefore = o.y;
+    o.y += o._vy;
+    var grounded = false;
+    for(i=0;i<blockers.length;i++){
+      var sv = blockers[i], bbv = bbox(sv);
+      if(o.x >= bbv[2] || o.x+o.w <= bbv[0] || o.y >= bbv[3] || o.y+o.h <= bbv[1]) continue;
+      var spV = spanY(polyOf(sv), o.x+2, o.x+o.w-2);
+      if(!spV || o.y >= spV[1] || o.y+o.h <= spV[0]) continue;
+      if((yBefore+o.h) <= spV[0]+2){ o.y = spV[0]-o.h; o._vy = 0; grounded = true; }
+    }
+    o._dy = o.y - yBefore;
+
+    // ---- горизонталь: толкает только игрок, и только стоящий на земле ящик ----
+    var dx = 0;
+    if(grounded && !pl.dead){
+      /* Грань берём точным многоугольником (spanX на уровне игрока), а не
+         прямоугольной рамкой: у треугольника рамка шире реальной фигуры
+         почти везде, кроме основания. Если сверять касание по рамке, а
+         толчок в основном коде идёт по настоящей грани (та же spanX),
+         зазор между игроком и фигурой медленно расходится с каждым
+         кадром и через десяток шагов толчок «случайно» обрывается. */
+      var pushSpan = spanX(polyOf(o), pl.y + 2, pl.y + pl.h - 2);
+      var speed = pushSpeed(o.mass);
+      if(pushSpan){
+        // игрок слева от фигуры (его правый бок у левого бока фигуры) и
+        // идёт вправо — толкает вправо; симметрично для правого бока
+        var touchLeftSide  = Math.abs((pl.x+pl.w) - pushSpan[0]) < 3;
+        var touchRightSide = Math.abs(pl.x - pushSpan[1]) < 3;
+        if(touchLeftSide && pl.vx > 0.3) dx = speed;
+        else if(touchRightSide && pl.vx < -0.3) dx = -speed;
+      }
+    }
+    if(dx !== 0){
+      var xBefore = o.x;
+      o.x += dx;
+      for(i=0;i<blockers.length;i++){
+        var sh = blockers[i], bbh = bbox(sh);
+        if(o.y >= bbh[3] || o.y+o.h <= bbh[1]) continue;
+        var spH = spanX(polyOf(sh), o.y+2, o.y+o.h-2);
+        if(!spH) continue;
+        if(dx > 0 && o.x+o.w > spH[0] && xBefore+o.w <= spH[0]+2) o.x = spH[0]-o.w;
+        else if(dx < 0 && o.x < spH[1] && xBefore >= spH[1]-2) o.x = spH[1];
+      }
+      dx = o.x - xBefore;
+    }
+    o._dx = dx;
+  }
+}
+
+/* Сколько из (dx,dy) поездки на платформе реально можно проехать, прежде
+   чем игрок влетит в объект, которого не касался до начала этого сдвига.
+   Режем путь на мелкие шаги вместо одного присваивания — иначе быстрая
+   платформа переносит игрока сквозь тонкую стену на пути, ни разу не
+   пересёкшись с ней ни в позиции «до», ни в позиции «после» (обычный
+   разбор столкновений сравнивает только эти две точки). Шаг 5px меньше
+   толщины любой разумной стены, а 200 шагов с запасом хватает даже на
+   самую размашистую платформу без ощутимой просадки кадра — это разовая
+   проверка, только пока игрок реально едет на чём-то. */
+function clampRideDelta(dx, dy, ride){
+  if(!dx && !dy) return {dx:0, dy:0};
+  var STEP = 5, MAX_STEPS = 200;
+  var dist = Math.max(Math.abs(dx), Math.abs(dy));
+  var steps = Math.min(MAX_STEPS, Math.max(1, Math.ceil(dist / STEP)));
+  var stepX = dx / steps, stepY = dy / steps;
+  var x0 = pl.x, y0 = pl.y, movedX = 0, movedY = 0;
+  for(var s = 0; s < steps; s++){
+    var nx = x0 + movedX + stepX, ny = y0 + movedY + stepY;
+    var near2 = nearby(Math.min(x0, nx) - 4, Math.min(y0, ny) - 4,
+                        Math.abs(nx - x0) + pl.w + 8, Math.abs(ny - y0) + pl.h + 8);
+    var blocked = false;
+    for(var i = 0; i < near2.length; i++){
+      var o = near2[i];
+      if(o === ride || !solid(o)) continue;
+      var bb = bbox(o);
+      if(nx >= bb[2] || nx+pl.w <= bb[0] || ny >= bb[3] || ny+pl.h <= bb[1]) continue;
+      // уже пересекались с этим объектом до сдвига — не наша забота здесь,
+      // это разберёт обычный разбор столкновений ниже
+      if(x0 < bb[2] && x0+pl.w > bb[0] && y0 < bb[3] && y0+pl.h > bb[1]) continue;
+      blocked = true; break;
+    }
+    if(blocked) break;
+    movedX += stepX; movedY += stepY;
+  }
+  return {dx: movedX, dy: movedY};
+}
+
+/* ══════════════════════════════════════════════════
+   ЛИФТ: МАРШРУТ И ЗАДЕРЖКА
+   o.path — точки маршрута [[dx,dy],...] относительно места, где лифт
+   поставлен (само это место — нулевая точка, в path её нет). Без path —
+   старый лифт с одним отрезком (moveX, moveY): ездит ровно как раньше и
+   с той же фазой (стартует с середины хода), чтобы опубликованные карты
+   не поменяли тайминг. Лифт с path стартует с места установки, ждёт
+   o.delay секунд и едет по точкам до конца и обратно. Темп — тот же
+   синус, что и раньше, только по длине ломаной: у одного отрезка это в
+   точности прежняя формула. Задержка считается в том же _t, что и ход,
+   поэтому у лифта на кнопке она идёт только пока он включён.
+   Призраки маршрута рисует только редактор — в игре их нет вовсе.
+   ══════════════════════════════════════════════════ */
+var LIFT_MAX_PTS = 16, LIFT_MAX_DELAY = 60;
+function liftHasPath(o){ return Array.isArray(o.path) && o.path.length > 0; }
+function liftPts(o){ return liftHasPath(o) ? o.path : [[o.moveX||0, o.moveY||0]]; }
+function liftK(o){
+  if(!liftHasPath(o)) return (Math.sin(o._t)+1)/2;
+  var wait = Math.max(0, +o.delay || 0) * 60 * 0.012 * Math.abs(o.speed||1);
+  var t = Math.abs(o._t) - wait;
+  return t <= 0 ? 0 : (1 - Math.cos(t))/2;
+}
+/* Маршрут и задержка из загруженной карты — та же граница доверия, что и
+   клэмп x/y/w/h: битый path не должен ронять step(), раздувать цикл по
+   точкам или уводить лифт за край карты. У старых карт этих полей нет —
+   лифт ездит как раньше (см. liftHasPath). */
+function cleanLift(o){
+  if(o.path !== undefined){
+    o.path = (Array.isArray(o.path) ? o.path : []).filter(function(p){
+      return Array.isArray(p) && typeof p[0] === "number" && typeof p[1] === "number" && isFinite(p[0]) && isFinite(p[1]);
+    }).slice(0, LIFT_MAX_PTS).map(function(p){
+      return [Math.max(-100000, Math.min(100000, +p[0])), Math.max(-100000, Math.min(100000, +p[1]))];
+    });
+    if(!o.path.length) delete o.path;
+  }
+  if(o.delay !== undefined){
+    o.delay = (typeof o.delay === "number" && isFinite(o.delay)) ? Math.max(0, Math.min(LIFT_MAX_DELAY, o.delay)) : 0;
+    if(!o.delay) delete o.delay;
+  }
+}
+function liftOffset(o, k){
+  var pts = liftPts(o), n = pts.length, len = [], total = 0, px = 0, py = 0, i, dx, dy;
+  if(n === 1) return [pts[0][0]*k, pts[0][1]*k];
+  for(i=0;i<n;i++){
+    dx = pts[i][0]-px; dy = pts[i][1]-py;
+    len.push(Math.sqrt(dx*dx + dy*dy)); total += len[i];
+    px = pts[i][0]; py = pts[i][1];
+  }
+  var d = k*total; px = 0; py = 0;
+  for(i=0;i<n;i++){
+    if(d <= len[i] || i === n-1){
+      var f = len[i] > 0 ? Math.min(1, d/len[i]) : 1;
+      return [px + (pts[i][0]-px)*f, py + (pts[i][1]-py)*f];
+    }
+    d -= len[i]; px = pts[i][0]; py = pts[i][1];
+  }
+  return [px, py];
+}
+
+function step(){
+  anim++;
+  /* Кто из движущихся объектов на самом деле привязан к кнопке/рычагу —
+     ID любой цели из ЧЬЕГО-ЛИБО targetIds. Только у таких платформа
+     стоит на месте, пока её не «держат» (button/lever._act) — обычная
+     платформа без привязки как и раньше едет всегда, без кнопки. */
+  var drivenIds = null;
+  objects.forEach(function(o){
+    if(!o.targetIds) return;
+    o.targetIds.split(",").forEach(function(id){
+      id = id.trim();
+      if(!id) return;
+      if(!drivenIds) drivenIds = {};
+      drivenIds[id] = true;
+    });
+  });
+  objects.forEach(function(o){
+    // Движение и вращение — свойства объекта, а не отдельные типы.
+    // Так двигаться и крутиться может любой блок, круг или треугольник.
+    // «Толкается» — исключение: у такой фигуры своя физика (см.
+    // stepPushables), синусоида ей не нужна и конфликтовала бы с
+    // падением/толчком. Инспектор не даёт включить оба свойства разом.
+    if(o.moves && !o.pushable){
+      var driven = drivenIds && o.customId && drivenIds[o.customId];
+      if(driven && !o._act){
+        o._dx = 0; o._dy = 0;   // стоит, пока кнопку не держат/рычаг не включён
+      } else {
+        o._t += 0.012*(o.speed||1);
+        var lo = liftOffset(o, liftK(o));
+        var nx = o._hx + lo[0], ny = o._hy + lo[1];
+        o._dx = nx-o.x; o._dy = ny-o.y; o.x = nx; o.y = ny;
+      }
+    }
+    if(o.spins) o._spin += (o.spin||2)*0.02;
+    if(o.pulse) o._pulseT = (o._pulseT||0) + 0.05;
+    if(o.colorCycle) o._hue = ((o._hue||0) + 1.2) % 360;
+    if(o._squash) o._squash *= 0.82;
+  });
+  if(shake > 0) shake *= 0.86;
+  stepParts();
+  if(done || pl.dead) return;
+
+  timeMs += 16.67;
+  document.getElementById("sTime").textContent = (timeMs/1000).toFixed(1);
+  /* Поездка на движущейся платформе.
+     Смещение платформы применяется ОДИН раз и ДО собственной физики
+     игрока. Раньше его добавляли уже после того, как игрока прижали
+     к верхней грани, — сдвиг накладывался дважды: платформа шла вниз
+     и вжимала игрока внутрь, шла вверх — отрывала от себя и он парил
+     в воздухе. Теперь игрок и платформа едут синхронно, а прижим к
+     грани только доводит его до места.
+
+     Сам сдвиг — разовое приращение позиции, а не пошаговое движение:
+     обычный разбор столкновений ниже видит только итог, а не путь до
+     него. Быстрая или размашистая платформа перепрыгивала тонкую стену
+     на пути насквозь, ни разу не пересёкшись с ней ни в кадре «до», ни
+     в кадре «после» — clampRideDelta режет сдвиг на мелкие шаги и
+     останавливает игрока у первого препятствия, которого там не было
+     до начала сдвига. */
+  if(pl.ground && pl.rideOn && (pl.rideOn.moves || pl.rideOn.pushable)){
+    var rideD = clampRideDelta(pl.rideOn._dx||0, pl.rideOn._dy||0, pl.rideOn);
+    pl.x += rideD.dx; pl.y += rideD.dy;
+  }
+  pl.rideOn = null;
+
+  // толкаемые фигуры считаются раньше остальной физики игрока: к
+  // моменту, когда игрок упирается в них или встаёт сверху, o._dx/o._dy
+  // уже готовы — ровно то же самое, что раньше умели только платформы
+  stepPushables();
+
+  // рядом с игроком объектов мало — дальние даже не проверяем
+  var near = nearby(pl.x - 260, pl.y - 260, pl.w + 520, pl.h + 520);
+  var sol = [], i;
+  for(i=0;i<near.length;i++) if(solid(near[i])) sol.push(near[i]);
+
+  /* Захват уступа: ввод разбирается здесь, до обычной физики — залезть
+     наверх или отпуститься должно начинать действовать с этого же
+     кадра, а не кадром позже. Пока grabbing истинный, движение и
+     гравитация ниже не трогают игрока вовсе: он висит неподвижно. */
+  var grabbing = false;
+  if(pl.grab){
+    var gWall = pl.wall, gAway = (gWall === 1 && keys.l) || (gWall === -1 && keys.r);
+    if(keys.u){
+      /* Залезть наверх — прямо на кромку блока, с лёгким толчком от края.
+         grabbing остаётся true и в этом кадре тоже: иначе обычный
+         триггер прыжка ниже увидит ту же самую зажатую keys.u и тут же
+         подбросит игрока — прыжок вместо посадки на кромку. Следующий
+         кадр обычная физика уже подхватит отпущенную/всё ещё зажатую
+         кнопку как положено. */
+      var gBB = bbox(pl.grab);
+      pl.y = gBB[1] - pl.h; pl.x += gWall === 1 ? 4 : -4;
+      pl.ground = true; coy = COYOTE; pl.vy = 0; pl.vx = 0; pl.selfJump = false;
+      pl.grab = null; grabCd = GRAB_COOLDOWN;
+      grabbing = true;
+    } else if(gAway || !solid(pl.grab)){
+      // отпустились сами (кнопка в обратную сторону) или блок исчез из-под руки
+      pl.grab = null; grabCd = GRAB_COOLDOWN;
+    } else {
+      grabbing = true;
+    }
+  }
+  if(grabCd > 0) grabCd--;
+
+  var dir = grabbing ? 0 : (keys.r?1:0)-(keys.l?1:0);
+  // отброс от бока рикошета (см. RICO_KICK) кончается раньше, если игрок
+  // уже встал — упёрся в обычную стену или повис на уступе
+  if(pl.kick > 0 && (grabbing || Math.abs(pl.vx) < 0.05)) pl.kick = 0;
+  if(pl.kick > 0){
+    pl.kick--; pl.vx *= RICO_KICK_DECAY;
+  } else if(dir){
+    /* Разгона нет: нажал — сразу полная скорость, одна и та же всегда.
+       Раньше скорость набиралась за 7 кадров (MOVE_A), и даже этот
+       короткий разбег читался как вялость — особенно на коротких
+       перебежках, где игрок отпускал кнопку, не дойдя до максимума.
+       Инерция при отпускании остаётся: см. FRIC в ветке ниже. */
+    pl.vx = dir * maxVX() * platBoost(pl.standPlat); pl.face = dir;
+  } else {
+    pl.vx *= pl.ground ? FRIC : AIR;
+    if(Math.abs(pl.vx) < .05) pl.vx = 0;
+  }
+
+  /* шаги — только по земле и только пока реально двигается. Порог был 30 —
+     мёртвый код: vx тут в пикселях НЕ на кадре игры, а на физическом шаге
+     (см. maxVX() = MAX_VX*gk(), это единицы до 5-6 даже с бустером), 30
+     не достижимо вообще ни при какой ходьбе — шагов не было слышно
+     никогда, ни на одной карте. */
+  if(window.BFSound && pl.ground && !pl.dead && Math.abs(pl.vx) > 0.5 && timeMs - lastStepAt > 250){
+    lastStepAt = timeMs;
+    BFSound.step();
+  }
+
+  if(coy > 0) coy--;
+  if(buf > 0) buf--;
+
+  if(grabbing){
+    // висим на уступе — гравитация и прыжок не действуют, пока не отпустились/залезли
+    pl.vy = 0; pl.selfJump = false; buf = 0; coy = 0; hold = 0;
+  } else if(flyMode){
+    /* Practice: полёт — вместо прыжка и гравитации вертикальная скорость
+       напрямую от зажатой кнопки прыжка (вверх), без неё — лёгкое
+       снижение, чтобы можно было и приземлиться. Столкновения ниже по
+       коду не меняются: сесть на платформу или упереться в потолок
+       всё ещё можно, просто без гравитации между ними. */
+    pl.vy = keys.u ? -FLY_SPEED : FLY_SPEED * 0.35;
+    pl.selfJump = false; buf = 0; coy = 0; hold = 0;
+  } else {
+    /* Кнопку прыжка можно держать: как только игрок коснулся земли,
+       он прыгает снова, без повторного нажатия. */
+    if(keys.u && !pl.selfJump && (pl.ground || coy > 0)) buf = BUFFER;
+    if(buf > 0){
+      /* По стене не оттолкнуться и на бегу по ней не забраться — только
+         соскальзывание (WALL_SLIDE ниже). Забраться можно только с
+         явного захвата уступа у самого верха стены — см. pl.grab выше
+         и tryGrab() ниже. */
+      if(coy > 0 || pl.ground){
+        pl.vy = jumpV(); buf = 0; coy = 0; hold = 0; pl.ground = false; pl.selfJump = true;
+        if(window.BFSound) BFSound.jump();
+      }
+    }
+    if(hold < 1000) hold++;
+    /* Прыжок всегда обрывается через MIN_HOLD кадров — независимо от
+       того, отпущена кнопка или всё ещё зажата. Высота больше не
+       зависит от удержания. */
+    if(pl.vy < 0 && pl.selfJump && hold > MIN_HOLD) pl.vy += G()*0.5;
+
+    pl.vy += G() * (pl.vy >= 0 ? FALL_MULT : 1);
+    // трение о стену — только в воздухе
+    if(pl.wall !== 0 && pl.vy > WALL_SLIDE) pl.vy -= (pl.vy - WALL_SLIDE) * 0.55;
+    var fallCap = maxFall();
+    if(pl.vy > fallCap) pl.vy = fallCap;
+  }
+
+  // висящего на уступе не двигаем и не разбираем столкновения — он и
+  // так стоит ровно там, где его поставил tryGrab()
+  if(!grabbing){
+  var xBefore = pl.x;                              // где игрок был до этого шага
+  pl.x += pl.vx; pl.wall = 0;
+  sol.forEach(function(o){
+    var bb = bbox(o);
+    if(pl.x >= bb[2] || pl.x+pl.w <= bb[0] || pl.y >= bb[3] || pl.y+pl.h <= bb[1]) return;
+    var P = polyOf(o);
+    // полосу чуть поджимаем: иначе стоя точно на блоке игрок цепляет
+    // его боком и его выталкивает вбок
+    var sp = spanX(P, pl.y + 2, pl.y + pl.h - 2);
+    if(!sp || pl.x >= sp[1] || pl.x + pl.w <= sp[0]) return;
+
+    // пологий подъём: на склон и невысокий уступ игрок заходит, а не упирается.
+    // Кроме рикошета: на низкий батут игрок иначе вшагивал, не отскакивая
+    if(pl.ground && !o.ricochet){
+      var top = spanY(P, pl.x + 2, pl.x + pl.w - 2);
+      if(top && pl.y + pl.h - top[0] <= STEP_UP && top[0] < pl.y + pl.h){
+        pl.y = top[0] - pl.h;
+        return;
+      }
+    }
+    var pdx = (o.moves || o.pushable) ? (o._dx||0) : 0;
+    var goL;
+    if(pdx !== 0){
+      /* Движущийся блок. Сторону выбираем по тому, с какой стороны игрок
+         пришёл: сравниваем, где был его бок и где была грань ДО этого
+         шага. Платформа остаётся твёрдой и толкает игрока перед собой, а
+         сдвиг за кадр не больше её собственного.
+
+         Телепорт был именно из-за выбора стороны: её брали по знаку
+         pl.vx, и игрока, которого платформа догнала сзади, выбрасывало
+         на её противоположный край — через весь блок разом. */
+      var leftWas  = Math.max(sp[0], sp[0] - pdx);   // левая грань: где была или стала
+      var rightWas = Math.min(sp[1], sp[1] - pdx);
+      var fromLeft  = (xBefore + pl.w) <= leftWas + 2;
+      var fromRight = xBefore >= rightWas - 2;
+      if(fromLeft && (!fromRight || pl.vx >= 0)) goL = true;
+      else if(fromRight) goL = false;
+      else goL = pdx < 0;                            // уже внутри — толкаем по ходу
+      /* Толкаем к своей грани, но за кадр не дальше, чем прошла сама
+         платформа. То есть она везёт игрока перед собой в своём темпе —
+         это честный толчок, а не бросок через блок. */
+      var edge = goL ? sp[0] - pl.w : sp[1];
+      var lim  = Math.abs(pdx) + Math.abs(pl.vx) + 4;
+      var move = Math.min(lim, Math.abs(edge - pl.x));
+      pl.x += goL ? -move : move;
+      if(Math.abs(edge - pl.x) < 0.01) pl.wall = goL ? 1 : -1;
+      /* Едущий рикошет отражает скорость игрока ОТНОСИТЕЛЬНО себя: так
+         отбрасывает и того, кто врезался в него сам, и того, в кого
+         въехала платформа, пока он стоял. */
+      if(o.ricochet && pl.wall !== 0 && Math.abs(pl.vx - pdx) > RICO_MIN){
+        pl.vx -= pdx;
+        ricochet(o, pl.x + pl.w/2, (Math.max(pl.y, bb[1]) + Math.min(pl.y + pl.h, bb[3]))/2);
+        pl.vx += pdx;
+        return;
+      }
+      /* Толкаемая фигура — исключение: её толкает сам игрок, поэтому его
+         собственная скорость в ту же сторону — это не «встречный разбег»
+         платформы, которую нужно погасить, а причина, по которой фигура
+         вообще едет. Обнулять vx здесь означало бы вышибать игроку ноги
+         на каждом кадре толчка — фигура сдвигалась бы на один кадр и
+         вставала намертво. */
+      if((goL ? pl.vx > 0 : pl.vx < 0) && !o.pushable) pl.vx = 0;     // встречный разбег гасим
+      return;
+    }
+    /* Прыжок впритык к уголку препятствия: если к концу этого самого кадра
+       игрок по вертикали уже поднимется выше грани блока, не гасим ему
+       разбег — иначе он «спотыкается» об уголок и теряет скорость в
+       прыжке, хотя долей кадра позже всё равно пролетел бы мимо. Мешало
+       паркуру — прыжки впритирку к стенам и уступам гасли на ровном месте. */
+    if(!pl.ground && pl.vy < 0 && (pl.y + pl.vy + pl.h) <= bb[1] + 0.01) return;
+    // неподвижный блок — выталкивание против движения, ровно как раньше
+    goL = pl.vx > 0 ? true : (pl.vx < 0 ? false
+        : (pl.x + pl.w/2 < (sp[0]+sp[1])/2));
+    /* Страховка. Если вбок пришлось бы двигать дальше, чем игрок вообще мог
+       въехать за кадр, значит он оказался глубоко внутри блока. Вбок такого
+       не выталкиваем — из широкого блока это швыряло на всю его длину.
+       Вертикальный проход отработает это как угол (оттолкнёт вбок к ближней
+       грани) или как глубокий провал (поставит сверху). */
+    if((goL ? (pl.x + pl.w) - sp[0] : sp[1] - pl.x) > Math.abs(pl.vx) + 8) return;
+    if(goL){ pl.x = sp[0] - pl.w; if(pl.vx !== 0) pl.wall = 1; }
+    else   { pl.x = sp[1];        if(pl.vx !== 0) pl.wall = -1; }
+    /* Рикошет отражает движение, а не гасит его. Медленное касание не
+       отражаем — иначе игрок дрожит, прижавшись к блоку. */
+    if(o.ricochet && Math.abs(pl.vx) > RICO_MIN)
+      ricochet(o, pl.x + pl.w/2, (Math.max(pl.y, bb[1]) + Math.min(pl.y + pl.h, bb[3]))/2);
+    /* Толкаемая фигура: тут она просто ещё не поймала это как активный
+       толчок в этот самый кадр (например, зазор до настоящей грани на
+       долю пикселя больше порога у наклонной фигуры) — это не «врезался
+       в стену», а обычная стыковка перед толчком. Гасить скорость нельзя:
+       игрок и так уже прижат к грани, и на следующем кадре толчок либо
+       подхватится сам, либо честно погаснет от инерции воздуха/земли. */
+    else if(!o.pushable) pl.vx = 0;
+  });
+
+  var wasAir = !pl.ground;
+  var yBefore = pl.y;                              // где игрок был до этого шага
+  pl.y += pl.vy; pl.ground = false; pl.standPlat = null;
+  sol.forEach(function(o){
+    var bb = bbox(o);
+    if(pl.x >= bb[2] || pl.x+pl.w <= bb[0] || pl.y >= bb[3] || pl.y+pl.h <= bb[1]) return;
+    var P = polyOf(o);
+    var sp = spanY(P, pl.x + 2, pl.x + pl.w - 2);
+    if(!sp || pl.y >= sp[1] || pl.y + pl.h <= sp[0]) return;
+
+    var pdy = (o.moves || o.pushable) ? (o._dy||0) : 0;
+    /* Откуда игрок пришёл — считаем не по глубине провала, а по тому, где
+       были его ноги (голова) и где была грань ДО этого шага. Так одинаково
+       ловится и быстрое падение, и платформа, подъехавшая под ноги сама.
+       У неподвижного блока pdy = 0, и оба условия сводятся к прежним —
+       статичная геометрия ведёт себя один в один. */
+    var topWas  = Math.max(sp[0], sp[0] - pdy);   // крышка: где была или где стала
+    var botWas  = Math.min(sp[1], sp[1] - pdy);   // то же для нижней грани
+    var fromTop   = (yBefore + pl.h) <= topWas + 2;
+    var fromBelow = yBefore >= botWas - 2;
+
+    /* Тот же предел, что и в разборе угла ниже: посадка и удар головой
+       двигают игрока максимум на его собственный шаг по Y плюс законный
+       уступ. Честную посадку или честный удар это не задевает — там
+       нужный сдвиг и так меньше vy. А вот игрока, который оказался
+       внутри высокой фигуры, раньше выбрасывало к её грани разом: у
+       блока высотой 300 это был скачок на 160 px за кадр. */
+    var capY = Math.abs(pl.vy) + STEP_UP;
+    if(pl.vy >= 0 && fromTop){
+      pl.y += Math.min((sp[0] - pl.h) - pl.y, capY); pl.ground = true; coy = COYOTE;
+      // приземление сверху: рикошет швыряет игрока обратно по нормали грани
+      if(o.ricochet && pl.vy > RICO_MIN){
+        ricochet(o);
+      } else {
+        if(wasAir && pl.vy > 6){ if(window.BFSound) BFSound.land(); }
+        pl.vy = 0; pl.selfJump = false;
+      }
+      // едем вместе с платформой — сдвиг применится в начале следующего шага
+      if(o.moves || o.pushable) pl.rideOn = o;
+    } else if(pl.vy < 0 && o.moves && fromBelow){
+      // удар головой снизу — только едущая платформа: у статичного блока
+      // то же самое теперь разбирает общая угловая ветка ниже, она же
+      // отличает удар впритык к боковой грани (угол) от удара по центру
+      var upTo = Math.min(sp[1] - pl.y, capY);
+      if(o.ricochet && Math.abs(pl.vy) > RICO_MIN){ pl.y += upTo; ricochet(o); }
+      else { pl.y += upTo; pl.vy = 0; }
+    } else if(!o.moves){
+      /* Игрок сбоку от блока — не посадка сверху и не чистый удар снизу
+         (оба уже разобраны выше). Раньше здесь ещё отталкивало вбок к
+         ближайшей боковой грани, когда до неё было ближе, чем до верха
+         или низа — но это и есть самовольный «отскок от угла», который
+         явно попросили убрать: столкновение само по себе не должно
+         двигать игрока вбок, этим распоряжается только его собственная
+         скорость (см. X-pass выше) и его же нажатие прыжка. Теперь любое
+         боковое продавливание разбираем по вертикали — куда ближе, туда
+         и выпускаем, без исключений для угла. */
+      var uPen = (pl.y + pl.h) - sp[0];                // сколько вылезли сверху
+      var dPen = sp[1] - pl.y;                         // и снизу
+      /* Несколько статичных объектов могут продавливать игрока в одном
+         кадре (например, пол и широкий потолок, перекрывающие друг
+         друга по Y) — раньше боковой уход у одного из них часто обрывал
+         цепочку раньше, чем вертикальные поправки успевали сложиться.
+         Без него поправки разных объектов иначе тупо складываются —
+         тот же рывок, что уже чинили для X (usedX/capX выше), только
+         по Y: вычитаем то, что уже сдвинуло игрока сверх его vy в этом
+         же кадре. */
+      var usedY = Math.max(0, Math.abs(pl.y - yBefore) - Math.abs(pl.vy));
+      var capY3 = Math.max(0, capY - usedY);
+      if(uPen <= dPen){
+        // ближе крышка — игрока продавили в блок сверху, ставим на него
+        pl.y -= Math.min(uPen, capY3);
+        if(pl.y + pl.h <= sp[0] + 0.01){
+          pl.ground = true; coy = COYOTE; pl.vy = 0; pl.selfJump = false;
+        }
+      } else {
+        // ближе низ — выпускаем вниз, а не выдёргиваем через весь блок наверх
+        var downTo = Math.min(dPen, capY3);
+        if(o.ricochet && pl.vy < 0 && Math.abs(pl.vy) > RICO_MIN){ pl.y += downTo; ricochet(o); }
+        else { pl.y += downTo; if(pl.vy < 0) pl.vy = 0; }
+      }
+    } else if(pdy !== 0){
+      /* Блок едет по вертикали и накрыл игрока сбоку — выносим к ближней
+         грани в его же темпе, а не рывком на всю высоту. */
+      var up = (pl.y + pl.h) - sp[0], dn = sp[1] - pl.y;
+      var limY = Math.abs(pdy) + Math.abs(pl.vy) + 4;
+      if(up <= dn){
+        pl.y -= Math.min(limY, up);
+        if(pl.y + pl.h <= sp[0] + 0.01){
+          pl.ground = true; coy = COYOTE; pl.vy = 0; pl.selfJump = false; pl.rideOn = o;
+        }
+      } else {
+        pl.y += Math.min(limY, dn);
+        if(pl.vy < 0) pl.vy = 0;
+      }
+    }
+    /* Иначе игрока накрыла сбоку платформа, едущая только вбок: её
+       разбирает горизонтальный проход, наверх игрока не выдёргиваем. */
+  });
+  } // !grabbing
+  if(pl.ground) pl.wall = 0;
+
+  /* Захват уступа: сработавшая только что горизонтальная/угловая
+     развязка уже выставила pl.wall и честную позицию у стены — ищем
+     среди тех же sol, какой блок это был, и проверяем, что его кромка
+     на высоте головы (а не где-то посреди стены, это просто
+     скольжение). Ловим только о неподвижную геометрию: у едущей
+     платформы кромка сама гуляет, цепляться там нечего. */
+  if(!pl.grab && !grabbing && !pl.ground && grabCd === 0 && !flyMode && pl.wall !== 0){
+    for(var gi=0; gi<sol.length; gi++){
+      var go = sol[gi];
+      if(go.moves || go.pushable) continue;
+      var gBB2 = bbox(go);
+      if(pl.wall === 1 && Math.abs((pl.x+pl.w) - gBB2[0]) > 1) continue;
+      if(pl.wall === -1 && Math.abs(pl.x - gBB2[2]) > 1) continue;
+      if(gBB2[1] < pl.y - 4 || gBB2[1] > pl.y + GRAB_ZONE) continue;
+      pl.grab = go; pl.y = gBB2[1]; pl.vx = 0; pl.vy = 0; pl.selfJump = false;
+      break;
+    }
+  }
+
+  /* Кто именно сейчас несёт игрока (для «едем вместе» и для бустера
+     скорости — см. platBoost) решаем ПОСЛЕ всего цикла выше, а не внутри
+     него. Если пол собран из двух платформ, наложенных ровно друг на
+     друга (например, буст-полоса поверх обычного пола — обычный способ
+     сделать «бустер» в редакторе, не вырезая дыру в полу), то первая же
+     из них, какую цикл выше обработает, ставит ноги игрока вплотную к
+     общей грани — и проверка пересечения в начале следующей итерации
+     (pl.y+pl.h <= bb[1]) видит уже НЕ пересекающиеся хитбоксы у второй
+     платформы с той же гранью, хотя игрок стоит на ней точно так же.
+     Она просто не доходила до pl.rideOn/pl.standPlat, и побеждала всегда
+     только та платформа, что стоит раньше в sol — а не та, что реально
+     на виду. Здесь пересматриваем всех кандидатов заново по УЖЕ решённой
+     позиции ног и берём одного — с наибольшим индексом в objects[], то
+     есть верхнюю по z-порядку (см. кнопки «На зад»/«Вперёд» в редакторе:
+     они двигают объект именно в этом массиве, а не меняют id). */
+  if(pl.ground){
+    var footY = pl.y + pl.h, bestPlat = null, bestZ = -1;
+    sol.forEach(function(o){
+      var op = polyOf(o);
+      var osp = spanY(op, pl.x + 2, pl.x + pl.w - 2);
+      if(!osp || Math.abs(osp[0] - footY) > 1.5) return;
+      var z = objects.indexOf(o);
+      if(z > bestZ){ bestZ = z; bestPlat = o; }
+    });
+    pl.rideOn = (bestPlat && (bestPlat.moves || bestPlat.pushable)) ? bestPlat : null;
+    pl.standPlat = bestPlat;
+  }
+
+  pl.hidden = false;
+  near.forEach(function(o){
+    var over = overlaps(o, pl.x, pl.y, pl.w, pl.h);
+    // зашёл в укрытие — искатель не видит ни фигуру, ни ник
+    if(over && o.hideSpot === true) pl.hidden = true;
+    if(!over){
+      if(o.type === "button" && o._act){ o._act = false; drive(o); }
+      if(o.type === "lever") o._latch = false;
+      return;
+    }
+    if(hazard(o)){ die(); return; }
+    if(o.type === "checkpoint" && !o._reached){
+      o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h}; lastSafePos = {x:spawnPt.x, y:spawnPt.y};
+      burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
+      if(window.BFSound) BFSound.checkpoint();
+    }
+    /* Портал — пара площадок, ID которых указан друг у друга в «Целях»
+       (см. teleportTarget()). Кулдаун — на игроке, а не на площадке: иначе
+       пара «садится» друг на друга и раз за разом дёргает того, кто просто
+       стоит внутри, пока не отойдёт — а его самого могло занести туда как
+       раз этим же порталом. */
+    if(o.type === "teleport" && timeMs >= pl.teleCooldown){
+      var teleDst = teleportTarget(o);
+      if(teleDst){
+        pl.x = teleDst.x + teleDst.w/2 - pl.w/2; pl.y = teleDst.y + teleDst.h - pl.h;
+        pl.vx = 0; pl.vy = 0; pl.rideOn = null;
+        pl.teleCooldown = timeMs + TELEPORT_COOLDOWN_MS;
+        burst(teleDst.x+teleDst.w/2, teleDst.y+teleDst.h/2, 16, C.tele1, 3, 32);
+        if(window.BFSound) BFSound.checkpoint();
+      }
+    }
+    // Дверь — это выход: игроку достаточно дойти до неё самому.
+    if(o.type === "finishline" && !done){
+      done = true; shake = 6;
+      if(window.BFSound) BFSound.finish();
+      burst(o.x+o.w/2, o.y+o.h/2, 40, "#fbbf24", 5, 60);
+      showMsg(TR("finishTitle","ФИНИШ!"),
+              TR("finishBody","Время {t}с · смертей {d}   —   новый забег через мгновение")
+                .replace("{t}", (timeMs/1000).toFixed(1)).replace("{d}", deaths));
+      /* Карта запускается заново сама: ни кнопок, ни перезагрузки. Пара
+         секунд — чтобы успеть увидеть время и салют, дальше снова старт. */
+      clearTimeout(finishTimer);
+      finishTimer = setTimeout(function(){ if(playing && done) restartRun(); }, 2200);
+    }
+    if(o.type === "button" && !o._act){ o._act = true; drive(o); if(window.BFSound) BFSound.toggle(); }
+    if(o.type === "lever" && !o._latch){ o._act = !o._act; o._latch = true; drive(o); if(window.BFSound) BFSound.toggle(); }
+  });
+  laserFeeds();
+  // не внутри опасности прямо сейчас — можно смело вернуть сюда при смерти
+  // в Practice Mode (если умер этим же кадром, pl.dead уже true — не трогаем)
+  if(!pl.dead) lastSafePos = {x:pl.x, y:pl.y};
+
+  if(pl.y > 5000){
+    /* В прятках die() ничего не делает («умереть нельзя», см. комментарий
+       в самой die()) — а respawn() эта ветка не звала вовсе. Игрок,
+       провалившийся сквозь дыру в полу или соскользнувший за край карты,
+       падал буквально бесконечно: пока это не гонка, где die()/respawn()
+       возвращают на чекпоинт, тут не было вообще никакого восстановления. */
+    if(mode === "hideAndSeek") respawn();
+    else die();
+  }
+
+  /* Застревание без падения. pl.y > 5000 выше ловит только сквозное
+     падение за карту — но держа прыжок над неполным уступом без бокового
+     движения, игрок никуда не падает вовсе: приземление тут же снимается
+     held-буфером на новый прыжок, а высоты хватает ровно чтобы упасть
+     обратно на тот же уступ, кадр в кадр, сколько угодно долго.
+
+     Первая версия сторожа судила только по размаху (мало места + почти
+     всё время в воздухе) — и подловила честного игрока: аккуратный
+     платформинг короткими тапами прыжка в тесной шахте (частые прыжки,
+     скромное продвижение) выглядит для этих двух признаков один в один
+     как застревание, хотя человек играет нормально и постепенно
+     продвигается. Итог — игрока откидывало на спавн посреди обычной игры,
+     раз за разом, на вид неотличимо от «вообще не могу двигаться».
+
+     Настоящий баг рождается не от тесноты и не от частых прыжков самих
+     по себе, а конкретно от УДЕРЖАНИЯ кнопки прыжка: только тогда
+     срабатывает мгновенный автоповтор — приземление в тот же кадр снова
+     запускает прыжок, без единого кадра на то, чтобы игрок успел бы
+     подвинуться в сторону. Обычный тап (нажал-отпустил на каждый прыжок,
+     как и играет любой человек) такого не даёт: между прыжками всегда
+     есть кадр с отпущенной кнопкой. Поэтому теперь размах — только
+     дополнительная страховка, а решающее условие — кнопка прыжка была
+     зажата почти всё окно целиком. */
+  if(mode === "hideAndSeek"){
+    if(pl.x < stuckMinX) stuckMinX = pl.x; if(pl.x > stuckMaxX) stuckMaxX = pl.x;
+    if(pl.y < stuckMinY) stuckMinY = pl.y; if(pl.y > stuckMaxY) stuckMaxY = pl.y;
+    stuckFrames++;
+    if(!pl.ground) stuckAir++;
+    if(keys.u) stuckHeld++;
+    if(stuckFrames >= STUCK_WINDOW){
+      if(stuckHeld / stuckFrames > 0.85 && stuckAir / stuckFrames > 0.6 &&
+         (stuckMaxX - stuckMinX) < 200 && (stuckMaxY - stuckMinY) < 200){
+        respawn();   // respawn() сам обнуляет окно сторожа
+      } else {
+        stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
+      }
+    }
+  } else {
+    stuckFrames = 0; stuckAir = 0; stuckHeld = 0;
+  }
+}
+function drive(src){
+  if(!src.targetIds) return;
+  var ids = src.targetIds.split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+  objects.forEach(function(o){ if(o.customId && ids.indexOf(o.customId) !== -1) o._act = src._act; });
+}
+/* Портал ведёт только на ПЕРВЫЙ ID из «Целей» — в отличие от кнопки/рычага,
+   у телепорта одна конкретная пара, а не список того, что приводить в
+   движение сразу. Запятая с несколькими ID тут не ошибка, просто лишние
+   игнорируются. */
+function teleportTarget(src){
+  if(!src.targetIds) return null;
+  var id = src.targetIds.split(",")[0].trim();
+  if(!id) return null;
+  for(var i=0;i<objects.length;i++) if(objects[i].customId === id) return objects[i];
+  return null;
+}
+/* Лазер — тот же принцип, что и кнопка (см. drive() выше): «нажат», пока
+   игрок перекрывает луч, отпущен, как только сошёл. Трасса луча (с учётом
+   отражений от стен с «Рикошетом») считается в computeLaserPath().
+
+   «Яд» на излучателе делает опасным сам луч, а не только блок-излучатель:
+   без этого галочка «Яд (убивает)» на лазере ловила бы игрока только
+   впритык к самому блоку — отдельная протяжённая трасса луча никак не
+   проверялась на столкновение. hit уже значит «луч сейчас упирается
+   именно в игрока» (см. tPlayer в computeLaserPath), поэтому просто
+   убиваем тем же hit, которым лазер обычно включает цели. */
+function laserFeeds(){
+  for(var i=0;i<objects.length;i++){
+    var o = objects[i];
+    if(o.type !== "laserFeed" && !o.laser) continue;
+    var path = computeLaserPath(o);
+    o._beamPts = path.pts;
+    var hit = path.hit;
+    if(hit && o.deadly) die();
+    if(hit && !o._act){ o._act = true; drive(o); if(window.BFSound) BFSound.toggle(); }
+    else if(!hit && o._act){ o._act = false; drive(o); }
+  }
+}
+/* Одинаковый участок мира у всех. Раньше в игре view.s оставался 1, и
+   сколько мира видно зависело от размера окна: телефон шириной 400
+   показывал 400 единиц карты, монитор 1280 — 1280. Игроки на разной
+   высоте смотрели буквально в разные куски карты.
+
+   Равняем по ВЫСОТЕ окна, а не по ширине: в CSS-пикселях высота у
+   телефона и монитора близка (≈850 против ≈900), а ширина отличается
+   втрое. При равнении по высоте совпадает и масштаб, и размер персонажа
+   на экране; телефон просто видит более узкую полосу — при его
+   пропорциях иначе и не бывает.
+
+   Ставим один раз на старте игры и на смене размера окна, а не каждый
+   кадр: иначе затирался бы пинч-зум, который игрок выбрал сам. */
+var VIEW_UNITS_H = 800;
+/* Назад к исходному масштабу v159 (до экспериментов v160/v161 с зумом
+   втрое, потом вполовину ближе) — по прямой просьбе: с приближенной
+   камерой вид стал «коренным образом другим», чем в игре-образце,
+   с которой сверялись. Без множителя, обе границы зажима как были. */
+/* Телефон: «как на ПК, только ближе» — и одинаково в обеих ориентациях.
+   Масштаб берём по короткой стороне экрана: на неё приходится 560 единиц
+   карты (на ПК по высоте 800). Персонаж поэтому одного размера и стоя, и
+   боком: стоя камера больше не липнет вплотную (раньше по высоте 852px —
+   впереди видно меньше 370 единиц), боком не уходит вдаль. Компьютер и
+   планшет (короткая сторона от 600px или мышь) не меняются вовсе. */
+var VIEW_UNITS_PHONE = 560;
+function isPhoneView(){
+  return Math.min(VW(), VH()) < 600 && typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches;
+}
+function playZoom(){
+  var z = isPhoneView() ? Math.min(VW(), VH()) / VIEW_UNITS_PHONE : VH() / VIEW_UNITS_H;
+  return Math.max(0.6, Math.min(2.2, z));
+}
+
+function follow(){
+  /* Камера прилипает к игроку НАМЕРТВО (v103): раньше экран догонял игрока
+     плавным лерпом 0.12 — при прыжке и падении персонаж уезжал к краю
+     экрана, и это выглядело как «лаги». Теперь ноль отставания: экран
+     движется ровно с той же скоростью, что и сам игрок. */
+  view.x = VW()/2 - (pl.x+pl.w/2)*view.s; view.y = VH()*0.6 - (pl.y+pl.h/2)*view.s;
+}
+
+/* ══════════════════════════════════════════════════
+   RENDER
+   ══════════════════════════════════════════════════ */
+function drawGrid(){
+  if(!grid || playing) return;
+  var step = GRID * view.s;
+  while(step < 9) step *= 2;
+  var ox = view.x % step, oy = view.y % step;
+  ctx.strokeStyle = "#e6eaf1"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for(var x = ox; x < VW(); x += step){ ctx.moveTo(x,0); ctx.lineTo(x,VH()); }
+  for(var y = oy; y < VH(); y += step){ ctx.moveTo(0,y); ctx.lineTo(VW(),y); }
+  ctx.stroke();
+  ctx.strokeStyle = "#cfd6e2"; ctx.lineWidth = 1.4; ctx.beginPath();
+  ctx.moveTo(view.x,0); ctx.lineTo(view.x,VH()); ctx.moveTo(0,view.y); ctx.lineTo(VW(),view.y);
+  ctx.stroke();
+}
+function paint(o, isSel){
+  var open = opened(o);
+  ctx.save();
+  ctx.translate(o.x+o.w/2, o.y+o.h/2);
+  ctx.rotate(o.spins && playing ? (o._spin||0) : (o.rot||0)*Math.PI/180);
+  /* Пульс масштабирует только рисунок, вокруг центра фигуры — сам объект
+     (w/h, хитбокс) не меняется, см. chkPulse в инспекторе. */
+  if(o.pulse && playing){
+    var ps = 1 + 0.22*Math.sin(o._pulseT||0);
+    ctx.scale(ps, ps);
+  }
+  ctx.translate(-o.w/2, -o.h/2);
+  if(open) ctx.globalAlpha = .2;
+  if(o.ghost) ctx.globalAlpha *= .45;      // проходимые видно, но они не мешают
+  (PAINT[o.type] || PAINT.rect)(o);
+  /* Лазер теперь свойство, а не отдельный тип — рисуем ту же линзу, что
+     раньше была у laserFeed, поверх обычной фигуры. */
+  if(o.laser){
+    var lr = Math.max(2.5, Math.min(o.w,o.h)*0.18), lcx = o.w*0.88, lcy = o.h/2;
+    laserLens(lcx, lcy, lr, !!o._act);
+  }
+  if(!playing && o.deadly && DEADLY_BY_DEFAULT.indexOf(o.type) === -1){
+    ctx.globalAlpha = 1; ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 2;
+    ctx.setLineDash([5,4]); ctx.strokeRect(-1,-1,o.w+2,o.h+2); ctx.setLineDash([]);
+  }
+  // укрытие для пряток видно только в редакторе — зелёной рамкой
+  if(!playing && o.hideSpot){
+    ctx.globalAlpha = 1; ctx.strokeStyle = "#16a34a"; ctx.lineWidth = 2;
+    ctx.setLineDash([3,3]); ctx.strokeRect(-2,-2,o.w+4,o.h+4); ctx.setLineDash([]);
+  }
+  /* Рамка выделения рисуется тут же, в системе координат самой фигуры
+     (тот же поворот, что и у неё): иначе при повёрнутом объекте рамка
+     оставалась прямоугольником по нулевому углу и «отклеивалась» от
+     фигуры. У треугольника и круга рамка повторяет их силуэт, а не
+     bounding box — это единственные два типа, у которых хитбокс вообще
+     НЕ прямоугольный (см. rawPoly()): у круга он настоящий эллипс по
+     его w/h, у треугольника — три вершины. У всех остальных объектов —
+     кнопки, рычага, текста, батута, двери и т.д. — хитбокс в физике как
+     раз и есть полный прямоугольник w×h (даже если нарисованная иконка
+     кажется круглой или узкой), так что рамка-прямоугольник для них
+     честная, а не заглушка. */
+  if(isSel && o.type !== "spawn" && o.type !== "zombie" && o.type !== "seekerSpot"){
+    var k = 1/view.s;
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#111827"; ctx.lineWidth = 1.6*k; ctx.setLineDash([5*k,4*k]);
+    var m = 3*k;
+    if(o.type === "triangle"){
+      ctx.beginPath();
+      ctx.moveTo(o.w/2, -m);
+      ctx.lineTo(o.w+m, o.h+m);
+      ctx.lineTo(-m, o.h+m);
+      ctx.closePath();
+      ctx.stroke();
+    } else if(o.type === "circle"){
+      ctx.beginPath();
+      ctx.ellipse(o.w/2, o.h/2, o.w/2+m, o.h/2+m, 0, 0, 6.2832);
+      ctx.stroke();
+    } else {
+      ctx.strokeRect(-3*k, -3*k, o.w+6*k, o.h+6*k);
+    }
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+  if(isSel && o.type !== "spawn" && o.type !== "zombie" && o.type !== "seekerSpot"){
+    var k2 = 1/view.s;
+    ctx.save();
+    ctx.fillStyle = "#fff"; ctx.strokeStyle = "#111827"; ctx.lineWidth = 1.6*k2;
+    grips(o).forEach(function(h){
+      ctx.beginPath(); ctx.arc(h.x,h.y,4.5*k2,0,6.2832); ctx.fill(); ctx.stroke();
+    });
+    ctx.restore();
+  }
+}
+var bgGrad = null, bgH = 0;
+/* Сама отрисовка сцены — отдельно от планирования следующего кадра,
+   чтобы resize() мог перерисовать немедленно после смены разрешения
+   холста: смена cv.width/height обнуляет содержимое холста тут же, и
+   без немедленной перерисовки один кадр показывался бы пустым (мигание
+   при входе в режим на слабых телефонах, когда надзор за FPS снижает
+   качество). */
+function paintFrame(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  /* Холст всегда светлый, независимо от темы сайта: карта — это
+     содержимое игры, и она должна выглядеть у всех одинаково.
+     Градиент фона создаётся один раз на размер окна — раньше он
+     пересоздавался 60 раз в секунду зря. */
+  if(!bgGrad || bgH !== VH()){
+    bgGrad = ctx.createLinearGradient(0,0,0,VH());
+    bgGrad.addColorStop(0,"#fbfcfe"); bgGrad.addColorStop(1,"#eef2f8");
+    bgH = VH();
+  }
+  ctx.fillStyle = bgGrad; ctx.fillRect(0,0,VW(),VH());
+  drawGrid();
+
+  var sx = shake > .4 ? (Math.random()-.5)*shake : 0, sy = shake > .4 ? (Math.random()-.5)*shake : 0;
+  ctx.setTransform(view.s*DPR,0,0,view.s*DPR, (view.x+sx)*DPR, (view.y+sy)*DPR);
+
+  // рисуем только то, что попадает на экран
+  var vx0 = -view.x/view.s - 80, vy0 = -view.y/view.s - 80;
+  var vx1 = vx0 + VW()/view.s + 160, vy1 = vy0 + VH()/view.s + 160;
+  var drawn = 0;
+  for(var ri=0; ri<objects.length; ri++){
+    var ro = objects[ri], rb = bbox(ro);
+    if(rb[2] < vx0 || rb[0] > vx1 || rb[3] < vy0 || rb[1] > vy1) continue;
+    /* Точка старта — это метка для автора карты, а не второй игрок.
+       Во время игры её не рисуем: иначе на экране две фигуры, живая и
+       та, что стоит на месте спавна. */
+    if(playing && ro.type === "spawn") continue;
+    /* Метка модификации, не второй зомби: заражённые игроки рисуются
+       своей собственной моделью (см. figureZombie/meIsZombie в game.js),
+       эта метка только включает модификацию (см. hsApplyApoc в
+       server.js) и больше ни на что не влияет — её позиция с Round D
+       (замена AI-зомби человеком) нигде не используется. Раньше условие
+       скрывало её только в классике (!apoc), и в apoc-раунде она так и
+       торчала на карте неподвижной лишней фигурой поверх настоящего
+       заражённого. */
+    if(playing && ro.type === "zombie") continue;
+    // то же самое для места ожидания искателя — там уже стоит настоящий
+    // искатель (см. teleportToSeekerSpot), вторую фигуру не рисуем
+    if(playing && ro.type === "seekerSpot") continue;
+    paint(ro, !playing && ro === sel); drawn++;
+  }
+  /* Луч рисуется отдельным проходом, не в PAINT.laserFeed: его трасса (с
+     отражениями от стен) зависит от игрока и от всей карты, а не только
+     от самого объекта. Во время игры путь уже посчитан в laserFeeds();
+     вне игры считаем его тут же — так автор карты сразу видит, куда луч
+     реально попадёт и от чего отскочит, ещё до нажатия «Играть». */
+  for(var lfi=0; lfi<objects.length; lfi++){
+    var lo = objects[lfi];
+    if(lo.type !== "laserFeed" && !lo.laser) continue;
+    var lpts = (playing && lo._beamPts) ? lo._beamPts : computeLaserPath(lo).pts;
+    if(lpts.length < 2) continue;
+    var lpi, lglow = lo._act ? "rgba(239,68,68,.32)" : "rgba(239,68,68,.13)";
+    var lpulse = 0.72 + 0.28*Math.sin(performance.now()/170 + lo.x*0.05 + lo.y*0.05);
+    var lcore = lo._act ? "rgba(254,226,226,.95)" : "rgba(239,68,68," + (0.5*lpulse).toFixed(2) + ")";
+    ctx.save();
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    // мягкое свечение под лучом
+    ctx.strokeStyle = lglow; ctx.lineWidth = (lo._act ? 7.5 : 5) / view.s;
+    ctx.beginPath(); ctx.moveTo(lpts[0].x, lpts[0].y);
+    for(lpi=1; lpi<lpts.length; lpi++) ctx.lineTo(lpts[lpi].x, lpts[lpi].y);
+    ctx.stroke();
+    // яркая сердцевина, слегка пульсирующая, пока луч не перекрыт
+    ctx.strokeStyle = lcore; ctx.lineWidth = (lo._act ? 3 : 1.7) / view.s;
+    ctx.beginPath(); ctx.moveTo(lpts[0].x, lpts[0].y);
+    for(lpi=1; lpi<lpts.length; lpi++) ctx.lineTo(lpts[lpi].x, lpts[lpi].y);
+    ctx.stroke();
+    // вспышка в каждой точке отражения от стены
+    if(lpts.length > 2){
+      ctx.fillStyle = "rgba(254,242,242,.9)";
+      for(lpi=1; lpi<lpts.length-1; lpi++){
+        ctx.beginPath(); ctx.arc(lpts[lpi].x, lpts[lpi].y, 3.2/view.s, 0, 6.2832); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+  /* Линии связей — только в редакторе, не в игре: пунктир от источника
+     (кнопка/рычаг/портал/...) к каждой его цели, чтобы было видно, что
+     на что влияет, не кликая по каждому объекту. Линия, где участвует
+     выделенный объект (с любой стороны), ярче остальных. */
+  if(!playing){
+    for(var cki=0; cki<objects.length; cki++){
+      var co = objects[cki];
+      if(LINKED.indexOf(co.type) === -1 || !co.targetIds) continue;
+      var cids = co.targetIds.split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+      for(var cji=0; cji<cids.length; cji++){
+        var ct = null;
+        for(var cmi=0; cmi<objects.length; cmi++){ if(objects[cmi].customId === cids[cji]){ ct = objects[cmi]; break; } }
+        if(!ct) continue;
+        var cInvolved = (sel === co || sel === ct);
+        ctx.save();
+        ctx.strokeStyle = cInvolved ? "rgba(17,24,39,.85)" : "rgba(17,24,39,.28)";
+        ctx.lineWidth = (cInvolved ? 2 : 1.3) / view.s;
+        ctx.setLineDash([5/view.s, 4/view.s]);
+        ctx.beginPath();
+        ctx.moveTo(co.x+co.w/2, co.y+co.h/2);
+        ctx.lineTo(ct.x+ct.w/2, ct.y+ct.h/2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+  /* Точка назначения движущейся платформы — только у выделенного объекта,
+     только в редакторе: синяя точка показывает, куда едет платформа.
+     Конечная точка — строго x+moveX, y+moveY (см. формулу в step(): k
+     идёт 0→1→0, при k=1 платформа ровно там); скорость влияет только
+     на то, как быстро она туда доедет, а не на саму точку. */
+  if(!playing && sel && sel.moves && (sel.moveX || sel.moveY)){
+    var mcx = sel.x+sel.w/2, mcy = sel.y+sel.h/2;
+    var mdx = mcx+(sel.moveX||0), mdy = mcy+(sel.moveY||0);
+    ctx.save();
+    ctx.strokeStyle = "rgba(17,24,39,.55)";
+    ctx.lineWidth = 1.6/view.s;
+    ctx.setLineDash([4/view.s, 4/view.s]);
+    ctx.beginPath(); ctx.moveTo(mcx, mcy); ctx.lineTo(mdx, mdy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#111827";
+    ctx.beginPath(); ctx.arc(mdx, mdy, 6/view.s, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.6/view.s; ctx.stroke();
+    ctx.restore();
+  }
+  if(playing && !pl.dead){
+    ctx.save(); ctx.translate(pl.x, pl.y);
+    // себя в укрытии видно бледным — чужие не видят вообще
+    if(pl.hidden) ctx.globalAlpha = 0.35;
+    // заразился в apoc-раунде — сам теперь выглядишь зомби (см. meIsZombie в game.js)
+    if(BRIDGE && BRIDGE.meIsZombie) PAINT.zombie({w: pl.w, h: pl.h, _zface: pl.face || 1});
+    else figure(pl.w, pl.h, (BRIDGE && BRIDGE.myColor) || "#000000", true,
+           (BRIDGE && BRIDGE.mySkin) || null);
+    ctx.restore();
+  }
+  if(BRIDGE && BRIDGE.onDraw){ BRIDGE.viewScale = view.s; BRIDGE.onDraw(ctx); }
+  drawParts();
+  if(!playing) anim++;
+}
+function render(){
+  paintFrame();
+  requestAnimationFrame(render);
+}
+/* Надзор за FPS: если кадр в среднем дороже 30 мс (ниже 33 FPS), снижаем
+   разрешение холста на шаг; когда устройство снова тянет — возвращаем.
+   Проверка не чаще раза в 1.5 с, чтобы качество не прыгало. */
+var govLast = 0, govAvg = 16.7, govAt = 0;
+function loop(ts){
+  if(playing){
+    if(!last) last = ts;
+    var dt = Math.min(100, ts-last); last = ts; acc += dt;
+    var g = 0;
+    while(acc >= 16.667 && g < 5){ step(); acc -= 16.667; g++; }
+    if(g >= 5) acc = 0;
+    follow();
+  }
+  if(govLast){
+    var gdt = ts - govLast;
+    if(gdt > 0 && gdt < 1000) govAvg = govAvg*0.95 + gdt*0.05;
+    if(ts - govAt > 1500){
+      govAt = ts;
+      if(govAvg > 30 && QUALITY > 0.55){ QUALITY = Math.max(0.5, QUALITY - 0.25); resize(); govAvg = 16.7; }
+      else if(govAvg < 19 && QUALITY < 1){ QUALITY = Math.min(1, QUALITY + 0.25); resize(); govAvg = 16.7; }
+    }
+  } else govAt = ts;
+  govLast = ts;
+  stepAlways();
+  requestAnimationFrame(loop);
+}
+/* Частицы (брызги, пыль) стареют и вне забега. */
+function stepAlways(){
+  if(!playing) stepParts();
+}
+
+/* ══════════════════════════════════════════════════
+   UI BUILD
+   ══════════════════════════════════════════════════ */
+var SVG = {
+  save:'<path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4z"/><path d="M8 4v5h7"/><rect x="7" y="14" width="10" height="7"/>',
+  open:'<path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/>',
+  play:'<path d="M7 4l13 8-13 8V4z"/>',
+  undo:'<path d="M4 9h11a5 5 0 0 1 0 10h-4"/><path d="M8 5L4 9l4 4"/>',
+  redo:'<path d="M20 9H9a5 5 0 0 0 0 10h4"/><path d="M16 5l4 4-4 4"/>',
+  copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
+  trash:'<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
+  grid:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>',
+  json:'<path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 17v3h16v-3"/>'
+};
+function sBtn(id,icon,key,fallback,cls){
+  var d = document.createElement("div");
+  d.className = "sBtn" + (cls ? " "+cls : ""); d.id = id;
+  d.dataset.tipKey = key; d.dataset.tipFallback = fallback;
+  d.setAttribute("data-tip", TR(key, fallback));
+  d.innerHTML = '<svg viewBox="0 0 24 24">'+icon+'</svg>';
+  return d;
+}
+var sceneEl = document.getElementById("scene");
+[["bSave",SVG.save,"btnSaveTip","Сохранить .txt"],["bOpen",SVG.open,"btnOpenTip","Открыть"],["bJson",SVG.json,"btnJsonTip","Экспорт JSON"]]
+  .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2],a[3])); });
+sceneEl.appendChild(Object.assign(document.createElement("div"),{className:"sep"}));
+[["bUndo",SVG.undo,"btnUndoTip","Отменить (Ctrl+Z)"],["bRedo",SVG.redo,"btnRedoTip","Вернуть (Ctrl+Y)"],
+ ["bCopy",SVG.copy,"btnCopyTip","Дубликат (Ctrl+D)"],["bDel",SVG.trash,"btnDelTip","Удалить (Del)"],["bGrid",SVG.grid,"btnGridTip","Сетка (G)"]]
+  .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2],a[3])); });
+sceneEl.appendChild(Object.assign(document.createElement("div"),{className:"sep"}));
+sceneEl.appendChild(sBtn("bPlay",SVG.play,"btnPlayTip","Играть","play"));
+document.getElementById("bGrid").classList.add("on");
+
+["hideAndSeek","race"].forEach(function(m,i){
+  var d = document.createElement("div");
+  d.className = "modeBtn" + (i===0?" on":""); d.textContent = TR(m, m); d.dataset.mode = m;
+  document.getElementById("modes").appendChild(d);
+});
+
+/* Модификация — только прятки (см. TOOL_MODES.zombie в maps.js и
+   объект "zombie" в TOOLS выше): в гонке зомби не из кого спавнить,
+   переключатель там только путал бы. */
+[["0", TR("modClassic","Классика")], ["1", TR("modApoc","Zombie Apocalypse")]].forEach(function(a,i){
+  var d = document.createElement("div");
+  d.className = "apocBtn" + (i===0?" on":""); d.textContent = a[1]; d.dataset.apoc = a[0];
+  document.getElementById("apoc").appendChild(d);
+});
+function syncApocBtns(){
+  document.querySelectorAll(".apocBtn").forEach(function(b){
+    b.classList.toggle("on", (b.dataset.apoc === "1") === !!apoc);
+  });
+}
+/* game.html — это сам экран игры, а не редактор: переключатель там не
+   нужен ВООБЩЕ, ни в каком режиме — его никто не должен видеть, пока
+   идёт матч. IS_GAME_PAGE решает это по имени файла, один раз — тот же
+   приём работает в обеих копиях движка (editor.html/game.html) без
+   отдельной ветки кода под каждую. */
+var IS_GAME_PAGE = /\/?game(\.html)?/i.test(location.pathname);
+function syncApocVisibility(){
+  document.getElementById("apoc").style.display =
+    (mode === "hideAndSeek" && !IS_GAME_PAGE) ? "flex" : "none";
+}
+syncApocVisibility();
+document.getElementById("apoc").addEventListener("click", function(e){
+  var b = e.target.closest(".apocBtn"); if(!b || playing) return;
+  apoc = b.dataset.apoc === "1";
+  syncApocBtns();
+  syncTools();
+  if(!toolOK(tool)) setTool("select");
+  // зомби существует только при модификации Zombie Apocalypse — уже
+  // расставленных мертвецов при возврате к «Классике» тоже убираем,
+  // иначе их можно опубликовать в карте, где они ничего не делают
+  // (см. "playing && !apoc" в step())
+  if(!apoc){
+    var drop = objects.filter(function(o){ return o.type === "zombie"; });
+    if(drop.length){
+      commit();
+      objects = objects.filter(function(o){ return o.type !== "zombie"; });
+      sel = null; markDirty(); indexMovers();
+      showMsg(TR("droppedObjsTitle","Убрано объектов: {n}").replace("{n}", drop.length),
+              TR("zombieDroppedBody","Зомби есть только при модификации «Zombie Apocalypse». Ctrl+Z вернёт их обратно."));
+      setTimeout(hideMsg, 2600);
+    }
+  } else {
+    // и наоборот: место искателя — только классика, в apoc его тоже убираем
+    var dropS = objects.filter(function(o){ return o.type === "seekerSpot"; });
+    if(dropS.length){
+      commit();
+      objects = objects.filter(function(o){ return o.type !== "seekerSpot"; });
+      sel = null; markDirty(); indexMovers();
+      showMsg(TR("droppedObjsTitle","Убрано объектов: {n}").replace("{n}", dropS.length),
+              TR("seekerSpotDroppedBody","Место искателя есть только в классике. Ctrl+Z вернёт его обратно."));
+      setTimeout(hideMsg, 2600);
+    }
+  }
+});
+
+/* toolbar icons are the real painters, rendered to tiny canvases — icon always matches the object */
+var toolsEl = document.getElementById("tools");
+TOOLS.forEach(function(T){
+  var d = document.createElement("div");
+  d.className = "tool" + (T.t==="select"?" on":"");
+  d.dataset.tool = T.t; d.dataset.modes = T.m;
+  d.dataset.tipKey = T.k; d.dataset.tipFallback = T.n;
+  d.setAttribute("data-tip", TR(T.k, T.n));
+  var ic = document.createElement("canvas"); ic.width = 48; ic.height = 48;
+  d.appendChild(ic); toolsEl.appendChild(d);
+  drawIcon(ic, T.t);
+});
+
+/* i18n.js подключается ПОСЛЕ этого скрипта и переводит статичную разметку
+   сама по data-i18n, но подсказки (data-tip) и подписи режимов рисует этот
+   код — обновляем их вручную при каждой смене языка. */
+function retip(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-tip-key]"), function(el){
+    el.setAttribute("data-tip", TR(el.dataset.tipKey, el.dataset.tipFallback || el.dataset.tipKey));
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".modeBtn"), function(b){
+    b.textContent = TR(b.dataset.mode, b.dataset.mode);
+  });
+  if(typeof inspect === "function") inspect();
+}
+addEventListener("bf-lang", retip);
+
+function drawIcon(cvs, type){
+  var g = cvs.getContext("2d"), old = ctx;
+  ctx = g; g.clearRect(0,0,48,48); g.save(); g.translate(4,4);
+  if(type === "select"){
+    g.fillStyle = "#111827"; g.beginPath();
+    g.moveTo(6,3); g.lineTo(33,25); g.lineTo(21,26); g.lineTo(27,38); g.lineTo(21,40); g.lineTo(15,28); g.lineTo(6,35);
+    g.closePath(); g.fill();
+  } else if(type === "hand"){
+    // ладонь: четыре пальца и большой
+    g.fillStyle = "#111827";
+    [[13,10],[19,7],[25,8],[31,12]].forEach(function(f,i){
+      g.beginPath(); g.roundRect ? g.roundRect(f[0], f[1], 5, 20 - i*1.5, 2.5)
+                                 : g.rect(f[0], f[1], 5, 20 - i*1.5);
+      g.fill();
+    });
+    g.beginPath();
+    g.moveTo(11,20); g.quadraticCurveTo(4,24, 9,30);
+    g.lineTo(14,34); g.lineTo(18,28); g.closePath(); g.fill();
+    g.beginPath();
+    g.roundRect ? g.roundRect(11,22,25,16,7) : g.rect(11,22,25,16);
+    g.fill();
+  } else {
+    var s = SIZES[type] || [40,40], sc = Math.min(40/s[0], 40/s[1]);
+    g.translate((40-s[0]*sc)/2, (40-s[1]*sc)/2); g.scale(sc,sc);
+    var o = mk(type,0,0,s[0],s[1]); uid--;
+    (PAINT[type] || PAINT.rect)(o);
+  }
+  g.restore(); ctx = old;
+}
+
+/* ══════════════════════════════════════════════════
+   INTERACTION
+   ══════════════════════════════════════════════════ */
+// зомби существует только при модификации Zombie Apocalypse — в
+// обычной «Классике» его спавнить нельзя, хотя режим карты (hideAndSeek)
+// тот же самый, поэтому отдельная проверка сверх dataset.modes
+function toolOK(t){
+  var e = document.querySelector('.tool[data-tool="'+t+'"]');
+  if(!e) return false;
+  if(t === "zombie" && !apoc) return false;
+  // зеркально: место искателя — только классика, в apoc у искателя нет
+  // отдельной точки ожидания (заражённые и так выглядят зомби)
+  if(t === "seekerSpot" && apoc) return false;
+  return e.dataset.modes.split(" ").indexOf(mode) !== -1;
+}
+function syncTools(){
+  document.querySelectorAll(".tool").forEach(function(t){
+    var ok = t.dataset.modes.split(" ").indexOf(mode) !== -1;
+    if(t.dataset.tool === "zombie" && !apoc) ok = false;
+    if(t.dataset.tool === "seekerSpot" && apoc) ok = false;
+    t.style.display = ok ? "flex" : "none";
+  });
+}
+syncTools();
+document.getElementById("modes").addEventListener("click", function(e){
+  var b = e.target.closest(".modeBtn"); if(!b || playing) return;
+  document.querySelectorAll(".modeBtn").forEach(function(x){ x.classList.remove("on"); });
+  b.classList.add("on"); mode = b.dataset.mode; syncTools();
+  if(mode !== "hideAndSeek" && apoc){ apoc = false; syncApocBtns(); }
+  syncApocVisibility();
+  if(!toolOK(tool)) setTool("select");
+});
+toolsEl.addEventListener("click", function(e){
+  var t = e.target.closest(".tool"); if(t) setTool(t.dataset.tool);
+});
+function setTool(n){
+  tool = n;
+  document.querySelectorAll(".tool").forEach(function(t){ t.classList.toggle("on", t.dataset.tool === n); });
+  cv.style.cursor = n === "select" ? "default" : "crosshair";
+  if(n !== "select"){ sel = null; inspect(); }
+}
+function at(x,y){
+  // выделяем по настоящей форме, а не по рамке — иначе повёрнутые
+  // и круглые объекты ловятся мимо картинки
+  for(var i = objects.length-1; i >= 0; i--){
+    var o = objects[i];
+    if(o.type === "text"){
+      if(x >= o.x && x <= o.x+o.w && y >= o.y && y <= o.y+o.h) return o;
+      continue;
+    }
+    if(inside(o, x, y)) return o;
+  }
+  return null;
+}
+/* Ручки стоят там же, где дальше дорисовывает рамка выделения (см. paint()):
+   у круга и треугольника она не bounding box, а силуэт фигуры, — иначе
+   половина ручек повисала бы в пустом месте рядом с фигурой, а не на ней
+   самой. Имена (nw/ne/sw/se) и их смысл для изменения размера в move()
+   не меняются — меняется только то, в какой ТОЧКЕ ручка нарисована и
+   ловится кликом (см. gripAt ниже). */
+function grips(o){
+  if(o.type === "circle"){
+    var cx = o.x+o.w/2, cy = o.y+o.h/2, rx = o.w/2*0.7071, ry = o.h/2*0.7071;
+    return [{n:"nw",x:cx-rx,y:cy-ry},{n:"ne",x:cx+rx,y:cy-ry},
+            {n:"sw",x:cx-rx,y:cy+ry},{n:"se",x:cx+rx,y:cy+ry}];
+  }
+  if(o.type === "triangle"){
+    // вершина треугольника одна — nw/ne встречаются в ней же, чуть раздвинуты,
+    // чтобы обе остались доступны кликом (см. gripAt)
+    var apexGap = Math.min(6, o.w/6);
+    return [{n:"nw",x:o.x+o.w/2-apexGap,y:o.y},{n:"ne",x:o.x+o.w/2+apexGap,y:o.y},
+            {n:"sw",x:o.x,y:o.y+o.h},{n:"se",x:o.x+o.w,y:o.y+o.h}];
+  }
+  return [{n:"nw",x:o.x,y:o.y},{n:"ne",x:o.x+o.w,y:o.y},{n:"sw",x:o.x,y:o.y+o.h},{n:"se",x:o.x+o.w,y:o.y+o.h}];
+}
+function gripAt(x,y){
+  // у точки старта и у зомби ручек нет: их размер задан движком
+  if(!sel || sel.type === "spawn" || sel.type === "zombie") return null;
+  var r = (document.body.classList.contains("mob") ? 15 : 7)/view.s, g = grips(sel);
+  for(var i=0;i<g.length;i++) if(Math.abs(x-g[i].x) <= r && Math.abs(y-g[i].y) <= r) return g[i].n;
+  return null;
+}
+var snapN = function(v){ return grid ? Math.round(v/GRID)*GRID : v; };
+
+var drag = null;
+/* Привязка кликом: Связи {from, single} — выбранный источник ждёт клика
+   по карте. Ставится/снимается кнопкой в инспекторе (см. linkPicker()),
+   перехватывается в самом начале mousedown/touchstart — раньше pan и
+   down(), иначе клик по карте вместо выбора цели снял бы выделение или
+   потащил карту. */
+var linkPick = null;
+function finishLinkPick(picked){
+  var src = linkPick.from, single = linkPick.single;
+  if(picked === src){ linkPick = null; inspect(); return; }   // клик по себе — отмена
+  if(!picked || LINKED.indexOf(picked.type) === -1) return;    // мимо — пробуем ещё раз
+  linkPick = null;
+  commit();
+  // у блока/круга/треугольника своего ID может ещё не быть — платформы и
+  // двери не заводят его сами при создании (в отличие от кнопки/рычага/
+  // портала), заводим здесь же, по той же схеме "w"+id, что и везде
+  if(!picked.customId) picked.customId = "w" + picked.id;
+  if(single){
+    src.targetIds = picked.customId;
+  } else {
+    var ids = (src.targetIds||"").split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+    if(ids.indexOf(picked.customId) === -1) ids.push(picked.customId);
+    src.targetIds = ids.join(",");
+  }
+  inspect();
+}
+function cPt(cx,cy){ var r = cv.getBoundingClientRect(); return {x:cx-r.left, y:cy-r.top}; }
+/* Портал спаривается сам, по 2 подряд поставленных объекта: первый —
+   вход (оранжевый, запускает перенос), второй — выход (синий, только
+   точка прибытия). Свободный вход ищем по пустому targetIds — как
+   только второй портал поставлен, пара замыкается сама, без ручного
+   выбора цели (см. teleport-блок в inspect()). Зовётся из down() при
+   установке нового портала, а также из duplicate() — тот СБРАСЫВАЕТ
+   связи копии перед вызовом (см. там же), иначе копия входа тащила бы
+   targetIds оригинала и вела на тот же выход, что и он: два входа на
+   один выход, второй из них нерабочий на вид не отличить от целого
+   (см. removeSel ниже про ту же беду при удалении половины пары). */
+function pairTeleport(o){
+  var mate = objects.filter(function(x){
+    return x.type === "teleport" && x !== o && !x.teleExit && !x.targetIds;
+  })[0];
+  if(mate){ o.teleExit = true; mate.targetIds = o.customId; }
+  else o.teleExit = false;
+}
+// партнёр портала по паре — вход по его targetIds, или выход, у кого
+// targetIds указывает на НЕГО (см. removeSel/pairTeleport выше)
+function teleportMateOf(o){
+  if(!o || o.type !== "teleport") return null;
+  if(o.teleExit){
+    return objects.filter(function(x){ return x.type === "teleport" && x.targetIds === o.customId; })[0] || null;
+  }
+  var id = (o.targetIds || "").split(",")[0].trim();
+  if(!id) return null;
+  return objects.filter(function(x){ return x.customId === id; })[0] || null;
+}
+function down(x,y,shift){
+  if(playing) return;
+  var g = gripAt(x,y);
+  if(g && sel){ commit(); drag = {m:"size", g:g, ox:x, oy:y, o:Object.assign({},sel)}; return; }
+  if(tool === "select"){
+    var h = at(x,y);
+    if(h){
+      commit();
+      sel = h; drag = {m:"move", ox:x, oy:y, o:{x:h.x,y:h.y}};
+    }
+    else sel = null;
+    inspect(); return;
+  }
+  if(!toolOK(tool)){ setTool("select"); return; }
+  if(overLimit(1)) return;
+  commit();
+  if(tool === "spawn"){
+    var ex = findSpawn(); if(ex) objects = objects.filter(function(o){ return o !== ex; });
+  }
+  if(tool === "zombie"){
+    var exz = findZombie(); if(exz) objects = objects.filter(function(o){ return o !== exz; });
+  }
+  if(tool === "seekerSpot"){
+    var exs = findSeekerSpot(); if(exs) objects = objects.filter(function(o){ return o !== exs; });
+  }
+  var d = SIZES[tool] || [50,50];
+  var o = mk(tool, x, y, 1, 1);
+  objects.push(o); sel = o;
+  if(tool === "teleport") pairTeleport(o);
+  drag = {m:"new", ox:x, oy:y, moved:false, w:d[0], h:d[1]};
+  inspect();
+}
+function move(x,y){
+  if(!drag || playing) return;
+  if(drag.m === "new"){
+    if(Math.abs(x-drag.ox) > 6 || Math.abs(y-drag.oy) > 6) drag.moved = true;
+    var o = objects[objects.length-1];
+    o.x = snapN(Math.min(drag.ox,x)); o.y = snapN(Math.min(drag.oy,y));
+    o.w = Math.max(4, snapN(Math.abs(x-drag.ox))); o.h = Math.max(4, snapN(Math.abs(y-drag.oy)));
+  } else if(drag.m === "move"){
+    sel.x = snapN(drag.o.x + (x-drag.ox)); sel.y = snapN(drag.o.y + (y-drag.oy));
+  } else if(drag.m === "size"){
+    var s = drag.o, dx = x-drag.ox, dy = y-drag.oy;
+    if(drag.g === "se"){ sel.w = Math.max(4,snapN(s.w+dx)); sel.h = Math.max(4,snapN(s.h+dy)); }
+    if(drag.g === "ne"){ sel.w = Math.max(4,snapN(s.w+dx)); sel.h = Math.max(4,snapN(s.h-dy)); sel.y = snapN(s.y+dy); }
+    if(drag.g === "sw"){ sel.w = Math.max(4,snapN(s.w-dx)); sel.h = Math.max(4,snapN(s.h+dy)); sel.x = snapN(s.x+dx); }
+    if(drag.g === "nw"){ sel.w = Math.max(4,snapN(s.w-dx)); sel.h = Math.max(4,snapN(s.h-dy)); sel.x = snapN(s.x+dx); sel.y = snapN(s.y+dy); }
+  }
+  inspect();
+}
+function up(){
+  if(drag && drag.m === "new" && !drag.moved){
+    var o = objects[objects.length-1];
+    o.w = drag.w; o.h = drag.h;
+    o.x = snapN(drag.ox-o.w/2); o.y = snapN(drag.oy-o.h/2);
+    inspect();
+  }
+  drag = null;
+}
+
+var pan = null, spaceDown = false;
+
+/* Двигать карту можно:
+     · правой кнопкой мыши (в любой момент)
+     · средней кнопкой или пробелом с левой
+     · инструментом «Рука»
+     · левой кнопкой по пустому месту, когда выбрано «Выделение»
+   На телефоне — просто протащить пальцем по пустому месту либо
+   включить «Руку» и тащить где угодно. */
+function startPan(sx, sy){
+  pan = {sx:sx, sy:sy, vx:view.x, vy:view.y};
+  cv.style.cursor = "grabbing";
+}
+function wantPan(x, y){
+  if(tool === "hand") return true;
+  if(tool !== "select") return false;
+  return !gripAt(x, y) && !at(x, y);      // пусто под курсором — тащим карту
+}
+
+cv.addEventListener("mousedown", function(e){
+  if(playing) return;
+  if(e.button === 1 || e.button === 2 || (e.button === 0 && spaceDown)){
+    startPan(e.offsetX, e.offsetY); e.preventDefault(); return;
+  }
+  if(e.button !== 0) return;
+  var p = toWorld(e.offsetX, e.offsetY);
+  if(linkPick){ finishLinkPick(at(p.x, p.y)); e.preventDefault(); return; }
+  if(wantPan(p.x, p.y)){
+    if(tool === "select" && sel){ sel = null; inspect(); }
+    startPan(e.offsetX, e.offsetY); e.preventDefault(); return;
+  }
+  down(p.x, p.y, e.shiftKey);
+});
+cv.addEventListener("mousemove", function(e){
+  if(playing) return;
+  if(pan){ view.x = pan.vx+(e.offsetX-pan.sx); view.y = pan.vy+(e.offsetY-pan.sy); return; }
+  var p = toWorld(e.offsetX, e.offsetY); move(p.x, p.y);
+});
+addEventListener("mouseup", function(){
+  if(pan){ pan = null; cv.style.cursor = tool === "hand" ? "grab" : (tool === "select" ? "default" : "crosshair"); return; }
+  up();
+});
+cv.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+/* Колесо работает и в игре тоже: камера следит за игроком, но масштаб
+   остаётся тот, что выставил сам игрок. Раньше зум в игре был запрещён,
+   и разглядеть карту во время прохождения было нельзя. */
+cv.addEventListener("wheel", function(e){
+  e.preventDefault();
+  zoomAt(e.offsetX, e.offsetY, e.deltaY < 0 ? 1.12 : 1/1.12);
+}, {passive:false});
+
+var pinch = null;
+function tD(a,b){ var x = a.clientX-b.clientX, y = a.clientY-b.clientY; return Math.sqrt(x*x+y*y); }
+function tM(a,b){ return cPt((a.clientX+b.clientX)/2, (a.clientY+b.clientY)/2); }
+/* Два пальца работают даже во время прохождения (playing) — раньше все
+   touch-обработчики выходили по playing самой первой строкой, и колесо
+   мыши масштаб во время игры уже умело менять (см. комментарий выше), а
+   тем же самым жестом с телефона — нет. Обычный однопальцевый тач ниже
+   по-прежнему выключен во время игры: он там означал бы «строить»/
+   «выделять», а не «идти» — движением занят экранный джойстик. Свободную
+   протяжку двумя пальцами (панораму) во время игры тоже не трогаем —
+   камера сама следит за игроком, так же, как и при зуме колесом. */
+cv.addEventListener("touchstart", function(e){
+  if(e.touches.length === 2){ drag = null; var m = tM(e.touches[0],e.touches[1]);
+    pinch = {d:tD(e.touches[0],e.touches[1]), x:m.x, y:m.y}; e.preventDefault(); return; }
+  if(playing) return;
+  if(e.touches.length !== 1) return;
+  var c = cPt(e.touches[0].clientX, e.touches[0].clientY), p = toWorld(c.x,c.y);
+  if(linkPick){ finishLinkPick(at(p.x, p.y)); e.preventDefault(); return; }
+  if(wantPan(p.x, p.y)){
+    if(tool === "select" && sel){ sel = null; inspect(); }
+    startPan(c.x, c.y); e.preventDefault(); return;
+  }
+  down(p.x,p.y); e.preventDefault();
+}, {passive:false});
+cv.addEventListener("touchmove", function(e){
+  if(e.touches.length === 2 && pinch){
+    var d = tD(e.touches[0],e.touches[1]), m = tM(e.touches[0],e.touches[1]);
+    if(pinch.d > 0) zoomAt(m.x,m.y,d/pinch.d);
+    if(!playing){ view.x += m.x-pinch.x; view.y += m.y-pinch.y; }
+    pinch.d = d; pinch.x = m.x; pinch.y = m.y; e.preventDefault(); return;
+  }
+  if(playing) return;
+  if(e.touches.length !== 1 || pinch) return;
+  var c = cPt(e.touches[0].clientX, e.touches[0].clientY);
+  if(pan){
+    view.x = pan.vx + (c.x - pan.sx);
+    view.y = pan.vy + (c.y - pan.sy);
+    e.preventDefault(); return;
+  }
+  var p = toWorld(c.x,c.y);
+  move(p.x,p.y); e.preventDefault();
+}, {passive:false});
+cv.addEventListener("touchend", function(e){
+  if(e.touches.length === 0) pinch = null;
+  if(playing) return;
+  if(e.touches.length === 0){
+    if(pan){ pan = null; cv.style.cursor = tool === "hand" ? "grab" : "default"; }
+    else up();
+  }
+  e.preventDefault();
+}, {passive:false});
+
+/* Пока пишешь в чат, ходить всё равно можно: стрелки и WASD остаются за
+   игроком, остальные буквы уходят в текст. Раньше любое поле ввода
+   блокировало управление целиком, и во время набора игрок стоял столбом.
+   W/A/D при этом ещё и печатаются как обычно (см. inp.addEventListener
+   ('keydown', ...) в game.js) — раздельно «буква» и «шаг» не развести, а
+   терять w/a/d из обычных слов («world», «away») хуже, чем лишний шаг. */
+function typingInChat(){
+  var el = document.activeElement;
+  return !!(el && el.id === "gMsg");
+}
+function inSomeField(){
+  var el = document.activeElement;
+  if(!el) return false;
+  if(el.id === "gMsg") return false;                 // чат — особый случай
+  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+}
+function movementKey(code){
+  return code === "ArrowLeft" || code === "ArrowRight" || code === "ArrowUp" ||
+         code === "KeyW" || code === "KeyA" || code === "KeyD";
+}
+
+document.addEventListener("keydown", function(e){
+  if(inSomeField()) return;
+  if(playing){
+    // в чате слушаем только стрелки и WASD, иначе остальные буквы не набрать
+    if(typingInChat() && !movementKey(e.code)) return;
+    /* Стрелками курсор в поле не двигаем — это их единственный побочный
+       эффект внутри text input, и он не нужен. У W/A/D побочный эффект —
+       вставка самой буквы, и его мы, наоборот, хотим оставить: иначе те
+       же буквы молча пропадают из обычного текста («world», «away»). */
+    if(typingInChat() && (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "ArrowUp")) e.preventDefault();
+
+    if(e.code === "ArrowLeft" || e.code === "KeyA") keys.l = true;
+    if(e.code === "ArrowRight"|| e.code === "KeyD") keys.r = true;
+    if(e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Space"){
+      keys.u = true; buf = BUFFER;
+      if(!(typingInChat() && e.code === "KeyW")) e.preventDefault();
+    }
+    if(e.code === "Escape") stop();
+    return;
+  }
+  if(e.key === "Escape" && linkPick){ linkPick = null; inspect(); return; }
+  var mod = e.ctrlKey || e.metaKey;
+  if(mod && e.code === "KeyZ"){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if(mod && e.code === "KeyY"){ e.preventDefault(); redo(); return; }
+  if(mod && e.code === "KeyD"){ e.preventDefault(); duplicate(); return; }
+  if(e.code === "Space"){ spaceDown = true; e.preventDefault(); }
+  if(e.code === "KeyG"){ grid = !grid; document.getElementById("bGrid").classList.toggle("on", grid); }
+  if((e.key === "Delete" || e.key === "Backspace") && sel){ removeSel(); }
+  if(e.key === "+" || e.key === "=") zoomAt(VW()/2, VH()/2, 1.15);
+  if(e.key === "-" || e.key === "_") zoomAt(VW()/2, VH()/2, 1/1.15);
+  if(e.key === "0") resetView();
+});
+document.addEventListener("keyup", function(e){
+  if(inSomeField()) return;
+  if(e.code === "Space") spaceDown = false;
+  if(playing){
+    if(e.code === "ArrowLeft" || e.code === "KeyA") keys.l = false;
+    if(e.code === "ArrowRight"|| e.code === "KeyD") keys.r = false;
+    if(e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Space") keys.u = false;
+  }
+});
+function pad(id, fn){
+  var e = document.getElementById(id);
+  ["touchstart","mousedown"].forEach(function(t){ e.addEventListener(t,function(ev){ fn(true); ev.preventDefault(); },{passive:false}); });
+  ["touchend","touchcancel","mouseup","mouseleave"].forEach(function(t){ e.addEventListener(t,function(ev){ fn(false); ev.preventDefault(); },{passive:false}); });
+}
+pad("pLeft",  function(v){ keys.l = v; });
+pad("pRight", function(v){ keys.r = v; });
+pad("pJump",  function(v){ keys.u = v; if(v) buf = BUFFER; });
+
+function duplicate(){
+  if(!sel) return;
+  if(overLimit(1)) return;
+  commit();
+  var c = JSON.parse(JSON.stringify(sel));
+  c.id = uid++; c.x += 20; c.y += 20;
+  if(c.customId) c.customId = "w"+c.id;
+  // копия портала не наследует связь оригинала — иначе два входа ведут
+  // на один и тот же выход (см. pairTeleport выше); копия сама ищет
+  // себе пару заново, как будто её только что поставили инструментом
+  if(c.type === "teleport"){ c.targetIds = ""; c.teleExit = false; pairTeleport(c); }
+  objects.push(c); sel = c; inspect();
+}
+function removeSel(){
+  if(!sel) return;
+  commit();
+  /* Портал — пара на двоих, не два независимых объекта: половина без
+     другой половины не телепортирует никуда, но выглядит обычным
+     порталом — автор карты узнал бы о поломке только играя её заново.
+     Поэтому удаление ОДНОГО из пары уносит сразу обоих, как одно целое. */
+  var mate = teleportMateOf(sel);
+  // Удаляемый объект (и его портальная пара) мог быть чьей-то целью
+  // (customId в targetIds кнопки/рычага) — без чистки эта ссылка осталась
+  // бы висеть в воздухе и, если тот же ID потом достанется другому
+  // объекту, начала бы управлять им незаметно для автора карты.
+  var deadIds = [sel.customId, mate && mate.customId].filter(Boolean);
+  objects = objects.filter(function(o){ return o !== sel && o !== mate; });
+  if(deadIds.length){
+    objects.forEach(function(o){
+      if(!o.targetIds) return;
+      var left = o.targetIds.split(",").map(function(s){ return s.trim(); })
+        .filter(function(id){ return id && deadIds.indexOf(id) === -1; });
+      o.targetIds = left.join(",");
+    });
+  }
+  sel = null;
+  inspect();
+}
+
+/* ══════════════════════════════════════════════════
+   INSPECTOR
+   ══════════════════════════════════════════════════ */
+var props = document.getElementById("props");
+var widgetsEl = document.getElementById("widgets");
+/* Две вкладки инспектора: "Свойства" — положение, размер и порядок
+   (куда объект поставлен), "Функции" — всё остальное, что он УМЕЕТ
+   (цвет, игровые свойства, движение и эффекты, связи). Переключение
+   только показывает/прячет уже построенные панели — inspect() ниже
+   каждый раз заново наполняет ОБЕ, какая бы ни была открыта, поэтому
+   смена вкладки не теряет выбор и не дёргает его обратно на "Свойства"
+   при каждой правке поля. */
+document.getElementById("inspHead").addEventListener("click", function(e){
+  if(e.target.id === "inspClose"){ sel = null; inspect(); return; }
+  var t = e.target.closest(".tab"); if(!t || !t.dataset.tab) return;
+  document.querySelectorAll(".tab").forEach(function(x){ x.classList.toggle("on", x === t); });
+  props.style.display = t.dataset.tab === "props" ? "block" : "none";
+  widgetsEl.style.display = t.dataset.tab === "widgets" ? "block" : "none";
+});
+// pr()/grp()/hint() пишут в ту вкладку, которую сейчас наполняет inspect() —
+// см. inspTarget ниже
+var inspTarget = props;
+function pr(){ var d = document.createElement("div"); d.className = "pRow"; inspTarget.appendChild(d); return d; }
+function num(l,v,fn){
+  var r = pr(), a = document.createElement("label"); a.textContent = l;
+  var i = document.createElement("input"); i.type = "number"; i.value = Math.round(v);
+  i.addEventListener("focus", commit);
+  i.addEventListener("input", function(){ fn(parseFloat(i.value)||0); });
+  r.appendChild(a); r.appendChild(i);
+}
+function txt(l,v,fn){
+  var r = pr(), a = document.createElement("label"); a.textContent = l;
+  var i = document.createElement("input"); i.type = "text"; i.value = v||"";
+  i.addEventListener("focus", commit);
+  i.addEventListener("input", function(){ fn(i.value); });
+  r.appendChild(a); r.appendChild(i);
+}
+/* Шрифт текстового объекта — единственная выпадашка в панели, поэтому не
+   обобщаем в отдельный select(), а пишем прямо под то, что есть (см.
+   FONTS выше). Каждый пункт списка нарисован СВОИМ шрифтом — видно, что
+   выбираешь, не открывая отдельно карту. */
+function fontField(l,v,fn){
+  var r = pr(), a = document.createElement("label"); a.textContent = l;
+  var s = document.createElement("select");
+  FONT_KEYS.forEach(function(k){
+    var opt = document.createElement("option");
+    opt.value = k; opt.textContent = TR(FONTS[k].k, FONTS[k].n); opt.style.fontFamily = FONTS[k].css;
+    if(k === (v || "sans")) opt.selected = true;
+    s.appendChild(opt);
+  });
+  s.addEventListener("focus", commit);
+  s.addEventListener("change", function(){ fn(s.value); });
+  r.appendChild(a); r.appendChild(s);
+}
+/* Тот же текстовый ввод, но с кнопкой «×» рядом — разом убрать все ID
+   разом, а не выделять и стирать текст руками. Только для «Целей»
+   кнопки/рычага: у обычного текстового поля вроде «ID» такая кнопка
+   не нужна и только путала бы. */
+function txtClear(l,v,fn){
+  var r = pr(), a = document.createElement("label"); a.textContent = l;
+  var wrap = document.createElement("div"); wrap.className = "pClearWrap";
+  var i = document.createElement("input"); i.type = "text"; i.value = v||"";
+  i.addEventListener("focus", commit);
+  i.addEventListener("input", function(){ fn(i.value); });
+  var clr = document.createElement("button"); clr.type = "button"; clr.className = "pClearBtn";
+  clr.title = TR("lblClearTargets","Убрать все связи"); clr.textContent = "×";
+  clr.addEventListener("click", function(){ if(!i.value) return; commit(); i.value = ""; fn(""); });
+  wrap.appendChild(i); wrap.appendChild(clr);
+  r.appendChild(a); r.appendChild(wrap);
+}
+function chk(l,v,fn){
+  var r = pr(), a = document.createElement("label"); a.textContent = l;
+  var i = document.createElement("input"); i.type = "checkbox"; i.checked = !!v;
+  i.addEventListener("change", function(){ commit(); fn(i.checked); });
+  r.appendChild(a); r.appendChild(i);
+}
+function grp(t){ var d = document.createElement("div"); d.className = "grp"; d.textContent = t; inspTarget.appendChild(d); }
+// короткая пояснительная строка под галочкой — там, где само название свойства не всё объясняет
+function hint(t){
+  var d = document.createElement("div");
+  d.className = "pHelp"; d.style.cursor = "default";
+  var b = document.createElement("div");
+  b.className = "pHelpBody"; b.style.display = "block"; b.textContent = t;
+  d.appendChild(b); inspTarget.appendChild(d);
+}
+
+// короткое читаемое имя объекта для чипов связей — тот же вид, что в заголовке инспектора
+function linkName(o){
+  var T = TOOLS.filter(function(x){ return x.t === o.type; })[0];
+  return (T ? TR(T.k, T.n) : o.type) + " #" + o.id;
+}
+/* Привязка кликом вместо ручного набора ID: список уже выбранных целей
+   чипами (крестик — убрать), кнопка "Добавить" ставит linkPick и дальше
+   ждёт клика по карте (см. finishLinkPick() и перехват в mousedown/
+   touchstart выше). single — цель одна, новый выбор заменяет старую
+   вместо добавления в список (сейчас без вызовов, задел на будущее). */
+function linkPicker(src, single){
+  var r = pr(); r.style.flexDirection = "column"; r.style.alignItems = "stretch"; r.style.gap = "6px";
+  var lbl = document.createElement("label"); lbl.textContent = TR("lblTargets","Цели");
+  r.appendChild(lbl);
+  var ids = (src.targetIds||"").split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+  var wrap = document.createElement("div"); wrap.className = "lnkChips";
+  if(!ids.length){
+    var empty = document.createElement("span"); empty.className = "lnkEmpty";
+    empty.textContent = TR("lnkNone","Пока ничего не выбрано");
+    wrap.appendChild(empty);
+  }
+  ids.forEach(function(id){
+    var t = objects.filter(function(o){ return o.customId === id; })[0];
+    var chip = document.createElement("span"); chip.className = "lnkChip";
+    chip.appendChild(document.createTextNode(t ? linkName(t) : (TR("lnkMissing","пропало: ") + id)));
+    var x = document.createElement("button"); x.type = "button"; x.className = "lnkChipX";
+    x.title = TR("lnkRemove","Убрать связь"); x.textContent = "×";
+    x.addEventListener("click", function(e){
+      e.stopPropagation(); commit();
+      src.targetIds = ids.filter(function(other){ return other !== id; }).join(",");
+      inspect();
+    });
+    chip.appendChild(x); wrap.appendChild(chip);
+  });
+  r.appendChild(wrap);
+  var picking = !!(linkPick && linkPick.from === src);
+  var addBtn = document.createElement("div");
+  addBtn.className = "lnkAdd" + (picking ? " on" : "");
+  addBtn.textContent = picking
+    ? TR("lnkPicking","Кликни объект на карте… (Esc — отмена)")
+    : (single ? TR("lnkPickOne","Выбрать на карте") : TR("lnkPickAdd","+ Добавить с карты"));
+  addBtn.addEventListener("click", function(){
+    linkPick = picking ? null : { from: src, single: !!single };
+    inspect();
+  });
+  r.appendChild(addBtn);
+}
+function inspect(){
+  var box = document.getElementById("insp");
+  // выделение сменилось (или снялось) — незавершённый выбор цели теперь ничей
+  if(linkPick && linkPick.from !== sel) linkPick = null;
+  if(!sel || playing){ box.style.display = "none"; return; }
+  box.style.display = "flex";
+  // наполняем ОБЕ вкладки разом — какая сейчас видна, решает только CSS/
+  // класс .tab.on (см. обработчик клика у #inspHead), inspect() его не трогает
+  props.innerHTML = "";
+  widgetsEl.innerHTML = "";
+  var T = TOOLS.filter(function(x){ return x.t === sel.type; })[0];
+  var objTitleHTML = (T ? TR(T.k, T.n) : sel.type) + "<span>#" + sel.id + "</span>";
+  function titleEl(){
+    var head = document.createElement("div"); head.id = "objTitle";
+    head.innerHTML = objTitleHTML;
+    return head;
+  }
+
+  /* ---------- вкладка «Свойства»: где объект и в каком порядке ---------- */
+  inspTarget = props;
+  props.appendChild(titleEl());
+
+  num("X", sel.x, function(v){ sel.x = v; });
+  num("Y", sel.y, function(v){ sel.y = v; });
+  /* Размер игрока и зомби задан движком (см. SIZES) и не редактируется. */
+  if(sel.type !== "spawn" && sel.type !== "zombie" && sel.type !== "seekerSpot"){
+    num(TR("lblWidth","Ширина"), sel.w, function(v){ sel.w = Math.max(1,v); });
+    num(TR("lblHeight","Высота"), sel.h, function(v){ sel.h = Math.max(1,v); });
+    num(TR("lblRotation","Поворот"), sel.rot||0, function(v){ sel.rot = v; });
+  } else {
+    var sr = pr();
+    var fixedSize = SIZES[sel.type] || [sel.w, sel.h];
+    sr.innerHTML = "<label>" + TR("lblSize","Размер") + "</label><b style='font-size:12px'>" +
+                   fixedSize[0] + " x " + fixedSize[1] + "</b>";
+  }
+
+  grp(TR("grpOrder","Порядок"));
+  var z = document.createElement("div"); z.className = "zBtns";
+  z.innerHTML = "<div data-z='b'>" + TR("zBack","На зад") + "</div><div data-z='f'>" + TR("zFront","Вперёд") + "</div>";
+  z.addEventListener("click", function(e){
+    var b = e.target.closest("[data-z]"); if(!b) return;
+    commit();
+    objects = objects.filter(function(o){ return o !== sel; });
+    b.dataset.z === "f" ? objects.push(sel) : objects.unshift(sel);
+  });
+  props.appendChild(z);
+
+  /* ---------- вкладка «Функции»: что объект умеет и с чем связан ---------- */
+  inspTarget = widgetsEl;
+  widgetsEl.appendChild(titleEl());
+
+  if(sel.type !== "zombie" && sel.type !== "seekerSpot"){   // их не красят — они рисуются собой
+    grp(TR("grpAppearance","Внешний вид"));
+    var r = pr();
+    r.innerHTML = "<label>" + TR("lblColor","Цвет") + "</label>";
+    var ci = document.createElement("input"); ci.type = "color";
+    ci.value = (sel.fill && sel.fill[0] === "#" && sel.fill.length === 7) ? sel.fill : "#4b5563";
+    ci.addEventListener("focus", commit);
+    ci.addEventListener("input", function(){ sel.fill = ci.value; });
+    r.appendChild(ci);
+  }
+  /* Только блок/круг/треугольник — своя фигура, рисуемая одной плоской
+     заливкой (см. shapeFill выше). Простой двухцветный переход, без
+     бликов и глянца — того самого «масляного» вида, который когда-то
+     специально убрали у декоративных объектов (см. grad()). */
+  if(SOLID.indexOf(sel.type) !== -1){
+    /* Смена цвета — тоже просто заливка, только не статичная и не
+       градиент, а перебор оттенков по кругу (см. shapeFill() и step()
+       выше). Включает и гасит цвет/градиент разом — иначе автору было бы
+       непонятно, почему выбранный им цвет не виден при проигрывании. */
+    chk(TR("chkColorCycle","Смена цвета"), !!sel.colorCycle, function(v){ sel.colorCycle = v; inspect(); });
+    if(!sel.colorCycle){
+      chk(TR("chkGradient","Градиент"), !!sel.gradient, function(v){
+        sel.gradient = v;
+        if(v && !sel.fill2) sel.fill2 = "#9ca3af";
+        inspect();
+      });
+      if(sel.gradient){
+        var r2 = pr();
+        r2.innerHTML = "<label>" + TR("lblColor2","Цвет 2") + "</label>";
+        var ci2 = document.createElement("input"); ci2.type = "color";
+        ci2.value = (sel.fill2 && sel.fill2[0] === "#" && sel.fill2.length === 7) ? sel.fill2 : "#9ca3af";
+        ci2.addEventListener("focus", commit);
+        ci2.addEventListener("input", function(){ sel.fill2 = ci2.value; });
+        r2.appendChild(ci2);
+      }
+    }
+  }
+  if(sel.type === "text"){
+    txt(TR("toolText","Текст"), sel.text, function(v){ sel.text = v; });
+    fontField(TR("lblFont","Шрифт"), sel.font, function(v){ sel.font = v; });
+  }
+
+  grp(TR("grpGameProps","Игровые свойства"));
+  /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Яд»
+     там бы включала свойство, которое физика всё равно игнорирует. */
+  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline","zombie","teleport","seekerSpot"].indexOf(sel.type) === -1)
+    chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
+  if(SOLID.indexOf(sel.type) !== -1)
+    chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; });
+  /* Прятки: за таким объектом игрок исчезает для искателя вместе с ником.
+     Коллизии у него нет — иначе внутрь не зайти. */
+  if(SOLID.indexOf(sel.type) !== -1 && mode === "hideAndSeek")
+    chk(TR("chkHideSpot","Укрытие для пряток"), !!sel.hideSpot, function(v){ sel.hideSpot = v; });
+  /* Рикошет, толкаемость, движение и вращение — свойства, а не отдельные
+     объекты. */
+  if(SOLID.indexOf(sel.type) !== -1){
+    grp(TR("grpMovement","Движение и эффекты"));
+    chk(TR("chkRicochet","Рикошет"), !!sel.ricochet, function(v){ sel.ricochet = v; });
+
+    /* Толкается — своя физика (см. stepPushables): падает и стоит на
+       земле сама, а не по синусоиде и не вращается, поэтому с
+       «Двигается»/«Вращается» несовместима — включение одного гасит
+       другое. */
+    chk(TR("chkPushable","Толкается"), !!sel.pushable, function(v){
+      sel.pushable = v;
+      if(v){
+        if(sel.mass === undefined) sel.mass = 1;
+        sel.moves = false; sel.spins = false;
+      }
+      inspect();
+    });
+    if(sel.pushable)
+      num(TR("lblMass","Масса"), sel.mass === undefined ? 1 : sel.mass, function(v){ sel.mass = Math.max(0.2, v||1); });
+
+    if(!sel.pushable){
+      chk(TR("chkMoves","Двигается"), !!sel.moves, function(v){
+        sel.moves = v;
+        if(v){
+          if(!sel.moveX && !sel.moveY){ sel.moveX = 130; sel.moveY = 0; sel.speed = 1.1; }
+          sel.pushable = false;
+        }
+        inspect();
+      });
+      if(sel.moves){
+        num(TR("lblMoveX","Ход по X"), sel.moveX||0, function(v){ sel.moveX = v; });
+        num(TR("lblMoveY","Ход по Y"), sel.moveY||0, function(v){ sel.moveY = v; });
+        num(TR("lblSpeed","Скорость"), sel.speed||1, function(v){ sel.speed = v; });
+      }
+
+      chk(TR("chkSpins","Вращается"), !!sel.spins, function(v){
+        sel.spins = v;
+        if(v){ if(!sel.spin) sel.spin = 2; sel.pushable = false; }
+        inspect();
+      });
+      if(sel.spins) num(TR("lblSpinSpeed","Скорость вращения"), sel.spin||2, function(v){ sel.spin = v; });
+    }
+
+    /* Изменение размера — чисто визуальный пульс (см. paint()), хитбокс
+       не трогает: значения w/h у объекта не меняются, только масштаб
+       рисунка. Поэтому, в отличие от Двигается/Вращается, ничего не
+       гасит и не гасится толкаемостью — конфликтовать здесь нечему. */
+    chk(TR("chkPulse","Изменение размера"), !!sel.pulse, function(v){ sel.pulse = v; inspect(); });
+
+    /* Лазер — тоже свойство фигуры, а не отдельный объект (см. laserFeeds()
+       в step()): включает связанные через «Цели» объекты, пока луч из этой
+       фигуры перекрыт игроком. Независим от толкаемости/движения/вращения —
+       ничего не гасит и не гасится ими. */
+    chk(TR("chkLaser","Лазер (излучатель)"), !!sel.laser, function(v){
+      sel.laser = v;
+      if(v && !sel.range) sel.range = 500;
+      inspect();
+    });
+    if(sel.laser)
+      hint(TR("laserDeadlyHint","Включи ещё и «Яд (убивает)» выше — тогда опасен весь луч, а не только сам блок-излучатель: смерть в любой точке трассы, пока она не перекрыта стеной."));
+  }
+  // мертвец — отдельный объект; из свойств ему нужна одна подсказка
+  if(sel.type === "zombie")
+    hint(TR("zombieHint","Обязательная метка для модификации Zombie Apocalypse — без неё её нельзя включить. Самого зомби тут не будет: им становится один из игроков, выбранный рулеткой в начале раунда."));
+  if(sel.type === "seekerSpot")
+    hint(TR("seekerSpotHint","Необязательная метка только для классики: здесь искатель ждёт во время пряток, пока не началась охота. С началом раунда он телепортируется на обычную точку старта, как и все."));
+  /* Портал спаривается сам при постановке (см. pairTeleport()) — тут
+     только показываем текущее состояние пары, выбирать цель вручную
+     больше негде и незачем. */
+  if(sel.type === "teleport"){
+    if(sel.teleExit){
+      hint(TR("teleportExitHint","Выход портала (синий). Переносит сюда из входа — сам телепортацию не запускает."));
+    } else {
+      var teleMate = objects.filter(function(o){ return o.customId === sel.targetIds; })[0];
+      hint(teleMate
+        ? TR("teleportEntryHint","Вход портала (оранжевый) → ") + linkName(teleMate)
+        : TR("teleportWaitingHint","Вход портала (оранжевый). Поставь ещё один портал — он станет выходом и свяжется сам."));
+    }
+  }
+  if(LINKED.indexOf(sel.type) !== -1){
+    grp(TR("grpLinks","Связи"));
+    txt("ID", sel.customId, function(v){ sel.customId = v; });
+    if(sel.type === "button" || sel.type === "lever" || sel.type === "laserFeed" || sel.laser)
+      linkPicker(sel);
+    if(SOLID.indexOf(sel.type) !== -1)
+      chk(TR("chkStartsOpen","Открыт сначала (проходим)"), sel.startsOpen, function(v){ sel.startsOpen = v; });
+  }
+  if(sel.type === "laserFeed" || sel.laser)
+    num(TR("lblLaserRange","Дальность луча"), sel.range||500, function(v){ sel.range = Math.max(20,v); });
+}
+
+/* ══════════════════════════════════════════════════
+   DIALOG
+   ══════════════════════════════════════════════════ */
+var dlg = document.getElementById("dlg"), dCb = null;
+function dialog(t,m,cb,ask){
+  document.getElementById("dT").textContent = t;
+  document.getElementById("dM").textContent = m;
+  var inp = document.getElementById("dIn");
+  if(ask !== undefined && ask !== null){
+    inp.style.display = "block"; inp.value = String(ask);
+    setTimeout(function(){ inp.focus(); inp.select(); }, 40);
+  } else {
+    inp.style.display = "none"; inp.value = "";
+  }
+  dCb = cb; document.getElementById("dNo").style.display = cb ? "inline-block" : "none";
+  dlg.style.display = "block";
+}
+document.getElementById("dOk").addEventListener("click", function(){
+  var v = document.getElementById("dIn").value;
+  dlg.style.display = "none";
+  if(dCb) dCb(v);
+});
+document.getElementById("dIn").addEventListener("keydown", function(e){
+  if(e.key === "Enter"){ e.preventDefault(); document.getElementById("dOk").click(); }
+  if(e.key === "Escape"){ dlg.style.display = "none"; dCb = null; }
+});
+document.getElementById("dNo").addEventListener("click", function(){ dlg.style.display = "none"; });
+dlg.querySelector(".bd").addEventListener("click", function(){ dlg.style.display = "none"; });
+
+/* ══════════════════════════════════════════════════
+   SAVE / LOAD  (.txt of decimal numbers, signed)
+   ══════════════════════════════════════════════════ */
+var DEV_KEY = "ARTEM_DEV_ONLY";
+function fnv(s){
+  var h = 0x811c9dc5;
+  for(var i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = (h + ((h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24))) >>> 0; }
+  return h.toString(16).padStart(8,"0");
+}
+function nativeZip(){ return typeof CompressionStream !== "undefined" && typeof DecompressionStream !== "undefined"; }
+async function drain(rs){
+  var rd = rs.getReader(), ch = [], n = 0, r;
+  while(true){ r = await rd.read(); if(r.done) break; ch.push(r.value); n += r.value.length; }
+  var out = new Uint8Array(n), off = 0;
+  ch.forEach(function(c){ out.set(c,off); off += c.length; });
+  return out;
+}
+async function zip(str){
+  var raw = new TextEncoder().encode(str);
+  if(nativeZip()){
+    try{ var cs = new CompressionStream("deflate-raw"), w = cs.writable.getWriter();
+      w.write(raw); w.close(); return {b: await drain(cs.readable), m:1};
+    }catch(e){}
+  }
+  return {b:raw, m:0};
+}
+async function unzip(bytes, m){
+  if(m === 1 && nativeZip()){
+    var ds = new DecompressionStream("deflate-raw"), w = ds.writable.getWriter();
+    w.write(bytes); w.close();
+    return new TextDecoder().decode(await drain(ds.readable));
+  }
+  return new TextDecoder().decode(bytes);
+}
+function clean(){
+  return objects.map(function(o){ var c = {}; for(var k in o) if(k[0] !== "_") c[k] = o[k]; return c; });
+}
+document.getElementById("bSave").addEventListener("click", async function(){
+  var json = JSON.stringify({mode:mode, gravity:gravityScale, objects:clean(), version:4});
+  var sig = fnv(DEV_KEY + json), r = await zip(json);
+  var nums = new Array(r.b.length+1); nums[0] = r.m;
+  for(var i=0;i<r.b.length;i++) nums[i+1] = r.b[i];
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([sig+"|"+nums.join(",")], {type:"text/plain"}));
+  a.download = "map_"+mode+".txt"; a.click();
+});
+document.getElementById("bOpen").addEventListener("click", function(){ document.getElementById("file").click(); });
+document.getElementById("file").addEventListener("change", function(e){
+  var f = e.target.files[0]; if(!f) return;
+  var rd = new FileReader();
+  rd.onload = async function(){
+    try{
+      var raw = String(rd.result).trim(), p = raw.indexOf("|");
+      if(p === -1){ dialog(TR("accessDeniedTitle","Доступ запрещён"), TR("accessDeniedFileBody","Файл не подписан этим редактором."),null); return; }
+      var sig = raw.slice(0,p), nums = raw.slice(p+1).split(",").map(function(s){ return parseInt(s,10); });
+      var json = await unzip(new Uint8Array(nums.slice(1)), nums[0]);
+      if(fnv(DEV_KEY+json) !== sig){ dialog(TR("accessDeniedTitle","Доступ запрещён"), TR("accessDeniedKeyBody","Ключ карты не совпадает. Только разработчик."),null); return; }
+      var d = JSON.parse(json);
+      commit();
+      objects = d.objects || [];
+      uid = objects.reduce(function(m2,o){ return Math.max(m2,(o.id||0)+1); },1);
+      mode = d.mode || "hideAndSeek";
+      // гравитация из карты игнорируется: она всегда 9
+      document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
+      objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid" && o.type !== "superGate"; });
+      syncTools(); sel = null; inspect();
+    }catch(err){ dialog(TR("errorTxt","Ошибка"), TR("readErrorBody","Не удалось прочитать файл карты."),null); }
+  };
+  rd.readAsText(f); e.target.value = "";
+});
+window.getEditorMap = function(){ return { mode: mode, data: JSON.stringify({mode:mode,apoc:apoc,gravity:gravityScale,objects:clean()}) }; };
+document.getElementById("bJson").addEventListener("click", function(){
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify({mode:mode,gravity:gravityScale,objects:clean()},null,2)],{type:"application/json"}));
+  a.download = "map_export.json"; a.click();
+});
+
+/* ══════════════════════════════════════════════════
+   WIRE UP
+   ══════════════════════════════════════════════════ */
+document.getElementById("bPlay").addEventListener("click", function(){ playing ? stop() : play(); });
+document.getElementById("exitBtn").addEventListener("click", stop);
+document.getElementById("bUndo").addEventListener("click", undo);
+document.getElementById("bRedo").addEventListener("click", redo);
+document.getElementById("bCopy").addEventListener("click", duplicate);
+document.getElementById("bDel").addEventListener("click", removeSel);
+document.getElementById("bGrid").addEventListener("click", function(){
+  grid = !grid; this.classList.toggle("on", grid);
+});
+document.getElementById("zIn").addEventListener("click", function(){ zoomAt(VW()/2,VH()/2,1.2); });
+document.getElementById("zOut").addEventListener("click", function(){ zoomAt(VW()/2,VH()/2,1/1.2); });
+document.getElementById("zLabel").addEventListener("click", resetView);
+
+
+/* ===== мост наружу: игровые страницы управляют движком через BRIDGE ===== */
+/* Мост наружу больше не остаётся в window: раньше через window.GAME из
+   консоли браузера можно было менять объекты карты, телепортировать игрока
+   и досрочно заканчивать забег. Страницы забирают мост при загрузке (game.js
+   и блок публикации делают это сразу), а глобальную ссылку убираем, как
+   только страница загрузилась. На локальной машине ссылку оставляем —
+   по ней ходят автотесты. */
+function hideBridge(){
+  var host = (window.location && window.location.hostname) || '';
+  if(/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(host)) return;
+  window.addEventListener("load", function(){
+    try { delete window.GAME; } catch(e){ try { window.GAME = undefined; } catch(e2){} }
+  });
+}
+hideBridge();
+
+var BRIDGE;
+window.GAME = BRIDGE = {
+  figure: figure,
+  mySkin: null,
+  play: play, stop: stop, respawn: respawn,
+  // классика: искатель ждёт раунд в отмеченном месте, если оно есть на
+  // карте (см. teleportToSeekerSpot/applySeeker в game.js)
+  seekerWaitSpot: teleportToSeekerSpot,
+  step: step,                     // один шаг физики — нужен автотестам
+  stepAlways: stepAlways,         // тик вне забега — для автотестов
+  zoomAt: zoomAt,                   // камера — тесты предела отдаления
+  removeSel: removeSel,
+  duplicate: duplicate,
+  get sel(){ return sel; },
+  undo: undo, redo: redo,           // откат и возврат правок
+  commit: commit,                   // снимок перед действием — так же зовёт инструмент
+  myColor: null, onDraw: null,
+  get keys(){ return keys; },          // состояние управления
+  get playing(){ return playing; },
+  get pl(){ return pl; },
+  get hidden(){ return !!pl.hidden; },
+  get view(){ return view; },
+  get objects(){ return objects; },
+  get mode(){ return mode; },
+  get apoc(){ return apoc; },
+  toolOK: function(t){ return toolOK(t); },   // автотесты: доступность инструмента (зомби/apoc)
+  /* Заражённый игрок apoc-раунда рисуется моделью зомби вместо обычной
+     фигурки (см. hsApocRound в game.js) — вызывается уже внутри save/
+     translate(o.x,o.y) чужого игрока в GAME.onDraw, поэтому здесь без
+     собственного save/translate. */
+  figureZombie: function(w, h){
+    PAINT.zombie({w: w, h: h});
+  },
+  get done(){ return done; },
+  // Practice Mode включается снаружи (game.js) до старта — см. respawn()
+  get practice(){ return practiceMode; },
+  set practice(v){ practiceMode = !!v; },
+  // Практика: неуязвимость и полёт — переключаются в любой момент кнопками в game.js
+  get godMode(){ return godMode; },
+  set godMode(v){ godMode = !!v; },
+  get flying(){ return flyMode; },
+  set flying(v){ flyMode = !!v; },
+  loadMap: function(json){
+    var d = (typeof json === "string") ? JSON.parse(json) : json;
+    if(playing) stop();
+    // Object.assign копирует через обычное присваивание — ключ "__proto__"
+    // в объекте из чужой карты через него подменяет прототип именно этой
+    // копии (карту играют все, кто зашёл в комнату — не только автор).
+    // Копируем ключи вручную и этот один пропускаем, как в редакторе.
+    objects = (d.objects || []).map(function(o){
+      var out = {};
+      Object.keys(o).forEach(function(k){
+        if (k !== "__proto__" && k !== "constructor" && k !== "prototype") out[k] = o[k];
+      });
+      return out;
+    });
+    if(d.mode) mode = d.mode;
+    // режимы sandbox и twoPlayer убраны — старые карты открываем как прятки
+    if(mode === "sandbox" || mode === "twoPlayer") mode = "hideAndSeek";
+    // в старых картах модификации не было — классика; в гонке её не бывает
+    // в принципе (см. TOOL_MODES.zombie), даже если в JSON что-то лежит
+    apoc = (mode === "hideAndSeek") && !!d.apoc;
+    syncApocBtns();
+    syncApocVisibility();
+    // объекты чужого режима в карту не пускаем
+    objects = objects.filter(function(o){ return allowedIn(o.type, mode); });
+    // зомби существует только при модификации Zombie Apocalypse — в
+    // старых картах он мог оказаться без неё (до проверки в toolOK/
+    // syncTools выше); в геймплее он и так уже неактивен при !apoc
+    // (см. "playing && !apoc" в step()), просто убираем его из карты
+    if(!apoc) objects = objects.filter(function(o){ return o.type !== "zombie"; });
+    // и наоборот — место искателя есть только в классике
+    if(apoc) objects = objects.filter(function(o){ return o.type !== "seekerSpot"; });
+    /* Самодельные/очень старые карты не всегда проставляют id. nearby()
+       различает объекты именно по id (see комментарий там про телепорт
+       на статичной геометрии) — два объекта без id схлопывались в один
+       ключ, и один из них (например, весь пол) пропадал из физики
+       целиком: игрок падал сквозь карту насквозь. */
+    (function(){
+      var nextId = objects.reduce(function(m, o){ return Math.max(m, (o.id||0)+1); }, 1);
+      objects.forEach(function(o){ if(!o.id) o.id = nextId++; });
+    })();
+    // в старых картах галочки не было — восстанавливаем прежнее поведение
+    objects.forEach(function(o){
+      /* Предохранитель от испорченной/вредоносной карты: сервер поля
+         x/y/w/h вообще не проверяет (см. objectsOf() в maps.js — там
+         только считает объекты и смотрит на o.type), так что гигантское
+         w/h в чужом JSON долетает сюда как есть. Без клэмпа buildGrid()
+         ниже раздувает сетку столкновений на миллионы/миллиарды ячеек
+         (шаг CELL=260 — у объекта шириной 1e9 это ~3.8 млн ячеек по
+         одной только оси) и намертво вешает вкладку любому, кто откроет
+         такую карту, даже просто посмотреть. */
+      o.x = isFinite(o.x) ? Math.max(-100000, Math.min(100000, o.x)) : 0;
+      o.y = isFinite(o.y) ? Math.max(-100000, Math.min(100000, o.y)) : 0;
+      o.w = isFinite(o.w) ? Math.max(1, Math.min(10000, o.w)) : 1;
+      o.h = isFinite(o.h) ? Math.max(1, Math.min(10000, o.h)) : 1;
+      o.rot = isFinite(o.rot) ? o.rot : 0;
+      cleanLift(o);
+      if(o.deadly === undefined && DEADLY_BY_DEFAULT.indexOf(o.type) !== -1) o.deadly = true;
+      // «Ищущий» убран из палитры: в старых картах превращаем его в старт
+      if(o.type === "seeker") o.type = "spawn";
+      // размер игрока и зомби больше не настраивается — приводим старые объекты
+      if(o.type === "spawn"){ o.w = SIZES.spawn[0]; o.h = SIZES.spawn[1]; }
+      if(o.type === "zombie" || o.type === "teleport" || o.type === "seekerSpot"){ o.w = SIZES[o.type][0]; o.h = SIZES[o.type][1]; }
+      // Платформа, ротатор, батут, яд и шипы стали свойствами обычных
+      // объектов — переносим их поведение, чтобы старые карты играли так же
+      if(o.type === "platform"){ o.type = "rect"; o.moves = true;
+        if(!o.moveX && !o.moveY){ o.moveX = 130; o.moveY = 0; }
+        if(!o.speed) o.speed = 1.1; }
+      if(o.type === "rotator"){ o.type = "rect"; o.spins = true;
+        if(!o.spin) o.spin = 2; o.deadly = true; }
+      // Батут заменён полноценным рикошетом
+      if(o.type === "bounce"){ o.type = "rect"; o.ricochet = true; }
+      // старый батут: сила 17 при обычном прыжке 12.3 — это примерно 1.4
+      if(o.bouncy){
+        o.ricochet = true;
+        o.power = Math.max(0.2, Math.min(3, (o.power || 17) / 12.3));
+        delete o.bouncy;
+      }
+      if(o.type === "poison" || o.type === "spike"){ o.type = "rect"; o.deadly = true; }
+      // «Ящик» был отдельным объектом совсем недолго — стал свойством
+      // «Толкается» у обычных фигур, старые карты с ним превращаются в блок
+      if(o.type === "box"){ o.type = "rect"; o.pushable = true; }
+      /* Зомби недолго был галочкой на обычной фигуре, а стал своим
+         объектом — в тех картах превращаем помеченную фигуру в него */
+      if(o.zombie){ o.type = "zombie"; delete o.zombie; }
+      // Ворота, дверь и укрытие убраны — в старых картах становятся блоком,
+      // чтобы геометрия уровня не разъехалась
+      if(o.type === "door" || o.type === "gate" || o.type === "cover"){ o.type = "rect"; }
+    });
+    // SUPER BRO gate убран как объект (см. историю) — на старых картах просто пропадает
+    objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid" && o.type !== "superGate"; });
+    if(objects.length > OBJ_LIMIT) objects.length = OBJ_LIMIT;
+    objects.forEach(function(o){ if(o.id >= uid) uid = o.id + 1; });
+    indexMovers(); markDirty();
+    sel = null;
+    syncApocBtns();
+    syncTools();
+    if(!toolOK(tool)) setTool("select");
+    resetView();
+    return objects.length;
+  },
+  startPlay: function(){ if(!playing) play(); return playing; },
+  setGrid: function(v){ grid = !!v; document.getElementById("bGrid").classList.toggle("on", grid); },
+  clear: function(){ if(playing) stop(); objects = []; sel = null; resetView(); }
+};
+
+resize();
+resetView();
+view.x = 40; view.y = -60;
+render();
+requestAnimationFrame(loop);
+})();
+
+/* Второе соединение отсюда убрано: этот leftover-блок открывал ещё один
+   socket на каждой странице игры и заводил призрака в комнату редактора.
+   Один игрок = одно соединение: вдвое меньше сокетов, памяти и работы
+   сервера. Вся сетевая часть игры живёт в game.js. */
+
+
+</script>
+<!-- Administrative/account panels are not part of the game screen. -->
+
+
+<script src="game.js?v=165"></script>
+        <script src="i18n.js?v=165"></script>
+        <script src="skinAvatar.js?v=165" defer></script>
+</body>
+</html>
