@@ -63,7 +63,7 @@
             + 'и настройки языка и темы. Это нужно для работы сайта.',
       rightsH: 'Ваши права',
       rights: 'Вы можете удалить свои карты и скины в любой момент. Чтобы удалить аккаунт '
-            + 'целиком, напишите в Telegram — контакт есть в меню.',
+            + 'целиком, напишите в Discord — ссылка есть в меню.',
       note: 'Нажимая «Принимаю», вы соглашаетесь с обработкой перечисленных данных. '
           + 'Мы спросим об этом один раз на этом устройстве.',
       yes: 'Принимаю',
@@ -88,7 +88,7 @@
             + 'language and theme settings. This is needed for the site to work.',
       rightsH: 'Your rights',
       rights: 'You can delete your maps and skins at any time. To delete the account '
-            + 'entirely, write to us on Telegram — the link is in the menu.',
+            + 'entirely, write to us on Discord — the link is in the menu.',
       note: 'By pressing “I agree” you consent to the processing of the data listed above. '
           + 'We ask this once per device.',
       yes: 'I agree',
@@ -138,7 +138,7 @@
     };
     document.getElementById('bfConsentNo').onclick = function () {
       // без согласия играть нельзя — уводим со страницы
-      location.href = 'https://t.me/aibrofist';
+      location.href = 'https://discord.gg/mTnybcXZsM';
     };
   }
 
