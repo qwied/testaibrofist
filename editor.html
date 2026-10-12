@@ -51,7 +51,8 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 }
 /* пальцем удобнее целиться по крупным кнопкам */
 @media (pointer: coarse){
-  .sBtn,.tBtn,#tools > div{min-width:44px;min-height:44px}
+  .tBtn,#tools > div{min-width:44px;min-height:44px}
+  .sBtn{min-height:40px}
 }
 
 
@@ -246,6 +247,8 @@ body.play.mob #pad{display:flex}
    старый пин на 1280px) больше нельзя — на телефоне кнопки выходили
    втрое больше и правая уезжала за край экрана. */
 .padG{display:flex;gap:13px;pointer-events:auto}
+/* стрелки — SVG, а не символы ◀/▶: на телефонах те рисовались цветными эмодзи */
+.pBtn svg{width:40%;height:40%;display:block;fill:currentColor}
 .pBtn{width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.9);border:1px solid var(--line);
   box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:23px;color:#5b6472;
   user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
@@ -286,21 +289,27 @@ body.play.mob #pad{display:flex}
 /* Все края — с поправкой на безопасные зоны (вырез, «чёлка», полоска
    «домой»): страница объявляет viewport-fit=cover, и отступать от них
    теперь наша забота, а не браузера. Без выреза env() даёт 0. */
-body.mob #modes{top:calc(114px + env(safe-area-inset-top,0px));bottom:auto;
-  left:calc(8px + env(safe-area-inset-left,0px));right:calc(8px + env(safe-area-inset-right,0px));padding:3px}
-/* вкладки режима и модификации — под палец, 44px */
-body.mob .modeBtn,body.mob .apocBtn{padding:7px 11px;font-size:12px;min-height:44px;display:flex;align-items:center}
-body.mob #apoc{top:calc(170px + env(safe-area-inset-top,0px));bottom:auto;
-  left:calc(8px + env(safe-area-inset-left,0px));right:calc(8px + env(safe-area-inset-right,0px));padding:3px}
-/* И верхняя (#scene, 11 кнопок), и нижняя (#tools, до 11 инструментов)
-   панели раньше были в один ряд с overflow-x:auto — часть кнопок (в
-   т.ч. Играть и Публикация) была достижима только свайпом, который на
-   телефоне не очевиден. Перенесли #modes/#apoc ниже и пустили обе
-   панели в два ряда (flex-wrap) — всё видно и нажимаемо сразу. */
+/* Телефон стоя. Панели компактные, чтобы карте оставалось место: сцена —
+   одной строкой (кнопки делят ширину между собой, но не шире 44px), режим и
+   модификация — одной строкой под ней (режим слева, модификация справа),
+   инструменты — в два ряда внизу. Раньше сцена шла в два ряда, а режим и
+   модификация — каждый своей строкой: четыре полосы сверху и две снизу
+   съедали больше половины экрана, карта оставалась узкой щелью. */
 body.mob #scene{top:calc(8px + env(safe-area-inset-top,0px));bottom:auto;padding:3px;
   left:calc(8px + env(safe-area-inset-left,0px));right:calc(8px + env(safe-area-inset-right,0px));transform:none;
-  max-width:none;flex-wrap:wrap;justify-content:center}
-body.mob .sBtn{width:38px;height:34px}
+  max-width:none;flex-wrap:nowrap;justify-content:center}
+body.mob .sBtn{flex:1 1 0;min-width:0;max-width:44px;width:auto;height:40px}
+body.mob .sep{margin:8px 1px}
+body.mob #modes{top:calc(60px + env(safe-area-inset-top,0px));bottom:auto;
+  left:calc(8px + env(safe-area-inset-left,0px));right:auto;padding:3px}
+body.mob #apoc{top:calc(60px + env(safe-area-inset-top,0px));bottom:auto;
+  left:auto;right:calc(8px + env(safe-area-inset-right,0px));padding:3px}
+body.mob .modeBtn,body.mob .apocBtn{padding:6px 8px;font-size:12px;min-height:40px;display:flex;align-items:center}
+/* совсем узкий телефон (≤380px): режим и модификация в одну строку не
+   влезают — модификация уходит строкой ниже */
+@media (max-width:380px) and (orientation:portrait){
+  body.mob #apoc{top:calc(108px + env(safe-area-inset-top,0px));left:calc(8px + env(safe-area-inset-left,0px));right:auto}
+}
 body.mob #tools{left:env(safe-area-inset-left,0px);right:env(safe-area-inset-right,0px);bottom:0;top:auto;
   transform:none;width:auto;max-height:none;
   flex-direction:row;flex-wrap:wrap;justify-content:center;
@@ -309,28 +318,37 @@ body.mob .tool{width:42px;height:42px}
 body.mob .tool canvas{width:26px;height:26px}
 body.mob .tool[data-tip]:hover::after{display:none}
 body.mob #insp{left:calc(8px + env(safe-area-inset-left,0px));right:calc(8px + env(safe-area-inset-right,0px));
-  width:auto;top:auto;bottom:calc(112px + env(safe-area-inset-bottom,0px));transform:none;max-height:30vh}
-body.mob #visuals,body.mob #passive,body.mob #active,body.mob #automatic{max-height:22vh}
+  width:auto;top:auto;bottom:calc(112px + env(safe-area-inset-bottom,0px));transform:none;max-height:34vh}
+body.mob #visuals,body.mob #passive,body.mob #active,body.mob #automatic{max-height:26vh}
 body.mob #hint{display:none}
 body.mob #zoomBox{bottom:calc(116px + env(safe-area-inset-bottom,0px));right:calc(8px + env(safe-area-inset-right,0px))}
 #bfHome{left:14px;bottom:14px;display:flex;align-items:center}
 body.mob #bfHome{left:calc(8px + env(safe-area-inset-left,0px));bottom:calc(116px + env(safe-area-inset-bottom,0px))}
+/* пока открыты свойства, «на главную» и зум прячутся — иначе ложились
+   поверх нижних строк панели свойств */
+body.mob.inspOpen #bfHome,body.mob.inspOpen #zoomBox{display:none}
 body.mob #msg h1{font-size:38px}
-/* Телефон боком: высоты мало (360–430px), ширины много. Сверху — панель
-   сцены в один ряд; под ней слева режим, справа модификация; инструменты
-   — полосой внизу; свойства — колонкой справа между ними, со своей
-   прокруткой внутри. Раньше здесь спорили правила из mobile.css:
-   режимы ложились на кнопки сцены, модификация — на инструменты. */
+/* Телефон боком: высоты мало (360–430px), ширины много — раскладка как на
+   компьютере: инструменты колонкой слева (в три столбца), сверху слева
+   режим и под ним модификация, сцена — строкой сверху правее них,
+   свойства — колонкой справа. Карте остаётся вся середина, а не узкая
+   полоса между панелями сверху и снизу. */
 @media (orientation:landscape) and (max-height:500px){
-  body.mob #scene{top:calc(4px + env(safe-area-inset-top,0px))}
-  body.mob #modes{top:calc(58px + env(safe-area-inset-top,0px));right:auto}
-  body.mob #apoc{top:calc(58px + env(safe-area-inset-top,0px));left:auto}
-  body.mob #tools{padding-top:4px;padding-bottom:calc(4px + env(safe-area-inset-bottom,0px))}
-  body.mob #insp{left:auto;width:240px;top:calc(114px + env(safe-area-inset-top,0px));
-    bottom:calc(60px + env(safe-area-inset-bottom,0px));max-height:none}
+  body.mob #modes{top:calc(4px + env(safe-area-inset-top,0px))}
+  body.mob #apoc{top:calc(54px + env(safe-area-inset-top,0px));right:auto;
+    left:calc(8px + env(safe-area-inset-left,0px))}
+  body.mob #scene{top:calc(4px + env(safe-area-inset-top,0px));left:calc(178px + env(safe-area-inset-left,0px))}
+  body.mob #tools{left:calc(8px + env(safe-area-inset-left,0px));right:auto;
+    top:calc(104px + env(safe-area-inset-top,0px));bottom:auto;
+    max-height:calc(100vh - 112px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+    width:156px;flex-direction:row;flex-wrap:wrap;align-content:flex-start;justify-content:flex-start;
+    overflow-y:auto;border-radius:14px;padding:6px}
+  body.mob #insp{left:auto;width:240px;top:calc(54px + env(safe-area-inset-top,0px));
+    bottom:calc(8px + env(safe-area-inset-bottom,0px));max-height:none}
   body.mob #visuals,body.mob #passive,body.mob #active,body.mob #automatic{max-height:none;flex:1 1 auto;min-height:0}
-  body.mob #zoomBox{bottom:calc(62px + env(safe-area-inset-bottom,0px));right:auto;left:50%;transform:translateX(-50%)}
-  body.mob #bfHome{bottom:calc(62px + env(safe-area-inset-bottom,0px))}
+  body.mob #zoomBox{bottom:calc(8px + env(safe-area-inset-bottom,0px));right:auto;left:50%;transform:translateX(-50%)}
+  body.mob #bfHome{bottom:calc(8px + env(safe-area-inset-bottom,0px));left:auto;
+    right:calc(8px + env(safe-area-inset-right,0px))}
 }
 </style>
         <script src="offline.js?v=2"></script>
@@ -410,7 +428,7 @@ body.mob #msg h1{font-size:38px}
 <div id="msg"><h1 id="msgT"></h1><p id="msgS"></p></div>
 
 <div id="pad">
-  <div class="padG"><div class="pBtn" id="pLeft">◀</div><div class="pBtn" id="pRight">▶</div></div>
+  <div class="padG"><div class="pBtn" id="pLeft" aria-label="Left"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 4.5 6.5 12 16 19.5z"/></svg></div><div class="pBtn" id="pRight" aria-label="Right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4.5 17.5 12 8 19.5z"/></svg></div></div>
   <div class="padG"><div class="pBtn" id="pJump">JUMP</div></div>
 </div>
 
@@ -1373,7 +1391,7 @@ function spawnTooClose(){
 
 function play(){
   var sp = findSpawn();
-  if(!sp){ dialog(TR("noSpawnTitle","Нет точки старта"), TR("noSpawnBody","Поставь инструмент «Точка старта», потом жми ▶."), null); return; }
+  if(!sp){ dialog(TR("noSpawnTitle","Нет точки старта"), TR("noSpawnBody","Поставь инструмент «Точка старта», потом жми «Играть»."), null); return; }
   var near = spawnTooClose();
   if(near !== null){
     dialog(TR("spawnCloseTitle","Старт слишком близко к финишу"),
@@ -2483,19 +2501,18 @@ var VIEW_UNITS_H = 800;
    втрое, потом вполовину ближе) — по прямой просьбе: с приближенной
    камерой вид стал «коренным образом другим», чем в игре-образце,
    с которой сверялись. Без множителя, обе границы зажима как были. */
-/* Телефон: «как на ПК, только ближе». Боком видно 560 единиц карты по
-   высоте вместо 800 — объекты крупнее и читаются на маленьком экране.
-   Стоя экран узкий: обзор вперёд важнее крупности, поэтому там ближе не
-   становится — остаётся прежнее равнение по высоте, если ширина обзора
-   и так меньше 480 единиц. Компьютер и планшет (меньшая сторона от
-   600px или мышь) не меняются вовсе. */
-var VIEW_UNITS_H_PHONE = 560, VIEW_UNITS_W_PHONE = 480;
+/* Телефон: «как на ПК, только ближе» — и одинаково в обеих ориентациях.
+   Масштаб берём по короткой стороне экрана: на неё приходится 560 единиц
+   карты (на ПК по высоте 800). Персонаж поэтому одного размера и стоя, и
+   боком: стоя камера больше не липнет вплотную (раньше по высоте 852px —
+   впереди видно меньше 370 единиц), боком не уходит вдаль. Компьютер и
+   планшет (короткая сторона от 600px или мышь) не меняются вовсе. */
+var VIEW_UNITS_PHONE = 560;
 function isPhoneView(){
   return Math.min(VW(), VH()) < 600 && typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches;
 }
 function playZoom(){
-  var z = VH() / VIEW_UNITS_H;
-  if(isPhoneView()) z = Math.min(VH() / VIEW_UNITS_H_PHONE, Math.max(VW() / VIEW_UNITS_W_PHONE, z));
+  var z = isPhoneView() ? Math.min(VW(), VH()) / VIEW_UNITS_PHONE : VH() / VIEW_UNITS_H;
   return Math.max(0.6, Math.min(2.2, z));
 }
 
@@ -3958,6 +3975,8 @@ function inspect(){
   if(linkPick && linkPick.from !== sel) linkPick = null;
   if(routeDraw && (routeDraw !== sel || !liftRouted(sel))) routeDraw = null;
   if(routeSel && (routeSel.o !== sel || !liftRouted(sel) || !liftHasPath(sel) || routeSel.i >= sel.path.length)) routeSel = null;
+  // открыта ли панель свойств — по нему на телефоне прячутся «на главную» и зум
+  document.body.classList.toggle("inspOpen", !!sel && !playing);
   if(!sel || playing){ box.style.display = "none"; return; }
   var cur = sel;
   box.style.display = "flex";

@@ -28,7 +28,7 @@
     + '#chatIn{flex:1;padding:9px 10px;border:1px solid var(--line);border-radius:9px;font:inherit;'
     + 'font-size:12.5px;background:#fafbfd;color:var(--ink);outline:none}'
     + '#chatIn:focus{border-color:#111827;background:#fff}'
-    + '#chatSend{padding:0 14px;border-radius:9px;border:none;background:#111827;color:#fff;'
+    + '#chatSend{padding:0 14px;border-radius:9px;border:none;background:#111827;color:#fff;display:flex;align-items:center;justify-content:center;'
     + 'font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}'
     + '#genChips{display:flex;flex-wrap:wrap;gap:5px;margin:9px 0 0}'
     + '.genChip{font-size:11px;padding:4px 9px;border:1px solid var(--line);border-radius:20px;'
@@ -96,7 +96,9 @@
         '<div id="chatLog"></div>'
       + '<div id="chatRow">'
       +   '<input id="chatIn" placeholder="Ask about the editor">'
-      +   '<button id="chatSend">→</button>'
+      +   '<button id="chatSend" aria-label="Send"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" '
+      +     'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      +     '<path d="M5 12h14M13 6l6 6-6 6"/></svg></button>'
       + '</div>'
       + '<div id="genChips"></div>';
 
