@@ -148,12 +148,12 @@ console.log('\nинтерфейс:');
 ok('отдаление ограничено',  /Math\.min\(4000, Math\.max\(0\.2/.test(src) && /Math\.min\(4000, Math\.max\(0\.2/.test(game));
 ok('колесо работает в игре', !/if\(playing\) return; e\.preventDefault\(\);\s*\n\s*zoomAt/.test(src)
    && !/if\(playing\) return; e\.preventDefault\(\);\s*\n\s*zoomAt/.test(game));
-ok('в игре панелей нет',    /body\.play #scene/.test(src) && /body\.play #bfPublish/.test(src));
+ok('в игре панелей нет',    /body\.play #scene/.test(src));
 ok('панель помощника тоже', /body\.play #genBox/.test(src));
 ok('HUD в правом нижнем',   /#hud\{display:none;position:fixed;right:14px;bottom:14px/.test(src));
 ok('HUD компактный',        /padding:6px 7px/.test(src));
-ok('кнопка публикации своя', /#bfPublish\{position:fixed/.test(src) && /linear-gradient\(180deg,#2f8bff,#1667e0\)/.test(src));
-ok('на кнопке значок',      /<svg viewBox="0 0 24 24"><path d="M12 16V5"/.test(src));
+ok('кнопка публикации в общей панели', /sBtn\("bPublish",SVG\.publish/.test(src) && !/linear-gradient\(180deg,#2f8bff,#1667e0\)/.test(src));
+ok('на кнопке значок',      /publish:'<path d="M12 16V5"/.test(src));
 
 console.log('\nодна модель игрока:');
 ok('метка старта скрыта в игре', /if\(playing && ro\.type === "spawn"\) continue;/.test(src));

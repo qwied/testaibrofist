@@ -288,8 +288,6 @@
 
       /* --- редактор и панель владельца --- */
       '.tool.on,.modeBtn.on,.sBtn.on{background:', grad, ' !important;color:', onA, ' !important}',
-      '#bfPublish{background:', p.dark, '}',
-      '#bfPublish:hover{background:', mix(p.dark, A, 0.35), '}',
       '.ow-fab{background:', p.dark, '}',
       '.ow-fab:hover{background:', A, '}',
       '.ow-b,.ow-bar button{border-color:', B, ';color:', B, '}',
