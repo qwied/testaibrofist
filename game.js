@@ -162,11 +162,6 @@
     + '#gExit{margin-left:auto;background:#fff;color:#111827;border:1px solid #d7dee7;padding:7px 13px;'
     + 'border-radius:8px;cursor:pointer;font-weight:bold;box-shadow:0 8px 20px -12px rgba(15,23,42,.35)}'
     + '#gExit:active{background:#f2f7fd}'
-    + '#gSound{background:#fff;color:#111827;border:1px solid #d7dee7;width:32px;height:32px;'
-    + 'border-radius:8px;cursor:pointer;font-size:15px;line-height:1;padding:0;'
-    + 'display:flex;align-items:center;justify-content:center}'
-    + '#gSound svg{width:17px;height:17px;display:block;pointer-events:none}'
-    + '#gSound:active{background:#f2f7fd}'
     + '#gDraw{background:#fff;color:#111827;border:1px solid #d7dee7;width:32px;height:32px;'
     + 'border-radius:8px;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center}'
     + '#gDraw svg{width:17px;height:17px;display:block;pointer-events:none}'
@@ -206,8 +201,8 @@
     // на телефоне: шапка компактнее, карточка карты уходит наверх, чтобы не мешать кнопкам
     + 'html.is-mobile #gTop,html.is-tablet #gTop{padding:5px 9px;gap:8px;font-size:12px}'
     + 'html.is-mobile #gExit,html.is-tablet #gExit{padding:9px 14px;font-size:13px}'
-    // звук и рисование — квадратные значки 32px: под палец нужно 44
-    + 'html.is-mobile #gSound,html.is-tablet #gSound,html.is-mobile #gDraw,html.is-tablet #gDraw{min-width:44px;min-height:44px}'
+    // рисование — квадратный значок 32px: под палец нужно 44
+    + 'html.is-mobile #gDraw,html.is-tablet #gDraw{min-width:44px;min-height:44px}'
     + 'html.is-mobile #gMap,html.is-tablet #gMap{bottom:auto;top:46px;right:8px;max-width:56vw;'
     + 'padding:6px 10px;font-size:11.5px}'
     /* твой шанс стать искателем — плашка в правом верхнем углу */
@@ -385,7 +380,6 @@
     + '<span><span id="gLblPlayers">Игроков</span>: <b id="gCount">1</b></span>'
     + '<span><span id="gLblPing">Пинг</span>: <b id="gPing">—</b></span>'
     + '<span id="gTimeBox"><span id="gLblTime">Время</span>: <b id="gTime">—</b></span>'
-    + '<button id="gSound" aria-label="Звук"></button>'
     + '<button id="gDraw" aria-label="Draw" title="Draw an arrow for others to see"><svg viewBox="0 0 24 24" '
     + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     + '<line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></button>'
@@ -460,7 +454,6 @@
     if (mni2) mni2.placeholder = TR('msNewAsk', 'Player name(s), comma-separated');
     var mno2 = $('gMsgsNewOk');
     if (mno2) mno2.textContent = TR('ok', 'OK');
-    paintSoundBtn();
   }
   window.addEventListener('bf-lang', refreshGameLabels);
 
@@ -476,19 +469,6 @@
     location.href = '/';
   };
 
-  // ---------- звук: включён по умолчанию, состояние живёт в localStorage ----------
-  var SOUND_ON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
-    + 'stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>'
-    + '<path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
-  var SOUND_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
-    + 'stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>'
-    + '<line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
-  function paintSoundBtn() {
-    var b = $('gSound');
-    if (!b || !window.BFSound) return;
-    b.innerHTML = BFSound.isOn() ? SOUND_ON_SVG : SOUND_OFF_SVG;
-    b.setAttribute('aria-label', TR('soundBtn', 'Sound'));
-  }
 
   /* ---------- стрелка на карте: показать дорогу другим ----------
      Кнопка включает режим рисования — зажатие мыши/пальца на канвасе
@@ -647,13 +627,6 @@
     }, get lockUntil() { return drawLockUntil; }, forceSpamLock: drawLock,
     get target() { return drawTargetId; }, setTarget: function (id) { drawTargetId = id; },
     refreshTargets: refreshDrawTargets, get myId() { return socket && socket.id; } };
-  }
-
-  if (window.BFSound) {
-    paintSoundBtn();
-    $('gSound').onclick = function () { BFSound.setOn(!BFSound.isOn()); paintSoundBtn(); };
-  } else {
-    var sb = $('gSound'); if (sb) sb.style.display = 'none';
   }
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) {
