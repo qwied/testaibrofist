@@ -227,9 +227,10 @@
     + 'padding-right:calc(12px + env(safe-area-inset-right,0px));'
     + 'padding-top:calc(7px + env(safe-area-inset-top,0px))}'
     /* всё, что висит под шапкой (карточка карты, шанс, рулетка, очки),
-       опускается вместе с ней на высоту верхнего выреза; очки ещё и
-       отступают от левого выреза в альбомной */
-    + '#gChance,#gRoul,#gScoresBox,html.is-mobile #gMap,html.is-tablet #gMap{margin-top:env(safe-area-inset-top,0px)}'
+       ставит relayoutCorner() — по фактическому низу шапки, в который
+       верхний вырез уже входит (отдельный margin-top его удваивал: на
+       iPhone стоя карточка карты висела на 47px ниже, чем боком); очки
+       ещё отступают от левого выреза в альбомной */
     + '#gScoresBox{margin-left:env(safe-area-inset-left,0px)}'
     + '#gTalk{right:calc(14px + env(safe-area-inset-right,0px));touch-action:manipulation}'
     + '#gMap{right:calc(12px + env(safe-area-inset-right,0px))}'
@@ -878,6 +879,10 @@
                  document.documentElement.classList.contains('is-tablet');
     var gap = mobile ? 6 : 8;
     var y = Math.ceil(top.getBoundingClientRect().bottom) + gap;
+    // очки — слева, своей колонкой: тоже сразу под шапкой (на телефоне
+    // фиксированные 44px были ниже шапки в 54px — табличка налезала на неё)
+    var scores = $('gScoresBox');
+    if (scores) scores.style.top = y + 'px';
 
     var roul = $('gRoul');
     if (roul && roul.classList.contains('on')) {
@@ -902,6 +907,10 @@
     // «Роль: …» появляется/пропадает — это и есть типичный триггер переноса строки
     new MutationObserver(relayoutCorner)
       .observe($('gRoleBox'), { attributes: true, attributeFilter: ['style'] });
+  } catch (e) {}
+  try {
+    // и любое другое изменение высоты шапки (время, пинг, перенос строки)
+    new ResizeObserver(relayoutCorner).observe($('gTop'));
   } catch (e) {}
   relayoutCorner();
 

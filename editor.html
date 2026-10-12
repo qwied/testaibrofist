@@ -327,19 +327,28 @@ body.mob #scene{top:calc(8px + env(safe-area-inset-top,0px));bottom:auto;padding
   max-width:none;flex-wrap:nowrap;justify-content:center}
 body.mob .sBtn{flex:1 1 0;min-width:0;max-width:44px;width:auto;height:40px}
 body.mob .sep{margin:8px 1px}
+/* режим и модификация делят строку ровно пополам и стоят вровень с краями
+   сцены над ними; в «Гонке» модификации нет — режим на всю строку.
+   Кнопки внутри тянутся на всю ширину своей панели, длинная подпись
+   («Zombie Apocalypse») при нехватке места переносится, а не вылезает. */
 body.mob #modes{top:calc(60px + env(safe-area-inset-top,0px));bottom:auto;
-  left:calc(8px + env(safe-area-inset-left,0px));right:auto;padding:3px}
+  left:calc(8px + env(safe-area-inset-left,0px));right:calc(50% + 4px);max-width:none;padding:3px}
+body.mob.noApoc #modes{right:calc(8px + env(safe-area-inset-right,0px))}
 body.mob #apoc{top:calc(60px + env(safe-area-inset-top,0px));bottom:auto;
-  left:auto;right:calc(8px + env(safe-area-inset-right,0px));padding:3px}
-body.mob .modeBtn,body.mob .apocBtn{padding:6px 8px;font-size:12px;min-height:40px;display:flex;align-items:center}
-/* совсем узкий телефон (≤380px): режим и модификация в одну строку не
-   влезают — модификация уходит строкой ниже */
-@media (max-width:380px) and (orientation:portrait){
-  body.mob #apoc{top:calc(108px + env(safe-area-inset-top,0px));left:calc(8px + env(safe-area-inset-left,0px));right:auto}
+  left:calc(50% + 4px);right:calc(8px + env(safe-area-inset-right,0px));max-width:none;padding:3px}
+body.mob .modeBtn,body.mob .apocBtn{flex:1 1 auto;padding:6px 8px;font-size:12px;min-height:40px;
+  display:flex;align-items:center;justify-content:center;text-align:center;white-space:normal;line-height:1.15}
+/* совсем узкий телефон (≤340px): по половине не влезает — каждая панель
+   на всю ширину, модификация строкой ниже */
+@media (max-width:340px) and (orientation:portrait){
+  body.mob #modes{right:calc(8px + env(safe-area-inset-right,0px))}
+  body.mob #apoc{top:calc(108px + env(safe-area-inset-top,0px));left:calc(8px + env(safe-area-inset-left,0px))}
 }
+/* инструменты — ровной сеткой: столбцы одинаковые, ряды поровну (6+5, а
+   не 7+4 вразнобой); число столбцов ставит layoutTools() в --tcols */
 body.mob #tools{left:env(safe-area-inset-left,0px);right:env(safe-area-inset-right,0px);bottom:0;top:auto;
   transform:none;width:auto;max-height:none;
-  flex-direction:row;flex-wrap:wrap;justify-content:center;
+  display:grid;grid-template-columns:repeat(var(--tcols,7),minmax(0,1fr));justify-items:center;
   border-radius:16px 16px 0 0;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));gap:4px}
 body.mob .tool{width:42px;height:42px}
 body.mob .tool canvas{width:26px;height:26px}
@@ -349,6 +358,8 @@ body.mob #insp{left:calc(8px + env(safe-area-inset-left,0px));right:calc(8px + e
 body.mob #visuals,body.mob #passive,body.mob #active,body.mob #automatic{max-height:26vh}
 body.mob #hint{display:none}
 body.mob #zoomBox{bottom:calc(116px + env(safe-area-inset-bottom,0px));right:calc(8px + env(safe-area-inset-right,0px))}
+/* та же высота, что у кнопки «на главную» рядом (44px), — низ и верх вровень */
+body.mob .zBtn{height:36px}
 #bfHome{left:14px;bottom:14px;display:flex;align-items:center}
 body.mob #bfHome{left:calc(8px + env(safe-area-inset-left,0px));bottom:calc(116px + env(safe-area-inset-bottom,0px))}
 /* пока открыты свойства, «на главную» и зум прячутся — иначе ложились
@@ -361,17 +372,21 @@ body.mob #msg h1{font-size:38px}
    свойства — колонкой справа. Карте остаётся вся середина, а не узкая
    полоса между панелями сверху и снизу. */
 @media (orientation:landscape) and (max-height:500px){
-  body.mob #modes{top:calc(4px + env(safe-area-inset-top,0px))}
+  /* режим, модификация и инструменты — одна колонка одной ширины, края
+     ровно друг под другом. 208px — чтобы «Классика | Zombie Apocalypse»
+     вставала в одну строку и по-русски; инструменты в ней — 4 столбца. */
+  body.mob #modes,body.mob.noApoc #modes{top:calc(4px + env(safe-area-inset-top,0px));right:auto;width:208px}
   body.mob #apoc{top:calc(54px + env(safe-area-inset-top,0px));right:auto;
-    left:calc(8px + env(safe-area-inset-left,0px))}
-  body.mob #scene{top:calc(4px + env(safe-area-inset-top,0px));left:calc(178px + env(safe-area-inset-left,0px))}
+    left:calc(8px + env(safe-area-inset-left,0px));width:208px}
+  body.mob .apocBtn{padding-left:7px;padding-right:7px}
+  body.mob #scene{top:calc(4px + env(safe-area-inset-top,0px));left:calc(224px + env(safe-area-inset-left,0px));gap:0}
   body.mob #tools{left:calc(8px + env(safe-area-inset-left,0px));right:auto;
     top:calc(104px + env(safe-area-inset-top,0px));bottom:auto;
     max-height:calc(100vh - 112px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
     /* в Safari 100vh — высота БЕЗ его панелей; dvh — то, что видно сейчас */
     max-height:calc(100dvh - 112px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
-    width:156px;flex-direction:row;flex-wrap:wrap;align-content:flex-start;justify-content:flex-start;
-    overflow-y:auto;border-radius:14px;padding:6px}
+    width:208px;grid-template-columns:repeat(4,44px);justify-content:space-between;align-content:start;
+    overflow-y:auto;border-radius:14px;padding:3px}
   /* в «Гонке» строки модификации нет — инструменты встают на её место */
   body.mob.noApoc #tools{top:calc(54px + env(safe-area-inset-top,0px));
     max-height:calc(100vh - 62px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
@@ -385,15 +400,15 @@ body.mob #msg h1{font-size:38px}
 }
 </style>
         <script src="offline.js?v=2"></script>
-<script src="device.js?v=161"></script>
-        <script src="sound.js?v=161"></script>
-        <script src="skinRender.js?v=161"></script>
-        <script src="skinCanvas.js?v=161"></script>
-        <script src="gifuct.bundle.js?v=161"></script>
-        <script src="gifPlayer.js?v=161"></script>
-        <script src="coin.js?v=161"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=161">
-        <script src="theme.js?v=161"></script>
+<script src="device.js?v=162"></script>
+        <script src="sound.js?v=162"></script>
+        <script src="skinRender.js?v=162"></script>
+        <script src="skinCanvas.js?v=162"></script>
+        <script src="gifuct.bundle.js?v=162"></script>
+        <script src="gifPlayer.js?v=162"></script>
+        <script src="coin.js?v=162"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=162">
+        <script src="theme.js?v=162"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -3077,7 +3092,21 @@ function syncTools(){
     if(t.dataset.tool === "seekerSpot" && apoc) ok = false;
     t.style.display = ok ? "flex" : "none";
   });
+  layoutTools();
 }
+/* Телефон стоя: сколько столбцов у сетки инструментов. Сначала — сколько
+   влезает по ширине (44px + зазор 4px), потом ряды выравниваются поровну:
+   11 инструментов — это 6+5, а не 7+4. Боком колонка всегда в 4 столбца
+   (это задаёт CSS, --tcols там не используется). */
+function layoutTools(){
+  var el = document.getElementById("tools"), n = 0;
+  if(!el || !el.style || !el.style.setProperty) return;
+  el.querySelectorAll(".tool").forEach(function(t){ if(t.style.display !== "none") n++; });
+  var fit = Math.max(1, Math.floor(((el.clientWidth || 0) - 16 + 4) / 48));
+  var rows = Math.max(1, Math.ceil(n / fit));
+  el.style.setProperty("--tcols", Math.max(1, Math.ceil(n / rows)));
+}
+addEventListener("resize", layoutTools);
 syncTools();
 document.getElementById("modes").addEventListener("click", function(e){
   var b = e.target.closest(".modeBtn"); if(!b || playing) return;
@@ -4694,12 +4723,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=161"></script>
-<script src="abuseShow.js?v=161" defer></script>
-<script src="editorHelp.js?v=161"></script>
-<script src="editorAI.js?v=161" defer></script>
-<script src="account.js?v=161" defer></script>
-<script src="owner.js?v=161" defer></script>
+<script src="i18n.js?v=162"></script>
+<script src="abuseShow.js?v=162" defer></script>
+<script src="editorHelp.js?v=162"></script>
+<script src="editorAI.js?v=162" defer></script>
+<script src="account.js?v=162" defer></script>
+<script src="owner.js?v=162" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -4815,7 +4844,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=161" defer></script>
+        <script src="skinAvatar.js?v=162" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */
