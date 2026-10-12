@@ -24,7 +24,7 @@
         + '• Delete or Backspace — delete\n'
         + '• G — grid, 0 — reset view, + and − — zoom\n'
         + '• Space + left click, or middle/right click — pan the map\n'
-        + '• ▶ — play, Esc — exit, R — restart\n'
+        + '• Play (green triangle at the top) — play, Esc — exit, R — restart\n'
         + 'In-game: arrows or A/D — run, up/W/space — jump (holdable).'
     },
     {
@@ -117,7 +117,7 @@
         + '1. Select the target block and give it an ID, e.g. door1.\n'
         + '2. Select a button or lever and type that same ID into the "Targets" field (Active tab). '
         + 'Comma-separate several.\n'
-        + '3. Press ▶ — the block opens when the button is pressed and becomes passable.\n'
+        + '3. Press Play — the block opens when the button is pressed and becomes passable.\n'
         + 'A button only works while a player stands on it; a lever flips permanently. '
         + 'The "Starts open" checkbox (Passive tab) makes the block passable before it\'s triggered.'
     },

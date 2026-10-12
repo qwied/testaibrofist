@@ -185,6 +185,8 @@ body.play.mob #pad{display:flex}
    старый пин на 1280px) больше нельзя — на телефоне кнопки выходили
    втрое больше и правая уезжала за край экрана. */
 .padG{display:flex;gap:13px;pointer-events:auto}
+/* стрелки — SVG, а не символы ◀/▶: на телефонах те рисовались цветными эмодзи */
+.pBtn svg{width:40%;height:40%;display:block;fill:currentColor}
 .pBtn{width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.9);border:1px solid var(--line);
   box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:23px;color:#5b6472;
   user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
@@ -307,7 +309,7 @@ body{background:#eef2f8;overflow:hidden}
 <div id="msg"><h1 id="msgT"></h1><p id="msgS"></p></div>
 
 <div id="pad">
-  <div class="padG"><div class="pBtn" id="pLeft">◀</div><div class="pBtn" id="pRight">▶</div></div>
+  <div class="padG"><div class="pBtn" id="pLeft" aria-label="Left"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 4.5 6.5 12 16 19.5z"/></svg></div><div class="pBtn" id="pRight" aria-label="Right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4.5 17.5 12 8 19.5z"/></svg></div></div>
   <div class="padG"><div class="pBtn" id="pJump">JUMP</div></div>
 </div>
 
@@ -1262,7 +1264,7 @@ function findZombie(){ for(var i=0;i<objects.length;i++) if(objects[i].type === 
 function findSeekerSpot(){ for(var i=0;i<objects.length;i++) if(objects[i].type === "seekerSpot") return objects[i]; return null; }
 function play(){
   var sp = findSpawn();
-  if(!sp){ dialog(TR("noSpawnTitle","Нет точки старта"), TR("noSpawnBody","Поставь инструмент «Точка старта», потом жми ▶."), null); return; }
+  if(!sp){ dialog(TR("noSpawnTitle","Нет точки старта"), TR("noSpawnBody","Поставь инструмент «Точка старта», потом жми «Играть»."), null); return; }
   playing = true; done = false; deaths = 0; timeMs = 0; parts.length = 0;
   // одинаковый участок мира у всех игроков (см. playZoom)
   view.s = playZoom();
@@ -2378,19 +2380,18 @@ var VIEW_UNITS_H = 800;
    втрое, потом вполовину ближе) — по прямой просьбе: с приближенной
    камерой вид стал «коренным образом другим», чем в игре-образце,
    с которой сверялись. Без множителя, обе границы зажима как были. */
-/* Телефон: «как на ПК, только ближе». Боком видно 560 единиц карты по
-   высоте вместо 800 — объекты крупнее и читаются на маленьком экране.
-   Стоя экран узкий: обзор вперёд важнее крупности, поэтому там ближе не
-   становится — остаётся прежнее равнение по высоте, если ширина обзора
-   и так меньше 480 единиц. Компьютер и планшет (меньшая сторона от
-   600px или мышь) не меняются вовсе. */
-var VIEW_UNITS_H_PHONE = 560, VIEW_UNITS_W_PHONE = 480;
+/* Телефон: «как на ПК, только ближе» — и одинаково в обеих ориентациях.
+   Масштаб берём по короткой стороне экрана: на неё приходится 560 единиц
+   карты (на ПК по высоте 800). Персонаж поэтому одного размера и стоя, и
+   боком: стоя камера больше не липнет вплотную (раньше по высоте 852px —
+   впереди видно меньше 370 единиц), боком не уходит вдаль. Компьютер и
+   планшет (короткая сторона от 600px или мышь) не меняются вовсе. */
+var VIEW_UNITS_PHONE = 560;
 function isPhoneView(){
   return Math.min(VW(), VH()) < 600 && typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches;
 }
 function playZoom(){
-  var z = VH() / VIEW_UNITS_H;
-  if(isPhoneView()) z = Math.min(VH() / VIEW_UNITS_H_PHONE, Math.max(VW() / VIEW_UNITS_W_PHONE, z));
+  var z = isPhoneView() ? Math.min(VW(), VH()) / VIEW_UNITS_PHONE : VH() / VIEW_UNITS_H;
   return Math.max(0.6, Math.min(2.2, z));
 }
 
