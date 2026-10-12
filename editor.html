@@ -73,12 +73,18 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 /* top bar */
 #scene{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;padding:4px;gap:2px;z-index:10}
 .sBtn{width:42px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;transition:.14s;position:relative}
-.sBtn:hover{background:#eef2f8}
+.sBtn:hover{background:#f1f3f6}
 .sBtn:active{transform:scale(.93)}
 .sBtn svg{width:19px;height:19px;stroke:var(--ink);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
 .sBtn.play svg{fill:#16a34a;stroke:#16a34a}
-.sBtn.on{background:var(--accent)}
+/* активное состояние — чёрное, как и .tab.on в инспекторе: тот же
+   монохромный акцент редактора вместо голубого цвета остального сайта. */
+.sBtn.on{background:#111827}
 .sBtn.on svg{stroke:#fff;fill:none}
+/* Удалить — тем же красным акцентом, что и #inspDel в инспекторе: единый
+   язык "опасного" действия по всему редактору. */
+#bDel:hover{background:#fef2f2}
+#bDel:hover svg{stroke:#dc2626}
 .sep{width:1px;background:var(--line);margin:6px 3px}
 .sBtn[data-tip]:hover::after{content:attr(data-tip);position:absolute;top:42px;left:50%;transform:translateX(-50%);
   background:#1e2530;color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none}
