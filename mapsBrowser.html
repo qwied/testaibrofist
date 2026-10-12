@@ -10,7 +10,7 @@
      вбок для Play/Vote на узких экранах — её просто не было видно за
      фактором масштаба. Теперь полноразмерный масштаб 1:1, а колонки
      Play/Vote доступны свайпом вбок внутри каждой строки, как и раньше. -->
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="stylesheet" href="ui.css?v=160">
 <script src="offline.js?v=2"></script>
 <script src="theme.js?v=160"></script>
@@ -155,7 +155,7 @@
    вместо шести колонок в один ряд — Play и Vote видны сразу, без
    свайпа вбок. Колонки-заголовки (.mbHeadCols) при табличной раскладке
    не нужны — у каждого поля уже есть подпись по месту. */
-@media (max-width:900px){
+@media (max-width:900px), (orientation:landscape) and (max-height:500px){
   .mbScroll{overflow-x:visible}
   .mbScrollInner{width:auto;min-width:0}
   .mbHeadCols{display:none}
@@ -167,6 +167,21 @@
   .mbRate{grid-area:rate;text-align:left}
   .mbVote{grid-area:vote}
   .mbPlay{grid-area:play}
+  /* Фильтры в пять колонок сжимали выпадашки до 26px (текста не видно),
+     а «Обновить» уезжал за правый край. Здесь — по два в ряд, кнопка
+     на всю ширину. */
+  .mbFilters{grid-template-columns:1fr 1fr}
+  .mbFilters .bfBtn{grid-column:1/-1;width:100%}
+}
+/* палец: звезда, оценки, чекбоксы с подписью, листалка и ник автора —
+   площадь нажатия не меньше 44×44 */
+@media (pointer:coarse){
+  .mbFav{min-width:44px;min-height:44px}
+  .mbVote button,.mbFavOnly,.mbPractice,.mbCommentsToggle{min-height:44px}
+  .mbVote button{min-width:44px}
+  .mbFavOnly input,.mbPractice input{width:20px;height:20px}
+  .mbHead .bfPager button{width:44px;height:44px}
+  .mbAuthor a{display:block;line-height:44px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
 </style>
         <link rel="icon" href="favicon.ico" sizes="any">

@@ -3,7 +3,7 @@
 <head>
         <meta charset="utf-8">
         <title>AIBrofist</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <style>
 /*body*/
 body{
@@ -172,7 +172,9 @@ body{
     margin: 28px auto 0;
     padding: 0 14px;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    /* min(230px, 100%): на узком телефоне рядом с сайдбаром колонка уже
+       230px — карточка сжимается до неё, а не вылезает за правый край */
+    grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
     gap: 22px;
     box-sizing: border-box;
     /* Выбор режима — единственное, что есть на этой странице, поэтому он

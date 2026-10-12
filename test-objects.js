@@ -120,7 +120,7 @@ ok('скольжение только в воздухе', /if\(pl\.wall !== 0 &&
 
 console.log('\nбатут:');
 ok('сила настраивается',    /rng\("Сила отскока"/.test(src));
-ok('отскок по нормали',     /function faceNormal/.test(src) && /function ricochet\(o\)/.test(src));
+ok('отскок по нормали',     /function faceNormal/.test(src) && /function ricochet\(o(, cx, cy)?\)/.test(src));
 ok('наклон учитывается',    /var pts = polyOf\(o\)/.test(src));
 ok('сила из свойства',      /o\.power === undefined \? 1 : o\.power/.test(src));
 ok('старые батуты мигрируют', src.indexOf('o.power = Math.max(0.2, Math.min(3, (o.power || 17) / 12.3));') !== -1);

@@ -97,6 +97,9 @@
     + 'transition:border-color .15s}'
     + '#aaPanel input:focus,#aaPanel select:focus{outline:none;border-color:#b91c1c}'
     + '.aaRow{display:flex;gap:6px}.aaRow input{margin-bottom:0}'
+    + '.aaVolRow{align-items:center;margin-bottom:6px}'
+    + '.aaVolRow #aaVolNum{width:64px;flex:none;text-align:right}'
+    + '.aaVolRow #aaVolNum.bad{border-color:#b91c1c}'
     + '#aaPanel button{padding:7px 11px;border-radius:9px;border:1px solid var(--line);background:var(--panel);'
     + 'color:var(--ink);font:inherit;font-size:12px;font-weight:600;cursor:pointer;margin:0 5px 5px 0;'
     + 'transition:border-color .15s,color .15s,background .15s}'
@@ -165,7 +168,10 @@
 
       + '<div class="aaH">Music</div>'
       + '<input id="aaSong" placeholder="link to an mp3">'
-      + '<input id="aaVol" type="range" min="0" max="1" step="0.05" value="0.7">'
+      + '<div class="aaRow aaVolRow">'
+      +   '<input id="aaVol" type="range" min="0" max="1" step="0.05" value="0.7">'
+      +   '<input id="aaVolNum" type="text" inputmode="decimal" value="0.70" aria-label="volume 0-1">'
+      + '</div>'
       + '<button class="go" id="aaSongGo">Play for everyone</button>'
       + '<button id="aaSongStop">Stop</button>'
 
@@ -281,6 +287,37 @@
     document.getElementById('aaClr').onclick = function () {
       post('/abuse/set', { what: 'mediaClear' }).then(function (r) { done(r, 'Media cleared for everyone'); });
     };
+
+    /* Громкость: ползунок и число рядом, синхронно в обе стороны. Число
+       применяется по Enter/уходу из поля (запятая = точка; буквы и пустое —
+       отказ, возвращается прежнее; зажим в 0..1 и шаг 0.05), Esc — отмена. */
+    (function () {
+      var bar = document.getElementById('aaVol'), box = document.getElementById('aaVolNum');
+      var shown = box.value, cancel = false;
+      function parse(s) {
+        s = String(s).trim().replace(',', '.');
+        if (!/^[-+]?(\d+\.?\d*|\.\d+)$/.test(s)) return null;
+        var n = parseFloat(s);
+        return isFinite(n) ? n : null;
+      }
+      bar.addEventListener('input', function () {
+        if (document.activeElement !== box) box.value = shown = (+bar.value).toFixed(2);
+      });
+      box.addEventListener('focus', function () { shown = box.value; cancel = false; });
+      box.addEventListener('input', function () { box.classList.toggle('bad', parse(box.value) === null); });
+      box.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); box.blur(); }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel = true; box.value = shown; box.blur(); }
+      });
+      box.addEventListener('blur', function () {
+        box.classList.remove('bad');
+        if (cancel) { cancel = false; return; }
+        var n = parse(box.value);
+        if (n === null) { box.value = shown; return; }
+        n = Math.min(1, Math.max(0, Math.round(n / 0.05) * 0.05));
+        bar.value = n; box.value = shown = n.toFixed(2);
+      });
+    })();
 
     document.getElementById('aaSongGo').onclick = function () {
       post('/abuse/set', { what: 'song',
