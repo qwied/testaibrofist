@@ -467,11 +467,6 @@ html[data-page="editor"], html[data-page="editor"] body {
 }
 html[data-page="editor"] #c { touch-action: none; }
 
-/* подсказка про «Руку» помещается на узком экране */
-@media (max-width: 900px) {
-  .tool[data-tool="hand"] { order: -1; }
-}
-
 /* =====================================================================
    v23 — телефон в обоих положениях
    ===================================================================== */
@@ -539,7 +534,7 @@ html[data-page="editor"] #c { touch-action: none; }
   /* нижние панели не залезают под системную полосу жестов.
      #pad не трогаем: у игрового пада своя safe-area-обвязка (лево/право/низ)
      прямо в game.html, а правило ниже перебивало её нулём. */
-  #tools, .ow-fab { padding-bottom: env(safe-area-inset-bottom, 0); }
+  .ow-fab { padding-bottom: env(safe-area-inset-bottom, 0); }
   .bfWrap { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0)); }
 }
 
