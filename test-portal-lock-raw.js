@@ -17,7 +17,7 @@ const BASE = 'http://127.0.0.1:' + PORT;
 
 function startServer() {
   return spawn(process.execPath, ['server.js'], {
-    cwd: __dirname, env: Object.assign({}, process.env, { PORT: String(PORT) }),
+    cwd: __dirname, env: Object.assign({}, process.env, { PORT: String(PORT), PASSWORD_AUTH: '1' }),
     stdio: ['ignore', 'pipe', 'pipe']
   });
 }

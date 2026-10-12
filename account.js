@@ -263,17 +263,8 @@
        + '<div class="bf-t">' + T('settings', 'Настройки') + '</div>'
        + '<div style="text-align:center;font-size:13px;color:#6b7280;margin-bottom:4px">' + name + '</div>'
        + '<div class="bf-b" id="bfProfile">' + T('viewProfile', 'Мой профиль') + '</div>'
-       + '<div class="bf-b" id="bfPassBtn">' + T('changePass', 'Сменить пароль') + '</div>'
-       + '<div id="bfPassBox" style="display:none">'
-       +   '<input class="bf-i" id="bfOldPass" type="password" placeholder="' + T('curPass', 'Текущий пароль') + '">'
-       +   '<input class="bf-i" id="bfNewPass" type="password" placeholder="' + T('newPass', 'Новый пароль (от 4 символов)') + '">'
-       +   '<div class="bf-e" id="bfPassErr"></div>'
-       +   '<div class="bf-b" id="bfPassGo">' + T('changePass', 'Сменить пароль') + '</div>'
-       + '</div>'
        + '<div class="bf-b ghost2" id="bfLogoutAll" style="border-color:#dc2626;color:#dc2626">'
        +   T('logoutAll', 'Выйти на всех устройствах') + '</div>'
-       + '<div class="bf-h" id="bfSecNote">' + T('secNote',
-           'Пароль хранится в зашифрованном виде — его не видно даже администратору.') + '</div>'
        + '<div id="bfDiscordBox"></div>'
        + '<div id="bfOwner"></div>'
        + '<div class="bf-sec">' + T('themes', 'Темы') + '</div>'
@@ -291,27 +282,6 @@
     drawDiscordLink();
     box.querySelector('#bfProfile').onclick = function () {
       location.href = BASE + 'users?name=' + encodeURIComponent(name);
-    };
-    var passBox = box.querySelector('#bfPassBox');
-    var passErr = box.querySelector('#bfPassErr');
-    box.querySelector('#bfPassBtn').onclick = function () {
-      passBox.style.display = passBox.style.display === 'none' ? 'block' : 'none';
-      passErr.textContent = '';
-    };
-    box.querySelector('#bfPassGo').onclick = function () {
-      var oldPw = box.querySelector('#bfOldPass').value;
-      var newPw = box.querySelector('#bfNewPass').value;
-      if (!oldPw || !newPw) { passErr.textContent = T('fillBoth', 'Заполните оба поля'); return; }
-      passErr.style.color = 'red';
-      passErr.textContent = '…';
-      post('/changePassword', { oldPassword: oldPw, newPassword: newPw }, function (r) {
-        if (r && r.status === 'success') {
-          passErr.style.color = 'green';
-          passErr.textContent = r.message || 'Password changed';
-          box.querySelector('#bfOldPass').value = '';
-          box.querySelector('#bfNewPass').value = '';
-        } else passErr.textContent = (r && r.message) || 'Error';
-      });
     };
     box.querySelector('#bfLogoutAll').onclick = function () {
       post('/logOutAll', {}, function () { location.reload(); });

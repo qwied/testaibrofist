@@ -1,6 +1,6 @@
 /* Окно Settings: тема и язык внутри него, страница Themes убрана. */
 const { chromium } = require(process.env.PW || '/opt/node22/lib/node_modules/playwright');
-const BASE = process.env.BASE || 'http://127.0.0.1:3210';
+const BASE = process.env.BASE || 'http://127.0.0.1:3210';  // сервер: PASSWORD_AUTH=1 PORT=3210 node server.js
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { c ? pass++ : fail++; console.log((c ? '  ✓ ' : '  ✗ ') + m + (x === undefined ? '' : '  ' + x)); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));

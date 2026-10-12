@@ -417,9 +417,16 @@ function paginate(list, page) {
   return { slice: list.slice((page - 1) * per, page * per), label: page + '/' + total };
 }
 
+/* Вход и регистрация по паролю выключены: аккаунты заводятся только через
+   Discord, а старые маршруты /signUp и /signIn позволяли бы обойти его
+   прямым запросом (боты, подбор пароля). Локальные тесты включают их
+   переменной окружения PASSWORD_AUTH=1. */
+const PASSWORD_AUTH = process.env.PASSWORD_AUTH === '1';
+
 function register(app) {
   // ---------- регистрация / вход ----------
   app.post('/signUp', (req, res) => {
+    if (!PASSWORD_AUTH) return res.json({ status: 'error', message: 'Sign up with Discord' });
     const name = String(req.body.name || '').trim();
     const password = String(req.body.password || '');
     let err = checkName(name) || checkNewPassword(password);
@@ -447,6 +454,7 @@ function register(app) {
   });
 
   const doLogin = (req, res) => {
+    if (!PASSWORD_AUTH) return res.json({ status: 'error', message: 'Sign in with Discord' });
     const name = String(req.body.username || req.body.name || '').trim();
     const password = String(req.body.password || '');
     const k = key(name);
@@ -565,6 +573,7 @@ function register(app) {
 
   // ---------- смена пароля ----------
   app.post('/changePassword', (req, res) => {
+    if (!PASSWORD_AUTH) return res.json({ status: 'error', message: 'Sign in with Discord' });
     const u = currentUser(req);
     if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const oldPw = String(req.body.oldPassword || '');

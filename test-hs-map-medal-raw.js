@@ -90,7 +90,7 @@ function cleanupUsers() {
   seedMap();
   const child = spawn(process.execPath, ['server.js'], {
     cwd: __dirname,
-    env: Object.assign({}, process.env, { PORT: String(PORT), OWNER_ALIASES: OWNER, HS_ROUND_MS: String(HS_ROUND_MS) }),
+    env: Object.assign({}, process.env, { PORT: String(PORT), PASSWORD_AUTH: '1', OWNER_ALIASES: OWNER, HS_ROUND_MS: String(HS_ROUND_MS) }),
     stdio: ['ignore', 'pipe', 'pipe']
   });
   let childErr = '';

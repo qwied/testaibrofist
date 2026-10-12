@@ -110,7 +110,7 @@ function cleanupUsers() {
 
   function startServer(extraEnv) {
     return spawn(process.execPath, ['server.js'], {
-      cwd: __dirname, env: Object.assign({}, process.env, { PORT: String(PORT) }, extraEnv || {}),
+      cwd: __dirname, env: Object.assign({}, process.env, { PORT: String(PORT), PASSWORD_AUTH: '1' }, extraEnv || {}),
       stdio: ['ignore', 'pipe', 'pipe']
     });
   }
