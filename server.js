@@ -86,7 +86,13 @@ const PRIVATE_EXT = /\.(md|py|json|lock|ya?ml|sh|bat|ps1|ini|conf|log|db|sqlite3
 // /skinparts сюда НЕ ходит — оттуда клиент грузит детали скинов (skinRender.js)
 const PRIVATE_PREFIX = ['/data', '/node_modules'];
 app.use((req, res, next) => {
-  const p = req.path.toLowerCase();
+  /* Проверяем РАСКОДИРОВАННЫЙ путь — тот же, что потом откроет
+     express.static. Иначе %2e вместо точки проходил мимо всех проверок
+     ниже: /%2egit/config, /server%2ejs, /CLAUDE%2emd отдавались как есть. */
+  let p;
+  try { p = decodeURIComponent(req.path).toLowerCase(); }
+  catch (e) { return res.status(400).send('Bad request'); }
+  if (p.indexOf('\\') !== -1 || p.indexOf('\0') !== -1) return res.status(404).send('Not found');
 
   /* Точки в начале ЛЮБОГО сегмента пути. Без этого express.static отдавал
      весь каталог .git — /.git/index плюс pack-файлы это полный исходник

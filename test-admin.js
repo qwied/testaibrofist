@@ -15,7 +15,7 @@ const own = fs.readFileSync(__dirname + '/owner.js', 'utf8');
 ok('в разметке страниц следа нет',
    fs.readdirSync(__dirname).filter(f => f.endsWith('.html'))
      .every(f => !fs.readFileSync(path.join(__dirname, f), 'utf8').includes('adminAbuse')));
-ok('подключается из owner.js', /sc\.src = 'adminAbuse\.js'/.test(own));
+ok('подключается из owner.js', /sc\.src = 'adminAbuse\.js(\?v=\d+)?'/.test(own));
 ok('чужому 404, а не пустышка', /if \(!allowed\) return res\.status\(404\)\.send\('Not found'\);/.test(srv));
 
 console.log('\nшоу видят все:');
