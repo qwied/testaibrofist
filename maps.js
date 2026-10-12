@@ -307,10 +307,15 @@ function register(app, getUser, acc, cleanText) {
     // без неё гигантское w/h всё равно попадёт на диск и до клэмпа
     // долетит buildGrid() у ЛЮБОГО, кто откроет карту до обновления
     // клиента — проще отказать сразу на публикации
+    // маршрут лифта (o.path, до 16 точек — см. LIFT_MAX_PTS в редакторе)
+    // проверяем по тем же границам, что и позицию самого объекта
+    const badPath = o => o.path !== undefined && (!Array.isArray(o.path) || o.path.length > 16 ||
+      o.path.some(p => !Array.isArray(p) || !Number.isFinite(p[0]) || !Number.isFinite(p[1]) ||
+        Math.abs(p[0]) > 100000 || Math.abs(p[1]) > 100000));
     const badGeom = list.some(o =>
       !isFinite(o.x) || !isFinite(o.y) || !isFinite(o.w) || !isFinite(o.h) ||
       Math.abs(o.x) > 100000 || Math.abs(o.y) > 100000 ||
-      o.w < 1 || o.w > 10000 || o.h < 1 || o.h > 10000
+      o.w < 1 || o.w > 10000 || o.h < 1 || o.h > 10000 || badPath(o)
     );
     if (badGeom)
       return res.json({ status: 'error', message: 'Map is corrupted: an object has an invalid position or size' });

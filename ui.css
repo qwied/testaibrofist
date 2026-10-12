@@ -279,6 +279,53 @@ body.bfHasSidebar{padding-left:var(--sbw)}
      целиком, а её 14px — это разница между «Sign in» и «Sign i…». */
   .bfProfileRow .bfChev,.bfCoin svg:last-child{display:none}
 }
+/* ---------- безопасные зоны: вырез, «чёлка», полоска «домой» ----------
+   Страницы объявляют viewport-fit=cover — браузер больше сам не отодвигает
+   их от выреза, это делаем мы: сайдбар шире на левый вырез и отступает от
+   верхнего и нижнего края, страница — от правого выреза и от верха. Без
+   выреза env() даёт 0, поэтому на компьютере ничего не меняется. */
+.bfHead{width:calc(var(--sbw) + env(safe-area-inset-left,0px));
+  padding-top:calc(12px + env(safe-area-inset-top,0px));
+  padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));
+  padding-left:calc(10px + env(safe-area-inset-left,0px))}
+body.bfHasSidebar{padding-left:calc(var(--sbw) + env(safe-area-inset-left,0px));
+  padding-right:env(safe-area-inset-right,0px);padding-top:env(safe-area-inset-top,0px)}
+@media (max-width:860px){
+  .bfHead{width:calc(var(--sbw-m) + env(safe-area-inset-left,0px));
+    padding:calc(10px + env(safe-area-inset-top,0px)) 5px calc(10px + env(safe-area-inset-bottom,0px))
+            calc(5px + env(safe-area-inset-left,0px))}
+  body.bfHasSidebar{padding-left:calc(var(--sbw-m) + env(safe-area-inset-left,0px))}
+  .bfDrop{left:calc(var(--sbw-m) + 8px + env(safe-area-inset-left,0px))}
+}
+/* палец: пункт меню, логотип-ссылка и строка профиля — не ниже 44px */
+@media (pointer:coarse){
+  .bfNavItem,.bfBrand,.bfProfileRow{min-height:44px}
+}
+/* Телефон боком: в 360–430px высоты 12 пунктов по 44px столбиком не
+   влезают — Avatar, Settings и соцсети уходили за нижний край. Здесь
+   панель шире и в две колонки, а Telegram/Discord — значками рядом с
+   логотипом: всё видно целиком и ничего не надо листать. */
+@media (orientation:landscape) and (max-height:500px){
+  .bfSideToggle{display:none}
+  .bfHead{display:grid !important;grid-template-columns:1fr auto;grid-template-rows:auto auto 1fr;
+    grid-template-areas:"brand social" "nav nav" "bottom bottom";align-content:stretch;gap:2px 4px;
+    width:calc(232px + env(safe-area-inset-left,0px));
+    padding:calc(6px + env(safe-area-inset-top,0px)) 6px calc(6px + env(safe-area-inset-bottom,0px))
+            calc(6px + env(safe-area-inset-left,0px))}
+  body.bfHasSidebar,body.bfSidebarCollapsed.bfHasSidebar{padding-left:calc(232px + env(safe-area-inset-left,0px))}
+  body.bfSidebarCollapsed .bfHead{transform:none}
+  .bfBrand{grid-area:brand;padding:0 4px;min-height:44px}
+  .bfBrand b{font-size:13px}
+  .bfNav{grid-area:nav;display:grid !important;grid-template-columns:1fr 1fr;gap:2px 4px}
+  .bfNavItem{min-height:44px;padding:4px 7px;font-size:12.5px;white-space:normal;line-height:1.2;border-radius:7px}
+  .bfSocial{grid-area:social;flex-direction:row;margin:0;padding:0;border-top:none;gap:2px}
+  .bfSocial .bfNavItem{width:44px;justify-content:center;padding:0}
+  .bfSocial .bfNavItem span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .bfBottom{grid-area:bottom;align-self:end;margin-top:0;padding-top:4px}
+  .bfProfileRow{min-height:44px;padding:4px 7px}
+  .bfDrop{left:calc(232px + 8px + env(safe-area-inset-left,0px));right:auto;bottom:8px;min-width:200px}
+}
+
 /* Кнопки-гамбургера в разметке больше нет (см. shell.js). Правило
    оставлено на случай, если элемент придёт из старого кэша страницы. */
 .bfMenuBtn{display:none !important}

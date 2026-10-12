@@ -3,7 +3,7 @@
 <head>
         <title>AIBrofist — Leaderboards</title>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <link rel="stylesheet" type="text/css" href="style.css?v=160">
         <script src="offline.js?v=2"></script>
 <script src="device.js?v=160"></script>
@@ -85,6 +85,7 @@
                         justify-content:center;box-shadow:0 6px 16px -10px rgba(15,23,42,.35)}
                 .lbArrow:hover:not(:disabled){background:var(--soft);border-color:var(--blue);color:var(--blue)}
                 .lbArrow:disabled{opacity:.35;cursor:default}
+                @media (pointer:coarse){ .lbArrow{width:44px;height:44px} }
                 .lbPageLabel{color:#8b93a1;font-size:13px;min-width:40px;text-align:center}
         </style>
         <link rel="stylesheet" href="ui.css?v=160">

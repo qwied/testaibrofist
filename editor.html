@@ -172,6 +172,13 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 .zBtns div{flex:1;text-align:center;padding:6px 0;border:1px solid var(--line);border-radius:7px;
   font-size:11px;cursor:pointer;background:#fafbfd}
 .zBtns div:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.zBtns div.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* Ползунок + число рядом (см. rng()): число можно вписать точно, ползунок
+   остаётся для быстрой подстройки */
+.rngWrap{display:flex;align-items:center;gap:6px}
+.pRow input[type=range].rngBar{width:74px}
+.pRow input.rngNum{width:58px;padding:5px 6px;text-align:right}
+.pRow input.rngNum.bad{border-color:#ef4444}
 /* Связи кликом: уже выбранные цели — чипами, добавление — одной кнопкой вместо ручного ввода ID */
 .lnkChips{display:flex;flex-wrap:wrap;gap:5px}
 .lnkEmpty{font-size:11px;color:var(--muted)}
@@ -212,6 +219,11 @@ body.play #genBox,body.play #aaPanel{display:none!important}
 #hud{display:none;position:fixed;right:14px;bottom:14px;left:auto;top:auto;transform:none;
   z-index:12;padding:6px 7px;align-items:center;gap:4px;border-radius:12px}
 body.play #hud{display:flex}
+/* на телефоне низ занят падом — HUD уходит наверх (сцена в игре скрыта, там
+   пусто), а кнопка «на главную» в игре прячется: она ложилась под ◀ */
+body.play.mob #hud{top:calc(8px + env(safe-area-inset-top,0px));bottom:auto;
+  right:calc(8px + env(safe-area-inset-right,0px))}
+body.play.mob #bfHome{display:none}
 .stat{display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:8px;
   background:#f4f6fa;font-size:12px;font-weight:600;white-space:nowrap}
 .stat i{font-style:normal;font-size:13px}
@@ -229,20 +241,26 @@ body.play #hud{display:flex}
 #pad{display:none;position:fixed;bottom:0;left:0;right:0;z-index:13;
   padding:0 18px calc(20px + env(safe-area-inset-bottom));justify-content:space-between;pointer-events:none}
 body.play.mob #pad{display:flex}
-/* viewport теперь закреплён на 1280px (десктопный вид на телефоне — см.
-   <meta viewport> выше), и браузер просто ужимает всю страницу под экран.
-   Без компенсации пад ужался бы вместе с ней и по кнопкам было бы не
-   попасть пальцем. --padZoom считается ниже из screen.width (он не
-   меняется от пина) и растягивает пад обратно до настоящего размера —
-   кнопки «плавают» над уменьшенной картинкой игры в своём истинном размере. */
-.padG{display:flex;gap:13px;pointer-events:auto;transform:scale(var(--padZoom,1))}
-.padG:first-child{transform-origin:bottom left}
-.padG:last-child{transform-origin:bottom right}
+/* Пад в настоящих CSS-пикселях: viewport теперь width=device-width, и
+   растягивать его обратно (бывший --padZoom = 1280/screen.width под
+   старый пин на 1280px) больше нельзя — на телефоне кнопки выходили
+   втрое больше и правая уезжала за край экрана. */
+.padG{display:flex;gap:13px;pointer-events:auto}
 .pBtn{width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.9);border:1px solid var(--line);
   box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:23px;color:#5b6472;
   user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .pBtn:active{background:var(--accent);color:#fff;transform:scale(.93)}
 #pJump{width:78px;height:78px;font-size:13px;font-weight:800;letter-spacing:.5px}
+/* на телефоне — как в игре (game.html): кнопки крупнее под большие пальцы
+   и ничего не уходит под вырез сбоку или полоску жестов снизу */
+@media (pointer:coarse){
+  #pad{padding-left:calc(18px + env(safe-area-inset-left,0px));
+    padding-right:calc(18px + env(safe-area-inset-right,0px));
+    padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+  .padG{gap:15px}
+  .pBtn{width:74px;height:74px;font-size:26px}
+  #pJump{width:92px;height:92px;font-size:14px}
+}
 
 /* dialog */
 #dlg{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;z-index:200;display:none}
@@ -265,29 +283,55 @@ body.play.mob #pad{display:flex}
    на ней. Раньше #modes и #scene оба висели на top:8px и просто лежали друг
    на друге: в точке вкладок «Прятки/Гонка» оказывалась кнопка сохранения,
    и переключить режим с телефона было физически нельзя. */
-body.mob #modes{top:112px;bottom:auto;left:8px;right:8px;padding:3px}
-body.mob .modeBtn{padding:8px 9px;font-size:11px}
-body.mob #apoc{top:156px;bottom:auto;left:8px;right:8px;padding:3px}
-body.mob .apocBtn{padding:7px 9px;font-size:11px}
+/* Все края — с поправкой на безопасные зоны (вырез, «чёлка», полоска
+   «домой»): страница объявляет viewport-fit=cover, и отступать от них
+   теперь наша забота, а не браузера. Без выреза env() даёт 0. */
+body.mob #modes{top:calc(114px + env(safe-area-inset-top,0px));bottom:auto;
+  left:calc(8px + env(safe-area-inset-left,0px));right:calc(8px + env(safe-area-inset-right,0px));padding:3px}
+/* вкладки режима и модификации — под палец, 44px */
+body.mob .modeBtn,body.mob .apocBtn{padding:7px 11px;font-size:12px;min-height:44px;display:flex;align-items:center}
+body.mob #apoc{top:calc(170px + env(safe-area-inset-top,0px));bottom:auto;
+  left:calc(8px + env(safe-area-inset-left,0px));right:calc(8px + env(safe-area-inset-right,0px));padding:3px}
 /* И верхняя (#scene, 11 кнопок), и нижняя (#tools, до 11 инструментов)
    панели раньше были в один ряд с overflow-x:auto — часть кнопок (в
    т.ч. Играть и Публикация) была достижима только свайпом, который на
    телефоне не очевиден. Перенесли #modes/#apoc ниже и пустили обе
    панели в два ряда (flex-wrap) — всё видно и нажимаемо сразу. */
-body.mob #scene{top:8px;bottom:auto;padding:3px;left:8px;right:8px;transform:none;
+body.mob #scene{top:calc(8px + env(safe-area-inset-top,0px));bottom:auto;padding:3px;
+  left:calc(8px + env(safe-area-inset-left,0px));right:calc(8px + env(safe-area-inset-right,0px));transform:none;
   max-width:none;flex-wrap:wrap;justify-content:center}
 body.mob .sBtn{width:38px;height:34px}
-body.mob #tools{left:0;right:0;bottom:0;top:auto;transform:none;width:100%;max-height:none;
+body.mob #tools{left:env(safe-area-inset-left,0px);right:env(safe-area-inset-right,0px);bottom:0;top:auto;
+  transform:none;width:auto;max-height:none;
   flex-direction:row;flex-wrap:wrap;justify-content:center;
-  border-radius:16px 16px 0 0;padding:6px 8px;gap:4px}
+  border-radius:16px 16px 0 0;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));gap:4px}
 body.mob .tool{width:42px;height:42px}
 body.mob .tool canvas{width:26px;height:26px}
 body.mob .tool[data-tip]:hover::after{display:none}
-body.mob #insp{left:8px;right:8px;width:auto;top:auto;bottom:112px;transform:none;max-height:30vh}
+body.mob #insp{left:calc(8px + env(safe-area-inset-left,0px));right:calc(8px + env(safe-area-inset-right,0px));
+  width:auto;top:auto;bottom:calc(112px + env(safe-area-inset-bottom,0px));transform:none;max-height:30vh}
 body.mob #visuals,body.mob #passive,body.mob #active,body.mob #automatic{max-height:22vh}
 body.mob #hint{display:none}
-body.mob #zoomBox{bottom:116px;right:8px}
+body.mob #zoomBox{bottom:calc(116px + env(safe-area-inset-bottom,0px));right:calc(8px + env(safe-area-inset-right,0px))}
+#bfHome{left:14px;bottom:14px;display:flex;align-items:center}
+body.mob #bfHome{left:calc(8px + env(safe-area-inset-left,0px));bottom:calc(116px + env(safe-area-inset-bottom,0px))}
 body.mob #msg h1{font-size:38px}
+/* Телефон боком: высоты мало (360–430px), ширины много. Сверху — панель
+   сцены в один ряд; под ней слева режим, справа модификация; инструменты
+   — полосой внизу; свойства — колонкой справа между ними, со своей
+   прокруткой внутри. Раньше здесь спорили правила из mobile.css:
+   режимы ложились на кнопки сцены, модификация — на инструменты. */
+@media (orientation:landscape) and (max-height:500px){
+  body.mob #scene{top:calc(4px + env(safe-area-inset-top,0px))}
+  body.mob #modes{top:calc(58px + env(safe-area-inset-top,0px));right:auto}
+  body.mob #apoc{top:calc(58px + env(safe-area-inset-top,0px));left:auto}
+  body.mob #tools{padding-top:4px;padding-bottom:calc(4px + env(safe-area-inset-bottom,0px))}
+  body.mob #insp{left:auto;width:240px;top:calc(114px + env(safe-area-inset-top,0px));
+    bottom:calc(60px + env(safe-area-inset-bottom,0px));max-height:none}
+  body.mob #visuals,body.mob #passive,body.mob #active,body.mob #automatic{max-height:none;flex:1 1 auto;min-height:0}
+  body.mob #zoomBox{bottom:calc(62px + env(safe-area-inset-bottom,0px));right:auto;left:50%;transform:translateX(-50%)}
+  body.mob #bfHome{bottom:calc(62px + env(safe-area-inset-bottom,0px))}
+}
 </style>
         <script src="offline.js?v=2"></script>
 <script src="device.js?v=160"></script>
@@ -399,17 +443,6 @@ var isMob = function(){
 };
 function syncMob(){ document.body.classList.toggle("mob", isMob()); }
 syncMob(); addEventListener("resize", syncMob); addEventListener("orientationchange", syncMob);
-
-/* компенсация пина viewport на 1280px (десктопный вид на телефоне) для
-   пада управления — см. комментарий у .padG выше. screen.width не
-   зависит от <meta viewport> и даёт настоящую ширину экрана. */
-function syncPadZoom(){
-  var sw = (window.screen && screen.width) || 1280;
-  var z = Math.max(1, Math.min(4, 1280 / sw));
-  document.documentElement.style.setProperty("--padZoom", z);
-}
-syncPadZoom(); addEventListener("resize", syncPadZoom);
-addEventListener("orientationchange", function(){ setTimeout(syncPadZoom, 300); setTimeout(syncPadZoom, 800); });
 
 var cv = document.getElementById("c"), ctx = cv.getContext("2d");
 /* Адаптивное разрешение (v103): если устройство не тянет (кадр дороже 30 мс),
@@ -1285,7 +1318,7 @@ function maxFall(){ return 12 + gravityScale * 0.8; }
 function platBoost(o){ return (o && o.speedMul) ? Math.max(0.05, 1 + (+o.speedMul || 0)) : 1; }
 
 var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,selfJump:false,hidden:false,
-  rideOn:null, standPlat:null, teleCooldown:0, grab:null,
+  rideOn:null, standPlat:null, teleCooldown:0, grab:null, kick:0,
 };
 var keys = {l:false,r:false,u:false};
 var coy = 0, buf = 0, hold = 0, grabCd = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
@@ -1389,7 +1422,7 @@ function restartRun(){
 function respawn(){
   var p = (practiceMode && mode === "race") ? lastSafePos : spawnPt;
   pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
-  pl.rideOn = null; pl.grab = null; grabCd = 0;
+  pl.rideOn = null; pl.grab = null; grabCd = 0; pl.kick = 0;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
 }
 function die(){
@@ -1457,6 +1490,10 @@ var CIRCLE_SIDES = 32;   // чем больше сторон, тем точне�
 /* Рикошет — полное отражение импульса от той грани, в которую попал игрок.
    Коэффициент чуть меньше единицы, иначе отскок копится до бесконечности. */
 var RICO_K = 0.96, RICO_MIN = 2.2, RICO_CAP = 26;
+/* Боковой отскок держится RICO_KICK кадров: без этого уже следующий кадр
+   ставил pl.vx = dir*maxVX() по зажатой стрелке и стирал отражённую
+   скорость — игрока, упёршегося в бок, не отталкивало вовсе. */
+var RICO_KICK = 16, RICO_KICK_DECAY = 0.95;
 
 /* Отскок считается от настоящей грани объекта, а не от осей экрана.
    Ищем ближайшее ребро многоугольника и берём его наружную нормаль —
@@ -1487,10 +1524,13 @@ function faceNormal(o, px, py){
 }
 
 /* Отражение импульса от грани. Сила берётся из свойства объекта:
-   1 — как пришёл, больше — подбрасывает сильнее. */
-function ricochet(o){
+   1 — как пришёл, больше — подбрасывает сильнее. cx/cy — точка касания;
+   без неё грань ищется от центра игрока, а он у высокого игрока рядом
+   с низким блоком ближе к крышке, чем к боку, — боковой удар отражался
+   как удар сверху и игрок продолжал идти в блок. */
+function ricochet(o, cx, cy){
   var px = pl.x + pl.w/2, py = pl.y + pl.h/2;
-  var nv = faceNormal(o, px, py);
+  var nv = faceNormal(o, cx === undefined ? px : cx, cy === undefined ? py : cy);
   var vx = pl.vx, vy = pl.vy;
   var dot = vx*nv[0] + vy*nv[1];
   if(dot > 0) dot = 0;                       // уже летим прочь — не разгоняем
@@ -1503,6 +1543,7 @@ function ricochet(o){
   /* coy обнуляем: иначе сразу после отскока остаётся «монетка времени»
      от касания земли и игрок прыгает второй раз прямо в воздухе. */
   pl.ground = false; pl.wall = 0; pl.selfJump = false; coy = 0; buf = 0;
+  if(Math.abs(nv[0]) > 0.5) pl.kick = RICO_KICK;
   o._squash = 1;
   puff(px - nv[0]*pl.w*0.5, py - nv[1]*pl.h*0.5, 8);
   if(window.BFSound) BFSound.bounce();
@@ -1807,6 +1848,64 @@ function clampRideDelta(dx, dy, ride){
   return {dx: movedX, dy: movedY};
 }
 
+/* ══════════════════════════════════════════════════
+   ЛИФТ: МАРШРУТ И ЗАДЕРЖКА
+   o.path — точки маршрута [[dx,dy],...] относительно места, где лифт
+   поставлен (само это место — нулевая точка, в path её нет). Без path —
+   старый лифт с одним отрезком (moveX, moveY): ездит ровно как раньше и
+   с той же фазой (стартует с середины хода), чтобы опубликованные карты
+   не поменяли тайминг. Лифт с path стартует с места установки, ждёт
+   o.delay секунд и едет по точкам до конца и обратно. Темп — тот же
+   синус, что и раньше, только по длине ломаной: у одного отрезка это в
+   точности прежняя формула. Задержка считается в том же _t, что и ход,
+   поэтому у лифта на кнопке она идёт только пока он включён.
+   ══════════════════════════════════════════════════ */
+var LIFT_MAX_PTS = 16, LIFT_MAX_DELAY = 60;
+function liftHasPath(o){ return Array.isArray(o.path) && o.path.length > 0; }
+function liftPts(o){ return liftHasPath(o) ? o.path : [[o.moveX||0, o.moveY||0]]; }
+function liftK(o){
+  if(!liftHasPath(o)) return (Math.sin(o._t)+1)/2;
+  var wait = Math.max(0, +o.delay || 0) * 60 * 0.012 * Math.abs(o.speed||1);
+  var t = Math.abs(o._t) - wait;
+  return t <= 0 ? 0 : (1 - Math.cos(t))/2;
+}
+/* Маршрут и задержка из загруженной карты — та же граница доверия, что и
+   клэмп x/y/w/h: битый path не должен ронять step(), раздувать цикл по
+   точкам или уводить лифт за край карты. У старых карт этих полей нет —
+   лифт ездит как раньше (см. liftHasPath). */
+function cleanLift(o){
+  if(o.path !== undefined){
+    o.path = (Array.isArray(o.path) ? o.path : []).filter(function(p){
+      return Array.isArray(p) && typeof p[0] === "number" && typeof p[1] === "number" && isFinite(p[0]) && isFinite(p[1]);
+    }).slice(0, LIFT_MAX_PTS).map(function(p){
+      return [Math.max(-100000, Math.min(100000, +p[0])), Math.max(-100000, Math.min(100000, +p[1]))];
+    });
+    if(!o.path.length) delete o.path;
+  }
+  if(o.delay !== undefined){
+    o.delay = (typeof o.delay === "number" && isFinite(o.delay)) ? Math.max(0, Math.min(LIFT_MAX_DELAY, o.delay)) : 0;
+    if(!o.delay) delete o.delay;
+  }
+}
+function liftOffset(o, k){
+  var pts = liftPts(o), n = pts.length, len = [], total = 0, px = 0, py = 0, i, dx, dy;
+  if(n === 1) return [pts[0][0]*k, pts[0][1]*k];
+  for(i=0;i<n;i++){
+    dx = pts[i][0]-px; dy = pts[i][1]-py;
+    len.push(Math.sqrt(dx*dx + dy*dy)); total += len[i];
+    px = pts[i][0]; py = pts[i][1];
+  }
+  var d = k*total; px = 0; py = 0;
+  for(i=0;i<n;i++){
+    if(d <= len[i] || i === n-1){
+      var f = len[i] > 0 ? Math.min(1, d/len[i]) : 1;
+      return [px + (pts[i][0]-px)*f, py + (pts[i][1]-py)*f];
+    }
+    d -= len[i]; px = pts[i][0]; py = pts[i][1];
+  }
+  return [px, py];
+}
+
 function step(){
   anim++;
   /* Кто из движущихся объектов на самом деле привязан к кнопке/рычагу —
@@ -1835,8 +1934,8 @@ function step(){
         o._dx = 0; o._dy = 0;   // стоит, пока кнопку не держат/рычаг не включён
       } else {
         o._t += 0.012*(o.speed||1);
-        var k = (Math.sin(o._t)+1)/2;
-        var nx = o._hx + (o.moveX||0)*k, ny = o._hy + (o.moveY||0)*k;
+        var lo = liftOffset(o, liftK(o));
+        var nx = o._hx + lo[0], ny = o._hy + lo[1];
         o._dx = nx-o.x; o._dy = ny-o.y; o.x = nx; o.y = ny;
       }
     }
@@ -1912,7 +2011,12 @@ function step(){
   if(grabCd > 0) grabCd--;
 
   var dir = grabbing ? 0 : (keys.r?1:0)-(keys.l?1:0);
-  if(dir){
+  // отброс от бока рикошета (см. RICO_KICK) кончается раньше, если игрок
+  // уже встал — упёрся в обычную стену или повис на уступе
+  if(pl.kick > 0 && (grabbing || Math.abs(pl.vx) < 0.05)) pl.kick = 0;
+  if(pl.kick > 0){
+    pl.kick--; pl.vx *= RICO_KICK_DECAY;
+  } else if(dir){
     /* Разгона нет: нажал — сразу полная скорость, одна и та же всегда.
        Раньше скорость набиралась за 7 кадров (MOVE_A), и даже этот
        короткий разбег читался как вялость — особенно на коротких
@@ -1989,8 +2093,9 @@ function step(){
     var sp = spanX(P, pl.y + 2, pl.y + pl.h - 2);
     if(!sp || pl.x >= sp[1] || pl.x + pl.w <= sp[0]) return;
 
-    // пологий подъём: на склон и невысокий уступ игрок заходит, а не упирается
-    if(pl.ground){
+    // пологий подъём: на склон и невысокий уступ игрок заходит, а не упирается.
+    // Кроме рикошета: на низкий батут игрок иначе вшагивал, не отскакивая
+    if(pl.ground && !o.ricochet){
       var top = spanY(P, pl.x + 2, pl.x + pl.w - 2);
       if(top && pl.y + pl.h - top[0] <= STEP_UP && top[0] < pl.y + pl.h){
         pl.y = top[0] - pl.h;
@@ -2023,6 +2128,15 @@ function step(){
       var move = Math.min(lim, Math.abs(edge - pl.x));
       pl.x += goL ? -move : move;
       if(Math.abs(edge - pl.x) < 0.01) pl.wall = goL ? 1 : -1;
+      /* Едущий рикошет отражает скорость игрока ОТНОСИТЕЛЬНО себя: так
+         отбрасывает и того, кто врезался в него сам, и того, в кого
+         въехала платформа, пока он стоял. */
+      if(o.ricochet && pl.wall !== 0 && Math.abs(pl.vx - pdx) > RICO_MIN){
+        pl.vx -= pdx;
+        ricochet(o, pl.x + pl.w/2, (Math.max(pl.y, bb[1]) + Math.min(pl.y + pl.h, bb[3]))/2);
+        pl.vx += pdx;
+        return;
+      }
       /* Толкаемая фигура — исключение: её толкает сам игрок, поэтому его
          собственная скорость в ту же сторону — это не «встречный разбег»
          платформы, которую нужно погасить, а причина, по которой фигура
@@ -2051,7 +2165,8 @@ function step(){
     else   { pl.x = sp[1];        if(pl.vx !== 0) pl.wall = -1; }
     /* Рикошет отражает движение, а не гасит его. Медленное касание не
        отражаем — иначе игрок дрожит, прижавшись к блоку. */
-    if(o.ricochet && Math.abs(pl.vx) > RICO_MIN) ricochet(o);
+    if(o.ricochet && Math.abs(pl.vx) > RICO_MIN)
+      ricochet(o, pl.x + pl.w/2, (Math.max(pl.y, bb[1]) + Math.min(pl.y + pl.h, bb[3]))/2);
     /* Толкаемая фигура: тут она просто ещё не поймала это как активный
        толчок в этот самый кадр (например, зазор до настоящей грани на
        долю пикселя больше порога у наклонной фигуры) — это не «врезался
@@ -2368,7 +2483,21 @@ var VIEW_UNITS_H = 800;
    втрое, потом вполовину ближе) — по прямой просьбе: с приближенной
    камерой вид стал «коренным образом другим», чем в игре-образце,
    с которой сверялись. Без множителя, обе границы зажима как были. */
-function playZoom(){ return Math.max(0.6, Math.min(2.2, VH() / VIEW_UNITS_H)); }
+/* Телефон: «как на ПК, только ближе». Боком видно 560 единиц карты по
+   высоте вместо 800 — объекты крупнее и читаются на маленьком экране.
+   Стоя экран узкий: обзор вперёд важнее крупности, поэтому там ближе не
+   становится — остаётся прежнее равнение по высоте, если ширина обзора
+   и так меньше 480 единиц. Компьютер и планшет (меньшая сторона от
+   600px или мышь) не меняются вовсе. */
+var VIEW_UNITS_H_PHONE = 560, VIEW_UNITS_W_PHONE = 480;
+function isPhoneView(){
+  return Math.min(VW(), VH()) < 600 && typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches;
+}
+function playZoom(){
+  var z = VH() / VIEW_UNITS_H;
+  if(isPhoneView()) z = Math.min(VH() / VIEW_UNITS_H_PHONE, Math.max(VW() / VIEW_UNITS_W_PHONE, z));
+  return Math.max(0.6, Math.min(2.2, z));
+}
 
 function follow(){
   /* Камера прилипает к игроку НАМЕРТВО (v103): раньше экран догонял игрока
@@ -2576,25 +2705,8 @@ function paintFrame(){
       }
     }
   }
-  /* Точка назначения движущейся платформы — только у выделенного объекта,
-     только в редакторе: синяя точка показывает, куда едет платформа.
-     Конечная точка — строго x+moveX, y+moveY (см. формулу в step(): k
-     идёт 0→1→0, при k=1 платформа ровно там); скорость влияет только
-     на то, как быстро она туда доедет, а не на саму точку. */
-  if(!playing && sel && sel.moves && (sel.moveX || sel.moveY)){
-    var mcx = sel.x+sel.w/2, mcy = sel.y+sel.h/2;
-    var mdx = mcx+(sel.moveX||0), mdy = mcy+(sel.moveY||0);
-    ctx.save();
-    ctx.strokeStyle = "rgba(17,24,39,.55)";
-    ctx.lineWidth = 1.6/view.s;
-    ctx.setLineDash([4/view.s, 4/view.s]);
-    ctx.beginPath(); ctx.moveTo(mcx, mcy); ctx.lineTo(mdx, mdy); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "#111827";
-    ctx.beginPath(); ctx.arc(mdx, mdy, 6/view.s, 0, 6.2832); ctx.fill();
-    ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.6/view.s; ctx.stroke();
-    ctx.restore();
-  }
+  // маршрут выделенного лифта с призраками — только в редакторе (см. drawRoute)
+  if(!playing && liftRouted(sel)) drawRoute(sel);
   if(playing && !pl.dead){
     ctx.save(); ctx.translate(pl.x, pl.y);
     // себя в укрытии видно бледным — чужие не видят вообще
@@ -2606,6 +2718,90 @@ function paintFrame(){
   if(BRIDGE && BRIDGE.onDraw) BRIDGE.onDraw(ctx);
   drawParts();
   if(!playing) anim++;
+}
+/* Маршрут выделенного лифта: пунктир от места установки по точкам,
+   полупрозрачные (50%) копии лифта в каждой точке, номера точек — порядок
+   следования, стрелки — направление хода туда (обратно лифт идёт тем же
+   путём). Полые кружки посередине отрезков — за них тянут, чтобы вставить
+   точку. В режиме рисования ещё и пробный отрезок до курсора/пальца.
+   Только картинка редактора: копии не в objects, в физику и в карту не
+   попадают; в игре (playing) не рисуется, а в game.html этого кода нет. */
+function drawRoute(o){
+  var c = liftHome(o), pts = liftPts(o), i, ax, ay, px, py, dx, dy, L;
+  var has = liftHasPath(o) || !!(o.moveX || o.moveY);
+  var tip = null;
+  if(routeDraw === o){
+    var tp = (drag && drag.m === "draw") ? drag : mouseW, last = routeLast(o);
+    tip = {x: c[0] + snapN(tp.x - c[0]), y: c[1] + snapN(tp.y - c[1]), fx: c[0] + last[0], fy: c[1] + last[1]};
+  }
+  if(!has && !tip) return;
+  var mob = document.body.classList.contains("mob");
+  ctx.save();
+  if(has) for(i=0;i<pts.length;i++){
+    ctx.save(); ctx.globalAlpha = 0.5;
+    paint(Object.assign({}, o, {x: o.x + pts[i][0], y: o.y + pts[i][1]}), false);
+    ctx.restore();
+  }
+  if(tip){
+    ctx.save(); ctx.globalAlpha = 0.28;
+    paint(Object.assign({}, o, {x: tip.x - o.w/2, y: tip.y - o.h/2}), false);
+    ctx.restore();
+  }
+  ctx.lineWidth = 1.8/view.s;
+  ctx.setLineDash([5/view.s, 4/view.s]);
+  if(has){
+    ctx.strokeStyle = "rgba(17,24,39,.6)";
+    ctx.beginPath(); ctx.moveTo(c[0], c[1]);
+    for(i=0;i<pts.length;i++) ctx.lineTo(c[0] + pts[i][0], c[1] + pts[i][1]);
+    ctx.stroke();
+  }
+  if(tip){
+    ctx.strokeStyle = "rgba(17,24,39,.35)";
+    ctx.beginPath(); ctx.moveTo(tip.fx, tip.fy); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  if(has){
+    // стрелка направления на 60% каждого отрезка
+    var ah = 6/view.s;
+    ctx.fillStyle = "rgba(17,24,39,.75)";
+    px = c[0]; py = c[1];
+    for(i=0;i<pts.length;i++){
+      ax = c[0] + pts[i][0]; ay = c[1] + pts[i][1];
+      dx = ax - px; dy = ay - py; L = Math.sqrt(dx*dx + dy*dy);
+      if(L > 34/view.s){
+        var ux = dx/L, uy = dy/L, hx = px + dx*0.6, hy = py + dy*0.6;
+        ctx.beginPath();
+        ctx.moveTo(hx + ux*ah, hy + uy*ah);
+        ctx.lineTo(hx - ux*ah - uy*ah*0.8, hy - uy*ah + ux*ah*0.8);
+        ctx.lineTo(hx - ux*ah + uy*ah*0.8, hy - uy*ah - ux*ah*0.8);
+        ctx.closePath(); ctx.fill();
+      }
+      px = ax; py = ay;
+    }
+    if(routeDraw !== o){
+      var mr = (mob ? 7 : 4.5)/view.s;
+      ctx.lineWidth = 1.5/view.s; ctx.strokeStyle = "#111827"; ctx.fillStyle = "#fff";
+      px = c[0]; py = c[1];
+      for(i=0;i<pts.length;i++){
+        ax = c[0] + pts[i][0]; ay = c[1] + pts[i][1];
+        ctx.beginPath(); ctx.arc((px+ax)/2, (py+ay)/2, mr, 0, 6.2832); ctx.fill(); ctx.stroke();
+        px = ax; py = ay;
+      }
+    }
+    var pr2 = (mob ? 10 : 8)/view.s;
+    ctx.font = "700 " + ((mob ? 11 : 9)/view.s) + "px system-ui, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for(i=0;i<pts.length;i++){
+      ax = c[0] + pts[i][0]; ay = c[1] + pts[i][1];
+      var on = routeSel && routeSel.o === o && routeSel.i === i;
+      ctx.beginPath(); ctx.arc(ax, ay, pr2, 0, 6.2832);
+      ctx.fillStyle = on ? "#fff" : "#111827"; ctx.fill();
+      ctx.lineWidth = (on ? 2.4 : 1.6)/view.s; ctx.strokeStyle = on ? "#111827" : "#fff"; ctx.stroke();
+      ctx.fillStyle = on ? "#111827" : "#fff";
+      ctx.fillText(String(i + 1), ax, ay + 0.5/view.s);
+    }
+  }
+  ctx.restore();
 }
 function render(){
   paintFrame();
@@ -2765,6 +2961,11 @@ function retip(){
   });
   Array.prototype.forEach.call(document.querySelectorAll(".modeBtn"), function(b){
     b.textContent = TR(b.dataset.mode, b.dataset.mode);
+  });
+  // вкладки модификации строятся тем же кодом до загрузки i18n.js — без
+  // этого «Классика» оставалась по-русски и в английском интерфейсе
+  Array.prototype.forEach.call(document.querySelectorAll(".apocBtn"), function(b){
+    b.textContent = b.dataset.apoc === "1" ? TR("modApoc","Zombie Apocalypse") : TR("modClassic","Классика");
   });
   if(typeof inspect === "function") inspect();
 }
@@ -2934,14 +3135,125 @@ function gripAt(x,y){
 }
 var snapN = function(v){ return grid ? Math.round(v/GRID)*GRID : v; };
 
+/* ══════════════════════════════════════════════════
+   МАРШРУТ ЛИФТА В РЕДАКТОРЕ
+   У выделенного лифта на карте видна ломаная маршрута (см. drawRoute):
+   точку можно тащить, полая точка посередине отрезка при перетаскивании
+   вставляет новую. «Рисовать маршрут» в инспекторе включает режим, где
+   каждое протягивание по карте добавляет точку туда, где палец/мышь
+   отпустили. Всё с привязкой к сетке, как и сам объект. Призраки лифта в
+   точках — только картинка редактора: в objects их нет, поэтому ни в
+   физику, ни в сохранение карты они не попадают.
+   ══════════════════════════════════════════════════ */
+var routeDraw = null;   // лифт, которому сейчас рисуют маршрут
+var routeSel = null;    // {o, i} — выбранная точка маршрута: её удаляет Delete
+function liftRouted(o){ return !!(o && o.moves && !o.pushable); }
+// старый лифт (только moveX/moveY) переводим на path — пустой ход даёт пустой маршрут
+function liftEnsurePath(o){
+  if(!liftHasPath(o)) o.path = (o.moveX || o.moveY) ? [[o.moveX||0, o.moveY||0]] : [];
+}
+/* Конец маршрута дублируем в moveX/moveY: клиент, который ещё не знает
+   path (старая вкладка), всё равно повезёт лифт к концу маршрута, а не
+   оставит стоять на месте. */
+function liftSync(o){
+  var last = liftHasPath(o) ? o.path[o.path.length-1] : [0,0];
+  o.moveX = last[0]; o.moveY = last[1];
+}
+function routeLast(o){ var p = liftPts(o); return p[p.length-1]; }
+function liftSetEnd(o, x, y){
+  if(liftHasPath(o)){
+    var p = o.path[o.path.length-1];
+    if(x !== null) p[0] = x;
+    if(y !== null) p[1] = y;
+    liftSync(o);
+  } else {
+    if(x !== null) o.moveX = x;
+    if(y !== null) o.moveY = y;
+  }
+}
+function liftHome(o){ return [o.x + o.w/2, o.y + o.h/2]; }
+function routeHandles(o){
+  var c = liftHome(o), pts = liftPts(o), out = [], px = c[0], py = c[1], i, ax, ay;
+  for(i=0;i<pts.length;i++){
+    ax = c[0] + pts[i][0]; ay = c[1] + pts[i][1];
+    out.push({k:"pt", i:i, x:ax, y:ay});
+    out.push({k:"mid", i:i, x:(px+ax)/2, y:(py+ay)/2});   // вставка перед точкой i
+    px = ax; py = ay;
+  }
+  return out;
+}
+function routeHandleAt(x, y){
+  if(playing || routeDraw || !liftRouted(sel)) return null;
+  var end = routeLast(sel);
+  if(!liftHasPath(sel) && !end[0] && !end[1]) return null;
+  // на телефоне зона касания 44 px, хотя сама ручка рисуется меньше
+  var r = (document.body.classList.contains("mob") ? 22 : 8)/view.s, hs = routeHandles(sel), i;
+  // точки важнее середин — на коротком отрезке они почти рядом
+  for(i=0;i<hs.length;i++) if(hs[i].k === "pt" && Math.abs(x-hs[i].x) <= r && Math.abs(y-hs[i].y) <= r) return hs[i];
+  for(i=0;i<hs.length;i++) if(hs[i].k === "mid" && Math.abs(x-hs[i].x) <= r && Math.abs(y-hs[i].y) <= r) return hs[i];
+  return null;
+}
+function routeFull(){
+  showMsg(TR("routeMaxTitle","Маршрут заполнен"),
+          TR("routeMaxBody","Не больше {n} точек у одного лифта.").replace("{n}", LIFT_MAX_PTS));
+  setTimeout(hideMsg, 1800);
+}
+// отпустили в режиме рисования — новая точка там, где отпустили
+function routeAppend(o, x, y){
+  var c = liftHome(o), nx = snapN(x - c[0]), ny = snapN(y - c[1]), last = routeLast(o);
+  // нулевой отрезок (просто ткнули в лифт или в последнюю точку) — не точка
+  if(Math.abs(nx - last[0]) < GRID/2 && Math.abs(ny - last[1]) < GRID/2) return;
+  if(liftHasPath(o) && o.path.length >= LIFT_MAX_PTS){ routeFull(); return; }
+  commit();
+  liftEnsurePath(o);
+  o.path.push([nx, ny]); liftSync(o);
+}
+function routeRemove(o, i){
+  if(!liftHasPath(o) || i < 0 || i >= o.path.length) return;
+  commit();
+  o.path.splice(i, 1); liftSync(o);
+  routeSel = null;
+  inspect();
+}
+/* Кнопки маршрута в инспекторе. На телефоне клавиши Delete нет — поэтому
+   выбранную точку удаляет и отдельная кнопка. */
+function routeTools(o){
+  var z = document.createElement("div"); z.className = "zBtns";
+  var bDraw = document.createElement("div");
+  if(routeDraw === o) bDraw.className = "on";
+  bDraw.textContent = routeDraw === o ? TR("btnRouteDone","Готово") : TR("btnDrawRoute","Рисовать маршрут");
+  bDraw.addEventListener("click", function(){ routeDraw = routeDraw === o ? null : o; routeSel = null; inspect(); });
+  var bClr = document.createElement("div");
+  bClr.textContent = TR("btnClearRoute","Сбросить маршрут");
+  bClr.addEventListener("click", function(){
+    commit(); o.path = []; liftSync(o); routeSel = null; routeDraw = o; inspect();
+  });
+  z.appendChild(bDraw); z.appendChild(bClr);
+  inspTarget.appendChild(z);
+  if(routeSel && routeSel.o === o){
+    var z2 = document.createElement("div"); z2.className = "zBtns";
+    var bDel = document.createElement("div"), at = routeSel.i;
+    bDel.textContent = TR("btnDelPoint","Удалить точку {n}").replace("{n}", at + 1);
+    bDel.addEventListener("click", function(){ routeRemove(o, at); });
+    z2.appendChild(bDel); inspTarget.appendChild(z2);
+  }
+  hint(routeDraw === o
+    ? TR("routeDrawHint","Протяни по карте от лифта (или от последней точки) туда, куда он должен ехать: точка встанет там, где отпустишь. Esc или «Готово» — закончить.")
+    : TR("routeEditHint","Точек в маршруте: {n}. Тяни точку, чтобы сдвинуть; тяни полую точку посередине отрезка, чтобы добавить новую. Выбранную точку удаляет Delete или кнопка.")
+        .replace("{n}", liftHasPath(o) ? o.path.length : ((o.moveX || o.moveY) ? 1 : 0)));
+}
+
 /* ---- БУФЕР ОБМЕНА ----
    mouseW — последняя позиция курсора в координатах карты: по ней
    вставляется копия. */
 var clipboard = null;
 var mouseW = {x:0, y:0};
+// мелкая копия объекта делила бы с оригиналом один и тот же массив
+// маршрута — правка точки у копии двигала бы и оригинал
+function ownPath(c){ if(Array.isArray(c.path)) c.path = c.path.map(function(p){ return [p[0], p[1]]; }); return c; }
 function copySel(){
   if(!sel) return false;
-  clipboard = Object.assign({}, sel);
+  clipboard = ownPath(Object.assign({}, sel));
   showMsg(TR("copiedTitle","Скопировано"), TR("copiedBody","Ctrl+V поставит копию под курсором"));
   setTimeout(hideMsg, 1200);
   return true;
@@ -2951,7 +3263,7 @@ function pasteAt(x, y){
   if(overLimit(1)) return false;
   if(!allowedIn(clipboard.type, mode)) return false;
   commit();
-  var c = Object.assign({}, clipboard);
+  var c = ownPath(Object.assign({}, clipboard));
   c.id = uid++;
   if(c.customId) c.customId = "w"+c.id;
   // центр копии садится ровно под курсор
@@ -3038,6 +3350,25 @@ function teleportMateOf(o){
 }
 function down(x,y,alt,shift){
   if(playing) return;
+  /* Рисование маршрута: нажатие где угодно на карте начинает протяжку,
+     точка встанет туда, где отпустят (см. up()) — не выделяем и не
+     двигаем ничего под пальцем. */
+  if(routeDraw){ drag = {m:"draw", x:x, y:y}; return; }
+  var rh = routeHandleAt(x, y);
+  if(rh){
+    if(rh.k === "mid" && liftHasPath(sel) && sel.path.length >= LIFT_MAX_PTS){ routeFull(); return; }
+    commit();
+    if(rh.k === "mid"){
+      liftEnsurePath(sel);
+      var rc = liftHome(sel);
+      sel.path.splice(rh.i, 0, [snapN(x - rc[0]), snapN(y - rc[1])]);
+      liftSync(sel);
+    }
+    routeSel = {o:sel, i:rh.i};
+    drag = {m:"pt", i:rh.i};
+    inspect(); return;
+  }
+  routeSel = null;
   var g = gripAt(x,y);
   if(g && sel){ commit(); drag = {m:"size", g:g, ox:x, oy:y, o:Object.assign({},sel)}; return; }
   if(tool === "select"){
@@ -3047,7 +3378,7 @@ function down(x,y,alt,shift){
       /* Быстрое дублирование: Alt и потащить — копия остаётся под курсором,
          оригинал на месте. Ctrl+D по-прежнему работает. */
       if(alt && !overLimit(1)){
-        var c = Object.assign({}, h);
+        var c = ownPath(Object.assign({}, h));
         c.id = uid++;
         if(c.customId) c.customId = "w"+c.id;
         // копия портала не наследует связь оригинала — см. pairTeleport
@@ -3086,6 +3417,16 @@ function down(x,y,alt,shift){
 }
 function move(x,y){
   if(!drag || playing) return;
+  // точка маршрута и протяжка рисования — без inspect() на каждый сдвиг,
+  // поля инспектора обновит up()
+  if(drag.m === "pt"){
+    // старый лифт переходит на маршрут только когда точку реально потащили
+    liftEnsurePath(sel);
+    var pc = liftHome(sel), pp = sel.path[drag.i];
+    if(pp){ pp[0] = snapN(x - pc[0]); pp[1] = snapN(y - pc[1]); liftSync(sel); }
+    return;
+  }
+  if(drag.m === "draw"){ drag.x = x; drag.y = y; return; }
   if(drag.m === "new"){
     if(Math.abs(x-drag.ox) > 6 || Math.abs(y-drag.oy) > 6) drag.moved = true;
     var o = objects[objects.length-1];
@@ -3111,6 +3452,11 @@ function move(x,y){
   inspect();
 }
 function up(){
+  if(drag && drag.m === "draw"){
+    if(routeDraw) routeAppend(routeDraw, drag.x, drag.y);
+    drag = null; inspect(); return;
+  }
+  if(drag && drag.m === "pt"){ drag = null; inspect(); return; }
   if(drag && drag.m === "new" && !drag.moved){
     var o = objects[objects.length-1];
     o.w = drag.w; o.h = drag.h;
@@ -3134,6 +3480,8 @@ function startPan(sx, sy){
   cv.style.cursor = "grabbing";
 }
 function wantPan(x, y){
+  // рисование маршрута и точки маршрута — не пустое место, карту не тащим
+  if(routeDraw || routeHandleAt(x, y)) return false;
   if(tool === "hand") return true;
   if(tool !== "select") return false;
   return !gripAt(x, y) && !at(x, y);      // пусто под курсором — тащим карту
@@ -3268,6 +3616,8 @@ document.addEventListener("keydown", function(e){
     return;
   }
   if(e.key === "Escape" && linkPick){ linkPick = null; inspect(); return; }
+  if((e.key === "Escape" || e.key === "Enter") && routeDraw){ routeDraw = null; drag = null; inspect(); return; }
+  if(e.key === "Escape" && routeSel){ routeSel = null; inspect(); return; }
   var mod = e.ctrlKey || e.metaKey;
   if(mod && e.code === "KeyZ"){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if(mod && e.code === "KeyY"){ e.preventDefault(); redo(); return; }
@@ -3278,7 +3628,10 @@ document.addEventListener("keydown", function(e){
   if(mod && e.code === "KeyV"){ e.preventDefault(); pasteAt(mouseW.x, mouseW.y); return; }
   if(e.code === "Space"){ spaceDown = true; e.preventDefault(); }
   if(e.code === "KeyG"){ grid = !grid; document.getElementById("bGrid").classList.toggle("on", grid); }
-  if((e.key === "Delete" || e.key === "Backspace") && sel){ removeSel(); }
+  // выбрана точка маршрута — удаляется она, а не весь лифт
+  if((e.key === "Delete" || e.key === "Backspace") && sel){
+    if(routeSel && routeSel.o === sel) routeRemove(sel, routeSel.i); else removeSel();
+  }
   if(e.key === "+" || e.key === "=") zoomAt(VW()/2, VH()/2, 1.15);
   if(e.key === "-" || e.key === "_") zoomAt(VW()/2, VH()/2, 1/1.15);
   if(e.key === "0") resetView();
@@ -3378,24 +3731,74 @@ function num(l,v,fn){
   i.addEventListener("input", function(){ fn(parseFloat(i.value)||0); });
   r.appendChild(a); r.appendChild(i);
 }
-/* Ползунок с числом рядом: удобнее, чем поле ввода, когда важно
-   быстро нащупать значение на слух, а не вписать точное. */
+/* Число с проверкой — для ползунков и задержки лифта. Пока печатаешь,
+   значение никуда не уходит; Enter или уход из поля — подтвердить, Esc —
+   отменить ввод. Запятая сходит за точку; буквы, пустое и «1.2.3» —
+   отказ, в поле возвращается прежнее. Принятое зажимается в [lo, hi] и
+   округляется к шагу от lo — ровно те значения, что даёт и ползунок. */
+function stepDecimals(step){ var s = String(step), k = s.indexOf("."); return k < 0 ? 0 : s.length - k - 1; }
+function parseNum(s){
+  s = String(s).trim().replace(",", ".");
+  if(!/^[-+]?(\d+\.?\d*|\.\d+)$/.test(s)) return null;
+  var n = parseFloat(s);
+  return isFinite(n) ? n : null;
+}
+function numField(v, lo, hi, step, onCommit){
+  var dp = stepDecimals(step);
+  function fit(n){
+    n = Math.min(hi, Math.max(lo, n));
+    n = lo + Math.round((n - lo)/step)*step;
+    return Math.min(hi, Math.max(lo, +n.toFixed(dp)));
+  }
+  var i = document.createElement("input");
+  i.type = "text"; i.inputMode = "decimal"; i.className = "rngNum";
+  i.setAttribute("aria-valuemin", lo); i.setAttribute("aria-valuemax", hi);
+  var shown = (+v).toFixed(dp), cancel = false;
+  i.value = shown;
+  i.addEventListener("focus", function(){ shown = i.value; cancel = false; });
+  i.addEventListener("input", function(){ i.classList.toggle("bad", parseNum(i.value) === null); });
+  i.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); i.blur(); }
+    else if(e.key === "Escape"){
+      e.preventDefault(); e.stopPropagation();
+      cancel = true; i.value = shown; i.classList.remove("bad"); i.blur();
+    }
+  });
+  i.addEventListener("blur", function(){
+    if(cancel){ cancel = false; return; }
+    i.classList.remove("bad");
+    var n = parseNum(i.value);
+    if(n === null){ i.value = shown; return; }
+    n = fit(n);
+    i.value = n.toFixed(dp);
+    if(i.value !== shown){ shown = i.value; commit(); onCommit(n); }
+  });
+  // ползунок двигает число, пока в само поле не печатают
+  i.show = function(n){ if(document.activeElement !== i){ shown = (+n).toFixed(dp); i.value = shown; } };
+  return i;
+}
+/* Ползунок + число рядом: ползунком быстро нащупать, в поле вписать
+   точно. Синхронизация в обе стороны. */
 function rng(l, v, lo, hi, step, fn){
   var r = pr(), a = document.createElement("label"); a.textContent = l;
+  var w = document.createElement("div"); w.className = "rngWrap";
   var i = document.createElement("input");
-  i.type = "range"; i.min = lo; i.max = hi; i.step = step; i.value = v;
-  i.style.cssText = "width:74px;accent-color:var(--accent)";
-  var b = document.createElement("b");
-  b.style.cssText = "font-size:11.5px;min-width:26px;text-align:right;color:var(--accent)";
-  b.textContent = (+v).toFixed(step < 1 ? 2 : 0);
+  i.type = "range"; i.className = "rngBar"; i.min = lo; i.max = hi; i.step = step; i.value = v;
+  var n = numField(v, lo, hi, step, function(val){ i.value = val; fn(val); });
   i.addEventListener("focus", commit);
   i.addEventListener("pointerdown", commit);
   i.addEventListener("input", function(){
     var val = parseFloat(i.value);
-    b.textContent = val.toFixed(step < 1 ? 2 : 0);
+    n.show(val);
     fn(val);
   });
-  r.appendChild(a); r.appendChild(i); r.appendChild(b);
+  w.appendChild(i); w.appendChild(n);
+  r.appendChild(a); r.appendChild(w);
+}
+// одно число с той же проверкой, без ползунка (задержка лифта)
+function dec(l, v, lo, hi, step, fn){
+  var r = pr(), a = document.createElement("label"); a.textContent = l;
+  r.appendChild(a); r.appendChild(numField(v, lo, hi, step, fn));
 }
 /* Множитель скорости («Бустеры»): значение вида x1, x2, x0.1 или -x0.1,
    -x2. Буква x — жёстко зафиксированная часть интерфейса: её нельзя
@@ -3544,9 +3947,19 @@ function linkPicker(src, single){
 }
 function inspect(){
   var box = document.getElementById("insp");
+  /* Недопечатанное число (см. numField) подтверждаем до перестройки
+     панели: удаление поля из DOM blur не вызывает, и введённое молча
+     пропадало бы, если следом щёлкнуть по карте или другому объекту.
+     Колбэк поля пишет в объект, для которого панель строилась (cur ниже),
+     а не в уже новый sel. */
+  var ae = document.activeElement;
+  if(ae && ae.classList && ae.classList.contains("rngNum") && box.contains(ae)) ae.blur();
   // выделение сменилось (или снялось) — незавершённый выбор цели теперь ничей
   if(linkPick && linkPick.from !== sel) linkPick = null;
+  if(routeDraw && (routeDraw !== sel || !liftRouted(sel))) routeDraw = null;
+  if(routeSel && (routeSel.o !== sel || !liftRouted(sel) || !liftHasPath(sel) || routeSel.i >= sel.path.length)) routeSel = null;
   if(!sel || playing){ box.style.display = "none"; return; }
+  var cur = sel;
   box.style.display = "flex";
   // наполняем ВСЕ ЧЕТЫРЕ вкладки разом — какая сейчас видна, решает только
   // CSS/класс .tab.on (см. обработчик клика у #inspHead), inspect() его не трогает
@@ -3674,7 +4087,7 @@ function inspect(){
        поэтому наклонный батут отправляет по диагонали. */
     if(sel.ricochet)
       rng(TR("lblBouncePower","Сила отскока"), sel.power === undefined ? 1 : sel.power, 0.2, 3, 0.1,
-          function(v){ sel.power = v; });
+          function(v){ cur.power = v; });
 
     /* Толкается — своя физика (см. stepPushables): падает и стоит на
        земле сама, а не по синусоиде и не вращается, поэтому с
@@ -3690,21 +4103,31 @@ function inspect(){
     }, TR("descPhysics","Объект двигается от толчка игрока"));
     if(sel.pushable)
       rng(TR("lblMass","Масса"), sel.mass === undefined ? 1 : sel.mass, 0.2, 5, 0.1,
-          function(v){ sel.mass = v; });
+          function(v){ cur.mass = v; });
 
     if(!sel.pushable){
       chk(TR("chkMoves","Двигается"), !!sel.moves, function(v){
         sel.moves = v;
         if(v){
-          if(!sel.moveX && !sel.moveY){ sel.moveX = 130; sel.moveY = 0; sel.speed = 1.1; }
+          /* Новый лифт сразу с маршрутом (path): стартует с места, где
+             поставлен, умеет задержку и точки — см. liftK. Старый лифт с
+             уже заданным ходом (moveX/moveY) не трогаем — тайминг как был. */
+          if(!sel.moveX && !sel.moveY && !liftHasPath(sel)){ sel.path = [[130, 0]]; liftSync(sel); sel.speed = 1.1; }
           sel.pushable = false;
         }
         inspect();
       }, TR("descLift","Движется по траектории. На нём можно кататься."));
       if(sel.moves){
-        num(TR("lblMoveX","Ход по X"), sel.moveX||0, function(v){ sel.moveX = v; });
-        num(TR("lblMoveY","Ход по Y"), sel.moveY||0, function(v){ sel.moveY = v; });
+        // «Ход по X/Y» — конечная точка маршрута (у старого лифта она и есть весь ход)
+        var lEnd = routeLast(sel);
+        num(TR("lblMoveX","Ход по X"), lEnd[0], function(v){ liftSetEnd(sel, v, null); });
+        num(TR("lblMoveY","Ход по Y"), lEnd[1], function(v){ liftSetEnd(sel, null, v); });
         num(TR("lblSpeed","Скорость"), sel.speed||1, function(v){ sel.speed = v; });
+        dec(TR("lblDelay","Задержка, с"), +sel.delay || 0, 0, LIFT_MAX_DELAY, 0.1, function(v){
+          // задержку понимает только лифт с маршрутом (см. liftK) — старый переводим
+          if(v > 0){ liftEnsurePath(cur); cur.delay = v; } else delete cur.delay;
+        });
+        routeTools(cur);
       }
 
       chk(TR("chkSpins","Вращается"), !!sel.spins, function(v){
@@ -3880,6 +4303,7 @@ document.getElementById("file").addEventListener("change", function(e){
       var d = JSON.parse(json);
       commit();
       objects = d.objects || [];
+      objects.forEach(cleanLift);
       uid = objects.reduce(function(m2,o){ return Math.max(m2,(o.id||0)+1); },1);
       mode = d.mode || "hideAndSeek";
       apoc = !!d.apoc;                 // в старых картах модификации не было — классика
@@ -4032,6 +4456,7 @@ window.GAME = BRIDGE = {
       o.w = isFinite(o.w) ? Math.max(1, Math.min(10000, o.w)) : 1;
       o.h = isFinite(o.h) ? Math.max(1, Math.min(10000, o.h)) : 1;
       o.rot = isFinite(o.rot) ? o.rot : 0;
+      cleanLift(o);
       if(o.deadly === undefined && DEADLY_BY_DEFAULT.indexOf(o.type) !== -1) o.deadly = true;
       // «Ищущий» убран из палитры: в старых картах превращаем его в старт
       if(o.type === "seeker") o.type = "spawn";
@@ -4246,11 +4671,11 @@ requestAnimationFrame(loop);
   var a = document.createElement('a');
   a.id = 'bfHome'; a.href = '/'; a.title = 'На главную'; a.setAttribute('data-i18n-title', 'edHomeTitle');
   a.textContent = 'AIBROFIST';
-  a.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:12;padding:8px 12px;'
-    + 'border-radius:9px;background:#fff;border:1px solid #e2e8f0;color:#111827;'
+  // где стоит кнопка (с поправкой на телефон и его положение) — решает CSS
+  // (#bfHome в <style>), а не разовая проверка ширины при загрузке
+  a.style.cssText = 'position:fixed;z-index:12;padding:8px 12px;'
+    + 'border-radius:9px;background:#fff;border:1px solid #e2e8f0;color:#111827;min-height:44px;box-sizing:border-box;'
     + 'text-decoration:none;font:700 12.5px/1 sans-serif;box-shadow:0 2px 8px rgba(15,23,42,.10)';
-  /* #tools теперь в два ряда вместо одного — кнопке нужно больше места снизу */
-  if (window.matchMedia('(max-width: 900px)').matches) { a.style.bottom = '124px'; a.style.left = '8px'; }
   document.body.appendChild(a);
 })();
 </script>

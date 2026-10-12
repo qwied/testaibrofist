@@ -206,6 +206,8 @@
     // на телефоне: шапка компактнее, карточка карты уходит наверх, чтобы не мешать кнопкам
     + 'html.is-mobile #gTop,html.is-tablet #gTop{padding:5px 9px;gap:8px;font-size:12px}'
     + 'html.is-mobile #gExit,html.is-tablet #gExit{padding:9px 14px;font-size:13px}'
+    // звук и рисование — квадратные значки 32px: под палец нужно 44
+    + 'html.is-mobile #gSound,html.is-tablet #gSound,html.is-mobile #gDraw,html.is-tablet #gDraw{min-width:44px;min-height:44px}'
     + 'html.is-mobile #gMap,html.is-tablet #gMap{bottom:auto;top:46px;right:8px;max-width:56vw;'
     + 'padding:6px 10px;font-size:11.5px}'
     /* твой шанс стать искателем — плашка в правом верхнем углу */
@@ -222,13 +224,20 @@
     /* безопасные зоны iPhone (чёлка/жесты): в альбомной панели прижимаются
        к краям, env() не поддерживается — строка игнорируется, остаётся базовая */
     + '#gTop{padding-left:calc(12px + env(safe-area-inset-left,0px));'
-    + 'padding-right:calc(12px + env(safe-area-inset-right,0px))}'
+    + 'padding-right:calc(12px + env(safe-area-inset-right,0px));'
+    + 'padding-top:calc(7px + env(safe-area-inset-top,0px))}'
+    /* всё, что висит под шапкой (карточка карты, шанс, рулетка, очки),
+       опускается вместе с ней на высоту верхнего выреза; очки ещё и
+       отступают от левого выреза в альбомной */
+    + '#gChance,#gRoul,#gScoresBox,html.is-mobile #gMap,html.is-tablet #gMap{margin-top:env(safe-area-inset-top,0px)}'
+    + '#gScoresBox{margin-left:env(safe-area-inset-left,0px)}'
     + '#gTalk{right:calc(14px + env(safe-area-inset-right,0px));touch-action:manipulation}'
     + '#gMap{right:calc(12px + env(safe-area-inset-right,0px))}'
     + 'html.is-mobile #gMap,html.is-tablet #gMap{right:calc(8px + env(safe-area-inset-right,0px))}'
     // у мобильной шапки падинг компактнее — безопасные зоны добавляем к нему же
     + 'html.is-mobile #gTop,html.is-tablet #gTop{padding-left:calc(9px + env(safe-area-inset-left,0px));'
-    + 'padding-right:calc(9px + env(safe-area-inset-right,0px))}'
+    + 'padding-right:calc(9px + env(safe-area-inset-right,0px));'
+    + 'padding-top:calc(5px + env(safe-area-inset-top,0px))}'
     /* --- рулетка искателя (прятки): компактная плашка в правом верхнем
            углу — там же, где потом встанет «Твой шанс». Лента ников едет
            под ней и тормозит на победителе; карточек и скинов больше нет.

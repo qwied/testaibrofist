@@ -180,15 +180,11 @@ body.play #hud{display:flex}
 #pad{display:none;position:fixed;bottom:0;left:0;right:0;z-index:13;
   padding:0 18px calc(20px + env(safe-area-inset-bottom));justify-content:space-between;pointer-events:none}
 body.play.mob #pad{display:flex}
-/* viewport теперь закреплён на 1280px (десктопный вид на телефоне — см.
-   <meta viewport> выше), и браузер просто ужимает всю страницу под экран.
-   Без компенсации пад ужался бы вместе с ней и по кнопкам было бы не
-   попасть пальцем. --padZoom считается ниже из screen.width (он не
-   меняется от пина) и растягивает пад обратно до настоящего размера —
-   кнопки «плавают» над уменьшенной картинкой игры в своём истинном размере. */
-.padG{display:flex;gap:13px;pointer-events:auto;transform:scale(var(--padZoom,1))}
-.padG:first-child{transform-origin:bottom left}
-.padG:last-child{transform-origin:bottom right}
+/* Пад в настоящих CSS-пикселях: viewport теперь width=device-width, и
+   растягивать его обратно (бывший --padZoom = 1280/screen.width под
+   старый пин на 1280px) больше нельзя — на телефоне кнопки выходили
+   втрое больше и правая уезжала за край экрана. */
+.padG{display:flex;gap:13px;pointer-events:auto}
 .pBtn{width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.9);border:1px solid var(--line);
   box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:23px;color:#5b6472;
   user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
@@ -344,17 +340,6 @@ var isMob = function(){
 };
 function syncMob(){ document.body.classList.toggle("mob", isMob()); }
 syncMob(); addEventListener("resize", syncMob); addEventListener("orientationchange", syncMob);
-
-/* компенсация пина viewport на 1280px (десктопный вид на телефоне) для
-   пада управления — см. комментарий у .padG выше. screen.width не
-   зависит от <meta viewport> и даёт настоящую ширину экрана. */
-function syncPadZoom(){
-  var sw = (window.screen && screen.width) || 1280;
-  var z = Math.max(1, Math.min(4, 1280 / sw));
-  document.documentElement.style.setProperty("--padZoom", z);
-}
-syncPadZoom(); addEventListener("resize", syncPadZoom);
-addEventListener("orientationchange", function(){ setTimeout(syncPadZoom, 300); setTimeout(syncPadZoom, 800); });
 
 var cv = document.getElementById("c"), ctx = cv.getContext("2d");
 /* Адаптивное разрешение (v103): если устройство не тянет (кадр дороже 30 мс),
@@ -1246,7 +1231,7 @@ function maxFall(){ return 12 + gravityScale * 0.8; }
 function platBoost(o){ return (o && o.speedMul) ? Math.max(0.05, 1 + (+o.speedMul || 0)) : 1; }
 
 var pl = {x:0,y:0,w:20,h:60,vx:0,vy:0,ground:false,wall:0,dead:false,face:1,selfJump:false,hidden:false,
-  rideOn:null, standPlat:null, teleCooldown:0, grab:null,
+  rideOn:null, standPlat:null, teleCooldown:0, grab:null, kick:0,
 };
 var keys = {l:false,r:false,u:false};
 var coy = 0, buf = 0, hold = 0, grabCd = 0, spawnPt = {x:0,y:0}, done = false, finishTimer = 0;
@@ -1319,7 +1304,7 @@ function restartRun(){
 function respawn(){
   var p = (practiceMode && mode === "race") ? lastSafePos : spawnPt;
   pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
-  pl.rideOn = null; pl.grab = null; grabCd = 0;
+  pl.rideOn = null; pl.grab = null; grabCd = 0; pl.kick = 0;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
 }
 /* Классика: игрок, которого рулетка только что назначила искателем, ждёт
@@ -1333,7 +1318,7 @@ function teleportToSeekerSpot(){
   var sp = findSeekerSpot();
   if(!sp) return false;
   pl.x = sp.x; pl.y = sp.y; pl.vx = 0; pl.vy = 0;
-  pl.rideOn = null; pl.grab = null; grabCd = 0;
+  pl.rideOn = null; pl.grab = null; grabCd = 0; pl.kick = 0;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
   return true;
 }
@@ -1400,6 +1385,10 @@ var CIRCLE_SIDES = 32;   // чем больше сторон, тем точне�
 /* Рикошет — полное отражение импульса от той грани, в которую попал игрок.
    Коэффициент чуть меньше единицы, иначе отскок копится до бесконечности. */
 var RICO_K = 0.96, RICO_MIN = 2.2, RICO_CAP = 26;
+/* Боковой отскок держится RICO_KICK кадров: без этого уже следующий кадр
+   ставил pl.vx = dir*maxVX() по зажатой стрелке и стирал отражённую
+   скорость — игрока, упёршегося в бок, не отталкивало вовсе. */
+var RICO_KICK = 16, RICO_KICK_DECAY = 0.95;
 
 /* Отскок считается от настоящей грани объекта, а не от осей экрана.
    Ищем ближайшее ребро многоугольника и берём его наружную нормаль —
@@ -1430,10 +1419,13 @@ function faceNormal(o, px, py){
 }
 
 /* Отражение импульса от грани. Сила берётся из свойства объекта:
-   1 — как пришёл, больше — подбрасывает сильнее. */
-function ricochet(o){
+   1 — как пришёл, больше — подбрасывает сильнее. cx/cy — точка касания;
+   без неё грань ищется от центра игрока, а он у высокого игрока рядом
+   с низким блоком ближе к крышке, чем к боку, — боковой удар отражался
+   как удар сверху и игрок продолжал идти в блок. */
+function ricochet(o, cx, cy){
   var px = pl.x + pl.w/2, py = pl.y + pl.h/2;
-  var nv = faceNormal(o, px, py);
+  var nv = faceNormal(o, cx === undefined ? px : cx, cy === undefined ? py : cy);
   var vx = pl.vx, vy = pl.vy;
   var dot = vx*nv[0] + vy*nv[1];
   if(dot > 0) dot = 0;                       // уже летим прочь — не разгоняем
@@ -1446,6 +1438,7 @@ function ricochet(o){
   /* coy обнуляем: иначе сразу после отскока остаётся «монетка времени»
      от касания земли и игрок прыгает второй раз прямо в воздухе. */
   pl.ground = false; pl.wall = 0; pl.selfJump = false; coy = 0; buf = 0;
+  if(Math.abs(nv[0]) > 0.5) pl.kick = RICO_KICK;
   o._squash = 1;
   puff(px - nv[0]*pl.w*0.5, py - nv[1]*pl.h*0.5, 8);
   if(window.BFSound) BFSound.bounce();
@@ -1750,6 +1743,65 @@ function clampRideDelta(dx, dy, ride){
   return {dx: movedX, dy: movedY};
 }
 
+/* ══════════════════════════════════════════════════
+   ЛИФТ: МАРШРУТ И ЗАДЕРЖКА
+   o.path — точки маршрута [[dx,dy],...] относительно места, где лифт
+   поставлен (само это место — нулевая точка, в path её нет). Без path —
+   старый лифт с одним отрезком (moveX, moveY): ездит ровно как раньше и
+   с той же фазой (стартует с середины хода), чтобы опубликованные карты
+   не поменяли тайминг. Лифт с path стартует с места установки, ждёт
+   o.delay секунд и едет по точкам до конца и обратно. Темп — тот же
+   синус, что и раньше, только по длине ломаной: у одного отрезка это в
+   точности прежняя формула. Задержка считается в том же _t, что и ход,
+   поэтому у лифта на кнопке она идёт только пока он включён.
+   Призраки маршрута рисует только редактор — в игре их нет вовсе.
+   ══════════════════════════════════════════════════ */
+var LIFT_MAX_PTS = 16, LIFT_MAX_DELAY = 60;
+function liftHasPath(o){ return Array.isArray(o.path) && o.path.length > 0; }
+function liftPts(o){ return liftHasPath(o) ? o.path : [[o.moveX||0, o.moveY||0]]; }
+function liftK(o){
+  if(!liftHasPath(o)) return (Math.sin(o._t)+1)/2;
+  var wait = Math.max(0, +o.delay || 0) * 60 * 0.012 * Math.abs(o.speed||1);
+  var t = Math.abs(o._t) - wait;
+  return t <= 0 ? 0 : (1 - Math.cos(t))/2;
+}
+/* Маршрут и задержка из загруженной карты — та же граница доверия, что и
+   клэмп x/y/w/h: битый path не должен ронять step(), раздувать цикл по
+   точкам или уводить лифт за край карты. У старых карт этих полей нет —
+   лифт ездит как раньше (см. liftHasPath). */
+function cleanLift(o){
+  if(o.path !== undefined){
+    o.path = (Array.isArray(o.path) ? o.path : []).filter(function(p){
+      return Array.isArray(p) && typeof p[0] === "number" && typeof p[1] === "number" && isFinite(p[0]) && isFinite(p[1]);
+    }).slice(0, LIFT_MAX_PTS).map(function(p){
+      return [Math.max(-100000, Math.min(100000, +p[0])), Math.max(-100000, Math.min(100000, +p[1]))];
+    });
+    if(!o.path.length) delete o.path;
+  }
+  if(o.delay !== undefined){
+    o.delay = (typeof o.delay === "number" && isFinite(o.delay)) ? Math.max(0, Math.min(LIFT_MAX_DELAY, o.delay)) : 0;
+    if(!o.delay) delete o.delay;
+  }
+}
+function liftOffset(o, k){
+  var pts = liftPts(o), n = pts.length, len = [], total = 0, px = 0, py = 0, i, dx, dy;
+  if(n === 1) return [pts[0][0]*k, pts[0][1]*k];
+  for(i=0;i<n;i++){
+    dx = pts[i][0]-px; dy = pts[i][1]-py;
+    len.push(Math.sqrt(dx*dx + dy*dy)); total += len[i];
+    px = pts[i][0]; py = pts[i][1];
+  }
+  var d = k*total; px = 0; py = 0;
+  for(i=0;i<n;i++){
+    if(d <= len[i] || i === n-1){
+      var f = len[i] > 0 ? Math.min(1, d/len[i]) : 1;
+      return [px + (pts[i][0]-px)*f, py + (pts[i][1]-py)*f];
+    }
+    d -= len[i]; px = pts[i][0]; py = pts[i][1];
+  }
+  return [px, py];
+}
+
 function step(){
   anim++;
   /* Кто из движущихся объектов на самом деле привязан к кнопке/рычагу —
@@ -1778,8 +1830,8 @@ function step(){
         o._dx = 0; o._dy = 0;   // стоит, пока кнопку не держат/рычаг не включён
       } else {
         o._t += 0.012*(o.speed||1);
-        var k = (Math.sin(o._t)+1)/2;
-        var nx = o._hx + (o.moveX||0)*k, ny = o._hy + (o.moveY||0)*k;
+        var lo = liftOffset(o, liftK(o));
+        var nx = o._hx + lo[0], ny = o._hy + lo[1];
         o._dx = nx-o.x; o._dy = ny-o.y; o.x = nx; o.y = ny;
       }
     }
@@ -1854,7 +1906,12 @@ function step(){
   if(grabCd > 0) grabCd--;
 
   var dir = grabbing ? 0 : (keys.r?1:0)-(keys.l?1:0);
-  if(dir){
+  // отброс от бока рикошета (см. RICO_KICK) кончается раньше, если игрок
+  // уже встал — упёрся в обычную стену или повис на уступе
+  if(pl.kick > 0 && (grabbing || Math.abs(pl.vx) < 0.05)) pl.kick = 0;
+  if(pl.kick > 0){
+    pl.kick--; pl.vx *= RICO_KICK_DECAY;
+  } else if(dir){
     /* Разгона нет: нажал — сразу полная скорость, одна и та же всегда.
        Раньше скорость набиралась за 7 кадров (MOVE_A), и даже этот
        короткий разбег читался как вялость — особенно на коротких
@@ -1931,8 +1988,9 @@ function step(){
     var sp = spanX(P, pl.y + 2, pl.y + pl.h - 2);
     if(!sp || pl.x >= sp[1] || pl.x + pl.w <= sp[0]) return;
 
-    // пологий подъём: на склон и невысокий уступ игрок заходит, а не упирается
-    if(pl.ground){
+    // пологий подъём: на склон и невысокий уступ игрок заходит, а не упирается.
+    // Кроме рикошета: на низкий батут игрок иначе вшагивал, не отскакивая
+    if(pl.ground && !o.ricochet){
       var top = spanY(P, pl.x + 2, pl.x + pl.w - 2);
       if(top && pl.y + pl.h - top[0] <= STEP_UP && top[0] < pl.y + pl.h){
         pl.y = top[0] - pl.h;
@@ -1965,6 +2023,15 @@ function step(){
       var move = Math.min(lim, Math.abs(edge - pl.x));
       pl.x += goL ? -move : move;
       if(Math.abs(edge - pl.x) < 0.01) pl.wall = goL ? 1 : -1;
+      /* Едущий рикошет отражает скорость игрока ОТНОСИТЕЛЬНО себя: так
+         отбрасывает и того, кто врезался в него сам, и того, в кого
+         въехала платформа, пока он стоял. */
+      if(o.ricochet && pl.wall !== 0 && Math.abs(pl.vx - pdx) > RICO_MIN){
+        pl.vx -= pdx;
+        ricochet(o, pl.x + pl.w/2, (Math.max(pl.y, bb[1]) + Math.min(pl.y + pl.h, bb[3]))/2);
+        pl.vx += pdx;
+        return;
+      }
       /* Толкаемая фигура — исключение: её толкает сам игрок, поэтому его
          собственная скорость в ту же сторону — это не «встречный разбег»
          платформы, которую нужно погасить, а причина, по которой фигура
@@ -1993,7 +2060,8 @@ function step(){
     else   { pl.x = sp[1];        if(pl.vx !== 0) pl.wall = -1; }
     /* Рикошет отражает движение, а не гасит его. Медленное касание не
        отражаем — иначе игрок дрожит, прижавшись к блоку. */
-    if(o.ricochet && Math.abs(pl.vx) > RICO_MIN) ricochet(o);
+    if(o.ricochet && Math.abs(pl.vx) > RICO_MIN)
+      ricochet(o, pl.x + pl.w/2, (Math.max(pl.y, bb[1]) + Math.min(pl.y + pl.h, bb[3]))/2);
     /* Толкаемая фигура: тут она просто ещё не поймала это как активный
        толчок в этот самый кадр (например, зазор до настоящей грани на
        долю пикселя больше порога у наклонной фигуры) — это не «врезался
@@ -2310,7 +2378,21 @@ var VIEW_UNITS_H = 800;
    втрое, потом вполовину ближе) — по прямой просьбе: с приближенной
    камерой вид стал «коренным образом другим», чем в игре-образце,
    с которой сверялись. Без множителя, обе границы зажима как были. */
-function playZoom(){ return Math.max(0.6, Math.min(2.2, VH() / VIEW_UNITS_H)); }
+/* Телефон: «как на ПК, только ближе». Боком видно 560 единиц карты по
+   высоте вместо 800 — объекты крупнее и читаются на маленьком экране.
+   Стоя экран узкий: обзор вперёд важнее крупности, поэтому там ближе не
+   становится — остаётся прежнее равнение по высоте, если ширина обзора
+   и так меньше 480 единиц. Компьютер и планшет (меньшая сторона от
+   600px или мышь) не меняются вовсе. */
+var VIEW_UNITS_H_PHONE = 560, VIEW_UNITS_W_PHONE = 480;
+function isPhoneView(){
+  return Math.min(VW(), VH()) < 600 && typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches;
+}
+function playZoom(){
+  var z = VH() / VIEW_UNITS_H;
+  if(isPhoneView()) z = Math.min(VH() / VIEW_UNITS_H_PHONE, Math.max(VW() / VIEW_UNITS_W_PHONE, z));
+  return Math.max(0.6, Math.min(2.2, z));
+}
 
 function follow(){
   /* Камера прилипает к игроку НАМЕРТВО (v103): раньше экран догонял игрока
@@ -3718,6 +3800,7 @@ window.GAME = BRIDGE = {
       o.w = isFinite(o.w) ? Math.max(1, Math.min(10000, o.w)) : 1;
       o.h = isFinite(o.h) ? Math.max(1, Math.min(10000, o.h)) : 1;
       o.rot = isFinite(o.rot) ? o.rot : 0;
+      cleanLift(o);
       if(o.deadly === undefined && DEADLY_BY_DEFAULT.indexOf(o.type) !== -1) o.deadly = true;
       // «Ищущий» убран из палитры: в старых картах превращаем его в старт
       if(o.type === "seeker") o.type = "spawn";
