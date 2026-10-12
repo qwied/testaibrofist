@@ -123,6 +123,33 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
   justify-content:center;border-radius:50%;color:var(--muted);cursor:pointer}
 #inspClose:hover{background:#fee2e2;color:#dc2626}
 #inspClose svg{width:12px;height:12px}
+/* Окно свойств двигается за полоску сверху (и за строку вкладок) и
+   меняет размер уголком справа снизу — см. скрипт у #inspHead. */
+#inspGrip{flex:none;height:14px;display:flex;align-items:center;justify-content:center;
+  cursor:grab;touch-action:none}
+#inspGrip i{width:36px;height:4px;border-radius:2px;background:#d4d9e1}
+#inspGrip:hover i{background:#9aa3af}
+#inspHead{touch-action:none}
+/* уголок — отдельной полоской внизу окна, а не поверх содержимого: иначе
+   он ложился на переключатели у правого края и перехватывал нажатия */
+#inspResize{flex:none;align-self:flex-end;width:22px;height:16px;padding:2px 5px 4px 3px;box-sizing:border-box;
+  cursor:nwse-resize;touch-action:none;color:#9aa3af}
+#inspResize svg{width:100%;height:100%;display:block;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
+#inspResize:hover{color:var(--ink)}
+/* окно, которое автор сам поставил, — поверх зума, «на главную» и
+   инструментов (как лист свойств на телефоне), раз он сам его туда передвинул */
+#insp.userBox{z-index:20}
+#insp.dragging{user-select:none;-webkit-user-select:none;box-shadow:0 14px 40px rgba(15,23,42,.22)}
+#insp.dragging #inspGrip{cursor:grabbing}
+/* размер задал сам автор — вкладка тянется на всю высоту окна и
+   прокручивается внутри него, а не обрезается */
+#insp.userBox #visuals,#insp.userBox #passive,#insp.userBox #active,#insp.userBox #automatic{
+  max-height:none;flex:1 1 auto;min-height:0}
+/* на телефоне — зоны под палец крупнее */
+@media (pointer:coarse){
+  #inspGrip{height:22px}
+  #inspResize{width:34px;height:24px;padding:5px 9px 6px 9px}
+}
 /* Копия/Удалить — не в полях самого объекта, а над вкладками: это
    действия НАД объектом целиком, а не одно из его свойств. duplicate()/
    removeSel() уже существовали (горячие клавиши) — тут их впервые видно. */
@@ -388,6 +415,7 @@ body.mob #msg h1{font-size:38px}
 </div>
 
 <div id="insp" class="panel">
+  <div id="inspGrip" data-i18n-title="inspGripTip" title="Drag to move · double-click to put back"><i></i></div>
   <div id="inspHead">
     <div class="tab on" data-tab="visuals" data-i18n="edVisuals">Visuals</div>
     <div class="tab" data-tab="passive" data-i18n="edPassive">Passive</div>
@@ -411,6 +439,7 @@ body.mob #msg h1{font-size:38px}
   <div id="passive" style="display:none"></div>
   <div id="active" style="display:none"></div>
   <div id="automatic" style="display:none"></div>
+  <div id="inspResize" data-i18n-title="inspResizeTip" title="Drag to resize"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M11 4 4 11M11 8 8 11"/></svg></div>
 </div>
 
 <div id="zoomBox" class="panel">
@@ -3737,6 +3766,98 @@ document.getElementById("inspActs").addEventListener("click", function(e){
   if(e.target.closest("#inspDup")) duplicate();
   else if(e.target.closest("#inspDel")) removeSel();
 });
+/* Окно свойств можно таскать — за полоску сверху или за строку вкладок —
+   и менять ему размер уголком справа снизу, мышью и пальцем. Обычное
+   нажатие на вкладку остаётся нажатием: перетаскивание начинается, только
+   когда палец/мышь ушли дальше 5px. Позиция и размер запоминаются отдельно
+   для компьютера, телефона стоя и телефона боком; двойной клик (двойной
+   тап) по полоске возвращает окно на его обычное место. Окно не выходит
+   за экран и за вырез/«чёлку». */
+(function(){
+  var box = document.getElementById("insp"), grip = document.getElementById("inspGrip");
+  var KEY = "bfInspBox", MIN_W = 220, MIN_H = 140, EDGE = 4;
+  var probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;width:0;height:0;" +
+    "padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)";
+  document.body.appendChild(probe);
+  function insets(){
+    var cs = getComputedStyle(probe);
+    return { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0,
+             b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+  }
+  function layout(){ return !document.body.classList.contains("mob") ? "desk" : (innerWidth > innerHeight ? "land" : "port"); }
+  function load(){ try { return JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch(e){ return {}; } }
+  function store(all){ try { localStorage.setItem(KEY, JSON.stringify(all)); } catch(e){} }
+  function fit(r){
+    var s = insets(), x0 = s.l + EDGE, y0 = s.t + EDGE;
+    var maxW = innerWidth - s.l - s.r - 2*EDGE, maxH = innerHeight - s.t - s.b - 2*EDGE;
+    var w = Math.max(Math.min(MIN_W, maxW), Math.min(r.w, maxW));
+    var h = Math.max(Math.min(MIN_H, maxH), Math.min(r.h, maxH));
+    return { x: Math.max(x0, Math.min(r.x, x0 + maxW - w)), y: Math.max(y0, Math.min(r.y, y0 + maxH - h)), w: w, h: h };
+  }
+  function apply(r){
+    var keys = ["left","top","width","height","right","bottom","transform","maxHeight"];
+    if(!r){ box.classList.remove("userBox"); keys.forEach(function(k){ box.style[k] = ""; }); return; }
+    r = fit(r);
+    box.classList.add("userBox");
+    box.style.left = r.x + "px"; box.style.top = r.y + "px";
+    box.style.width = r.w + "px"; box.style.height = r.h + "px";
+    box.style.right = "auto"; box.style.bottom = "auto"; box.style.transform = "none"; box.style.maxHeight = "none";
+  }
+  function restore(){ apply(load()[layout()] || null); }
+  restore();
+  addEventListener("resize", restore);
+
+  var drag = null, noClick = false, lastTap = 0;
+  function down(mode){
+    return function(e){
+      if(e.pointerType === "mouse" && e.button !== 0) return;
+      if(mode === "move" && e.target.closest("#inspClose")) return;
+      var rc = box.getBoundingClientRect();
+      drag = { mode: mode, id: e.pointerId, sx: e.clientX, sy: e.clientY, el: e.currentTarget, moved: false,
+               r: { x: rc.left, y: rc.top, w: rc.width, h: rc.height } };
+      if(mode === "size") e.preventDefault();
+    };
+  }
+  grip.addEventListener("pointerdown", down("move"));
+  document.getElementById("inspHead").addEventListener("pointerdown", down("move"));
+  document.getElementById("inspResize").addEventListener("pointerdown", down("size"));
+  addEventListener("pointermove", function(e){
+    if(!drag || e.pointerId !== drag.id) return;
+    var dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+    if(!drag.moved){
+      if(Math.abs(dx) < 5 && Math.abs(dy) < 5) return;   // ещё нажатие, не перетаскивание
+      drag.moved = true; box.classList.add("dragging");
+      try { drag.el.setPointerCapture(e.pointerId); } catch(err){}
+    }
+    var r = drag.r;
+    apply(drag.mode === "move" ? { x: r.x + dx, y: r.y + dy, w: r.w, h: r.h }
+                               : { x: r.x, y: r.y, w: r.w + dx, h: r.h + dy });
+    e.preventDefault();
+  }, { passive: false });
+  function up(e){
+    if(!drag || e.pointerId !== drag.id) return;
+    if(drag.moved){
+      box.classList.remove("dragging");
+      var rc = box.getBoundingClientRect(), all = load();
+      all[layout()] = { x: rc.left, y: rc.top, w: rc.width, h: rc.height };
+      store(all);
+      noClick = true; setTimeout(function(){ noClick = false; }, 0);
+    } else if(drag.el === grip && e.type === "pointerup"){
+      // двойной тап/клик по полоске — окно на обычное место
+      var now = Date.now();
+      if(now - lastTap < 350){ var all2 = load(); delete all2[layout()]; store(all2); apply(null); lastTap = 0; }
+      else lastTap = now;
+    }
+    drag = null;
+  }
+  addEventListener("pointerup", up);
+  addEventListener("pointercancel", up);
+  // отпустили после перетаскивания над вкладкой — это не выбор вкладки
+  document.getElementById("inspHead").addEventListener("click", function(e){
+    if(noClick){ e.stopPropagation(); e.preventDefault(); }
+  }, true);
+})();
 // pr()/grp()/hint() пишут в ту вкладку, которую сейчас наполняет inspect() —
 // см. inspTarget ниже
 var inspTarget = visualsEl;
