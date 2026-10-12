@@ -1,0 +1,122 @@
+/* Прятки: реплики, сброс поимки и досрочный конец раунда.
+   Проверяем сам game.js — его логика лежит в одном файле. */
+const fs = require('fs');
+const src = fs.readFileSync(__dirname + '/game.js', 'utf8');
+let fails = 0;
+const ok = (n, c, x) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', n, x === undefined ? '' : x); };
+
+console.log('реплики:');
+ok('копятся стопкой',       /var list = spoken\[who\] \|\| \(spoken\[who\] = \[\]\);/.test(src));
+ok('старая не затирается',  !/spoken\[who\] = \{ text: text, born: Date\.now\(\) \};/.test(src));
+ok('лимит стопки',          /SAY_MAX/.test(src));
+ok('рисуются все',          /for \(var si = 0; si < list\.length; si\+\+\)/.test(src));
+ok('не наезжают друг на друга', /var lift = \(list\.length - 1 - si\) \* 15 \* tk;/.test(src));
+ok('перенос длинных реплик',  /function wrapSay/.test(src) && /wrapSay\(sp\.text/.test(src));
+ok('bidi-символы чистятся',   /BIDI_RE/.test(src) && /cleanSay\(text\)/.test(src));
+ok('ник белый с обводкой',    /strokeText\(name/.test(src) && /#ffffff/.test(src));
+
+console.log('\nотправка сообщений:');
+ok('одна дорога отправки',  /function sendTyped/.test(src));
+ok('Готово на айфоне шлёт', /if \(inp\.value\.trim\(\)\) sendTyped\(\);/.test(src));
+ok('submit не перезагружает', /inp\.form\.addEventListener\('submit'/.test(src));
+ok('реплики тают, а не рвутся', /old\.born = Date\.now\(\) - \(SAY_FADE - SAY_OUT\)/.test(src));
+ok('растворение по времени', /SAY_OUT/.test(src) && /1 - SAY_OUT \/ SAY_FADE/.test(src));
+
+console.log('\nпоимка:');
+ok('сбрасывается функцией', /function clearCaught/.test(src));
+ok('сброс в начале раунда', /clearCaught\(\);\s*\/\/ новый раунд/.test(src));
+ok('сброс при уходе в лобби', (src.match(/clearCaught\(\);/g) || []).length >= 2);
+ok('чужие тоже сбрасываются', /others\[id\]\.caught = false/.test(src));
+// заражение теперь подтверждает только сервер (hsInfected), не разбор
+// чата — чужой не может подделать чужую поимку, отправив '<имя> caught!'
+ok('заражение только от сервера, не из чата', /socket\.on\('hsInfected'/.test(src) && !/function watchCaught/.test(src));
+ok('заражённый добавляется в общий список охотящихся', /hsSeekerIds\[id\] = true;/.test(src));
+
+console.log('\nконец раунда:');
+ok('проверка «все пойманы»', /function checkAllCaught/.test(src));
+ok('вызов после поимки',    /checkAllCaught\(\);/.test(src));
+ok('один в комнате не считается', /if \(!ids\.length\) return;/.test(src));
+ok('раунд переключается',   /switching = false; if \(!hsSync\) advance\(\);/.test(src));
+
+console.log('\nрулетка искателя:');
+ok('сервер выбирает искателя',  /socket\.on\('hsRoulette'/.test(src));
+ok('состояние при входе',       /socket\.on\('hsState'/.test(src));
+ok('фазы от сервера',           /socket\.on\('hsPhase'/.test(src));
+ok('рулетка рисуется функцией', /function runRoulette/.test(src) && /runRoulette\(d\)/.test(src));
+ok('плашка в правом верхнем углу, без карточек и скинов',
+                                 /#gRoul\{position:fixed;top:52px/.test(src) &&
+                                 !/className = 'rSkin'/.test(src) && !/className = 'rCard'/.test(src));
+ok('в ленте только ники',       /el\.className = 'rName'/.test(src) &&
+                                 /el\.textContent = p\.name/.test(src));
+ok('ник победителя синеет',     /pills\[target\]\.classList\.add\('rWin'\)/.test(src) &&
+                                 /\.rName\.rWin\{color:#60a5fa\}/.test(src));
+ok('итог подписывается только тебе', /roulYouSeek/.test(src) &&
+                                 /if \(d\.winnerId === socket\.id\)/.test(src));
+ok('шанс в правом верхнем',     /#gChance\{position:fixed;top:52px/.test(src) &&
+                                /function showChance/.test(src) && /showChance\(\(d\.players\)/.test(src));
+/* Баг: showChance() вызывался только один раз, из hsRoulette, а
+   hideChance() — только на отказе входа (дубль-аккаунт). Плашка «Твой
+   шанс» продолжала висеть весь раунд после того, как рулетка уже решила,
+   кто искатель, и цифра шанса потеряла смысл. */
+ok('шанс гасится на старте раунда (hsPhase)',
+    /if \(d\.phase === 'round'\) \{\s*roulStop\(\);\s*(?:\/\/[^\n]*\n\s*)+hideChance\(\);/.test(src));
+ok('шанс гасится у опоздавшего в раунд (hsState)',
+    /socket\.on\('hsState'[\s\S]{0,900}if \(d\.phase === 'round'\) \{\s*roulStop\(\);\s*(?:\/\/[^\n]*\n\s*)+hideChance\(\);/.test(src));
+ok('шанс гасится при обрыве Story-сессии', /roulStop\(\);\s*hideChance\(\);\s*phaseEnds = Date\.now\(\) \+ 1e12;/.test(src));
+ok('плашки в углу считают отступ по факту, не угадывают числом',
+                                 /function relayoutCorner/.test(src) &&
+                                 /y = Math\.ceil\(top\.getBoundingClientRect\(\)\.bottom\) \+ gap;/.test(src));
+ok('рулетка и шанс не наезжают друг на друга', /roul\.offsetHeight \+ gap;/.test(src) &&
+                                 /chance\.offsetHeight \+ gap;/.test(src));
+ok('в охоте видно всех',        /if \(o\.hid && hsWait\) return;/.test(src));
+ok('лента едет одним ходом',    /transition = 'transform ' \+ spin \+ 'ms cubic-bezier/.test(src));
+ok('стоп ровно на победителе',  /var target = seq\.length \+ winIdx;/.test(src) &&
+                                /posOf\(target\)/.test(src));
+ok('укладывается в лобби',      /var spin = Math\.min\(dur - 1100, left - 2400\);/.test(src));
+ok('роль после остановки',      /applySeeker\(d\.winnerId\)/.test(src));
+ok('обрыв связи — свой таймер', /socket\.on\('disconnect', function \(\) \{\s*hsSync = false; joined = false;[\s\S]*?\}\)/.test(src));
+
+console.log('\nодин игрок в комнате — играть можно, паузы нет:');
+ok('фазы waiting в клиенте больше нет', !/d\.phase === 'waiting'/.test(src) &&
+                                 !/function showWaitingForPlayers/.test(src));
+ok('плашки «жду игроков» нет',  !/waitTitle/.test(src) && !/hsWaitText/.test(src));
+ok('таймер не завязан на паузу', !/phase === 'waiting'/.test(src));
+
+console.log('\nпроверка поимки не зависит от отправки позиции:');
+ok('checkAllFinished вне троттлинга', /checkAllFinished\(\);\s*\n\s*checkRaceFinish\(\);/.test(src));
+ok('отправка на сервер троттлится отдельно', /if \(now - lastSent >= minGap && \(moved \|\| force\)\) \{/.test(src));
+
+console.log('\nвидимость в прятках:');
+/* Правило лобби перевернули: пока крутится рулетка — видно всех, как
+   только выпал искатель и до конца лобби — никого (время прятаться). */
+ok('лобби делится по рулетке',     /var hsHiding = hsWait && !!hsWinnerId;/.test(src));
+ok('прячемся — не видно никого',   /if \(hsHiding\) return;/.test(src));
+ok('во время рулетки видно всех',  !/if \(!hsWinnerId\) return;/.test(src)
+                                   && !/if \(id === hsWinnerId\) return;/.test(src)
+                                   && !/if \(me\.role === 'seeker'\) return;/.test(src));
+ok('подсказка про невидимость',    /hideNow/.test(src));
+ok('в раунде видно всех',          /var hsWait = MODE === 'hideAndSeek' && !VIEW && phase === 'lobby';/.test(src));
+ok('все пойманы — сигнал серверу', /if \(hsSync\) socket\.emit\('hsCaught'\);/.test(src));
+
+/* Серверная часть прятки/награды: одометр. Оба правила проверялись
+   живыми клиентами (искатель-телепорт и честный прячущийся), здесь
+   держим их от молчаливого отката. */
+const srv = fs.readFileSync(__dirname + '/server.js', 'utf8');
+console.log('\nодометр в прятках (server.js):');
+ok('путь прячущегося считается с лобби', /st\.lobbyOdo = new Map\(\);/.test(srv)
+                                   && /st\.lobbyOdo\.has\(m\.id\)\) \? st\.lobbyOdo\.get\(m\.id\)/.test(srv));
+// seekerOdo теперь Map — своя отметка на каждого охотящегося (заражение
+// добавляет новых по ходу раунда, у каждого путь считается с момента
+// заражения, а не с чужого старта)
+ok('путь каждого искателя считается за раунд от своей отметки',
+    /st\.seekerOdo = new Map\(\[\[st\.seekerId, sp0 \? \(sp0\.odo \|\| 0\) : 0\]\]\);/.test(srv)
+    && /const base = st\.seekerOdo \? \(st\.seekerOdo\.get\(socket\.id\) \|\| 0\) : 0;/.test(srv)
+    && /\(player\.odo \|\| 0\) - base < HS_MIN_DIST/.test(srv));
+ok('за всю сессию путь больше не считают', !/if \(\(player\.odo \|\| 0\) < HS_MIN_DIST\) return;/.test(srv));
+ok('переподключённому искателю отметку сдвигают', /st\.seekerOdo\.set\(socket\.id, player\.odo \|\| 0\);/.test(srv));
+ok('заражённому отметку тоже ставят с нуля', /st\.seekerOdo\.set\(targetId, target\.odo \|\| 0\);/.test(srv));
+ok('гость-искатель тоже заражает (не только с монетами)',
+    /st\.seekerIds\.add\(targetId\);/.test(srv) && /io\.to\(room\)\.emit\('hsInfected'/.test(srv));
+
+console.log(fails ? '\nПРОВАЛЕНО проверок: ' + fails : '\nвсе проверки пройдены ✓');
+process.exit(fails ? 1 : 0);

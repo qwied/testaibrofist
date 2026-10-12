@@ -1,0 +1,853 @@
+// ============ КАРТЫ: публикация из редактора и Maps Browser ============
+const fs = require('fs');
+const path = require('path');
+const { atomicWriteFileSync } = require('./fsAtomic.js');
+
+const DATA_DIR = path.join(__dirname, 'data');
+const MAPS_FILE = path.join(DATA_DIR, 'maps.json');
+
+const MODES = ['hideAndSeek', 'race'];
+/* Владелец сайта — ОДИН список, accounts.js (OWNER_ALIASES). Раньше
+   здесь был свой отдельный список с тем же умолчанием, но независимо
+   пересчитанный — малейшее расхождение с accounts.js (например, после
+   смены владельца только в одном месте) и /owner/removeMap начинал
+   писать настоящему владельцу «Not available». accounts.js требуется
+   раньше maps.js в server.js, так что к этому моменту он уже полностью
+   загружен — циклической зависимости нет (сам accounts.js требует
+   maps.js лениво, внутри функций, а не при загрузке модуля).
+   в игровые режимы попадают только карты владельца сайта. */
+const { OWNER_ALIASES } = require('./accounts.js');
+const isOwnerName = n => OWNER_ALIASES.indexOf(String(n || '').toLowerCase()) !== -1;
+/* Буквы медалей за время (см. rankForTime в ranks.js). ranks.js сам
+   требует этот файл лениво, внутри build() — цикла загрузки здесь нет. */
+const RANK_LETTERS = require('./ranks.js').RANK_ORDER;
+
+const DAILY_LIMIT = 3;                 // сколько новых карт можно выложить за сутки
+const REWARD      = 10;                // монет за каждую новую опубликованную карту
+const COIN_LIMIT  = 3;                 // максимум монет в одной карте — защита от накрутки
+const OBJ_LIMIT   = 2000;              // максимум объектов в карте, одинаково во всех режимах
+const OBJ_MIN     = 100;               // минимум объектов для публикации — иначе награду накрутить проще, чем карту построить
+const TEXT_MAX_RATIO = 0.3;            // не больше 30% карты — текстовые объекты, остальное геометрия
+
+// у каждого режима свой набор объектов; общие доступны везде
+/* Платформа, ротатор, батут, яд и шипы стали свойствами обычных объектов,
+   а дверь — воротами. Типы оставлены в списке, чтобы старые карты
+   принимались: редактор превращает их в свойства при загрузке. */
+const TOOL_MODES = {
+  rect:null, circle:null, triangle:null, text:null, coin:null,
+  gate:null, spawn:null, finishline:null,
+  button:null, lever:null, water:null, laserFeed:null, laserReceiver:null,
+  zombie:['hideAndSeek'],       // модификация Zombie Apocalypse — только прятки
+  teleport:null,               // пара площадок — есть в обоих режимах, как кнопка/рычаг
+  cover:['hideAndSeek'],
+  checkpoint:['race'],
+  // устаревшие типы — принимаем, но в палитре их больше нет
+  poison:null, spike:null, bounce:null, platform:null, rotator:null,
+  door:null, seeker:null, liquid:null, box:null, superGate:null
+};
+const TOOL_RU = {
+  cover:'Cover', seeker:'Seeker', door:'Door', button:'Button',
+  lever:'Lever', checkpoint:'Checkpoint', finishline:'Finish', water:'Water',
+  teleport:'Teleport', zombie:'Zombie', liquid:'Liquid', superGate:'SUPER BRO gate'
+};
+
+// объекты карты (mapData — JSON из редактора)
+function objectsOf(raw) {
+  try {
+    const m = JSON.parse(raw);
+    const list = Array.isArray(m) ? m : (m && Array.isArray(m.objects) ? m.objects : []);
+    return list.filter(o => o && typeof o.type === 'string');
+  } catch (e) { return []; }
+}
+
+// какие объекты не подходят заявленному режиму
+function wrongForMode(list, mode) {
+  const bad = new Set();
+  list.forEach(o => {
+    // o.type — строка из присланного JSON; "constructor"/"toString" и т.п.
+    // резолвятся через прототип в обычную функцию Object, а не в undefined,
+    // и .indexOf на ней рвёт запрос — hasOwnProperty отсекает это заранее
+    if (!Object.prototype.hasOwnProperty.call(TOOL_MODES, o.type)) return;
+    const allowed = TOOL_MODES[o.type];
+    if (allowed && allowed.indexOf(mode) === -1) bad.add(o.type);
+  });
+  return Array.from(bad);
+}
+
+// сколько монет лежит в карте
+function coinsInMap(raw) {
+  return objectsOf(raw).filter(o => o.type === 'coin').length;
+}
+
+/* Медали за время на карте (см. rankForTime в ranks.js) — задаёт только
+   владелец сайта, см. /owner/setMapRankTiers ниже. От клиента приходит
+   {БУКВА: секунды}; пустая строка/0/мусор для буквы — порог для неё
+   просто не задан, а не ошибка (поле в форме почистили). Неизвестная
+   буква или не-объект — вот это уже ошибка формы, вся правка отклоняется. */
+function parseLadder(obj) {
+  if (obj === undefined || obj === null) return [];
+  if (typeof obj !== 'object' || Array.isArray(obj)) return false;
+  const out = [];
+  for (const rank of Object.keys(obj)) {
+    if (RANK_LETTERS.indexOf(rank) === -1) return false;
+    const sec = Number(obj[rank]);
+    if (!(sec > 0) || sec > 36000) continue;    // до 10 часов — больше заведомо опечатка, но не аварийная
+    out.push({ rank, ms: Math.round(sec * 1000) });
+  }
+  return out;
+}
+// raw -> внутренний вид rankTiers карты (null — медали с карты сняты, false — вход не распознан)
+function parseRankTiers(raw, mapType) {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) return false;
+  if (mapType === 'race') {
+    const race = parseLadder(raw.race);
+    if (race === false) return false;
+    return race.length ? { race } : null;
+  }
+  const hider = parseLadder(raw.hider);
+  const seeker = parseLadder(raw.seeker);
+  if (hider === false || seeker === false) return false;
+  if (!hider.length && !seeker.length) return null;
+  const out = {};
+  if (hider.length) out.hider = hider;
+  if (seeker.length) out.seeker = seeker;
+  return out;
+}
+
+// медаль ТЕКУЩЕГО зрителя на этой карте — для карточки в Maps Browser
+// (та же лестница, что и в общем ранге, см. medalAvgRace/medalAvgHs)
+function medalOf(m, me) {
+  if (!m.rankTiers || !me) return null;
+  const mapKey = m.author + '|' + m.mapName;
+  const rk = require('./ranks.js');
+  if (m.mapType === 'race') {
+    const ms = me.rcBest && me.rcBest[mapKey];
+    if (!(ms > 0) || !Array.isArray(m.rankTiers.race)) return null;
+    const r = rk.rankForTime(m.rankTiers.race, ms, 'min');
+    return r ? { race: r } : null;
+  }
+  const e = me.hsMapBest && me.hsMapBest[mapKey];
+  if (!e) return null;
+  const out = {};
+  if (Array.isArray(m.rankTiers.hider) && e.hiderMs > 0) {
+    const r = rk.rankForTime(m.rankTiers.hider, e.hiderMs, 'max'); if (r) out.hider = r;
+  }
+  if (Array.isArray(m.rankTiers.seeker) && e.seekerMs > 0) {
+    const r = rk.rankForTime(m.rankTiers.seeker, e.seekerMs, 'min'); if (r) out.seeker = r;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+// счётчики оценок: голоса игроков + ручная правка владельца
+function tally(m) {
+  const votes = Object.values(m.votes || {});
+  // boost может быть отрицательным: так владелец способен выставить
+  // итог меньше, чем реальных голосов. Ниже нуля не опускаемся.
+  const likes = Math.max(0, votes.filter(v => v > 0).length + (m.boostLikes || 0));
+  const dislikes = Math.max(0, votes.filter(v => v < 0).length + (m.boostDislikes || 0));
+  return { likes, dislikes, rating: likes - dislikes };
+}
+function retally(m) {
+  const t = tally(m);
+  m.rating = t.rating;
+  return t;
+}
+
+/* Сколько новых карт автор выложил за сутки.
+   Считаем по счётчику в аккаунте, а не по списку карт: раньше можно
+   было выложить карту, получить монеты, удалить её — и счётчик падал,
+   так что и лимит, и награда обходились бесконечно. */
+function publishedToday(u) {
+  if (!u) return 0;
+  if (!u.mapDay || Date.now() - u.mapDay > 864e5) return 0;
+  return u.mapCount || 0;
+}
+function countPublish(u) {
+  if (!u.mapDay || Date.now() - u.mapDay > 864e5) { u.mapDay = Date.now(); u.mapCount = 0; }
+  u.mapCount = (u.mapCount || 0) + 1;
+}
+function publishWait(u) {
+  const left = (u.mapDay || Date.now()) + 864e5 - Date.now();
+  return Math.max(0, left);
+}
+
+let maps = [];
+
+function load() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (fs.existsSync(MAPS_FILE)) maps = JSON.parse(fs.readFileSync(MAPS_FILE, 'utf8'));
+  } catch (e) { console.log('maps.json не прочитан, начинаю с нуля'); }
+  if (!Array.isArray(maps)) maps = [];
+}
+let timer = null;
+function save() {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    try {
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+      atomicWriteFileSync(MAPS_FILE, JSON.stringify(maps, null, 2));
+    } catch (e) { console.log('не смог сохранить maps.json:', e.message); }
+  }, 300);
+}
+load();
+
+const low = s => String(s || '').toLowerCase();
+
+/* Случайная карта режима. Вынесено из обработчика /getRandomMap, потому
+   что теперь её зовёт и server.js: в прятках карту комнаты выбирает
+   СЕРВЕР и рассылает всем, иначе каждый клиент дёргал /getRandomMap сам
+   и игроки одной комнаты оказывались на разных картах — чужой персонаж
+   при этом честно приходил с правильными координатами, но падал на
+   другую геометрию и выглядел «парящим в воздухе». */
+function randomFor(mapType, not) {
+  const t = mapType;
+  // без указания режима берём любую карту, иначе — карты владельца
+  // плюс те, что он добавил кнопкой «Добавить в игру» в Maps Browser
+  const pool = !t
+    ? maps.slice()
+    : maps.filter(m => {
+        if (isOwnerName(m.author) && m.mapType === t) return true;
+        // владелец мог вручную добавить чужую карту в конкретный режим
+        return Array.isArray(m.inGameModes) && m.inGameModes.indexOf(t) !== -1;
+      });
+  if (!pool.length) return null;
+  let m = pool[Math.floor(Math.random() * pool.length)];
+  // не повторяем ту же карту подряд, если есть выбор
+  if (pool.length > 1 && not) {
+    let guard = 0;
+    while (m.mapName === not && guard++ < 8)
+      m = pool[Math.floor(Math.random() * pool.length)];
+  }
+  return m;
+}
+
+// сохраняем ссылку на accounts.js, переданную в register(), — она же нужна
+// вне обработчиков запросов, в renameAuthor() ниже (тот же приём, что
+// accountsRef в server.js)
+let accRef = null;
+
+/* Ключ избранного/папки карты — "автор::карта" в нижнем регистре (см.
+   favKey выше). Он ссылается на карту по имени АВТОРА, а не по её ID,
+   поэтому при переименовании автора ключи у ВСЕХ, кто уже добавил его
+   карту в избранное или разложил по папкам, тихо отвязываются от неё.
+   Трогаем только те ключи, что действительно указывают на переименованные
+   карты — свои избранные карты других авторов не задеть. */
+function remapFavKey(k, fromKey, toKey, mapNamesKey) {
+  const i = String(k).indexOf('::');
+  if (i === -1) return k;
+  const a = k.slice(0, i), mn = k.slice(i + 2);
+  return (a === fromKey && mapNamesKey.indexOf(mn) !== -1) ? (toKey + '::' + mn) : k;
+}
+
+/* Игрок сменил ник (см. /changeNickname в accounts.js и /renameUser в
+   extras.js) — карты остаются при нём, а не превращаются в чужие. Раньше
+   их не удаляло, но и не находило под новым именем: m.author так и
+   оставался старым, и для игрока это выглядело как пропажа. Переносим
+   и подпись карты, и авторство её же комментариев, и — раз уж читаем всю
+   базу — ключи избранного/папок у ДРУГИХ игроков, которые ссылались на
+   эти карты по старому имени автора. */
+function renameAuthor(oldName, newName) {
+  const fromKey = low(oldName), toKey = low(newName);
+  if (!fromKey || !toKey || fromKey === toKey) return;
+  const mapNamesKey = [];
+  maps.forEach(m => {
+    if (low(m.author) !== fromKey) return;
+    m.author = newName;
+    mapNamesKey.push(low(m.mapName));
+    if (Array.isArray(m.comments))
+      m.comments.forEach(c => { if (low(c.author) === fromKey) c.author = newName; });
+  });
+  if (!mapNamesKey.length) return;
+  save();
+  if (!accRef) return;
+  const db = accRef.getDb();
+  Object.values(db.users).forEach(u => {
+    if (Array.isArray(u.favoriteMaps))
+      u.favoriteMaps = u.favoriteMaps.map(k => remapFavKey(k, fromKey, toKey, mapNamesKey));
+    if (u.mapFolderOf && typeof u.mapFolderOf === 'object') {
+      const next = {};
+      Object.keys(u.mapFolderOf).forEach(k => { next[remapFavKey(k, fromKey, toKey, mapNamesKey)] = u.mapFolderOf[k]; });
+      u.mapFolderOf = next;
+    }
+  });
+  accRef.save();
+}
+
+function register(app, getUser, acc, cleanText) {
+  accRef = acc;
+  // ---------- публикация карты из редактора ----------
+  app.post('/uploadMap', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+
+    const mapName = String(req.body.mapName || '').trim();
+    const mapType = String(req.body.mapType || 'hideAndSeek');
+    const mapData = String(req.body.mapData || '');
+    const overwrite = String(req.body.mapOverwrite || '') === 'true';
+
+    if (mapName.length < 2 || mapName.length > 30)
+      return res.json({ status: 'error', message: 'Map name: 2 to 30 characters' });
+    if (MODES.indexOf(mapType) === -1)
+      return res.json({ status: 'error', message: 'Unknown map mode' });
+    if (!mapData)
+      return res.json({ status: 'error', message: 'Map is empty' });
+
+    const list = objectsOf(mapData);
+    // objectsOf молча возвращает [] на любой мусор/битый JSON — без этой
+    // проверки такой mapData спокойно проходил все лимиты (0 не больше
+    // 2000, 0 монет не больше 3) и приносил полную награду ни за что
+    if (!list.length)
+      return res.json({ status: 'error', message: 'Map is corrupted or empty' });
+
+    // objectsOf проверяет только o.type — числовые поля (x/y/w/h) из
+    // чужого JSON долетали бы как есть. Клиентский loadMap() их уже
+    // клэмпит защитно, но это единственная настоящая граница доверия:
+    // без неё гигантское w/h всё равно попадёт на диск и до клэмпа
+    // долетит buildGrid() у ЛЮБОГО, кто откроет карту до обновления
+    // клиента — проще отказать сразу на публикации
+    // маршрут лифта (o.path, до 16 точек — см. LIFT_MAX_PTS в редакторе)
+    // проверяем по тем же границам, что и позицию самого объекта
+    const badPath = o => o.path !== undefined && (!Array.isArray(o.path) || o.path.length > 16 ||
+      o.path.some(p => !Array.isArray(p) || !Number.isFinite(p[0]) || !Number.isFinite(p[1]) ||
+        Math.abs(p[0]) > 100000 || Math.abs(p[1]) > 100000));
+    const badGeom = list.some(o =>
+      !isFinite(o.x) || !isFinite(o.y) || !isFinite(o.w) || !isFinite(o.h) ||
+      Math.abs(o.x) > 100000 || Math.abs(o.y) > 100000 ||
+      o.w < 1 || o.w > 10000 || o.h < 1 || o.h > 10000 || badPath(o)
+    );
+    if (badGeom)
+      return res.json({ status: 'error', message: 'Map is corrupted: an object has an invalid position or size' });
+
+    if (list.length > OBJ_LIMIT)
+      return res.json({
+        status: 'error',
+        message: 'The map has ' + list.length + ' objects. No more than ' + OBJ_LIMIT + ' allowed.'
+      });
+
+    // за новую карту платим монетами — иначе публиковали бы карту из
+    // одного объекта ради награды. Владельцу порог не мешает: его карты
+    // для показов, не для заработка.
+    if (list.length < OBJ_MIN && !isOwnerName(u.name))
+      return res.json({
+        status: 'error',
+        message: 'The map has ' + list.length + ' objects. At least ' + OBJ_MIN +
+                 ' are required to publish.'
+      });
+
+    // текстом легче всего накрутить число объектов, не строя саму карту —
+    // ограничиваем его долю, а не количество, чтобы большие карты могли
+    // позволить себе больше подписей
+    const textCount = list.filter(o => o.type === 'text').length;
+    if (textCount > 0 && textCount > Math.floor(list.length * TEXT_MAX_RATIO) && !isOwnerName(u.name))
+      return res.json({
+        status: 'error',
+        message: textCount + ' of ' + list.length + ' objects are text — more than ' +
+                 Math.round(TEXT_MAX_RATIO * 100) + '% of the map. Add more actual geometry.'
+      });
+
+    const coins = list.filter(o => o.type === 'coin').length;
+    // владельцу лимит монет не мешает: его карты для показов
+    if (coins > COIN_LIMIT && !isOwnerName(u.name))
+      return res.json({
+        status: 'error',
+        message: 'The map has ' + coins + ' coins. No more than ' + COIN_LIMIT +
+                 ' allowed — remove the extra ones and try again.'
+      });
+
+    const bad = wrongForMode(list, mapType);
+    if (bad.length)
+      return res.json({
+        status: 'error',
+        message: 'These objects don\'t work in the «' + mapType + '» mode: ' +
+                 bad.map(t => TOOL_RU[t] || t).join(', ') + '. Remove them from the map.'
+      });
+
+    const i = maps.findIndex(m => low(m.author) === low(u.name) && low(m.mapName) === low(mapName));
+
+    // лимит считаем только для новых карт — обновлять свои можно свободно
+    if (i === -1) {
+      const used = publishedToday(u);
+      if (used >= DAILY_LIMIT) {
+        const mins = Math.ceil(publishWait(u) / 60000);
+        const h = Math.floor(mins / 60), mn = mins % 60;
+        return res.json({
+          status: 'error',
+          message: 'Daily limit of ' + DAILY_LIMIT + ' maps reached. You can publish the next one in '
+                   + (h > 0 ? h + 'h ' + mn + 'm' : mn + 'm') + '.'
+        });
+      }
+    }
+
+    if (i !== -1) {
+      if (!overwrite)
+        return res.json({ status: 'exists', message: 'A map with this name already exists. Overwrite it?' });
+      maps[i].mapData = mapData;
+      maps[i].mapType = mapType;
+      maps[i].date = Date.now();
+      save();
+      return res.json({ status: 'success', message: 'Map updated' });
+    }
+
+    maps.push({
+      mapName, mapType, mapData,
+      author: u.name, date: Date.now(), created: Date.now(),
+      rating: 0, votes: {}, boostLikes: 0, boostDislikes: 0, inGameModes: []
+    });
+    save();
+
+    // за новую карту начисляем монеты; при обновлении старой — нет,
+    // иначе можно было бы перезаливать одну и ту же карту без конца
+    let balance = u.coins || 0;
+    if (acc && typeof acc.save === 'function') {
+      u.coins = balance = balance + REWARD;
+      countPublish(u);
+      acc.save();
+    }
+
+    const left = DAILY_LIMIT - publishedToday(u);
+    res.json({
+      status: 'success',
+      reward: REWARD,
+      coins: balance,
+      left: Math.max(0, left),
+      limit: DAILY_LIMIT,
+      message: 'Map published. +' + REWARD + ' coins  ·  left today: ' +
+               Math.max(0, left) + ' of ' + DAILY_LIMIT
+    });
+  });
+
+  app.get('/getUploadLimit', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ limit: DAILY_LIMIT, left: DAILY_LIMIT, reward: REWARD, guest: true });
+    res.json({
+      limit: DAILY_LIMIT, reward: REWARD, guest: false,
+      left: Math.max(0, DAILY_LIMIT - publishedToday(u))
+    });
+  });
+
+  // "author::mapName" в нижнем регистре — тот же составной ключ, которым
+  // карта адресуется везде (у карт нет отдельного числового id)
+  const favKey = (author, mapName) => low(author) + '::' + low(mapName);
+
+  // ---------- список карт для Maps Browser ----------
+  function list(req, res) {
+    const me = getUser(req);
+    const myFavs = me && Array.isArray(me.favoriteMaps) ? me.favoriteMaps : [];
+    const mapType = String(req.query.mapType || '');
+    const author = low(req.query.author || '');
+    const sortBy = String(req.query.sortBy || 'date');
+    const favoritesOnly = req.query.favoritesOnly === '1';
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const per = 10;
+
+    let out = maps.slice();
+    if (mapType) out = out.filter(m => m.mapType === mapType);
+    if (author) out = out.filter(m => low(m.author).indexOf(author) !== -1);
+    if (favoritesOnly) out = out.filter(m => myFavs.indexOf(favKey(m.author, m.mapName)) !== -1);
+
+    out.sort((a, b) => {
+      if (sortBy === 'rating') return (b.rating - a.rating) || (b.date - a.date);
+      if (sortBy === 'dislikes') return (tally(b).dislikes - tally(a).dislikes) || (b.date - a.date);
+      if (sortBy === 'oldest') return a.date - b.date;
+      return b.date - a.date;
+    });
+
+    const pages = Math.max(1, Math.ceil(out.length / per));
+    const curPage = Math.min(page, pages);
+    const slice = out.slice((curPage - 1) * per, curPage * per).map(m => {
+      const t = tally(m);
+      return {
+        mapName: m.mapName, rating: t.rating, likes: t.likes, dislikes: t.dislikes,
+        author: m.author, date: m.date, mapType: m.mapType,
+        myVote: me ? ((m.votes || {})[low(me.name)] || 0) : 0,
+        myFavorite: myFavs.indexOf(favKey(m.author, m.mapName)) !== -1,
+        inGameModes: Array.isArray(m.inGameModes) ? m.inGameModes : [],
+        commentCount: Array.isArray(m.comments) ? m.comments.length : 0,
+        rankTiers: m.rankTiers || null,
+        myMedal: medalOf(m, me)
+      };
+    });
+
+    res.json({ page: String(curPage) + '/' + pages,
+               pages, count: out.length, maps: slice });
+  }
+  app.get('/getMaps', list);
+  app.get('/getMapsForList', list);
+
+  // ---------- данные карты ----------
+  app.get('/getMapData', (req, res) => {
+    const m = maps.find(x => low(x.author) === low(req.query.author) &&
+                             low(x.mapName) === low(req.query.mapName));
+    res.json(m ? m.mapData : '');
+  });
+
+  // ---------- случайная карта режима ----------
+  app.get('/getRandomMap', (req, res) => {
+    const m = randomFor(req.query.mapType, req.query.not);
+    if (!m) return res.json(null);
+    res.json({ mapName: m.mapName, author: m.author, mapType: m.mapType, mapData: m.mapData });
+  });
+
+  // ---------- оценка ----------
+  app.post('/uploadVote', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const m = maps.find(x => low(x.author) === low(req.body.author) &&
+                             low(x.mapName) === low(req.body.mapName));
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+    if (low(m.author) === low(u.name))
+      return res.json({ status: 'error', message: 'You can\'t vote on your own map' });
+    // мусор в запросе не должен молча превращаться в дизлайк
+    const raw = parseInt(req.body.vote, 10);
+    if (!(raw === 1 || raw === -1))
+      return res.json({ status: 'error', message: 'Unknown vote value' });
+    const v = raw;
+    m.votes = m.votes || {};
+    /* Квест «оцени 10 карт» засчитываем только за ПЕРВУЮ оценку карты.
+       Раньше засчитывалась любая смена мнения, а лайк/дизлайк на одной и
+       той же карте меняются как угодно часто — весь квест закрывался
+       десятью кликами по одной кнопке, не открыв ни одной карты. */
+    const fresh = m.votes[low(u.name)] === undefined;
+    // повторный клик по той же кнопке снимает оценку
+    if (m.votes[low(u.name)] === v) delete m.votes[low(u.name)];
+    else {
+      m.votes[low(u.name)] = v;
+      if (fresh) require('./quests.js').track(u.name, 'map_vote');
+    }
+    const t = retally(m);
+    save();
+    res.json({ status: 'success', rating: t.rating, likes: t.likes, dislikes: t.dislikes,
+               myVote: m.votes[low(u.name)] || 0 });
+  });
+
+  // ---------- комментарии под картой ----------
+  const COMMENT_MAX = 300;
+  const COMMENT_COOLDOWN_MS = 8000;   // не чаще раза в 8 секунд с одного аккаунта
+  const COMMENTS_PER_MAP_CAP = 200;   // старые обрезаем, чтобы maps.json не пух
+  const lastCommentAt = {};           // login (lower-case) -> timestamp, только в памяти
+
+  function findMap(author, mapName) {
+    return maps.find(x => low(x.author) === low(author) && low(x.mapName) === low(mapName));
+  }
+  function canModerateComment(u, m, c) {
+    return low(u.name) === low(c.author) || low(u.name) === low(m.author) || isOwnerName(u.name);
+  }
+
+  app.get('/getMapComments', (req, res) => {
+    const m = findMap(req.query.author, req.query.mapName);
+    if (!m) return res.json({ comments: [] });
+    const u = getUser(req);
+    const list = (m.comments || []).map(c => ({
+      id: c.id, author: c.author, text: c.text, date: c.date,
+      canDelete: !!u && canModerateComment(u, m, c)
+    }));
+    res.json({ comments: list });
+  });
+
+  app.post('/addMapComment', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const m = findMap(req.body.author, req.body.mapName);
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+    const text = cleanText(req.body.text, COMMENT_MAX).trim();
+    if (!text) return res.json({ status: 'error', message: 'Comment is empty' });
+    const key = low(u.name);
+    const now = Date.now();
+    if (lastCommentAt[key] && now - lastCommentAt[key] < COMMENT_COOLDOWN_MS)
+      return res.json({ status: 'error', message: 'Slow down a bit before commenting again' });
+    lastCommentAt[key] = now;
+    if (!Array.isArray(m.comments)) m.comments = [];
+    const comment = { id: now + '_' + Math.random().toString(36).slice(2, 8), author: u.name, text, date: now };
+    m.comments.push(comment);
+    if (m.comments.length > COMMENTS_PER_MAP_CAP) m.comments.splice(0, m.comments.length - COMMENTS_PER_MAP_CAP);
+    save();
+    res.json({ status: 'success', comment: { id: comment.id, author: comment.author, text: comment.text, date: comment.date, canDelete: true } });
+  });
+
+  app.post('/deleteMapComment', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const m = findMap(req.body.author, req.body.mapName);
+    if (!m || !Array.isArray(m.comments)) return res.json({ status: 'error', message: 'Not found' });
+    const i = m.comments.findIndex(c => c.id === req.body.id);
+    if (i === -1) return res.json({ status: 'error', message: 'Not found' });
+    if (!canModerateComment(u, m, m.comments[i])) return res.json({ status: 'error', message: 'Not allowed' });
+    m.comments.splice(i, 1);
+    save();
+    res.json({ status: 'success' });
+  });
+
+  /* Избранное — личный список игрока, а не свойство карты (в отличие от
+     оценок): держим его на аккаунте (u.favoriteMaps), как friends/incoming/
+     outgoing в accounts.js, а не на самой карте — так «мои избранные»
+     не требует сканировать все карты в поиске своего имени. */
+  app.post('/mapFavorite', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const m = maps.find(x => low(x.author) === low(req.body.author) &&
+                             low(x.mapName) === low(req.body.mapName));
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+    const key = favKey(m.author, m.mapName);
+    u.favoriteMaps = Array.isArray(u.favoriteMaps) ? u.favoriteMaps : [];
+    const i = u.favoriteMaps.indexOf(key);
+    if (i !== -1) u.favoriteMaps.splice(i, 1);
+    else u.favoriteMaps.push(key);
+    if (acc && typeof acc.save === 'function') acc.save();
+    res.json({ status: 'success', myFavorite: i === -1 });
+  });
+
+  /* Папки для своих карт — только у автора, живут на его же аккаунте,
+     тем же приёмом, что и избранное: u.mapFolders — список {id,name,color},
+     u.mapFolderOf — favKey карты -> id папки. Смотреть чужие папки
+     (вкладка «Карты» в профиле) может кто угодно, редактировать — только
+     сам владелец профиля (через getUser(req), не через ?name=). */
+  const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+  function findAccount(name) {
+    if (!acc || typeof acc.getDb !== 'function' || typeof acc.key !== 'function') return null;
+    return acc.getDb().users[acc.key(name)] || null;
+  }
+
+  app.get('/mapFolders', (req, res) => {
+    const u = findAccount(req.query.name);
+    const folders = (u && Array.isArray(u.mapFolders)) ? u.mapFolders : [];
+    const of = (u && u.mapFolderOf) || {};
+    res.json({ folders, mapFolderOf: of });
+  });
+
+  app.post('/mapFolders/create', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const name = String(req.body.name || '').trim().slice(0, 30);
+    if (!name) return res.json({ status: 'error', message: 'Name required' });
+    const color = HEX_COLOR.test(req.body.color) ? req.body.color : '#111827';
+    u.mapFolders = Array.isArray(u.mapFolders) ? u.mapFolders : [];
+    if (u.mapFolders.length >= 30) return res.json({ status: 'error', message: 'Too many folders' });
+    const id = String(u.mapFolders.reduce((mx, f) => Math.max(mx, parseInt(f.id, 10) || 0), 0) + 1);
+    const folder = { id, name, color };
+    u.mapFolders.push(folder);
+    if (acc && typeof acc.save === 'function') acc.save();
+    res.json({ status: 'success', folder });
+  });
+
+  app.post('/mapFolders/edit', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const id = String(req.body.id || '');
+    const f = (Array.isArray(u.mapFolders) ? u.mapFolders : []).find(x => x.id === id);
+    if (!f) return res.json({ status: 'error', message: 'Folder not found' });
+    if (req.body.name !== undefined) {
+      const name = String(req.body.name || '').trim().slice(0, 30);
+      if (!name) return res.json({ status: 'error', message: 'Name required' });
+      f.name = name;
+    }
+    if (req.body.color !== undefined) {
+      if (!HEX_COLOR.test(req.body.color)) return res.json({ status: 'error', message: 'Bad color' });
+      f.color = req.body.color;
+    }
+    if (acc && typeof acc.save === 'function') acc.save();
+    res.json({ status: 'success', folder: f });
+  });
+
+  app.post('/mapFolders/delete', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const id = String(req.body.id || '');
+    u.mapFolders = (Array.isArray(u.mapFolders) ? u.mapFolders : []).filter(f => f.id !== id);
+    // карты из удалённой папки не трогаем — становятся «без папки»
+    const of = u.mapFolderOf || {};
+    Object.keys(of).forEach(k => { if (of[k] === id) delete of[k]; });
+    u.mapFolderOf = of;
+    if (acc && typeof acc.save === 'function') acc.save();
+    res.json({ status: 'success' });
+  });
+
+  // пустой/отсутствующий folderId — убрать карту из любой папки
+  app.post('/mapFolders/assign', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const m = maps.find(x => low(x.author) === low(u.name) && low(x.mapName) === low(req.body.mapName));
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+    const key = favKey(m.author, m.mapName);
+    const folderId = String(req.body.folderId || '');
+    u.mapFolderOf = u.mapFolderOf || {};
+    if (folderId) {
+      const exists = (Array.isArray(u.mapFolders) ? u.mapFolders : []).some(f => f.id === folderId);
+      if (!exists) return res.json({ status: 'error', message: 'Folder not found' });
+      u.mapFolderOf[key] = folderId;
+    } else {
+      delete u.mapFolderOf[key];
+    }
+    if (acc && typeof acc.save === 'function') acc.save();
+    res.json({ status: 'success' });
+  });
+
+  // ---------- удаление ----------
+  function remove(author, mapName) {
+    const i = maps.findIndex(x => low(x.author) === low(author) && low(x.mapName) === low(mapName));
+    if (i === -1) return false;
+    maps.splice(i, 1);
+    save();
+    return true;
+  }
+  // свою карту удаляет автор (вкладка «Карты» в профиле),
+  // чужую — только владелец сайта
+  function canDelete(u, author) {
+    if (!u) return false;
+    if (low(u.name) === low(author)) return true;
+    return isOwnerName(u.name);
+  }
+
+  app.post('/removeMap', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const author = String(req.body.author || u.name);
+    if (!canDelete(u, author))
+      return res.json({ status: 'error', message: 'You can only delete your own maps' });
+    res.json({ status: remove(author, req.body.mapName) ? 'success' : 'error' });
+  });
+
+  app.post('/map/disable', (req, res) => {
+    const u = getUser(req);
+    if (!canDelete(u, req.body.author_name))
+      return res.json({ status: 'error', message: 'You can only delete your own maps' });
+    res.json({ status: remove(req.body.author_name, req.body.map_name) ? 'success' : 'error' });
+  });
+
+  // отдельный вход для владельца: удалить любую карту из Maps Browser
+  app.post('/owner/removeMap', (req, res) => {
+    const u = getUser(req);
+    if (!u || !isOwnerName(u.name))
+      return res.json({ status: 'error', message: 'Not available' });
+    const author = String(req.body.author || '').trim();
+    const mapName = String(req.body.mapName || '').trim();
+    if (!remove(author, mapName))
+      return res.json({ status: 'error', message: 'Map not found' });
+    res.json({ status: 'success', message: '«' + mapName + '» deleted' });
+  });
+
+  // текущие пороги карты — подгрузить форму в owner.js перед правкой
+  app.get('/owner/getMapRankTiers', (req, res) => {
+    const u = getUser(req);
+    if (!u || !isOwnerName(u.name))
+      return res.json({ status: 'error', message: 'Not available' });
+    const m = maps.find(x => low(x.author) === low(req.query.author) && low(x.mapName) === low(req.query.mapName));
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+    res.json({ status: 'success', mapType: m.mapType, rankTiers: m.rankTiers || null });
+  });
+
+  /* Медали за время на карте (см. ranks.js — это добавка к общей формуле
+     ранга, не отдельный ранг). Задаёт ТОЛЬКО владелец сайта, своей
+     панелью в Maps Browser (см. owner.js): лестница порогов "буква ->
+     время в мс", своя для Race (finishMs) и своя для каждой роли в
+     Hide and Seek (hider — дольше лучше, seeker — быстрее лучше). Пустой
+     объект/null тиров для режима карты снимает медали с этой карты. */
+  app.post('/owner/setMapRankTiers', (req, res) => {
+    const u = getUser(req);
+    if (!u || !isOwnerName(u.name))
+      return res.json({ status: 'error', message: 'Not available' });
+    const author = String(req.body.author || '').trim();
+    const mapName = String(req.body.mapName || '').trim();
+    const m = maps.find(x => low(x.author) === low(author) && low(x.mapName) === low(mapName));
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+
+    let raw;
+    try { raw = JSON.parse(String(req.body.tiers || 'null')); }
+    catch (e) { return res.json({ status: 'error', message: 'Bad tiers JSON' }); }
+    const parsed = parseRankTiers(raw, m.mapType);
+    if (parsed === false)
+      return res.json({ status: 'error', message: 'Bad tiers: use rank letters S/A+/A/B+/B/C+/C and times in seconds' });
+
+    m.rankTiers = parsed;   // null — медали с карты снова сняты
+    save();
+    res.json({ status: 'success', rankTiers: m.rankTiers });
+  });
+
+  // ---------- карты игрока (вкладка Maps в профиле) ----------
+  app.get('/userMaps', (req, res) => {
+    const mine = maps.filter(m => low(m.author) === low(req.query.name));
+    const owner = findAccount(req.query.name);
+    const folderOf = (owner && owner.mapFolderOf) || {};
+    res.json({ count: mine.length, maps: mine.map(m => {
+      const t = tally(m);
+      return { mapName: m.mapName, mapType: m.mapType, rating: t.rating,
+               likes: t.likes, dislikes: t.dislikes, date: m.date, inGame: !!m.inGame,
+               folderId: folderOf[favKey(m.author, m.mapName)] || '' };
+    }) });
+  });
+}
+
+// ---------- доступ для инструментов владельца ----------
+function find(author, mapName) {
+  return maps.find(x => low(x.author) === low(author) && low(x.mapName) === low(mapName));
+}
+// копия списка карт — для ranks.js (см. build(): только оттуда и собираются
+// rankTiers всех карт сразу, по одному циклу на пересчёт, а не по карте)
+function allMaps() {
+  return maps.slice();
+}
+/* Владелец задаёт ИТОГОВОЕ число лайков и дизлайков, а не прибавку.
+   Считаем, сколько живых голосов уже есть, и подгоняем поправку так,
+   чтобы на карточке вышло ровно запрошенное. Новые голоса игроков
+   после этого продолжают учитываться поверх. */
+function setBoost(author, mapName, likes, dislikes) {
+  const m = find(author, mapName);
+  if (!m) return null;
+
+  const votes = Object.values(m.votes || {});
+  const realUp = votes.filter(v => v > 0).length;
+  const realDown = votes.filter(v => v < 0).length;
+
+  if (likes !== null && likes !== undefined && likes !== '')
+    m.boostLikes = Math.max(0, parseInt(likes) || 0) - realUp;
+  if (dislikes !== null && dislikes !== undefined && dislikes !== '')
+    m.boostDislikes = Math.max(0, parseInt(dislikes) || 0) - realDown;
+
+  const t = retally(m);
+  save();
+  return t;
+}
+// добавить/убрать карту в конкретном игровом режиме
+function setInGame(author, mapName, mode, on) {
+  const m = find(author, mapName);
+  if (!m) return null;
+  if (MODES.indexOf(mode) === -1) return { bad: true };
+
+  m.inGameModes = Array.isArray(m.inGameModes) ? m.inGameModes : [];
+  const i = m.inGameModes.indexOf(mode);
+  if (on && i === -1) m.inGameModes.push(mode);
+  if (!on && i !== -1) m.inGameModes.splice(i, 1);
+  save();
+  return {
+    modes: m.inGameModes.slice(), mode, on: !!on,
+    mapName: m.mapName, author: m.author, mapType: m.mapType
+  };
+}
+function inGameList() {
+  return maps.filter(m => Array.isArray(m.inGameModes) && m.inGameModes.length)
+             .map(m => ({ mapName: m.mapName, author: m.author,
+                          mapType: m.mapType, modes: m.inGameModes.slice() }));
+}
+
+/* Карты друзей, опубликованные после того, как игрок в последний раз
+   открывал Maps Browser (см. notifications.js). Метка времени лежит на
+   аккаунте, а не список «прочитанных карт»: карты только добавляются,
+   поэтому одного числа хватает, и оно не растёт с ростом каталога. */
+function newFromFriends(user) {
+  const out = { count: 0, authors: [], newest: 0 };
+  if (!user || !Array.isArray(user.friends) || !user.friends.length) return out;
+  const since = Number(user.mapsSeenAt) || 0;
+  // ни разу не открывал Maps Browser — не заваливаем его всем каталогом
+  if (!since) return out;
+  const friends = new Set(user.friends.map(low));
+  for (const m of maps) {
+    if (!(m.date > since) || !friends.has(low(m.author))) continue;
+    out.count++;
+    if (out.authors.indexOf(m.author) === -1) out.authors.push(m.author);
+    if (m.date > out.newest) out.newest = m.date;
+  }
+  return out;
+}
+
+module.exports = { register, reload: load, MODES, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, allMaps, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, renameAuthor };

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIBrofist — Messages</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="canonical" href="https://aibrofist.online/messages">
+<meta name="description" content="Private chats with other players — start a secret chat with 2 or more of them.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AIBrofist">
+<meta property="og:title" content="AIBrofist — Messages">
+<meta property="og:description" content="Private chats with other players — start a secret chat with 2 or more of them.">
+<meta property="og:url" content="https://aibrofist.online/messages">
+<meta property="og:image" content="https://aibrofist.online/preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://aibrofist.online/preview.png">
+<link rel="stylesheet" href="ui.css?v=165">
+<script src="offline.js?v=2"></script>
+<script src="device.js?v=165"></script>
+<script src="sound.js?v=165"></script>
+<style>
+.msLayout{display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start;
+  height:calc(100vh - 220px);min-height:420px}
+.msThreads{border:1px solid var(--line);border-radius:14px;background:#fff;
+  display:flex;flex-direction:column;height:100%;overflow:hidden}
+.msThreads .bfBtn{margin:10px 10px 6px}
+.msList{overflow-y:auto;flex:1}
+.msRow{display:block;width:100%;text-align:left;padding:10px 12px;border:none;background:none;
+  cursor:pointer;border-bottom:1px solid var(--line)}
+.msRow:hover{background:var(--soft)}
+.msRow.on{background:#eef7ff}
+.msRowName{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msRowPrev{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.msDot{display:inline-block;min-width:8px;height:8px;border-radius:50%;background:var(--blue);
+  margin-left:6px;vertical-align:middle}
+.msBadge{display:inline-block;background:var(--blue);color:#fff;font-size:11px;font-weight:700;
+  border-radius:10px;padding:1px 6px;margin-left:6px;vertical-align:middle}
+.msPane{border:1px solid var(--line);border-radius:14px;background:#fff;
+  display:flex;flex-direction:column;height:100%;overflow:hidden}
+.msHead{padding:10px 14px;border-bottom:1px solid var(--line);font-weight:700;
+  display:flex;align-items:center;gap:8px}
+.msWithWrap{flex:1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
+.msChip{display:inline-flex;align-items:center;gap:3px;background:var(--soft);border-radius:14px;
+  padding:3px 6px 3px 10px;font-size:13px;font-weight:600}
+.msChipX{border:none;background:none;color:var(--muted);cursor:pointer;font-size:15px;
+  line-height:1;padding:2px 4px;border-radius:50%}
+.msChipX:hover{color:#fff;background:var(--red)}
+.msAddBtn{border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:50%;
+  width:28px;height:28px;min-width:28px;cursor:pointer;font-size:17px;line-height:1;flex:0 0 auto}
+.msAddBtn:hover{background:var(--blue);color:#fff}
+.msBody{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.msMsg{max-width:78%;padding:8px 12px;border-radius:14px;font-size:14px;line-height:1.35;word-break:break-word}
+.msMsg.me{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:4px}
+.msMsg.them{align-self:flex-start;background:var(--soft);color:var(--ink);border-bottom-left-radius:4px}
+.msMsg .who{font-size:11px;opacity:.75;margin-bottom:2px;display:block}
+.msMsg .when{font-size:10.5px;opacity:.65;display:block;margin-top:3px}
+.msMsg.me .when{text-align:right}
+.msSend{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+.msSend input{flex:1;font-size:15px;padding:10px 12px;border:1px solid #cfd6de;border-radius:10px}
+.msSend button{padding:10px 16px;border-radius:10px;border:1px solid var(--blue);
+  background:var(--blue);color:#fff;cursor:pointer;font-weight:700}
+@media (max-width:720px){
+  .msLayout{grid-template-columns:1fr;height:auto}
+  .msThreads{height:220px}
+  .msPane{height:60vh}
+  .msLayout.msOpen .msThreads{display:none}
+  .msLayout:not(.msOpen) .msPane{display:none}
+  .msBack{display:inline-block!important}
+}
+.msBack{display:none;background:none;border:none;color:var(--blue);cursor:pointer;
+  font-size:14px;padding:0 10px 0 0;font-weight:700}
+</style>
+        <script src="theme.js?v=165"></script>
+        <link rel="icon" href="favicon.ico" sizes="any">
+        <link rel="icon" type="image/svg+xml" href="favicon.svg">
+        <link rel="apple-touch-icon" href="apple-touch-icon.png">
+        <link rel="manifest" href="site.webmanifest">
+        <meta name="theme-color" content="#111827">
+</head>
+<body>
+
+<div class="bfWrap">
+  <div class="bfTitle" data-i18n="messagesTitle">Messages</div>
+  <div class="bfSub" data-i18n="messagesSub">Private chats with other players. Add 2 or more names to start a secret group chat.</div>
+
+  <div class="msLayout" id="msLayout">
+    <div class="msThreads">
+      <button class="bfBtn go" id="msNew" data-i18n="msNewChat">New chat</button>
+      <div class="msList" id="msList"><div class="bfHint" data-i18n="loading">Loading…</div></div>
+    </div>
+    <div class="msPane">
+      <div id="msEmpty" class="bfHint" data-i18n="msPick">Pick a chat on the left, or start a new one.</div>
+      <div id="msActive" style="display:none;flex-direction:column;height:100%">
+        <div class="msHead">
+          <button class="msBack" id="msBackBtn">&larr;</button>
+          <div class="msWithWrap" id="msWith"></div>
+          <button class="msAddBtn" id="msAddBtn" title="Add participant" data-i18n-title="msAddTip" style="display:none">+</button>
+        </div>
+        <div class="msBody" id="msBody"></div>
+        <div class="msSend">
+          <input id="msInput" maxlength="400" data-i18n-ph="msTypeHint" placeholder="Message">
+          <button id="msSendBtn" data-i18n="msSend">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bfMsg" id="msMsg"></div>
+</div>
+
+<link rel="stylesheet" href="mobile.css?v=165">
+<script src="i18n.js?v=165"></script>
+<script src="coin.js?v=165"></script>
+<script src="skinRender.js?v=165"></script>
+<script src="shell.js?v=165"></script>
+<script src="abuseShow.js?v=165" defer></script>
+<script src="account.js?v=165" defer></script>
+<script src="owner.js?v=165" defer></script>
+<script>
+(function () {
+  'use strict';
+  var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : (f || k); };
+  var $ = function (id) { return document.getElementById(id); };
+
+  var guest = true, myName = '';
+  var threads = [];
+  var activeId = null, activeMembers = [], activeCreator = '';
+  var listTimer = null, threadTimer = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c];
+    });
+  }
+  function msg(text, ok) {
+    var m = $('msMsg');
+    m.textContent = text;
+    m.style.color = ok ? 'var(--green)' : 'var(--red)';
+    clearTimeout(msg._t);
+    msg._t = setTimeout(function () { m.textContent = ''; }, 4000);
+  }
+  function post(url, data) {
+    var body = Object.keys(data).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
+    }).join('&');
+    return fetch(url, { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+      .then(function (r) { return r.json(); });
+  }
+  function get(url) {
+    return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+  }
+
+  function fmtTime(ms) {
+    var d = new Date(ms);
+    return isNaN(d.getTime()) ? '' : d.toLocaleString('en-US',
+      { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function nameLink(n) {
+    return '<a href="users?name=' + encodeURIComponent(n) + '" style="color:inherit;text-decoration:underline">'
+      + esc(n) + '</a>';
+  }
+
+  function drawList() {
+    var host = $('msList');
+    if (!threads.length) {
+      host.innerHTML = '<div class="bfHint" data-i18n="msNone">No chats yet.</div>';
+      return;
+    }
+    host.innerHTML = threads.map(function (t) {
+      var names = t.members.join(', ') || T('guest', 'Guest');
+      var prev = t.lastText ? (t.lastFrom && low(t.lastFrom) !== low(myName) ? esc(t.lastFrom) + ': ' : '') + esc(t.lastText) : '';
+      return '<button class="msRow' + (t.id === activeId ? ' on' : '') + '" data-id="' + t.id + '">'
+        + '<div class="msRowName">' + esc(names) + (t.unread ? '<span class="msBadge">' + t.unread + '</span>' : '') + '</div>'
+        + '<div class="msRowPrev">' + prev + '</div></button>';
+    }).join('');
+  }
+
+  function low(s) { return String(s || '').toLowerCase(); }
+
+  function loadThreads(after) {
+    get('/messages/threads').then(function (d) {
+      threads = d.threads || [];
+      drawList();
+      if (after) after();
+    }).catch(function () {});
+  }
+
+  function drawMessages(list) {
+    var body = $('msBody');
+    var atBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 30;
+    body.innerHTML = list.map(function (m) {
+      var mine = low(m.from) === low(myName);
+      return '<div class="msMsg ' + (mine ? 'me' : 'them') + '">'
+        + (mine ? '' : '<span class="who">' + esc(m.from) + '</span>')
+        + esc(m.text)
+        + '<span class="when">' + fmtTime(m.at) + '</span>' + '</div>';
+    }).join('');
+    if (atBottom || !list.length) body.scrollTop = body.scrollHeight;
+  }
+
+  function openThread(id) {
+    activeId = id;
+    $('msLayout').classList.add('msOpen');
+    $('msEmpty').style.display = 'none';
+    $('msActive').style.display = 'flex';
+    clearInterval(threadTimer);
+    fetchThread();
+    threadTimer = setInterval(fetchThread, 3000);
+    drawList();
+  }
+
+  // участники активной переписки: чипами, с крестиком удаления у
+  // создателя (себя среди них нет — сервер отдаёт только остальных)
+  function renderMembers() {
+    var iAmCreator = activeId && low(myName) === low(activeCreator);
+    $('msAddBtn').style.display = activeId ? 'inline-flex' : 'none';
+    $('msWith').innerHTML = activeMembers.length
+      ? activeMembers.map(function (n) {
+          return '<span class="msChip">' + nameLink(n)
+            + (iAmCreator ? '<button class="msChipX" data-remove="' + esc(n) + '" title="'
+                          + T('msRemove', 'Remove') + '">×</button>' : '')
+            + '</span>';
+        }).join('')
+      : T('guest', 'Guest');
+  }
+
+  function fetchThread() {
+    if (!activeId) return;
+    get('/messages/thread?id=' + encodeURIComponent(activeId)).then(function (d) {
+      if (d.status !== 'success') { msg(d.message || T('errorTxt')); return; }
+      activeMembers = d.members || [];
+      activeCreator = d.creator || '';
+      renderMembers();
+      drawMessages(d.messages || []);
+      // фон списка обновляем без визуальной перерисовки активного треда
+      loadThreads();
+      /* Открытая переписка считается прочитанной (сервер двигает readAt
+         в /messages/thread) — значок в боковом меню должен погаснуть
+         сразу, не дожидаясь своего получасового опроса. */
+      if (window.BFShell && BFShell.refreshNotifications) BFShell.refreshNotifications();
+    }).catch(function () {});
+  }
+
+  $('msAddBtn').onclick = function () {
+    if (!activeId) return;
+    var name = prompt(T('msAddAsk', 'Player name to add:'), '');
+    if (name === null) return;
+    name = name.trim();
+    if (!name) return;
+    post('/messages/addMember', { id: activeId, name: name }).then(function (r) {
+      if (r.status !== 'success') { msg(r.message || T('errorTxt')); return; }
+      msg(T('msAdded', 'Added'), true);
+      fetchThread();
+    }).catch(function () { msg(T('serverDown')); });
+  };
+
+  $('msWith').addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('[data-remove]') : null;
+    if (!btn || !activeId) return;
+    var name = btn.dataset.remove;
+    if (!confirm(T('msRemoveConfirm', 'Remove {n} from this chat?').replace('{n}', name))) return;
+    post('/messages/removeMember', { id: activeId, name: name }).then(function (r) {
+      if (r.status !== 'success') { msg(r.message || T('errorTxt')); return; }
+      fetchThread();
+    }).catch(function () { msg(T('serverDown')); });
+  });
+
+  $('msList').addEventListener('click', function (e) {
+    var row = e.target.closest ? e.target.closest('.msRow') : null;
+    if (row) openThread(row.dataset.id);
+  });
+
+  $('msBackBtn').onclick = function () {
+    $('msLayout').classList.remove('msOpen');
+  };
+
+  $('msNew').onclick = function () {
+    if (guest) { msg(T('loginFirst', 'Sign in first')); return; }
+    var names = prompt(T('msNewAsk', 'Player name(s), comma-separated for a group chat:'), '');
+    if (names === null) return;
+    names = names.trim();
+    if (!names) return;
+    post('/messages/start', { names: names }).then(function (r) {
+      if (r.status !== 'success') { msg(r.message || T('errorTxt')); return; }
+      loadThreads(function () { openThread(r.id); });
+    }).catch(function () { msg(T('serverDown')); });
+  };
+
+  function send() {
+    var input = $('msInput');
+    var text = input.value.trim();
+    if (!text || !activeId) return;
+    input.value = '';
+    post('/messages/send', { id: activeId, text: text }).then(function (r) {
+      if (r.status !== 'success') { msg(r.message || T('errorTxt')); input.value = text; return; }
+      fetchThread();
+    }).catch(function () { msg(T('serverDown')); input.value = text; });
+  }
+  $('msSendBtn').onclick = send;
+  $('msInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); send(); }
+  });
+
+  fetch('/whoAmI', { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      guest = !!d.guest;
+      myName = d.name || '';
+      if (guest) {
+        $('msList').innerHTML = '<div class="bfHint">' + T('loginFirst', 'Sign in first') + '</div>';
+        return;
+      }
+      loadThreads();
+      clearInterval(listTimer);
+      listTimer = setInterval(function () { loadThreads(); }, 5000);
+
+      // открыть/начать чат сразу, если пришли с кнопки «Написать» из профиля
+      var withName = new URLSearchParams(location.search).get('with');
+      if (withName) {
+        post('/messages/start', { names: withName }).then(function (r) {
+          if (r.status === 'success') loadThreads(function () { openThread(r.id); });
+        }).catch(function () {});
+      }
+    })
+    .catch(function () { $('msList').innerHTML = '<div class="bfHint">' + T('serverDown') + '</div>'; });
+
+  window.addEventListener('bf-lang', drawList);
+})();
+</script>
+        <script src="skinAvatar.js?v=165" defer></script>
+</body>
+</html>

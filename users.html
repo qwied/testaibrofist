@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIBrofist — Profile</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="ui.css?v=165">
+<script src="offline.js?v=2"></script>
+<script src="theme.js?v=165"></script>
+<script src="device.js?v=165"></script>
+<script src="sound.js?v=165"></script>
+<style>
+.upSearch{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.upSearch .bfInput{margin-bottom:0;flex:1 1 180px}
+.upSearch .bfBtn{margin-bottom:0;width:auto;padding:11px 20px;flex:0 0 auto}
+.upFound{border:1px solid var(--line);border-radius:12px;margin-bottom:18px;overflow:hidden}
+.upFound a{display:block;padding:11px 14px;text-decoration:none;color:var(--ink);border-bottom:1px solid var(--line)}
+.upFound a:last-child{border-bottom:none}
+.upFound a:hover{background:var(--soft)}
+
+.upTop{display:flex;gap:20px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
+.upAva{width:136px;height:136px;border-radius:50%;overflow:hidden;flex:0 0 auto;
+  background:var(--soft);border:1px solid var(--line);display:flex;
+  align-items:center;justify-content:center}
+.upAva img{width:100%;height:100%;object-fit:contain;display:block}
+.upInfo{flex:1 1 240px;min-width:0}
+.upName{font-size:26px;font-weight:800;margin-bottom:4px;word-break:break-word}
+.upMeta{color:var(--muted);font-size:14px;margin-bottom:8px}
+.upCoins{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--gold);
+  font-size:16px;margin-bottom:10px}
+.upStats{margin-bottom:10px}
+.upStatTabs{display:flex;gap:6px;margin-bottom:8px}
+.upStatTab{padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;
+  color:var(--muted);background:var(--soft);border:1px solid transparent;user-select:none}
+.upStatTab.on{color:#fff;background:var(--blue);border-color:var(--blue)}
+.upStatRow{display:flex;gap:18px;flex-wrap:wrap}
+.upStatRow .upCoins{margin-bottom:0}
+.upScore{display:inline-flex;align-items:center;gap:8px;font-weight:700;color:var(--blue);font-size:16px}
+/* тот же приём, что и у активной вкладки чуть выше (.upStatTab.on) —
+   раньше очки были просто синим числом без подписи, непонятно на глаз,
+   что это вообще такое рядом с монетами */
+.upScoreBadge{display:inline-block;padding:3px 11px;border-radius:20px;font-size:11px;
+  font-weight:700;color:#fff;background:var(--blue);text-transform:uppercase;letter-spacing:.03em}
+/* Ранг навыка по режимам — отдельной строкой под монетами и очками: это
+   не счёт, а оценка, и мешать её с накопительными числами не стоит.
+   Только синий/чёрный/белый (тёмная тема — синий/серый/белый), как и весь
+   остальной сайт: раньше S/A/B/C были каждый своим цветом и не складывались
+   в единую лесенку — редкость ранга теперь видна по НАСЫЩЕННОСТИ одного и
+   того же акцента, а не по случайному набору цветов (см. lbRank в
+   leaderboard.html — та же шкала, тот же вид в обоих местах). */
+.upRankRow{margin-top:9px}
+.upRank{display:inline-flex;align-items:center;gap:7px;padding:4px 11px;border-radius:20px;
+  font-size:13px;font-weight:800;letter-spacing:.02em;border:1px solid var(--line);color:var(--muted);
+  background:var(--soft)}
+.upRankMode{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;opacity:.92}
+.upRank[data-r="S"]{color:var(--panel);background:var(--ink);border-color:var(--ink)}
+.upRank[data-r="A+"],.upRank[data-r="A"]{color:#fff;background:var(--blue);border-color:var(--blue)}
+.upRank[data-r="B+"],.upRank[data-r="B"]{color:var(--blue);background:transparent;border-color:var(--blue)}
+.upRank[data-r="Declassified"]{color:var(--muted);background:transparent}
+.upRank.none{color:var(--muted);background:transparent;font-weight:600;opacity:.75}
+.upActs{display:flex;gap:8px;flex-wrap:wrap}
+.upActs button,.upActs a{padding:10px 18px;border-radius:9px;cursor:pointer;font-size:14px;
+  border:1px solid var(--blue);background:var(--panel);color:var(--blue);text-decoration:none;
+  display:inline-block;box-sizing:border-box}
+.upActs button:hover,.upActs a:hover{background:var(--blue);color:#fff}
+.upActs button.warn{border-color:var(--red);color:var(--red)}
+.upActs button.warn:hover{background:var(--red);color:#fff}
+
+.upAbout{border:1px dashed var(--line);border-radius:12px;padding:14px;margin-bottom:20px;
+  min-height:56px;font-size:14.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.upAbout .empty{color:var(--muted)}
+.upAboutEdit{display:none}
+.upAboutEdit textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:10px;
+  padding:11px;font:inherit;font-size:14.5px;resize:vertical;box-sizing:border-box}
+
+.upRow{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--line);
+  border-radius:12px;margin-bottom:9px;background:#fff}
+.upRow .ava{width:44px;height:44px;border-radius:50%;overflow:hidden;flex:0 0 auto;
+  background:var(--soft);display:flex;align-items:center;justify-content:center}
+.upRow .ava img{width:100%;height:100%;object-fit:contain}
+.upRow .ava img:not([src]){visibility:hidden}
+.upAva img:not([src]){visibility:hidden}
+.upRow .who{flex:1 1 auto;min-width:0}
+.upRow .who a{color:var(--ink);text-decoration:none;font-weight:600}
+.upRow .who span{display:block;color:var(--muted);font-size:12.5px}
+.upRow button{padding:9px 14px;border-radius:8px;font-size:13px;cursor:pointer;
+  border:1px solid var(--line);background:var(--panel);color:var(--muted)}
+.upRow button.go{border-color:var(--green);color:var(--green)}
+.upRow button.go:hover{background:var(--green);color:#fff}
+.upRow button.bad{border-color:var(--red);color:var(--red)}
+.upRow button.bad:hover{background:var(--red);color:#fff}
+
+.upFolderBar{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.upFolderChip{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;
+  font-size:13px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--muted)}
+.upFolderChip[style*="--fc"]::before{content:'';width:8px;height:8px;border-radius:50%;
+  background:var(--fc);flex:0 0 auto}
+.upFolderChip.on{border-color:var(--blue);color:var(--blue);background:var(--soft)}
+.upFolderChip b{font-style:normal;opacity:.65;margin-left:2px}
+.upFolderChip b:hover{opacity:1}
+.upFolderNew{padding:6px 12px;border-radius:20px;font-size:13px;cursor:pointer;
+  border:1px dashed var(--line);background:none;color:var(--muted)}
+.upFolderNew:hover{border-color:var(--blue);color:var(--blue)}
+.upFolderForm{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.upFolderForm .bfInput{margin-bottom:0;flex:1 1 160px}
+.upFolderForm input[type=color]{width:36px;height:36px;padding:2px;border:1px solid var(--line);
+  border-radius:8px;cursor:pointer}
+.upFolderAssign{margin-bottom:0;width:auto;flex:0 0 auto;padding:8px 10px;font-size:12.5px}
+
+.upGrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
+.upSkin{border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;background:#fff}
+.upSkin .art{background:var(--soft);border-radius:9px;padding:8px 0;margin-bottom:8px}
+.upSkin .nm{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upSkin .rt{font-size:12.5px;font-weight:700}
+.upSkin .rt.pos{color:var(--green)} .upSkin .rt.neg{color:var(--red)}
+
+@media (max-width:640px){
+  .upTop{gap:14px}
+  .upAva{width:104px;height:104px}
+  .upName{font-size:21px}
+  .upGrid{grid-template-columns:repeat(2,1fr)}
+  /* Узкий экран: имя карты/игрока + выбор папки + Изменить/Удалить не
+     помещаются в один ряд без переноса — раньше просто наезжали друг
+     на друга. Имя — на всю ширину сверху, остальное переносится под
+     него и растягивается по мере необходимости. */
+  .upRow{flex-wrap:wrap}
+  .upRow .who{flex:1 1 100%}
+  .upFolderAssign{flex:1 1 auto}
+}
+</style>
+        <link rel="icon" href="favicon.ico" sizes="any">
+        <link rel="icon" type="image/svg+xml" href="favicon.svg">
+        <link rel="apple-touch-icon" href="apple-touch-icon.png">
+        <link rel="manifest" href="site.webmanifest">
+        <meta name="theme-color" content="#111827">
+        <link rel="canonical" href="https://aibrofist.online/users">
+        <meta name="description" content="Player profiles, friends and their works.">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Users">
+        <meta property="og:description" content="Player profiles, friends and their works.">
+        <meta property="og:url" content="https://aibrofist.online/users">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<div class="bfWrap">
+  <div class="upSearch">
+    <input class="bfInput" id="upQ" data-i18n-ph="searchUsers" placeholder="Поиск игроков">
+    <button class="bfBtn go" id="upGo" data-i18n="find">Найти</button>
+    <button class="bfBtn ghost" id="upGoExact" data-i18n="exactSearch">Exact search</button>
+  </div>
+  <div id="upFound"></div>
+
+  <div id="upBody"><div class="bfHint" data-i18n="loading">Загрузка…</div></div>
+  <div class="bfMsg" id="upMsg"></div>
+</div>
+
+<link rel="stylesheet" href="mobile.css?v=165">
+<script src="i18n.js?v=165"></script>
+<script src="coin.js?v=165"></script>
+<script src="skinRender.js?v=165"></script>
+<script src="skinAvatar.js?v=165" defer></script>
+<script src="shell.js?v=165"></script>
+<script src="abuseShow.js?v=165" defer></script>
+<script src="account.js?v=165" defer></script>
+<script src="owner.js?v=165" defer></script>
+<script>
+(function () {
+  'use strict';
+  var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; };
+  var $ = function (id) { return document.getElementById(id); };
+
+  var who = decodeURIComponent((location.search.match(/[?&]name=([^&]*)/) || [, ''])[1] || '');
+  var me = null, tab = 'friends', isMe = false;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c];
+    });
+  }
+  function msg(t, ok) {
+    var m = $('upMsg');
+    m.textContent = t; m.style.color = ok ? 'var(--green)' : 'var(--red)';
+    clearTimeout(msg._t); msg._t = setTimeout(function () { m.textContent = ''; }, 4000);
+  }
+  function get(url) {
+    return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+  }
+  function post(url, data) {
+    return fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: Object.keys(data || {}).map(function (k) {
+        return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
+      }).join('&')
+    }).then(function (r) { return r.json(); });
+  }
+  function ago(ms) {
+    if (!ms) return '';
+    var d = Math.max(0, Date.now() - ms), m = Math.floor(d / 60000);
+    if (m < 1) return T('nowOnline', 'сейчас в сети');
+    if (m < 60) return m + ' ' + T('minAgo', 'мин назад');
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + ' ' + T('hoursAgo', 'ч назад');
+    return Math.floor(h / 24) + ' ' + T('daysAgo', 'дн назад');
+  }
+  function when(ms) {
+    var d = new Date(ms);
+    // сайт всегда на английском — формат даты не зависит от локали браузера
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US',
+      { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  /* ---------- шапка профиля ---------- */
+  /* Ранги навыка по режимам (см. ranks.js). Пока сыграно мало для формулы
+     (порог — RACE_MIN_FIN/HS_MIN_ROUNDS), ранга нет — пишем «нет ранга»,
+     а не счётчик «ещё N игр»: это тот же бейдж, что и у уже заработанного
+     ранга, просто с другим текстом, а не отдельный вид прогресс-бара.
+     Ранг, выставленный владельцем вручную (см. /owner/setRank), помечен
+     «manual» — звёздочка рядом с буквой, чтобы не выглядело так, будто
+     его насчитала формула. */
+  function rankRow(rk) {
+    if (!rk) return '';
+    var parts = [
+      { k: 'race', title: T('race', 'Race'), v: rk.race },
+      { k: 'hs', title: T('hideAndSeek', 'Hide and Seek'), v: rk.hs }
+    ].map(function (p) {
+      var r = p.v ? p.v.rank : '';
+      var manualMark = ' <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" style="vertical-align:1px">'
+        + '<path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/></svg>';
+      var txt = r ? esc(r) + (p.v.manual ? manualMark : '') : T('rankNone', 'нет ранга');
+      return '<span class="upRank' + (r ? '' : ' none') + '" data-r="' + esc(r) + '">'
+        + '<span class="upRankMode">' + esc(p.title) + '</span> ' + txt + '</span>';
+    }).join('');
+    return '<div class="upStatRow upRankRow">' + parts + '</div>';
+  }
+
+  function drawHead(d) {
+    isMe = me && !me.guest && String(me.name).toLowerCase() === who.toLowerCase();
+    var acts = '';
+    if (isMe) {
+      acts = '<button id="upEditAbout">' + T('editTxt', 'Изменить') + '</button>';
+    } else if (me && !me.guest) {
+      var r = d.relation;
+      var t = (r && r.type) || r;
+      if (t === '1') acts = '<button class="warn" data-rel="unfriend">' + T('removeFriend', 'Удалить из друзей') + '</button>';
+      else if (t === '2') acts = '<button data-rel="cancel">' + T('cancelReq', 'Отменить заявку') + '</button>'
+                               + '<button class="go" data-rel="accept">' + T('accept', 'Принять') + '</button>';
+      else acts = '<button data-rel="add">' + T('addFriend', 'Добавить в друзья') + '</button>';
+      acts += '<a href="messages?with=' + encodeURIComponent(who) + '">' + T('msgBtn', 'Message') + '</a>';
+    }
+
+    var s = d.stats || {};
+    return '<div class="upTop">'
+      + '<div class="upAva"><img class="profile-picture" data-bf-name="' + esc(who) + '" alt=""></div>'
+      + '<div class="upInfo">'
+      +   '<div class="upName">' + esc(who) + '</div>'
+      +   '<div class="upMeta">' + T('joinDate', 'Дата регистрации') + ': ' + when(d.joined) + '</div>'
+      +   '<div class="upStats" id="upStats" data-coins-day="' + (s.coinsDay || 0) + '" data-coins-week="' + (s.coinsWeek || 0) + '" data-coins-all="' + (s.coins || 0) + '"'
+      +     ' data-score-day="' + (s.scoreDay || 0) + '" data-score-week="' + (s.scoreWeek || 0) + '" data-score-all="' + (s.score || 0) + '">'
+      +     '<div class="upStatTabs" id="upStatTabs">'
+      +       '<span class="upStatTab" data-period="day">' + T('lbPeriodDay', 'Today') + '</span>'
+      +       '<span class="upStatTab" data-period="week">' + T('lbPeriodWeek', 'This Week') + '</span>'
+      +       '<span class="upStatTab on" data-period="all">' + T('lbPeriodAll', 'All Time') + '</span>'
+      +     '</div>'
+      +     '<div class="upStatRow">'
+      +       '<span class="upCoins">' + (window.BFCoin ? BFCoin.svg(18) : '') + ' <span id="upCoinsV">' + (s.coins || 0) + '</span></span>'
+      +       '<span class="upScore"><span class="upScoreBadge">' + T('raceScoresTitle', 'Scores') + '</span> <span id="upScoreV">' + (s.score || 0) + '</span></span>'
+      +     '</div>'
+      +     rankRow(d.rank)
+      +   '</div>'
+      +   '<div class="upActs">' + acts + '</div>'
+      + '</div></div>'
+
+      + '<div class="upAbout" id="upAbout">'
+      +   (d.about ? esc(d.about) : '<span class="empty">' + T('noAbout', 'Ничего не написано') + '</span>')
+      + '</div>'
+      + '<div class="upAboutEdit" id="upAboutEdit">'
+      +   '<textarea id="upAboutText" maxlength="300">' + esc(d.about || '') + '</textarea>'
+      +   '<button class="bfBtn go" id="upAboutSave" style="max-width:200px;margin-top:8px">'
+      +     T('save', 'Сохранить') + '</button>'
+      + '</div>'
+
+      + '<div class="bfTabs" id="upTabs">'
+      +   '<div class="bfTab on" data-tab="friends">' + T('friendsTxt', 'Друзья') + '</div>'
+      +   (isMe ? '<div class="bfTab" data-tab="requests">' + T('requestsTxt', 'Заявки') + '</div>'
+                + '<div class="bfTab" data-tab="pending">' + T('pendingTxt', 'Отправленные') + '</div>' : '')
+      +   '<div class="bfTab" data-tab="maps">' + T('mapsTxt', 'Карты') + '</div>'
+      + '</div>'
+      + '<div id="upTabBody"></div>';
+  }
+
+  /* ---------- вкладки ---------- */
+  function drawFriends(kind) {
+    var box = $('upTabBody');
+    box.innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
+    get('/getFriendsList?name=' + encodeURIComponent(who) + '&type=' + kind + '&page=1')
+      .then(function (d) {
+        var list = d.relation || [];
+        if (!list.length) {
+          box.innerHTML = '<div class="bfHint">' + T('emptyHere', 'Пусто') + '</div>';
+          return;
+        }
+        box.innerHTML = list.map(function (u) {
+          var btn = '';
+          if (isMe && kind === 'requests')
+            btn = '<button class="go" data-act="accept" data-n="' + esc(u.name) + '">' + T('accept', 'Принять') + '</button>'
+                + '<button class="bad" data-act="cancel" data-n="' + esc(u.name) + '">' + T('decline', 'Отклонить') + '</button>';
+          else if (isMe && kind === 'pending')
+            btn = '<button class="bad" data-act="cancel" data-n="' + esc(u.name) + '">' + T('cancelReq', 'Отменить') + '</button>';
+          else if (isMe)
+            btn = '<button class="bad" data-act="unfriend" data-n="' + esc(u.name) + '">' + T('removeTxt', 'Удалить') + '</button>';
+
+          return '<div class="upRow">'
+            + '<div class="ava"><img data-bf-name="' + esc(u.name) + '" alt=""></div>'
+            + '<div class="who"><a href="users?name=' + encodeURIComponent(u.name) + '">'
+            +   esc(u.name) + '</a><span>' + ago(u.lastSeen) + '</span></div>'
+            + btn + '</div>';
+        }).join('');
+        if (window.BFAvatar) BFAvatar.scan(box);
+      })
+      .catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
+  }
+
+  var ownMaps = null, ownFolders = [];   // фильтры по режиму/папке — чисто на клиенте
+  var mapModeFilter = '', folderFilter = '';   // folderFilter: '' все, '__none__' без папки, иначе id
+  var editingFolderId = null;    // null — создаём новую, иначе редактируем эту
+  function renderMapsList() {
+    var box = $('upTabBody');
+    var list = ownMaps || [];
+    if (mapModeFilter) list = list.filter(function (m) { return m.mapType === mapModeFilter; });
+    if (folderFilter === '__none__') list = list.filter(function (m) { return !m.folderId; });
+    else if (folderFilter) list = list.filter(function (m) { return m.folderId === folderFilter; });
+
+    var sel = '<select class="bfSelect" id="upMapMode">'
+      +   '<option value="">' + T('modeAll', 'Режим: все') + '</option>'
+      +   '<option value="hideAndSeek">' + T('hideAndSeek', 'Прятки') + '</option>'
+      +   '<option value="race">' + T('race', 'Гонка') + '</option>'
+      + '</select>';
+
+    var folderBar = (ownFolders.length || isMe)
+      ? '<div class="upFolderBar">'
+        +   '<span class="upFolderChip' + (folderFilter === '' ? ' on' : '') + '" data-folder="">'
+        +     T('folderAll', 'Все папки') + '</span>'
+        +   '<span class="upFolderChip' + (folderFilter === '__none__' ? ' on' : '') + '" data-folder="__none__">'
+        +     T('folderNone', 'Без папки') + '</span>'
+        +   ownFolders.map(function (f) {
+              return '<span class="upFolderChip' + (folderFilter === f.id ? ' on' : '') + '" style="--fc:' + esc(f.color) + '" data-folder="' + esc(f.id) + '">'
+                +   esc(f.name) + (isMe ? '<b data-edit-folder="' + esc(f.id) + '" title="' + T('editTxt', 'Изменить') + '">&#9998;</b>' : '')
+                + '</span>';
+            }).join('')
+        +   (isMe ? '<button class="upFolderNew" id="upFolderNew">+ ' + T('folderNewTxt', 'Папка') + '</button>' : '')
+        + '</div>'
+        + (isMe ? '<div class="upFolderForm" id="upFolderForm" style="display:none">'
+            +   '<input class="bfInput" id="upFolderName" maxlength="30" placeholder="' + T('folderNamePh', 'Название папки') + '">'
+            +   '<input type="color" id="upFolderColor" value="#111827">'
+            +   '<button class="go" id="upFolderSave">' + T('save', 'Сохранить') + '</button>'
+            +   '<button class="bad" id="upFolderDelete" style="display:none">' + T('removeTxt', 'Удалить') + '</button>'
+            +   '<button id="upFolderCancel">' + T('cancel', 'Отмена') + '</button>'
+            + '</div>' : '')
+      : '';
+
+    var rows = !list.length
+      ? '<div class="bfHint">' + T('noMaps', 'Карт нет') + '</div>'
+      : list.map(function (m) {
+          return '<div class="upRow">'
+            + '<div class="who"><a href="game?view=' + encodeURIComponent(m.mapName)
+            +   '&author=' + encodeURIComponent(who) + '">' + esc(m.mapName) + '</a>'
+            +   '<span>' + m.mapType + ' · ' + T('colRating', 'рейтинг') + ' ' + m.rating + '</span></div>'
+            + (isMe ? '<select class="bfSelect upFolderAssign" data-assign-map="' + esc(m.mapName) + '">'
+                      +   '<option value="">' + T('folderNone', 'Без папки') + '</option>'
+                      +   ownFolders.map(function (f) {
+                            return '<option value="' + esc(f.id) + '"' + (m.folderId === f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>';
+                          }).join('')
+                      + '</select>'
+                      + '<button class="go" data-edit-map="' + esc(m.mapName) + '">'
+                      + T('editTxt', 'Изменить') + '</button>'
+                    + '<button class="bad" data-map="' + esc(m.mapName) + '">'
+                      + T('removeTxt', 'Удалить') + '</button>' : '')
+            + '</div>';
+        }).join('');
+    box.innerHTML = folderBar + (ownMaps && ownMaps.length ? sel : '') + rows;
+    var modeSel = $('upMapMode');
+    if (modeSel) {
+      modeSel.value = mapModeFilter;
+      modeSel.onchange = function () { mapModeFilter = modeSel.value; renderMapsList(); };
+    }
+  }
+  function loadFoldersAndMaps() {
+    return Promise.all([
+      get('/userMaps?name=' + encodeURIComponent(who)),
+      get('/mapFolders?name=' + encodeURIComponent(who))
+    ]).then(function (res) {
+      ownMaps = res[0].maps || [];
+      ownFolders = res[1].folders || [];
+      renderMapsList();
+    });
+  }
+  function drawMaps() {
+    var box = $('upTabBody');
+    box.innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
+    loadFoldersAndMaps()
+      .catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
+  }
+  function openFolderForm(folder) {
+    editingFolderId = folder ? folder.id : null;
+    $('upFolderName').value = folder ? folder.name : '';
+    $('upFolderColor').value = folder ? folder.color : '#111827';
+    $('upFolderDelete').style.display = folder ? '' : 'none';
+    $('upFolderForm').style.display = 'flex';
+  }
+
+  function showTab(t) {
+    tab = t;
+    Array.prototype.forEach.call(document.querySelectorAll('#upTabs .bfTab'), function (x) {
+      x.classList.toggle('on', x.dataset.tab === t);
+    });
+    if (t === 'maps') drawMaps();
+    else drawFriends(t);
+  }
+
+  /* ---------- действия ---------- */
+  document.addEventListener('click', function (e) {
+    var tb = e.target.closest && e.target.closest('#upTabs .bfTab');
+    if (tb) { showTab(tb.dataset.tab); return; }
+
+    var pt = e.target.closest && e.target.closest('#upStatTabs .upStatTab');
+    if (pt) {
+      var stats = $('upStats');
+      if (!stats) return;
+      Array.prototype.forEach.call(stats.querySelectorAll('.upStatTab'), function (x) {
+        x.classList.toggle('on', x === pt);
+      });
+      var p = pt.dataset.period;
+      $('upCoinsV').textContent = stats.dataset['coins' + p.charAt(0).toUpperCase() + p.slice(1)] || 0;
+      $('upScoreV').textContent = stats.dataset['score' + p.charAt(0).toUpperCase() + p.slice(1)] || 0;
+      return;
+    }
+
+    var rel = e.target.closest && e.target.closest('[data-rel]');
+    if (rel) {
+      var map = { add: '/friendRequest', accept: '/acceptFriendRequest',
+                  cancel: '/cancelFriendRequest', unfriend: '/unfriend' };
+      post(map[rel.dataset.rel], { name: who }).then(function () { start(); })
+        .catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var act = e.target.closest && e.target.closest('[data-act]');
+    if (act) {
+      var m2 = { accept: '/acceptFriendRequest', cancel: '/cancelFriendRequest', unfriend: '/unfriend' };
+      post(m2[act.dataset.act], { name: act.dataset.n }).then(function () { showTab(tab); })
+        .catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var em = e.target.closest && e.target.closest('[data-edit-map]');
+    if (em) {
+      location.href = 'editor?editMap=' + encodeURIComponent(em.dataset.editMap)
+                     + '&editAuthor=' + encodeURIComponent(who);
+      return;
+    }
+
+    var dm = e.target.closest && e.target.closest('[data-map]');
+    if (dm) {
+      if (dm.dataset.armed !== '1') {
+        dm.dataset.armed = '1';
+        dm.textContent = T('confirmDel', 'Точно удалить?');
+        setTimeout(function () {
+          if (dm.dataset.armed === '1') { dm.dataset.armed = ''; dm.textContent = T('removeTxt', 'Удалить'); }
+        }, 4000);
+        return;
+      }
+      post('/removeMap', { mapName: dm.dataset.map, author: who }).then(function (r) {
+        if (r.status === 'success') { msg(T('deleted', 'Карта удалена'), true); drawMaps(); }
+        else msg(r.message || T('errorTxt', 'Ошибка'));
+      }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    var ef = e.target.closest && e.target.closest('[data-edit-folder]');
+    if (ef) {
+      var found = ownFolders.filter(function (f) { return f.id === ef.dataset.editFolder; })[0];
+      if (found) openFolderForm(found);
+      return;
+    }
+
+    var fc = e.target.closest && e.target.closest('[data-folder]');
+    if (fc) {
+      folderFilter = fc.dataset.folder;
+      renderMapsList();
+      return;
+    }
+
+    if (e.target.id === 'upFolderNew') { openFolderForm(null); return; }
+    if (e.target.id === 'upFolderCancel') { $('upFolderForm').style.display = 'none'; return; }
+
+    if (e.target.id === 'upFolderSave') {
+      var name = $('upFolderName').value.trim();
+      var color = $('upFolderColor').value;
+      if (!name) return;
+      var req = editingFolderId
+        ? post('/mapFolders/edit', { id: editingFolderId, name: name, color: color })
+        : post('/mapFolders/create', { name: name, color: color });
+      req.then(function (r) {
+        if (r.status !== 'success') { msg(r.message || T('errorTxt', 'Ошибка')); return; }
+        $('upFolderForm').style.display = 'none';
+        loadFoldersAndMaps();
+      }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    if (e.target.id === 'upFolderDelete') {
+      if (!editingFolderId) return;
+      post('/mapFolders/delete', { id: editingFolderId }).then(function (r) {
+        if (r.status !== 'success') { msg(r.message || T('errorTxt', 'Ошибка')); return; }
+        $('upFolderForm').style.display = 'none';
+        if (folderFilter === editingFolderId) folderFilter = '';
+        loadFoldersAndMaps();
+      }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+  });
+
+  document.addEventListener('change', function (e) {
+    var fa = e.target.closest && e.target.closest('[data-assign-map]');
+    if (fa) {
+      post('/mapFolders/assign', { mapName: fa.dataset.assignMap, folderId: fa.value }).then(function (r) {
+        if (r.status !== 'success') { msg(r.message || T('errorTxt', 'Ошибка')); return; }
+        loadFoldersAndMaps();
+      }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+    }
+  });
+
+  /* ---------- поиск ---------- */
+  // точный поиск ищет только полное совпадение ника — удобно, когда
+  // похожих аккаунтов много и обычный поиск по подстроке их все мешает
+  function search(exact) {
+    var q = $('upQ').value.trim();
+    if (!q) { $('upFound').innerHTML = ''; return; }
+    get('/searchUser?name=' + encodeURIComponent(q) + (exact ? '&exact=1' : '')).then(function (list) {
+      $('upFound').innerHTML = (list && list.length)
+        ? '<div class="upFound">' + list.map(function (u) {
+            return '<a href="users?name=' + encodeURIComponent(u.name) + '">' + esc(u.name) + '</a>';
+          }).join('') + '</div>'
+        : '<div class="bfHint">' + T('nobodyFound', 'Никого не нашлось') + '</div>';
+    }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+  }
+  $('upGo').onclick = function () { search(false); };
+  $('upGoExact').onclick = function () { search(true); };
+  $('upQ').addEventListener('keydown', function (e) { if (e.key === 'Enter') search(); });
+
+  /* ---------- загрузка ---------- */
+  function start() {
+    if (!who) { $('upBody').innerHTML = '<div class="bfHint">' + T('noUser', 'Игрок не указан') + '</div>'; return; }
+
+    Promise.all([
+      get('/whoAmI').catch(function () { return { guest: true }; }),
+      get('/getJoinDate?name=' + encodeURIComponent(who)).catch(function () { return 0; }),
+      get('/getCoins?name=' + encodeURIComponent(who)).catch(function () { return 0; }),
+      get('/getAboutMe?name=' + encodeURIComponent(who)).catch(function () { return ''; }),
+      get('/getRelation?name=' + encodeURIComponent(who)).catch(function () { return '0'; }),
+      get('/getRank?name=' + encodeURIComponent(who)).catch(function () { return null; })
+    ]).then(function (r) {
+      me = r[0];
+
+      var stats = (r[2] && typeof r[2] === 'object') ? r[2] : { coins: r[2] || 0 };
+      $('upBody').innerHTML = drawHead({
+        joined: typeof r[1] === 'object' ? r[1].date : r[1],
+        stats: stats,
+        about: typeof r[3] === 'object' ? (r[3].about || '') : r[3],
+        relation: r[4],
+        rank: r[5]
+      });
+
+      if (isMe) {
+        $('upEditAbout').onclick = function () {
+          $('upAbout').style.display = 'none';
+          $('upAboutEdit').style.display = 'block';
+          $('upAboutText').focus();
+        };
+        $('upAboutSave').onclick = function () {
+          var v = $('upAboutText').value;
+          post('/setAboutMe', { aboutMe: v }).then(function () {
+            $('upAbout').innerHTML = v
+              ? esc(v) : '<span class="empty">' + T('noAbout', 'Ничего не написано') + '</span>';
+            $('upAbout').style.display = '';
+            $('upAboutEdit').style.display = 'none';
+            msg(T('saved', 'Сохранено'), true);
+          }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+        };
+      }
+
+      if (window.BFAvatar) BFAvatar.scan(document);
+      showTab('friends');
+      if (window.I18N) I18N.apply(document.body);
+    });
+  }
+
+  start();
+  window.addEventListener('bf-lang', function () { if (window.I18N) I18N.apply(document.body); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+/* Навигация главного меню AIBrofist
+   В исходном index.html все ссылки заглушены (href="#"), поэтому назначаем их здесь.
+   Кнопка Menu открывает список разделов и доступна всем, включая гостей. */
+(function () {
+  'use strict';
+
+  var ROUTES = {
+    'hide and seek':        'hide-and-seek',
+    'race':                 'race',
+    'гонка':                'race',
+    'прятки':               'hide-and-seek',
+    'map editor':           'editor',
+    'editor':               'editor',
+    'skin editor':          'skinEditor.html',
+    'редактор скинов':      'skinEditor.html',
+    'maps browser':         'mapsBrowser',
+    'browser':              'mapsBrowser',
+    'skins browser':        'skinsBrowser.html',
+    'обзор скинов':         'skinsBrowser.html',
+    'shop':                 'avatar',
+    'магазин':              'avatar',
+    'logs':                 'logs',
+    'новости':              'logs',
+    'avatar':               'avatar',
+    'аватар':               'avatar',
+    'leaderboards':         'leaderboard',
+    'leaderboard':          'leaderboard',
+    'таблица лидеров':      'leaderboard',
+    'supporters':           'leaderboard',
+    'editor tutorial':      'editor',
+    'privacy policy':       'logs',
+    'terms & conditions':   'logs'
+  };
+
+  var MENU_LABELS = ['menu', 'меню', 'menü', 'menú', '菜单'];
+
+  /* Карточки режимов маршрутизируются по data-mode, а не по надписи —
+     раньше клик искал ROUTES[переведённый текст], и на любом языке,
+     кроме русского и английского, карточка переставала вести куда-либо:
+     ни одного перевода не было в ROUTES. */
+  var MODE_ROUTES = { hideAndSeek: 'hide-and-seek', race: 'race' };
+
+  function go(target) {
+    if (typeof target === 'string') { location.href = target; return; }
+    if (target && target.play) location.href = 'game?mode=' + target.play;
+  }
+
+  function toast(text) {
+    var t = document.createElement('div');
+    t.textContent = text;
+    t.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:9999;' +
+      'background:rgba(0,0,0,.82);color:#fff;padding:11px 20px;border-radius:20px;font-size:14px;' +
+      'font-family:sans-serif;pointer-events:none';
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 1800);
+  }
+
+  function label(el) {
+    return (el.textContent || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  // в списке Menu не хватало Skin Editor, Logs и Leaderboards — добавляем
+
+  // На телефоне нет наведения мышью, поэтому подменю «Editor» и «Browser»
+  // не открывались вовсе — их пункты выглядели нерабочими. Открываем по клику.
+
+  function wireCards() {
+    Array.prototype.forEach.call(document.querySelectorAll('.card'), function (card) {
+      var title = card.querySelector('div');
+      var dest = MODE_ROUTES[card.dataset.mode] || ROUTES[label(title || card)];
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (dest) go(dest);
+        else toast(window.I18N ? I18N.t('notReady') : 'Этот режим ещё не готов');
+      });
+    });
+
+  }
+
+  function boot() {
+    // Верхнюю панель теперь целиком строит shell.js — одна на все страницы.
+    // Здесь остаются только карточки режимов на главной, иначе две
+    // системы навигации мешали друг другу и меню мигало.
+    wireCards();
+    if (window.I18N) I18N.apply(document.body);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
