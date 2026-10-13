@@ -105,8 +105,12 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 .tool.on{background:var(--accent);box-shadow:0 2px 8px rgba(17,24,39,.3)}
 .tool canvas{position:static;width:24px;height:24px;pointer-events:none}
 .tool.on canvas{filter:brightness(0) invert(1)}
-.tool[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:44px;top:50%;transform:translateY(-50%);
-  background:#1e2530;color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:30;pointer-events:none}
+.tool[data-tip]:hover::after{content:none}
+/* название инструмента при наведении — отдельный элемент поверх страницы
+   (см. toolTip в скрипте): ::after самой кнопки обрезала прокручиваемая
+   панель #tools, и названий не было видно */
+#toolTip{position:fixed;z-index:60;display:none;transform:translateY(-50%);
+  background:#1e2530;color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none}
 
 /* inspector */
 #insp{position:fixed;right:14px;top:50%;transform:translateY(-50%);width:248px;z-index:10;display:none;
@@ -341,19 +345,19 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
     flex-wrap:wrap;justify-content:center}
 }
 /* на сенсорном экране подсказки по наведению и подсказка про клавиши не нужны */
-body.mob .tool[data-tip]:hover::after{display:none}
+body.mob #toolTip{display:none!important}
 body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=2"></script>
-<script src="device.js?v=166"></script>
-        <script src="sound.js?v=166"></script>
-        <script src="skinRender.js?v=166"></script>
-        <script src="skinCanvas.js?v=166"></script>
-        <script src="gifuct.bundle.js?v=166"></script>
-        <script src="gifPlayer.js?v=166"></script>
-        <script src="coin.js?v=166"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=166">
-        <script src="theme.js?v=166"></script>
+<script src="device.js?v=167"></script>
+        <script src="sound.js?v=167"></script>
+        <script src="skinRender.js?v=167"></script>
+        <script src="skinCanvas.js?v=167"></script>
+        <script src="gifuct.bundle.js?v=167"></script>
+        <script src="gifPlayer.js?v=167"></script>
+        <script src="coin.js?v=167"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=167">
+        <script src="theme.js?v=167"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -2965,6 +2969,25 @@ TOOLS.forEach(function(T){
   d.appendChild(ic); toolsEl.appendChild(d);
   drawIcon(ic, T.t);
 });
+/* Подсказка с названием инструмента. Раньше это была ::after у самой
+   кнопки, но панель #tools прокручивается (overflow-y:auto) и обрезает
+   всё, что выходит за её край, — названий почти ни у кого не было видно.
+   Теперь подсказка — отдельный элемент справа от панели. */
+var toolTip = document.createElement("div");
+toolTip.id = "toolTip";
+document.body.appendChild(toolTip);
+function hideToolTip(){ toolTip.style.display = "none"; }
+toolsEl.addEventListener("mouseover", function(e){
+  var t = e.target.closest(".tool");
+  if(!t){ hideToolTip(); return; }
+  var r = t.getBoundingClientRect(), pr = toolsEl.getBoundingClientRect();
+  toolTip.textContent = t.getAttribute("data-tip") || "";
+  toolTip.style.left = (pr.right + 8) + "px";
+  toolTip.style.top = (r.top + r.height / 2) + "px";
+  toolTip.style.display = "block";
+});
+toolsEl.addEventListener("mouseleave", hideToolTip);
+toolsEl.addEventListener("scroll", hideToolTip);
 
 /* i18n.js подключается ПОСЛЕ этого скрипта и переводит статичную разметку
    сама по data-i18n, но подсказки (data-tip) и подписи режимов рисует этот
@@ -4656,12 +4679,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=166"></script>
-<script src="abuseShow.js?v=166" defer></script>
-<script src="editorHelp.js?v=166"></script>
-<script src="editorAI.js?v=166" defer></script>
-<script src="account.js?v=166" defer></script>
-<script src="owner.js?v=166" defer></script>
+<script src="i18n.js?v=167"></script>
+<script src="abuseShow.js?v=167" defer></script>
+<script src="editorHelp.js?v=167"></script>
+<script src="editorAI.js?v=167" defer></script>
+<script src="account.js?v=167" defer></script>
+<script src="owner.js?v=167" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -4777,7 +4800,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=166" defer></script>
+        <script src="skinAvatar.js?v=167" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */

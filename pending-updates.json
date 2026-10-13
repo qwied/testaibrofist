@@ -1,4 +1,17 @@
 {
   "base": "04b6b9722506e600cf5ffb9d88ef36d3cbfe18f2",
-  "updates": []
+  "updates": [
+    {
+      "title": "Hide and Seek no longer stuck on Loading map",
+      "text": "On school and office networks the game could hang on \"Loading map...\" forever. It now switches to a backup connection after a few seconds and remembers it for that network."
+    },
+    {
+      "title": "Tool names in the map editor",
+      "text": "Hovering any tool in the map editor now shows its name. Before, the names were cut off by the tool panel."
+    },
+    {
+      "title": "Hide and Seek rules updated",
+      "text": "The Hide and Seek page now explains the current rules: in Classic a caught player turns orange and is out of the round, in Zombie Apocalypse they become a zombie and join the hunt."
+    }
+  ]
 }

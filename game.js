@@ -1697,9 +1697,36 @@
          вовсе не проходит — и игрок навсегда оставался на медленном
          транспорте. websocket первый, polling — запасной на случай
          его полного запрета (tryAllTransports пробует по очереди). */
-      socket = io({ transports: ['websocket', 'polling'], tryAllTransports: true });
+      socket = openIo();
     }
     bindNet();
+  }
+
+  /* Сеть, где вебсокет не обрывается, а молча «подвисает» (школьные и
+     офисные прокси): соединение будто открыто, но данных нет, и клиент
+     socket.io раз за разом пробует тот же вебсокет — до polling дело не
+     доходит, игра навсегда остаётся на «Loading map…» с пингом «—».
+     Поэтому: не подключились за WS_WAIT мс — пересоздаём сокет «сначала
+     polling, потом апгрейд до websocket» (так socket.io проходит через
+     любой прокси, а где вебсокет жив — всё равно на него переходит) и на
+     POLL_DAYS дней запоминаем, что в этой сети так и надо начинать. */
+  var WS_WAIT = 6000, POLL_KEY = 'bf_pollFirst', POLL_DAYS = 3;
+  function pollFirst() {
+    try { return Date.now() - (Number(localStorage.getItem(POLL_KEY)) || 0) < POLL_DAYS * 864e5; }
+    catch (e) { return false; }
+  }
+  function openIo() {
+    if (pollFirst()) return io({ transports: ['polling', 'websocket'], forceNew: true });
+    var s = io({ transports: ['websocket', 'polling'], tryAllTransports: true });
+    setTimeout(function () {
+      if (socket !== s || s.connected) return;
+      try { localStorage.setItem(POLL_KEY, String(Date.now())); } catch (e) {}
+      s.off();
+      s.close();
+      socket = io({ transports: ['polling', 'websocket'], forceNew: true });
+      bindNet();
+    }, WS_WAIT);
+    return s;
   }
 
   /* Все подписи на события сокета — отдельной функцией: при переходе
