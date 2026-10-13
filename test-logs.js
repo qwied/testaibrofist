@@ -16,7 +16,7 @@ fs.writeFileSync(path.join(TMP, 'data', 'logs.json'),
 // maps.js теперь берёт OWNER_ALIASES из accounts.js (а не хранит свою
 // отдельную копию), так что accounts.js и его собственная зависимость
 // discordAuth.js тоже нужны рядом во временной папке.
-['extras.js', 'maps.js', 'fsAtomic.js', 'accounts.js', 'discordAuth.js']
+['extras.js', 'maps.js', 'ranks.js', 'fsAtomic.js', 'accounts.js', 'discordAuth.js']
   .forEach(f => fs.copyFileSync(path.join(__dirname, f), path.join(TMP, f)));
 
 const extras = require(path.join(TMP, 'extras.js'));

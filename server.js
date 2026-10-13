@@ -328,6 +328,8 @@ require('./abuse.js').register(app, accounts);
 app.use('/abusefile', express.static(require('./abuse.js').FILE_DIR,
         { maxAge: '1h', fallthrough: true }));
 require('./extras.js').register(app, accounts);
+// новые записи updates.json -> лента Logs и канал #updates в Discord
+require('./updatesFeed.js').start(require('./extras.js'));
 require('./dailyRewards.js').register(app, accounts);
 require('./quests.js').register(app, accounts);
 require('./story.js').register(app, accounts);

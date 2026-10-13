@@ -111,6 +111,20 @@ function nextId() {
   return id;
 }
 
+/* Новость из updates.json (см. updatesFeed.js): тот же вид, что у /addLog,
+   только без перевода — записи там уже по-английски. src — метка
+   источника: по ней та же запись второй раз в ленту не попадёт. */
+function addAutoLog(src, title, text, date) {
+  if (logs.some(l => l.src === src)) return null;
+  const entry = {
+    id: nextId(), title: String(title || '').slice(0, 120),
+    text: String(text || '').slice(0, 4000), images: [], date: date || Date.now(), src
+  };
+  logs.push(entry);
+  save();
+  return entry;
+}
+
 function dropImages(list) {
   const used = usedImages();
   (list || []).forEach(i => {
@@ -688,4 +702,4 @@ function register(app, acc) {
   });
 }
 
-module.exports = { register, reload: load, IMG_DIR, recordGeoHit };
+module.exports = { register, reload: load, IMG_DIR, recordGeoHit, addAutoLog };
