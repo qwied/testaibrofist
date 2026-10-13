@@ -31,15 +31,16 @@ const ok = (n, c) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', n);
   console.log(f + ':');
   ok('константа окна сторожа объявлена', /STUCK_WINDOW = 150/.test(src));
   ok('состояние сторожа объявлено (включая stuckHeld)',
-      /var stuckFrames = 0, stuckAir = 0, stuckHeld = 0, stuckMinX = 0, stuckMaxX = 0, stuckMinY = 0, stuckMaxY = 0;/.test(src));
+      /var stuckFrames = 0, stuckAir = 0, stuckHeld = 0, stuckSteer = 0, stuckMinX = 0, stuckMaxX = 0, stuckMinY = 0, stuckMaxY = 0;/.test(src));
   ok('respawn\\(\\) обнуляет окно сторожа (включая stuckHeld)',
-      /function respawn\(\)\{[\s\S]{0,300}stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckMinX = stuckMaxX = pl\.x; stuckMinY = stuckMaxY = pl\.y;/.test(src));
+      /function respawn\(\)\{[\s\S]{0,300}stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckSteer = 0; stuckMinX = stuckMaxX = pl\.x; stuckMinY = stuckMaxY = pl\.y;/.test(src));
   ok('доля удержания прыжка считается каждый кадр', /if\(keys\.u\) stuckHeld\+\+;/.test(src));
+  ok('доля нажатий влево/вправо считается каждый кадр (v4)', /if\(keys\.l \|\| keys\.r\) stuckSteer\+\+;/.test(src));
   ok('сторож живёт только в прятках, вне их — сбрасывается (включая stuckHeld)',
       /if\(mode === "hideAndSeek"\)\{\s*if\(pl\.x < stuckMinX\)/.test(src) &&
-      /\} else \{\s*stuckFrames = 0; stuckAir = 0; stuckHeld = 0;\s*\}\s*\}\s*function drive/.test(src));
+      /\} else \{\s*stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckSteer = 0;\s*\}\s*\}\s*function drive/.test(src));
   ok('решающее условие — доля удержания прыжка (> 0.85), а не только размах окна',
-      /stuckHeld \/ stuckFrames > 0\.85 && stuckAir \/ stuckFrames > 0\.6 &&\s*\n\s*\(stuckMaxX - stuckMinX\) < 200 && \(stuckMaxY - stuckMinY\) < 200/.test(src));
+      /stuckHeld \/ stuckFrames > 0\.85 && stuckAir \/ stuckFrames > 0\.6 && stuckSteer \/ stuckFrames < 0\.3 &&\s*\n\s*\(stuckMaxX - stuckMinX\) < 200 && \(stuckMaxY - stuckMinY\) < 200/.test(src));
   ok('застрявшего телепортирует на спавн через respawn\\(\\)',
       /\(stuckMaxY - stuckMinY\) < 200\)\{\s*respawn\(\);/.test(src));
 });

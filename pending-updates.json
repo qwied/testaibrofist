@@ -1,4 +1,9 @@
 {
   "base": "0ade32df5b7a886a8c54c0823426a487b0c8f97f",
-  "updates": []
+  "updates": [
+    {
+      "title": "No more teleporting on objects",
+      "text": "Objects no longer throw the player around. Ledge grabbing now works only on real flat ledges, not on circles, triangles, tilted or spinning shapes. Climbing a ledge is a smooth climb instead of an instant jump onto the top, and you no longer bounce up right after climbing. Jumping at a block that is too high no longer sends you back to spawn."
+    }
+  ]
 }
