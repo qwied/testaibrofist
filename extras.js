@@ -125,6 +125,16 @@ function addAutoLog(src, title, text, date) {
   return entry;
 }
 
+/* Убрать из ленты все новости из updates.json (метка src «upd:…»): они
+   выходят в Logs только вместе с постом бота в Discord, а пока бота нет,
+   лента от них должна быть пустой (см. updatesFeed.js). */
+function removeAutoLogs() {
+  const before = logs.length;
+  logs = logs.filter(l => !(typeof l.src === 'string' && l.src.indexOf('upd:') === 0));
+  if (logs.length !== before) save();
+  return before - logs.length;
+}
+
 function dropImages(list) {
   const used = usedImages();
   (list || []).forEach(i => {
@@ -702,4 +712,4 @@ function register(app, acc) {
   });
 }
 
-module.exports = { register, reload: load, IMG_DIR, recordGeoHit, addAutoLog };
+module.exports = { register, reload: load, IMG_DIR, recordGeoHit, addAutoLog, removeAutoLogs };

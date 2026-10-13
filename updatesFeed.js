@@ -1,14 +1,15 @@
 // ============ ОБНОВЛЕНИЯ ИГРЫ -> Logs и Discord #updates ============
 // Список обновлений ведётся в updates.json в корне репозитория aibrofist
 // (в testaibrofist такого файла нет — там модуль ничего не делает).
-// При старте сервера каждая новая запись попадает в ленту Logs, а затем
-// бот Discord публикует её в канале #updates. Что уже опубликовано,
+// Новость выходит сразу в двух местах: бот Discord публикует её в канале
+// #updates, и только после этого она появляется в ленте Logs. Пока бота
+// нет, в Logs не пишется ничего (так попросил владелец), а то, что туда
+// успело попасть раньше, при запуске убирается. Что уже опубликовано,
 // помним в data/updatesFeed.json — перезапуск ничего не дублирует.
 //
 // Боту нужна переменная окружения DISCORD_BOT_TOKEN. Канал он находит
 // сам по имени (updates) на сервере, куда приглашён; можно задать и
-// явно — DISCORD_UPDATES_CHANNEL_ID. Без токена новости просто
-// остаются в Logs, а в Discord уйдут после перезапуска с токеном.
+// явно — DISCORD_UPDATES_CHANNEL_ID.
 // Отправка — обычный HTTPS-запрос к API Discord, как в discordAuth.js:
 // постоянное подключение к Discord и новая npm-зависимость не нужны.
 const fs = require('fs');
@@ -19,8 +20,8 @@ const { atomicWriteFileSync } = require('./fsAtomic.js');
 const SRC_FILE = path.join(__dirname, 'updates.json');
 const DATA_DIR = path.join(__dirname, 'data');
 const STATE_FILE = path.join(DATA_DIR, 'updatesFeed.json');
-/* В Discord уходят только свежие записи: если data/ вдруг потеряется,
-   бот не вывалит в канал всю историю разом. */
+/* Публикуются только свежие записи: если data/ вдруг потеряется или бот
+   появится не сразу, в канал не вывалится вся история разом. */
 const DISCORD_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 const RETRY_MS = 15 * 60 * 1000;     // Discord не ответил — пробуем снова позже
 const TIMEOUT_MS = 10000;
@@ -32,7 +33,7 @@ const clean = s => String(s || '').replace(EMOJI, '').replace(/[ \t]{2,}/g, ' ')
 
 let state = { logged: [], posted: [], channel: '' };
 let list = [];
-let busy = false, warned = false;
+let busy = false, extras = null;
 
 function readUpdates() {
   let raw;
@@ -147,13 +148,11 @@ async function post(token, channel, u) {
   return false;
 }
 
-async function pushToDiscord() {
-  const token = String(process.env.DISCORD_BOT_TOKEN || '').trim();
-  if (!token) {
-    if (!warned) { warned = true; console.log('[updates] DISCORD_BOT_TOKEN не задан — в Discord не публикуем'); }
-    return;
-  }
-  if (busy) return;
+const botToken = () => String(process.env.DISCORD_BOT_TOKEN || '').trim();
+
+async function publish() {
+  const token = botToken();
+  if (!token || busy) return;
   const now = Date.now();
   const fresh = list.filter(u => state.posted.indexOf(u.id) === -1 && now - u.date < DISCORD_MAX_AGE);
   if (!fresh.length) return;
@@ -161,9 +160,13 @@ async function pushToDiscord() {
   try {
     const channel = await findChannel(token);
     if (!channel) return;
+    let i = 0;
     for (const u of fresh) {                 // по порядку файла: в канале читается сверху вниз
       if (!(await post(token, channel, u))) break;
+      // в Logs — только то, что бот уже выложил; +i держит порядок файла
+      extras.addAutoLog('upd:' + u.id, u.title, u.text, Date.now() + i++);
       state.posted.push(u.id);
+      if (state.logged.indexOf(u.id) === -1) state.logged.push(u.id);
       saveState();
     }
   } catch (e) {
@@ -173,22 +176,21 @@ async function pushToDiscord() {
   }
 }
 
-function start(extras) {
+function start(ex) {
+  extras = ex;
   list = readUpdates();
   if (!list.length) return;
   loadState();
-  const now = Date.now();
-  let changed = false;
-  list.forEach((u, i) => {
-    if (state.logged.indexOf(u.id) !== -1) return;
-    // +i: записи одной выкладки встают в ленте в порядке файла
-    extras.addAutoLog('upd:' + u.id, u.title, u.text, now + i);
-    state.logged.push(u.id);
-    changed = true;
-  });
-  if (changed) saveState();
-  pushToDiscord();
-  setInterval(pushToDiscord, RETRY_MS).unref();
+  if (!botToken()) {
+    // бота нет — лента Logs без новостей; выложенное раньше убираем
+    const gone = extras.removeAutoLogs();
+    if (gone || state.logged.length) { state.logged = []; saveState(); }
+    console.log('[updates] DISCORD_BOT_TOKEN не задан — новости ждут бота, в Logs ничего не пишем'
+                + (gone ? ' (убрано из Logs: ' + gone + ')' : ''));
+    return;
+  }
+  publish();
+  setInterval(publish, RETRY_MS).unref();
 }
 
 module.exports = { start, readUpdates, clean };
