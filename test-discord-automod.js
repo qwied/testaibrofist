@@ -48,6 +48,26 @@ ok('в канале 18+ ссылка 18+ не нарушение', A.inspect({ c
 ok('приглашения находятся', A.inviteCodes('join discord.gg/abc123 and https://discord.com/invite/XyZ').join() === 'abc123,XyZ');
 ok('тяжёлое нарушение первым', kinds('ты дебил https://grabify.link/x')[0] === 'grabber');
 
+console.log('\nправила 5, 7, 10, 12 (мошенничество, читы, политика, возраст):');
+[
+  ['продам акк за 500 руб', 'cheat'], ['selling account 20$ paypal', 'cheat'], ['кидаю чит бесплатно скачать', 'cheat'],
+  ['путин', 'politics'], ['трамп', 'politics'], ['war in ukraine', 'politics'], ['мне 11 лет', 'underage'],
+  ['im 12 years old', 'underage'], ['I accidentally reported you', 'scam-text'], ['free nitro, dm me', 'scam-text'],
+  ['@everyone https://bit.ly/x', 'everyone-link'], ['русня', 'slur'], ['рашка', 'slur']
+].forEach(([t, want]) => { const k = kinds(t); ok(JSON.stringify(t) + ' -> ' + want, k[0] === want, k.join(',')); });
+['меняю скин на скин', 'трамплин в карте', 'своё время', 'мне 15 лет', '@everyone hi', 'укроп в салат',
+ 'hack the level lol', 'I played 12 years ago', 'the war level is hard', 'who sells skins in the shop?']
+  .forEach(t => ok('не нарушение: ' + JSON.stringify(t), kinds(t).length === 0, kinds(t).join(',')));
+
+console.log('\nники (правило 9):');
+const name = (n, o) => (A.checkName(n, { owner: o || 'qwied' }) || {}).kind || '-';
+[['Admin', 'impersonation'], ['[Admin] Bob', 'impersonation'], ['Модератор', 'impersonation'], ['AiBrofist', 'impersonation'],
+ ['qwied', 'impersonation'], ['n1gg3r', 'bad-name'], ['discord.gg/xyz', 'bad-name'], ['!!!Bob', 'hoist'],
+ ['★★★', 'unreadable'], ['z̷̛̛͓̫a̷l̷g̷o̷', 'unreadable']]
+  .forEach(([n, want]) => ok('ник ' + JSON.stringify(n) + ' -> ' + want, name(n) === want, name(n)));
+['Bob', 'Modern', 'Vasya_2010', 'Мишка', 'xX_Pro_Xx', 'Administrative Bob'].forEach(n => ok('нормальный ник ' + JSON.stringify(n), name(n) === '-', name(n)));
+ok('значки в начале ника просто убираются', A.checkName('!!!Bob').clean === 'Bob');
+
 console.log('\nфлуд и повторы:');
 {
   const w = new A.FloodWatch();

@@ -5,6 +5,11 @@
    - автомодерация: удаляет нарушения, наказывает по лестнице, пишет игроку
      в личку и в mod-log, не трогает модераторов и разрешённые каналы;
    - за волну флуда — одно наказание, а не по штрафу за каждое сообщение;
+   - участники: плохой ник меняется (и балл), значки в начале убираются,
+     ники всех, кто уже на сервере, тоже проверяются; рейд (много входов
+     сразу) — новые аккаунты в мьют; та же аватарка, что у забаненного, —
+     бан; совсем новый аккаунт не может сразу слать ссылки; политика,
+     продажа аккаунтов, «мне 11 лет» (только сообщение владельцу);
    - секретные команды владельца (начало задаётся на хостинге, здесь «!qa»):
      news, updates, warn, mute, strikes, help — сообщение с командой исчезает,
      без секретного начала не срабатывают, окно видит только
@@ -67,6 +72,7 @@ const server = http.createServer((req, res) => {
     if (/^\/applications\/\w+\/guilds\/\w+\/commands$/.test(p)) return send(200, []);
     if (req.method === 'GET' && /auto-moderation\/rules$/.test(p)) return send(200, []);
     if (req.method === 'POST' && /auto-moderation\/rules$/.test(p)) return send(200, { id: 'am' + (++msgId) });
+    if (req.method === 'GET' && p === '/guilds/' + G + '/members/' + OWNER) return send(200, { user: { id: OWNER, username: 'qwied' } });
     if (/^\/guilds\/\w+\/members\/\w+$/.test(p)) return send(200, {});
     if (/^\/guilds\/\w+\/bans\/\w+$/.test(p)) return send(204);
     if (p === '/users/@me/channels') return send(200, { id: 'dm' + json.recipient_id });
@@ -115,6 +121,10 @@ wss.on('connection', ws => {
       dispatch('GUILD_CREATE', guildCreate());
     }
     if (msg.op === 6) dispatch('RESUMED', {});
+    if (msg.op === 8) dispatch('GUILD_MEMBERS_CHUNK', { guild_id: G, chunk_index: 0, chunk_count: 1, members: [
+      { user: { id: 'E1', username: 'oldhoister' }, nick: '!!!Hoister', roles: [] },
+      { user: { id: 'E2', username: 'fine' }, roles: [] },
+      { user: { id: 'E3', username: 'staffer' }, nick: 'Admin', roles: [MOD_ROLE] }] });
   });
 });
 
@@ -127,6 +137,7 @@ function say(uid, content, extra) {
   return m;
 }
 const since = t => calls.filter(c => c.t >= t);
+const points = list => (list || []).reduce((n, s) => n + s.p, 0);
 const find = (list, method, re) => list.filter(c => c.method === method && re.test(c.path));
 
 (async () => {
@@ -152,7 +163,14 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   let t = Date.now();
   bot.start();
   const ident = await waitFor(() => gwLog.find(m => m.op === 2));
-  ok('входит с intents: серверы, сообщения, их текст, события AutoMod', ident && ident.d.intents === (1 | 512 | 32768 | 2097152), ident && ident.d.intents);
+  ok('входит с intents: серверы, участники, баны, сообщения, их текст, события AutoMod',
+     ident && ident.d.intents === (1 | 2 | 4 | 512 | 32768 | 2097152), ident && ident.d.intents);
+  const op8 = await waitFor(() => gwLog.find(m => m.op === 8));
+  ok('запрашивает список участников, чтобы проверить уже стоящие ники', op8 && op8.d.guild_id === G);
+  await waitFor(() => find(calls, 'PATCH', /members\/E1$/).length);
+  const e1 = find(calls, 'PATCH', /members\/E1$/)[0];
+  ok('у старого участника значки в начале ника убраны (без балла)', e1 && e1.body.nick === 'Hoister' && !(bot._test.state().strikes[G + ':E1'] || []).length);
+  ok('модератора с ником Admin и обычный ник не трогает', find(calls, 'PATCH', /members\/(E2|E3)$/).length === 0);
   ok('токен — из DISCORD_BOT_TOKEN', ident && ident.d.token === 'test-token');
   await waitFor(() => find(calls, 'POST', /auto-moderation\/rules$/).length >= 3);
   const cmds = find(calls, 'PUT', /^\/applications\/700\/guilds\/100\/commands$/);
@@ -242,6 +260,74 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await sleep(200);
   ok('блок встроенной AutoMod засчитывается (1 балл), без сообщения в канал', (bot._test.state().strikes[G + ':U6'] || []).length === 1 &&
      find(since(t), 'POST', /^\/channels\/300\/messages$/).length === 0);
+
+  console.log('\nправила 7, 10, 12 и новички:');
+  t = Date.now();
+  const sale = say('V1', 'продам акк за 500 руб, пишите');
+  await waitFor(() => find(since(t), 'DELETE', new RegExp(sale.id + '$')).length);
+  ok('продажа аккаунта за деньги — удалено, правило 7', (bot._test.state().strikes[G + ':V1'] || [])[0].r === 7);
+  t = Date.now();
+  const pol = say('V2', 'а что вы думаете про путина?');
+  await waitFor(() => find(since(t), 'DELETE', new RegExp(pol.id + '$')).length);
+  ok('политика — удалено, правило 10', (bot._test.state().strikes[G + ':V2'] || [])[0].r === 10);
+  t = Date.now();
+  const kid = say('V3', 'привет всем, мне 11 лет');
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
+  await sleep(150);
+  const alertMsg = find(since(t), 'POST', /^\/channels\/303\/messages$/)[0];
+  ok('«мне 11 лет» — не наказание: сообщение не удалено, без баллов, владельцу в mod-log', alertMsg &&
+     /under 13/.test(alertMsg.body.embeds[0].title) && find(since(t), 'DELETE', new RegExp(kid.id + '$')).length === 0 &&
+     !(bot._test.state().strikes[G + ':V3'] || []).length);
+  t = Date.now();
+  const evl = say('V4', '@everyone free gifts https://gift-drop.example.com');
+  await waitFor(() => find(since(t), 'PATCH', /members\/V4$/).length);
+  ok('@everyone со ссылкой — 2 балла, мьют на 10 минут', points(bot._test.state().strikes[G + ':V4']) === 2);
+  const snow = ms => String((BigInt(ms) - 1420070400000n) << 22n);
+  const newbie = snow(Date.now() - 3600000);
+  t = Date.now();
+  const nl = say(newbie, 'check this https://example.com/cool', { member: Object.assign(member(), { joined_at: new Date().toISOString() }) });
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/300\/messages$/).length);
+  c = since(t);
+  ok('новый аккаунт сразу после входа шлёт ссылку — удалено, без баллов, с объяснением', find(c, 'DELETE', new RegExp(nl.id + '$')).length === 1 &&
+     !(bot._test.state().strikes[G + ':' + newbie] || []).length && /10 minutes after joining/.test(find(c, 'POST', /^\/channels\/300\/messages$/)[0].body.content));
+  t = Date.now();
+  say(snow(Date.now() - 30 * 86400000), 'check this https://example.com/cool', { member: Object.assign(member(), { joined_at: new Date().toISOString() }) });
+  await sleep(250);
+  ok('старому аккаунту, только что зашедшему, ссылки можно', find(since(t), 'DELETE', /messages/).length === 0);
+
+  console.log('\nучастники:');
+  t = Date.now();
+  dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: 'W1', username: 'w1' }, nick: null, roles: [], joined_at: new Date().toISOString() });
+  dispatch('GUILD_MEMBER_UPDATE', { guild_id: G, user: { id: 'W1', username: 'w1' }, nick: 'Модератор', roles: [] });
+  await waitFor(() => find(since(t), 'PATCH', /members\/W1$/).length);
+  ok('ник «Модератор» — заменён и балл по правилу 9', find(since(t), 'PATCH', /members\/W1$/)[0].body.nick === 'Player W1' &&
+     (bot._test.state().strikes[G + ':W1'] || [])[0].r === 9);
+  t = Date.now();
+  dispatch('GUILD_MEMBER_UPDATE', { guild_id: G, user: { id: 'W1', username: 'w1' }, nick: 'Player W1', roles: [] });
+  dispatch('GUILD_MEMBER_UPDATE', { guild_id: G, user: { id: 'W1', username: 'w1' }, nick: 'Player W1', roles: ['777'] });
+  await sleep(250);
+  ok('наш же новый ник — повторно не наказывает', find(since(t), 'PATCH', /members\/W1$/).length === 0 && (bot._test.state().strikes[G + ':W1'] || []).length === 1);
+  t = Date.now();
+  dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: 'W2', username: 'n1gg3r' }, roles: [] });
+  await waitFor(() => find(since(t), 'PATCH', /members\/W2$/).length);
+  ok('оскорбление в имени — ник заменён', find(since(t), 'PATCH', /members\/W2$/)[0].body.nick === 'Player W2');
+  t = Date.now();
+  dispatch('GUILD_BAN_ADD', { guild_id: G, user: { id: 'B1', username: 'badguy', avatar: 'cafe1234' } });
+  dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: 'B2', username: 'newguy', avatar: 'cafe1234' }, roles: [] });
+  await waitFor(() => find(since(t), 'PUT', /bans\/B2$/).length);
+  ok('та же аватарка, что у забаненного, — бан за обход (правило 11)', find(since(t), 'PUT', /bans\/B2$/).length === 1 &&
+     /ban evasion/.test(decodeURIComponent(find(since(t), 'PUT', /bans\/B2$/)[0].reason || '')));
+  t = Date.now();
+  dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: 'B3', username: 'badguy' }, roles: [] });
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
+  ok('то же имя, что у забаненного, — только сообщение владельцу', find(since(t), 'PUT', /bans\/B3$/).length === 0 &&
+     /second account/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/)[0].body)));
+  t = Date.now();
+  for (let i = 0; i < 10; i++) dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: snow(Date.now() - 3600000 - i), username: 'raider' + i }, roles: [] });
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length && find(since(t), 'PATCH', /members\/\d+$/).length);
+  await sleep(300);
+  ok('рейд: 10 входов за минуту — сообщение владельцу и мьют новых аккаунтов', /Raid/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/))) &&
+     find(since(t), 'PATCH', /members\/\d+$/).filter(x => x.body.communication_disabled_until).length >= 1);
 
   console.log('\nлестница до бана:');
   const g = bot._test.guilds.get(G);
@@ -469,7 +555,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bot._test.reload();
   bot.start();
   const ident2 = await waitFor(() => gwLog.slice(before).filter(m => m.op === 2).length >= 2 && gwLog.slice(before).filter(m => m.op === 2)[1], 8000);
-  ok('без Message Content Intent переподключается без него', ident2 && ident2.d.intents === (1 | 512 | 2097152), ident2 && ident2.d.intents);
+  ok('без привилегированных intents переподключается без них', ident2 && ident2.d.intents === (1 | 4 | 512 | 2097152), ident2 && ident2.d.intents);
   await sleep(800);
   c = since(t);
   ok('после перезапуска ничего не постит заново (команды, AutoMod)',

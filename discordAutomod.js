@@ -29,6 +29,16 @@ const KIND = {
   'nsfw-text': { rule: 4, weight: 2, note: 'Sexual content' },
   'native-spam': { rule: 2, weight: 1, note: 'Spam blocked by Discord AutoMod' },
   'native-word': { rule: 1, weight: 1, note: 'Blocked by a server AutoMod rule' },
+  cheat:       { rule: 7, weight: 1, note: 'Cheats or trading for real money' },
+  politics:    { rule: 10, weight: 1, note: 'Politics' },
+  'scam-text': { rule: 5, weight: 2, note: 'Known scam message' },
+  'everyone-link': { rule: 5, weight: 2, note: 'Mass ping with a link' },
+  'bad-name':  { rule: 9, weight: 1, note: 'Inappropriate name' },
+  impersonation: { rule: 9, weight: 1, note: 'Pretending to be staff' },
+  'nsfw-avatar': { rule: 4, weight: 2, note: 'Adult avatar' },
+  evasion:     { rule: 11, weight: 0, note: 'Ban evasion with another account' },
+  // без баллов: только сообщить владельцу (Discord запрещает аккаунты младше 13 лет)
+  underage:    { rule: 12, weight: 0, note: 'Says they are under 13' },
   doxx:        { rule: 6, weight: 2, note: 'Posting an IP address' },
   badfile:     { rule: 5, weight: 2, note: 'Executable file' },
   scam:        { rule: 5, weight: 3, note: 'Scam or phishing link' },
@@ -118,7 +128,8 @@ const SLURS = [
   C('н+и+г{2,}[еаэ]+р+[а-я]*|н+и+г+е+р(?:ы|ов|ам|ами|а|у|ок|ом)?|н+и+г{2,}а+'),
   C('х+о+х+л(?:ы|ов|ам|ами|ах|а|у|ом|ушк[а-я]*|яцк[а-я]*)?|х+о+х+о+л'),
   C('к+а+ц+а+п[а-я]*'),
-  C('м+о+с+к+а+л(?:ь|и|ей|я|ям|ями|ях)?')
+  C('м+о+с+к+а+л(?:ь|и|ей|я|ям|ями|ях)?'),
+  C('р+у+с+н(?:я|и|ю|ей)|р+а+ш+к(?:а|и|у|е|ой)|у+к+р+о+п(?:ы|ов|ам|ами|ах)|п+и+н+д+о+с[а-я]*')
 ];
 
 const SELF_HARM = [
@@ -322,12 +333,69 @@ function checkFiles(msg) {
   return [];
 }
 
+/* ---------- правила 5, 7, 10, 12: мошенничество, читы, политика, возраст ----------
+   Работают по исходному тексту (знаки денег, цифры возраста важны), с
+   границами слов и для кириллицы. */
+const B = src => new RegExp('(?<![a-zа-яё0-9])(?:' + src + ')(?![a-zа-яё0-9])', 'iu');
+const SELL = B('продам|продаю|продаём|куплю|покупаю|скупаю|обменяю|sell|selling|buy|buying|trade|trading|wts|wtb');
+const GOODS = B('акк|акка|акков|аккаунт[а-я]*|монет[а-я]*|коин[а-я]*|account|accounts|acc|accs|coins?');
+const MONEY = /(?:руб|₽|грн|\$|usd|долл|евро|€|деньг|реал|paypal|qiwi|киви|сбер|на\s*карт|донат|money|cash|venmo|crypto|btc|usdt)/i;
+const CHEAT = B('чит|читы|читов|хак|хаки|взлом[а-я]*|инжектор[а-я]*|аимбот|aimbot|wallhack|speedhack|спидхак|дюп|cheat|cheats|hack|hacks|injector|exploit|dupe');
+const SHARE = B('скачать|скачай|ссылк[а-я]*|раздаю|продаю|бесплатн[а-я]*|кидаю|download|free|selling|sell');
+const POLITICS = B('путин[а-я]*|зеленск[а-я]*|лукашенк[а-я]*|навальн[а-я]*|байден[а-я]*|трамп(?:а|у|ом|е)?|сво|спецоперац[а-я]*|мобилизац[а-я]*|' +
+                   'putin|zelensk[a-z]*|lukashenk[a-z]*|navaln[a-z]*|biden|trump|' +
+                   'войн[аеуыо]\\s+(?:с|на|в)\\s+(?:украин[а-я]*|росси[а-я]*)|(?:war\\s+in|war\\s+with)\\s+(?:ukraine|russia)|слава\\s+украине');
+const SCAM_TEXT = [
+  /(?:accidentally|accidently|mistakenly)\s+report(?:ed)?\s+(?:you|u|your)/i,
+  /случайно\s+(?:кинул|отправил|подал|зарепортил|пожаловался)[а-я]*\s+(?:на\s+тебя|репорт|жалоб)/i,
+  /(?:free|бесплатн[а-я]*)\s+(?:discord\s+)?(?:nitro|нитро)/i
+];
+const AGE = [/мне\s+(\d{1,2})\s*(?:лет|год|годик)/i, /(?:i\s+am|i'?m)\s+(\d{1,2})\s*(?:years?\s*old|y\/?o|yrs?\s*old)/i];
+
+function checkRules(msg) {
+  const text = String(msg.content || '').normalize('NFKC').replace(STRIP, '').toLowerCase();
+  const res = [];
+  if (SCAM_TEXT.some(re => re.test(text))) res.push(finding('scam-text'));
+  if (/@(?:everyone|here)/.test(text) && links(text).length) res.push(finding('everyone-link'));
+  if ((SELL.test(text) && GOODS.test(text) && MONEY.test(text)) || (CHEAT.test(text) && SHARE.test(text))) res.push(finding('cheat'));
+  if (POLITICS.test(text)) res.push(finding('politics'));
+  for (const re of AGE) {
+    const m = re.exec(text);
+    if (m && +m[1] >= 5 && +m[1] <= 12) { res.push(finding('underage')); break; }
+  }
+  return res;
+}
+
+/* ---------- имена (правило 9) ----------
+   Ник проверяется при входе на сервер и при каждой смене. Оскорбление или
+   ссылка в нике и «Admin»/«Модератор» — новый ник и балл; значки в начале
+   (чтобы стоять первым в списке) и нечитаемый ник — просто новый ник. */
+const STAFF_WORDS = /^(?:admin|administrator|moderator|staff|owner|support|system|aibrofist|админ|администратор|модератор|модер|владелец|поддержка|система)$/;
+function checkName(name, opts) {
+  opts = opts || {};
+  const n = String(name || '');
+  if (!n.trim()) return null;
+  const words = checkWords({ content: n });
+  if (words.some(f => f.kind === 'slur' || f.kind === 'insult' || f.kind === 'selfharm') ||
+      inviteCodes(n).length || checkLinks(n).length || /https?:\/\/|discord\.gg/i.test(n))
+    return { kind: 'bad-name' };
+  const tokens = (latinForm(n, false) + ' ' + cyrForm(n, false)).split(/\s+/).filter(Boolean);
+  const flat = latinForm(n).replace(/\s+/g, '');
+  const owner = opts.owner ? latinForm(opts.owner).replace(/\s+/g, '') : '';
+  if (tokens.some(t => STAFF_WORDS.test(t)) || (owner.length >= 3 && flat === owner)) return { kind: 'impersonation' };
+  const marks = (n.match(/\p{M}/gu) || []).length;
+  const readable = n.replace(/[^\p{L}\p{N}]/gu, '');
+  if (marks >= 5 || !readable.length) return { kind: 'unreadable' };
+  if (/^[^\p{L}\p{N}]/u.test(n)) return { kind: 'hoist', clean: n.replace(/^[^\p{L}\p{N}]+/u, '').slice(0, 32) };
+  return null;
+}
+
 /* Все проверки, которые можно сделать сразу, по одному сообщению.
    opts.allowAds — канал для саморекламы, opts.nsfw — канал 18+.
    Возвращает самые тяжёлые находки первыми. */
 function inspect(msg, opts) {
   opts = opts || {};
-  let res = [].concat(checkLinks(msg.content), checkFiles(msg), checkWords(msg), checkPrivacy(msg), checkSpam(msg));
+  let res = [].concat(checkLinks(msg.content), checkFiles(msg), checkWords(msg), checkPrivacy(msg), checkRules(msg), checkSpam(msg));
   if (opts.nsfw) res = res.filter(f => f.rule !== 4);
   return res.sort((a, b) => b.weight - a.weight);
 }
@@ -378,6 +446,6 @@ class FloodWatch {
 }
 
 module.exports = {
-  KIND, finding, inspect, checkLinks, checkSpam, checkWords, checkPrivacy, checkFiles,
+  KIND, finding, inspect, checkLinks, checkSpam, checkWords, checkPrivacy, checkFiles, checkRules, checkName,
   inviteCodes, links, isPhish, latinForm, cyrForm, FloodWatch, dist
 };

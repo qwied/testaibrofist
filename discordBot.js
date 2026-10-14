@@ -4,6 +4,9 @@
 //   - автомодерация: проверяет каждое сообщение (discordAutomod.js),
 //     удаляет нарушения, даёт штрафные баллы и наказывает по лестнице из
 //     discordRules.js — предупреждение, мьюты, бан только в крайнем случае;
+//     следит и за участниками: ники, аватарки 18+, рейды (много входов
+//     сразу), обход бана с другого аккаунта, ссылки от только что
+//     зашедших новых аккаунтов;
 //     дополнительно включает встроенную AutoMod Discord, которая не даёт
 //     отправить оскорбления и спам упоминаниями вовсе;
 //   - пишет игроку в личку, за что и как он наказан, а модераторам — в
@@ -31,8 +34,12 @@ const { atomicWriteFileSync } = require('./fsAtomic.js');
 const STATE_FILE = process.env.DISCORD_BOT_STATE || path.join(__dirname, 'data', 'discordBot.json');
 const SCAN_IMAGES = process.env.DISCORD_SCAN_IMAGES !== '0';
 
-const INTENT = { GUILDS: 1, GUILD_MESSAGES: 1 << 9, MESSAGE_CONTENT: 1 << 15, AUTOMOD_EXECUTION: 1 << 21 };
-const ALL_INTENTS = INTENT.GUILDS | INTENT.GUILD_MESSAGES | INTENT.MESSAGE_CONTENT | INTENT.AUTOMOD_EXECUTION;
+const INTENT = { GUILDS: 1, GUILD_MEMBERS: 1 << 1, GUILD_MODERATION: 1 << 2, GUILD_MESSAGES: 1 << 9,
+                 MESSAGE_CONTENT: 1 << 15, AUTOMOD_EXECUTION: 1 << 21 };
+const ALL_INTENTS = INTENT.GUILDS | INTENT.GUILD_MEMBERS | INTENT.GUILD_MODERATION | INTENT.GUILD_MESSAGES |
+                    INTENT.MESSAGE_CONTENT | INTENT.AUTOMOD_EXECUTION;
+// «привилегированные»: их надо включить в Developer Portal, иначе Discord не пустит
+const PRIVILEGED = INTENT.GUILD_MEMBERS | INTENT.MESSAGE_CONTENT;
 
 const PERM = { KICK: 1n << 1n, BAN: 1n << 2n, ADMIN: 1n << 3n, MANAGE_GUILD: 1n << 5n,
                MANAGE_MESSAGES: 1n << 13n, MODERATE: 1n << 40n };
@@ -40,9 +47,14 @@ const ALL_PERMS = (1n << 64n) - 1n;
 const STAFF = PERM.ADMIN | PERM.MANAGE_GUILD | PERM.MANAGE_MESSAGES | PERM.MODERATE | PERM.KICK | PERM.BAN;
 
 const COOLDOWN = 30 * 1000;      // за одну волну спама — одно наказание, а не восемь
+const NEWBIE_MS = 10 * 60 * 1000; // новые аккаунты первые 10 минут на сервере не шлют ссылки
+const RAID_JOINS = 10;            // столько входов за минуту — рейд
+const RAID_MS = 10 * 60 * 1000;
+const WEEK = 7 * 24 * 60 * 60 * 1000;
 const NOTICE_MS = 10 * 1000;     // короткое предупреждение в канале исчезает само
 
-let state = { feed: [], guilds: {}, strikes: {}, cases: 0 };
+// banned — приметы забаненных (аватарка, имя): по ним ловим обход бана
+let state = { feed: [], guilds: {}, strikes: {}, cases: 0, banned: {} };
 let loaded = false, saveTimer = null;
 const guilds = new Map();        // id -> { id, name, owner, roles: Map, channels: Map }
 const setupDone = new Set();
@@ -51,6 +63,12 @@ const inviteCache = new Map();   // код приглашения -> { guild, t 
 const dmChannels = new Map();
 const said = new Set();          // какие подсказки владельцу уже были в журнале
 const flood = new A.FloodWatch();
+const flaggedAvatars = new Map(); // guild:user -> аватарка 18+, которую ещё не сменили
+const avatarSeen = new Map();     // guild:user -> какую аватарку уже проверили
+const nameSeen = new Map();       // guild:user -> какой ник уже разобрали
+const joins = new Map();          // guild -> времена входов за последнюю минуту
+const raidUntil = new Map();
+const softHit = new Map();        // guild:user -> когда последний раз писали «подожди»
 let gw = null, me = null, appId = null, timers = [];
 
 const log = (...a) => console.log('[discord]', ...a);
@@ -66,7 +84,8 @@ function loadState() {
       feed: Array.isArray(s.feed) ? s.feed.filter(x => /^\d+$/.test(x)) : [],
       guilds: s.guilds && typeof s.guilds === 'object' ? s.guilds : {},
       strikes: s.strikes && typeof s.strikes === 'object' ? s.strikes : {},
-      cases: Number(s.cases) || 0
+      cases: Number(s.cases) || 0,
+      banned: s.banned && typeof s.banned === 'object' ? s.banned : {}
     };
   } catch (e) { /* первый запуск */ }
 }
@@ -247,7 +266,7 @@ async function punish(g, user, f, ctx) {
   await dm(user.id, { embeds: [{
     color: color(step),
     title: step.type === 'ban' ? 'You have been banned' : step.type === 'mute' ? 'You have been muted' : 'Warning',
-    description: (ctx.by ? 'A moderator of **' : 'Your message in **') + g.name + (ctx.by ? '** gave you a strike.' : '** was removed.'),
+    description: ctx.dm || ((ctx.by ? 'A moderator of **' : 'Your message in **') + g.name + (ctx.by ? '** gave you a strike.' : '** was removed.')),
     fields: [
       { name: 'Rule', value: rule ? rule.id + '. ' + rule.title : 'Moderator decision', inline: true },
       { name: 'Action', value: action, inline: true },
@@ -339,12 +358,15 @@ function queueImages(g, m) {
   pumpImages();
 }
 
+const isAdult = s => { const porn = s.Porn || 0, hentai = s.Hentai || 0; return porn >= 0.85 || hentai >= 0.85 || porn + hentai >= 0.92; };
+
 async function pumpImages() {
   if (imgBusy) return;
   imgBusy = true;
   try {
     while (imgQueue.length) {
       const job = imgQueue.shift();
+      if (job.avatar) { await checkAvatar(job).catch(e => once('img:' + e.message, 'avatar check skipped:', e.message)); continue; }
       for (const a of job.pics) {
         try {
           // уменьшенная копия с медиа-прокси Discord: нейросети хватает 512 px
@@ -357,9 +379,7 @@ async function pumpImages() {
           const img = require('./imgModeration.js');
           const decoded = img.decodeImage(buf, ext);
           if (!decoded || !decoded.frames) continue;
-          const s = await img.nsfwScores(decoded);
-          const porn = s.Porn || 0, hentai = s.Hentai || 0;
-          if (porn >= 0.85 || hentai >= 0.85 || porn + hentai >= 0.92) {
+          if (isAdult(await img.nsfwScores(decoded))) {
             await enforce(job.g, job.m, A.finding('nsfw-image'));
             break;
           }
@@ -382,8 +402,27 @@ async function onMessage(m, edited) {
   if (memberPerms(g, m.author.id, m.member && m.member.roles) & STAFF) return;   // модераторов не трогаем
   const ch = channelInfo(g, m.channel_id);
   const allowAds = /promo|advert|реклам|самопиар/i.test(ch.name);
+  const key = g.id + ':' + m.author.id;
+
+  // аватарка 18+ ещё не сменена — писать нельзя, пока не сменит (без новых баллов)
+  const avatar = (m.member && m.member.avatar) || m.author.avatar;
+  queueAvatar(g, { user: m.author, avatar: m.member && m.member.avatar });   // кто пишет — проверим и аватарку
+  if (avatar && flaggedAvatars.get(key) === avatar)
+    return softRemove(m, 'please change your avatar first, it breaks rule 4.');
+  // совсем новый аккаунт только что зашёл и сразу шлёт ссылку — так пишут спам-боты
+  const joined = Date.parse(m.member && m.member.joined_at) || 0;
+  if (!edited && joined && Date.now() - joined < NEWBIE_MS && accountAge(m.author.id) < WEEK &&
+      A.links(m.content).some(l => l.explicit))
+    return softRemove(m, 'new members can post links 10 minutes after joining.');
 
   const found = A.inspect(m, { nsfw: ch.nsfw });
+  // «мне 11 лет» — не наказание, а сообщение владельцу: решать ему
+  const young = found.findIndex(f => f.kind === 'underage');
+  if (young !== -1) {
+    found.splice(young, 1);
+    if (!edited) alert(g, 'Possibly under 13', '<@' + m.author.id + '> wrote in <#' + m.channel_id + '>:\n>>> ' + quote(m.content) +
+                       '\n\nDiscord does not allow accounts of people under 13.').catch(() => {});
+  }
   if (!edited) {
     const fl = flood.add(m.guild_id + ':' + m.author.id, m);
     if (fl) found.push(A.finding(fl.kind, { messages: fl.messages }));
@@ -426,6 +465,128 @@ async function onAutomodExecution(d) {
   if (last && now - last.t < COOLDOWN && last.weight >= f.weight) return;
   lastHit.set(hk, { t: now, weight: f.weight });
   await punish(g, { id: d.user_id }, f, { channel: d.channel_id, excerpt: d.content, silent: true });
+}
+
+/* ---------- участники: ники, аватарки, рейды, обход бана ---------- */
+const DISCORD_EPOCH = 1420070400000n;
+// возраст аккаунта по его id (в id зашито время создания)
+const accountAge = id => /^\d{15,}$/.test(String(id)) ? Date.now() - Number((BigInt(id) >> 22n) + DISCORD_EPOCH) : Infinity;
+
+// удалить сообщение и коротко объяснить почему — без баллов (раз в 30 секунд)
+async function softRemove(m, text) {
+  await api('DELETE', '/channels/' + m.channel_id + '/messages/' + m.id).catch(() => {});
+  const key = m.guild_id + ':' + m.author.id, now = Date.now();
+  if (now - (softHit.get(key) || 0) < COOLDOWN) return;
+  softHit.set(key, now);
+  await notice(m.channel_id, m.author.id, text).catch(() => {});
+}
+
+async function alert(g, title, text) {
+  const ch = modlogChannel(g);
+  if (!ch) return;
+  await sendMessage(ch, { embeds: [{ color: R.COLORS.warn, title: 'Alert | ' + title, description: text,
+                                     timestamp: new Date().toISOString() }], allowed_mentions: { parse: [] } });
+}
+
+const displayName = d => d.nick || (d.user && (d.user.global_name || d.user.username)) || '';
+
+async function checkName(g, d) {
+  const uid = d.user.id, shown = displayName(d), key = g.id + ':' + uid;
+  if (nameSeen.get(key) === shown) return;            // этот ник уже разобран
+  nameSeen.set(key, shown);
+  const v = A.checkName(shown, { owner: g.ownerName });
+  if (!v) return;
+  const nick = v.kind === 'hoist' && v.clean ? v.clean : 'Player ' + uid.slice(-4);
+  const why = v.kind === 'impersonation' ? 'pretending to be staff' : v.kind === 'bad-name' ? 'inappropriate name' : 'unreadable name';
+  const r = await api('PATCH', '/guilds/' + g.id + '/members/' + uid, { nick }, { reason: 'Rule 9: ' + why });
+  if (r.status === 403) once('nonick:' + g.id, 'cannot change nicknames in ' + g.name + ': give the bot Manage Nicknames and move its role above member roles');
+  nameSeen.set(key, nick);
+  if (v.kind === 'bad-name' || v.kind === 'impersonation') {
+    await punish(g, d.user, A.finding(v.kind, { detail: shown.slice(0, 60) }), { silent: true,
+      dm: 'Your name in **' + g.name + '** breaks the rules, so it was changed to "' + nick + '".' });
+  }
+}
+
+function queueAvatar(g, d) {
+  const key = g.id + ':' + d.user.id, hash = d.avatar || d.user.avatar;
+  if (!hash) { flaggedAvatars.delete(key); return; }
+  if (avatarSeen.get(key) === hash) return;
+  if (flaggedAvatars.has(key) && flaggedAvatars.get(key) !== hash) flaggedAvatars.delete(key);   // сменил
+  if (SCAN_IMAGES && imgQueue.length > 20) return;     // очередь полна — проверим в другой раз
+  avatarSeen.set(key, hash);
+  if (!SCAN_IMAGES) return;
+  const url = d.avatar ? 'https://cdn.discordapp.com/guilds/' + g.id + '/users/' + d.user.id + '/avatars/' + hash + '.png?size=256'
+                       : 'https://cdn.discordapp.com/avatars/' + d.user.id + '/' + hash + '.png?size=256';
+  imgQueue.push({ avatar: true, g, user: d.user, hash, url });
+  pumpImages();
+}
+
+async function checkAvatar(job) {
+  const { buf, type } = await download(job.url, 4 * 1024 * 1024);
+  if (type !== 'image/png') return;
+  const img = require('./imgModeration.js');
+  const decoded = img.decodeImage(buf, 'png');
+  if (!decoded || !decoded.frames || !isAdult(await img.nsfwScores(decoded))) return;
+  flaggedAvatars.set(job.g.id + ':' + job.user.id, job.hash);
+  await punish(job.g, job.user, A.finding('nsfw-avatar'), { silent: true,
+    dm: 'Your avatar in **' + job.g.name + '** breaks rule 4. Change it: until then your messages there are removed.' });
+}
+
+// много входов за минуту — рейд: новые аккаунты на 10 минут получают мьют на час
+async function trackJoin(g, d) {
+  const now = Date.now();
+  const list = (joins.get(g.id) || []).filter(t => now - t < 60000);
+  list.push(now);
+  joins.set(g.id, list);
+  if (list.length >= RAID_JOINS && !((raidUntil.get(g.id) || 0) > now)) {
+    raidUntil.set(g.id, now + RAID_MS);
+    alert(g, 'Raid', list.length + ' members joined within a minute. For the next 10 minutes accounts younger ' +
+                     'than a week are muted for an hour when they join.').catch(() => {});
+  }
+  if ((raidUntil.get(g.id) || 0) > now && accountAge(d.user.id) < WEEK) await timeout(g, d.user.id, R.HOUR, 'Raid protection');
+}
+
+// приметы забаненного: аватарка и имя — по ним узнаём его второй аккаунт
+function rememberBan(gid, user) {
+  if (!user || (!user.avatar && !user.username)) return;
+  const list = (state.banned[gid] || []).filter(b => b.id !== user.id);
+  list.push({ id: user.id, a: user.avatar || null, n: String(user.global_name || user.username || '').toLowerCase(), t: Date.now() });
+  state.banned[gid] = list.slice(-500);
+  save();
+}
+
+async function checkEvasion(g, d) {
+  const list = state.banned[g.id] || [];
+  const u = d.user, name = String(u.global_name || u.username || '').toLowerCase();
+  const same = u.avatar && list.find(b => b.a && b.a === u.avatar && b.id !== u.id);
+  if (same) {
+    // та же картинка аватарки, что у забаненного, — это он
+    const caseNo = ++state.cases;
+    save();
+    const done = await ban(g, u.id, 'Case ' + caseNo + ': rule 11, ban evasion');
+    await modlog(g, { caseNo, title: 'Ban (ban evasion)' + (done ? '' : ' (failed: no permission)'), color: R.COLORS.ban,
+                      user: u.id, rule: 11, reason: 'Same avatar as banned member <@' + same.id + '>' });
+    return true;
+  }
+  const alike = name.length >= 4 && list.find(b => b.n === name && b.id !== u.id);
+  if (alike) alert(g, 'Possible second account', '<@' + u.id + '> has the same name as banned member <@' + alike.id + '>.').catch(() => {});
+  return false;
+}
+
+async function onMemberAdd(d) {
+  const g = guilds.get(d.guild_id);
+  if (!g || !d.user || d.user.bot) return;
+  await trackJoin(g, d);
+  if (await checkEvasion(g, d)) return;
+  await onMemberUpdate(d);
+}
+
+async function onMemberUpdate(d) {
+  const g = guilds.get(d.guild_id);
+  if (!g || !d.user || d.user.bot || d.user.id === g.owner) return;
+  if (memberPerms(g, d.user.id, d.roles) & STAFF) return;      // модераторов не трогаем
+  await checkName(g, d);
+  queueAvatar(g, d);
 }
 
 /* ---------- встроенная AutoMod Discord ----------
@@ -816,6 +977,10 @@ async function setupGuild(g) {
   try {
     await clearSlashCommands(g);
     await ensureNativeAutomod(g);
+    const o = await api('GET', '/guilds/' + g.id + '/members/' + g.owner);
+    if (ok(o) && o.body && o.body.user) g.ownerName = o.body.nick || o.body.user.global_name || o.body.user.username;
+    // ники всех, кто уже на сервере, — тоже проверить (ответ придёт пачками)
+    if (gw) gw.send({ op: 8, d: { guild_id: g.id, query: '', limit: 0 } });
   } catch (e) { log('setup failed for ' + g.name + ':', e.message); setupDone.delete(g.id); }
 }
 
@@ -842,6 +1007,12 @@ function onDispatch(t, d) {
     }
     case 'CHANNEL_DELETE': case 'THREAD_DELETE': { const g = guilds.get(d.guild_id); if (g) g.channels.delete(d.id); break; }
     case 'MESSAGE_CREATE': onMessage(d, false).catch(e => log('message check failed:', e.message)); break;
+    case 'GUILD_MEMBER_ADD': onMemberAdd(d).catch(e => log('member check failed:', e.message)); break;
+    case 'GUILD_MEMBER_UPDATE': onMemberUpdate(d).catch(e => log('member check failed:', e.message)); break;
+    case 'GUILD_BAN_ADD': rememberBan(d.guild_id, d.user); break;
+    case 'GUILD_MEMBERS_CHUNK':
+      (d.members || []).forEach(mb => onMemberUpdate(Object.assign({ guild_id: d.guild_id }, mb)).catch(() => {}));
+      break;
     // правка сообщения проверяется так же: иначе нарушение дописали бы позже
     // (без edited_timestamp это Discord дорисовал превью ссылки, а не правка)
     case 'MESSAGE_UPDATE': if (typeof d.content === 'string' && d.author && d.edited_timestamp) onMessage(d, true).catch(() => {}); break;
@@ -859,9 +1030,10 @@ function connect(intents) {
   gw.on('disallowed', () => {
     // «Message Content Intent» не включён в настройках бота — работаем без
     // чтения текста: встроенная AutoMod, флуд и картинки остаются
-    log('Message Content Intent is off in the Discord Developer Portal (Bot tab): text checks are paused until it is enabled');
+    log('Message Content or Server Members Intent is off in the Discord Developer Portal (Bot tab): ' +
+        'text and member checks are paused until both are enabled');
     gw.removeAllListeners();
-    connect(intents & ~INTENT.MESSAGE_CONTENT);
+    connect(intents & ~PRIVILEGED);
   });
   gw.connect();
 }
