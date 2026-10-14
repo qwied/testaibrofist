@@ -538,6 +538,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('новость из updates.json — во все каналы новостей, потом в Logs', fresh.length === 2 && logged.length === 1 &&
      logged[0] === 'upd:' + today + '-1|Discord bot', logged.join());
   ok('и в Discord, и в Logs — без эмодзи', fresh[0] && fresh[0].body.embeds[0].title === 'Discord bot');
+  ok('время на карточке — момент выхода, а не полночь даты', fresh[0] && Math.abs(Date.parse(fresh[0].body.embeds[0].timestamp) - Date.now()) < 60000,
+     fresh[0] && fresh[0].body.embeds[0].timestamp);
   ok('новости, вышедшие до появления бота, не публикуются', !JSON.stringify(fresh).includes('Old news'));
   const err = feed.status().lastError;
   ok('нет прав в #updates — это видно на странице состояния', err && err.channel === CH.updates && err.status === 403, err);

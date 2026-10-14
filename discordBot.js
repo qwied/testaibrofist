@@ -741,6 +741,7 @@ async function onOwnerCommand(g, m) {
   const mm = /^\s*([a-z]+)(?:\s+([\s\S]*))?$/i.exec(text.slice(PREFIX.length));
   if (!mm || COMMANDS.indexOf(mm[1].toLowerCase()) === -1) return false;
   const cmd = mm[1].toLowerCase(), args = (mm[2] || '').trim();
+  lastCommandAt = Date.now();
   api('DELETE', '/channels/' + m.channel_id + '/messages/' + m.id).catch(() => {});
 
   if (cmd === 'news' || cmd === 'updates' || cmd === 'help') { await openPanel(g, m, cmd); return true; }
@@ -982,9 +983,11 @@ async function clearSlashCommands(g) {
    С хостинга сайта живое подключение к gateway.discord.gg не открывается
    («Opening handshake has timed out»), а обычные запросы к Discord
    проходят. Тогда бот работает так:
-   - новые сообщения: раз в 3 секунды один запрос со всеми каналами
-     сервера (у каждого номер последнего сообщения), и только в тех, где он
-     сменился, — сами новые сообщения;
+   - новые сообщения: раз в 3 секунды по запросу на каждый текстовый канал
+     («что нового после последнего прочитанного»). Список каналов и роли —
+     раз в минуту и отдельно: этот запрос Discord даёт делать лишь ~10 раз
+     за 40 секунд, и когда опрос шёл через него, бот подолгу ждал и не
+     видел ни команд, ни нарушений;
    - участники (входы, ники, аватарки) — раз в минуту, баны — раз в 5 минут;
    - кнопки и окна Discord присылает сайту сам (/discord/interactions,
      подпись проверяется ключом приложения).
@@ -993,8 +996,11 @@ async function clearSlashCommands(g) {
 const POLL_MS = Number(process.env.DISCORD_POLL_MS) || 3000;
 const REST_AFTER_MS = Number(process.env.DISCORD_REST_AFTER_MS) || 45000;
 const MEMBERS_MS = Number(process.env.DISCORD_MEMBERS_POLL_MS) || 60000;
+const CHANNELS_MS = Number(process.env.DISCORD_CHANNELS_POLL_MS) || 60000;
 const BANS_MS = 5 * 60 * 1000;
+const BLOCK_MS = 10 * 60 * 1000;     // канал закрыт для бота — заглянем снова через 10 минут
 let rest = null, verifyKey = null;
+let lastCommandAt = 0;               // для страницы состояния: когда бот последний раз узнал команду владельца
 const newer = (a, b) => a.length !== b.length ? a.length > b.length : a > b;   // id сообщений — большие числа строкой
 
 async function loadApp() {
@@ -1023,9 +1029,27 @@ async function loadGuildRest(id) {
   return g;
 }
 
+// список каналов и роли сервера — раз в минуту (новые каналы, выданные права);
+// упёрлись в лимит Discord — не ждём, обновим в следующий раз
+async function refreshGuild(g) {
+  const gr = await api('GET', '/guilds/' + g.id, null, { once: true });
+  if (ok(gr) && gr.body) {
+    g.name = gr.body.name || g.name;
+    g.owner = gr.body.owner_id || g.owner;
+    g.roles.clear();
+    (gr.body.roles || []).forEach(r => g.roles.set(r.id, { perms: BigInt(r.permissions || '0'), name: r.name }));
+  }
+  const cr = await api('GET', '/guilds/' + g.id + '/channels', null, { once: true });
+  if (!ok(cr) || !Array.isArray(cr.body)) return;
+  const seen = new Set();
+  cr.body.forEach(c => { g.channels.set(c.id, chan(c)); seen.add(c.id); });
+  for (const id of [...g.channels.keys()]) if (!seen.has(id)) g.channels.delete(id);
+}
+
 async function startRest() {
   if (rest || !token()) return;
-  rest = { last: new Map(), blocked: new Map(), members: new Map(), timers: [], busy: false };
+  rest = { last: new Map(), from: new Map(), blocked: new Map(), members: new Map(), timers: [], busy: false, listing: false,
+           since: Date.now(), rounds: 0, lastRound: 0 };
   log('live connection to Discord is not available here, the bot works through requests');
   const u = await api('GET', '/users/@me');
   if (ok(u) && u.body) me = u.body;
@@ -1040,6 +1064,11 @@ async function startRest() {
   }
   const every = (fn, ms) => { const t = setInterval(() => fn().catch(e => once('rest:' + e.message, 'poll failed:', e.message)), ms); if (t.unref) t.unref(); rest.timers.push(t); };
   every(pollMessages, POLL_MS);
+  every(async () => {
+    if (!rest || rest.listing) return;
+    rest.listing = true;
+    try { for (const g of guilds.values()) await refreshGuild(g); } finally { if (rest) rest.listing = false; }
+  }, CHANNELS_MS);
   every(async () => { for (const g of guilds.values()) await pollMembers(g, false); }, MEMBERS_MS);
   every(async () => { for (const g of guilds.values()) await pollBans(g); }, BANS_MS);
 }
@@ -1055,30 +1084,37 @@ async function pollMessages() {
   rest.busy = true;
   try {
     for (const g of guilds.values()) {
-      const cr = await api('GET', '/guilds/' + g.id + '/channels');
-      if (!ok(cr) || !Array.isArray(cr.body)) continue;
-      for (const c of cr.body) {
-        g.channels.set(c.id, chan(c));
+      for (const c of [...g.channels.values()]) {
         if (c.type !== 0 && c.type !== 5) continue;
-        const last = rest.last.get(c.id);
-        if (!c.last_message_id || last === c.last_message_id) continue;
-        if (!last) { rest.last.set(c.id, c.last_message_id); continue; }   // новый канал: с этого места
         if ((rest.blocked.get(c.id) || 0) > Date.now()) continue;
-        const r = await api('GET', '/channels/' + c.id + '/messages?after=' + last + '&limit=50');
-        if (r.status === 403 || r.status === 404) { rest.blocked.set(c.id, Date.now() + 10 * 60 * 1000); rest.last.set(c.id, c.last_message_id); continue; }
+        // после последнего прочитанного; в пустом канале — последние, но только новее «from»
+        const last = rest.last.get(c.id);
+        if (!last && !rest.from.has(c.id)) rest.from.set(c.id, Date.now());
+        const r = await api('GET', '/channels/' + c.id + '/messages?' + (last ? 'after=' + last + '&' : '') + 'limit=50');
+        if (r.status === 403 || r.status === 404) {
+          // закрыт для бота: заглянем позже и начнём с того места, а не со старого
+          rest.blocked.set(c.id, Date.now() + BLOCK_MS);
+          rest.last.delete(c.id);
+          rest.from.set(c.id, Date.now() + BLOCK_MS);
+          continue;
+        }
         if (!ok(r) || !Array.isArray(r.body)) continue;
         const list = r.body.slice().sort((a, b) => newer(a.id, b.id) ? 1 : -1);
-        let top = last;
+        const from = last ? 0 : rest.from.get(c.id);
+        let top = last || '0';
         for (const m of list) {
           if (newer(m.id, top)) top = m.id;
+          if (!last && !(Date.parse(m.timestamp) >= from)) continue;     // было до запуска — не трогаем
           m.guild_id = g.id;
           m.member = (rest.members.get(g.id) || new Map()).get(m.author && m.author.id);
           (m.mentions || []).forEach(u => { if (!u.member) u.member = (rest.members.get(g.id) || new Map()).get(u.id); });
           await onMessage(m, false).catch(e => log('message check failed:', e.message));
         }
-        rest.last.set(c.id, newer(c.last_message_id, top) && list.length < 50 ? c.last_message_id : top);
+        if (top !== '0') { rest.last.set(c.id, top); rest.from.delete(c.id); }
       }
     }
+    rest.rounds++;
+    rest.lastRound = Date.now();
   } finally { if (rest) rest.busy = false; }
 }
 
@@ -1243,6 +1279,14 @@ async function status() {
   const out = { token: !!token(), prefix: !!String(process.env.DISCORD_CMD_PREFIX || '').trim(), problems: [] };
   if (!out.token) out.problems.push('DISCORD_BOT_TOKEN is not set on the hosting (or the site was not restarted after setting it).');
   out.mode = gw && gw.state === 'ready' ? 'live' : rest ? 'requests' : 'starting';
+  const ago = t => t ? Math.round((Date.now() - t) / 1000) + 's ago' : 'never';
+  if (rest) {
+    let channels = 0;
+    for (const g of guilds.values()) for (const c of g.channels.values()) if ((c.type === 0 || c.type === 5) && !((rest.blocked.get(c.id) || 0) > Date.now())) channels++;
+    out.reading = { channels, rounds: rest.rounds, lastRound: ago(rest.lastRound), lastCommand: ago(lastCommandAt) };
+    const idle = Date.now() - (rest.lastRound || rest.since);
+    if (idle > 90000) out.problems.push('The bot has not read new messages for ' + Math.round(idle / 1000) + ' seconds.');
+  }
   if (gw) {
     out.gateway = { state: gw.state, intents: gw.intents, lastClose: gw.lastClose, lastError: gw.lastError };
     if (gw.state !== 'ready' && !rest) out.problems.push('Not connected to Discord yet: ' +

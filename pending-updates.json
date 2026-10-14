@@ -4,6 +4,10 @@
     {
       "title": "Stability improvements",
       "text": "Stability and security improvements."
+    },
+    {
+      "title": "Discord bot fixes",
+      "text": "The Discord bot now reacts to messages within seconds, and news posts show the real time they were published."
     }
   ]
 }

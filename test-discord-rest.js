@@ -50,6 +50,8 @@ function addMsg(channel, author, content, extra) {
 const say = (uid, content, extra) => addMsg((extra && extra.channel) || CH.general, members.get(uid) ? members.get(uid).user : { id: uid, username: uid }, content, extra);
 
 const calls = [];
+let listCalls = 0;
+const roles = [{ id: G, name: '@everyone', permissions: '1024' }, { id: MOD_ROLE, name: 'Moderator', permissions: String(1n << 13n) }];
 const server = http.createServer((req, res) => {
   let body = '';
   req.on('data', c => { body += c; });
@@ -64,8 +66,10 @@ const server = http.createServer((req, res) => {
     if (p === '/applications/@me' && req.method === 'GET') return send(200, { id: APP, verify_key: verifyHex, interactions_endpoint_url: null });
     if (p === '/applications/@me' && req.method === 'PATCH') return send(200, { id: APP });
     if (p === '/users/@me/guilds') return send(200, [{ id: G, name: 'AIBROFIST' }]);
-    if (p === '/guilds/' + G) return send(200, { id: G, name: 'AIBROFIST', owner_id: OWNER,
-      roles: [{ id: G, name: '@everyone', permissions: '1024' }, { id: MOD_ROLE, name: 'Moderator', permissions: String(1n << 13n) }] });
+    if (p === '/guilds/' + G) return send(200, { id: G, name: 'AIBROFIST', owner_id: OWNER, roles });
+    // как у настоящего Discord: список каналов дают редко (10 раз за ~40 с),
+    // дальше — 429 и долгое ожидание
+    if (p === '/guilds/' + G + '/channels' && ++listCalls > 2) return send(429, { message: 'You are being rate limited.', retry_after: 30, global: false });
     if (p === '/guilds/' + G + '/channels') return send(200, [
       { id: CH.general, name: 'general', type: 0, last_message_id: (store[CH.general].slice(-1)[0] || {}).id || null },
       { id: CH.news, name: 'news', type: 5, last_message_id: (store[CH.news].slice(-1)[0] || {}).id || null },
@@ -105,7 +109,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     DISCORD_GATEWAY_URL: 'ws://127.0.0.1:1/gw',                 // живое подключение не откроется
     DISCORD_BOT_STATE: path.join(tmp, 'bot.json'), UPDATES_FEED_STATE: path.join(tmp, 'feed.json'),
     DISCORD_SCAN_IMAGES: '0', DISCORD_CMD_PREFIX: 'qa',
-    DISCORD_REST_AFTER_MS: '800', DISCORD_POLL_MS: '250', DISCORD_MEMBERS_POLL_MS: '600'
+    DISCORD_REST_AFTER_MS: '800', DISCORD_POLL_MS: '250', DISCORD_MEMBERS_POLL_MS: '600', DISCORD_CHANNELS_POLL_MS: '500'
   });
   // сообщение, отправленное ДО запуска бота, — его бот не трогает
   const old = say('U1', 'ты пидор');
@@ -135,12 +139,29 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(since(t), 'POST', /^\/channels\/dmU2\/messages$/).length);
   await sleep(500);
   ok('волна флуда пришла пачкой — одно наказание', find(since(t), 'POST', /^\/channels\/dmU2\/messages$/).length === 1);
+  ok('список каналов почти всё время отвечает 429 — бот всё равно читает сообщения', listCalls > 2);
+  t = Date.now();
+  const inNews = say('U1', 'ты пидор', { channel: CH.news });
+  await waitFor(() => find(since(t), 'DELETE', new RegExp('/messages/' + inNews.id + '$')).length);
+  ok('в канале, где до запуска не было сообщений, первое же нарушение замечено',
+     find(since(t), 'DELETE', new RegExp('/messages/' + inNews.id + '$')).length === 1);
+  // владелец выдал роли новые права, перезапуска не было
+  roles.push({ id: '201', name: 'Helper', permissions: String(1n << 13n) });
+  members.set('U3', { user: { id: 'U3', username: 'helper' }, roles: ['201'], joined_at: '2024-01-01T00:00:00Z' });
+  await sleep(1500);
+  t = Date.now();
+  say('U3', 'ты пидор');
+  await sleep(800);
+  ok('права, выданные роли после запуска, учтены (помощника не наказывает)', find(since(t), 'DELETE', /messages/).length === 0);
 
   console.log('\nсекретная команда и кнопки по HTTP:');
   t = Date.now();
   const cmd = say(OWNER, '!qanews');
   await waitFor(() => find(since(t), 'POST', /^\/channels\/300\/messages$/).length);
   ok('«!qanews» удалено, вместо него панель с кнопкой', find(since(t), 'DELETE', new RegExp('/messages/' + cmd.id + '$')).length === 1);
+  const st = await bot.status();
+  ok('на странице состояния видно, что бот читает каналы и узнал команду', st.reading && st.reading.channels === 2 && st.reading.rounds > 0 &&
+     /s ago$/.test(st.reading.lastRound) && /s ago$/.test(st.reading.lastCommand) && st.problems.join() === 'none', st.reading);
   const panel = store[CH.general].filter(x => x.author.id === BOT).slice(-1)[0];
   const panelCall = find(since(t), 'POST', /^\/channels\/300\/messages$/).slice(-1)[0];
   const customId = panelCall && panelCall.body.components[0].components[0].custom_id;

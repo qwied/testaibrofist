@@ -82,11 +82,15 @@ function raw(method, p, body, opts) {
 /* Запрос к API. Возвращает { status, body } и не бросает исключений на
    ответы Discord — только на обрыв сети. До трёх повторов при 429.
    opts.reason — причина для журнала аудита, opts.files — файлы
-   ({ name, data: Buffer, type }) к сообщению. */
+   ({ name, data: Buffer, type }) к сообщению, opts.once — без ожидания:
+   лимит исчерпан — сразу 429 (для фоновых запросов, которые можно
+   повторить в следующий раз). */
 async function api(method, p, body, opts) {
   const key = routeKey(method, p);
-  for (let attempt = 0; attempt < 4; attempt++) {
+  const once = !!(opts && opts.once);
+  for (let attempt = 0; attempt < (once ? 1 : 4); attempt++) {
     const wait = Math.max(globalUntil, waitUntil.get(key) || 0) - Date.now();
+    if (wait > 0 && once) return { status: 429, body: null };
     if (wait > 0) await sleep(Math.min(wait, 60000));
     const r = await raw(method, p, body, opts);
     const h = r.headers || {};

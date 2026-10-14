@@ -156,7 +156,8 @@ async function publish() {
   try {
     let i = 0;
     for (const u of fresh) {                 // по порядку файла: в канале читается сверху вниз
-      if (!(await postEverywhere('upd:' + u.id, u))) break;
+      // в updates.json только день, без часа: на карточке — время выхода, а не «3:00»
+      if (!(await postEverywhere('upd:' + u.id, Object.assign({}, u, { date: Date.now() })))) break;
       // в Logs — только то, что бот уже выложил; +i держит порядок файла
       extras.addAutoLog('upd:' + u.id, u.title, u.text, Date.now() + i++);
       state.posted.push(u.id);
