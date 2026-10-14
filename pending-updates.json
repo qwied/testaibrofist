@@ -1,9 +1,4 @@
 {
-  "base": "c331a40f18b4f5217679d1813a1c0a16a410557f",
-  "updates": [
-    {
-      "title": "Smarter Discord moderation",
-      "text": "The Discord bot now also checks nicknames and avatars, protects the server from raids and from second accounts of banned players, and removes political arguments, cheat sharing and account trading for real money."
-    }
-  ]
+  "base": "a0a2168fbc12b28962e118589c48c6f011598a9f",
+  "updates": []
 }
