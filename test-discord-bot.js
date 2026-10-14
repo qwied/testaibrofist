@@ -137,7 +137,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     DISCORD_BOT_TOKEN: 'test-token', DISCORD_API_BASE: 'http://127.0.0.1:' + port + '/api/v10',
     DISCORD_GATEWAY_URL: 'ws://127.0.0.1:' + port + '/gw', DISCORD_BOT_STATE: path.join(tmp, 'bot.json'),
     UPDATES_FEED_STATE: path.join(tmp, 'feed.json'), DISCORD_SCAN_IMAGES: '0', DISCORD_TEST_CDN: '127.0.0.1:' + port,
-    DISCORD_CMD_PREFIX: 'qa'
+    DISCORD_CMD_PREFIX: 'qa', UPDATES_FILE: path.join(tmp, 'updates.json')
   });
   delete process.env.DISCORD_UPDATES_CHANNEL_ID; delete process.env.DISCORD_RULES_CHANNEL_ID; delete process.env.DISCORD_MODLOG_CHANNEL_ID;
   const { api } = require('./discordApi.js');
@@ -423,7 +423,21 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   process.env.DISCORD_UPDATES_CHANNEL_ID = CH.updates;
   const feed = require('./updatesFeed.js');
   let hook = null;
-  feed.start({ onLogChange: fn => { hook = fn; }, removeAutoLogs: () => 0, addAutoLog: () => null });
+  // новость до запуска бота (её не публикуем) и сегодняшняя
+  const today = new Date().toISOString().slice(0, 10);
+  fs.writeFileSync(process.env.UPDATES_FILE, JSON.stringify([
+    { id: '2026-10-13-1', date: '2026-10-13', title: 'Old news', text: 'old' },
+    { id: today + '-1', date: today, title: 'Discord bot 🎉', text: '- First line\n- Second line' }]));
+  const logged = [];
+  t = Date.now();
+  feed.start({ onLogChange: fn => { hook = fn; }, removeAutoLogs: () => 0, addAutoLog: (src, title) => { logged.push(src + '|' + title); } });
+  await waitFor(() => logged.length);
+  await sleep(200);
+  const fresh = find(since(t), 'POST', /^\/channels\/(302|306)\/messages$/);
+  ok('новость из updates.json — во все каналы новостей, потом в Logs', fresh.length === 2 && logged.length === 1 &&
+     logged[0] === 'upd:' + today + '-1|Discord bot', logged.join());
+  ok('и в Discord, и в Logs — без эмодзи', fresh[0] && fresh[0].body.embeds[0].title === 'Discord bot');
+  ok('новости, вышедшие до появления бота, не публикуются', !JSON.stringify(fresh).includes('Old news'));
   t = Date.now();
   hook('add', { id: 77, title: 'New maps', text: '- Two new race maps\n- Faster loading', images: [{ u: '/logimg/a.png' }], date: Date.now() });
   await waitFor(() => find(since(t), 'POST', /^\/channels\/(302|306)\/messages$/).length >= 2);

@@ -19,12 +19,15 @@ const path = require('path');
 const { atomicWriteFileSync } = require('./fsAtomic.js');
 const { api, ok, token, SITE } = require('./discordApi.js');
 
-const SRC_FILE = path.join(__dirname, 'updates.json');
+const SRC_FILE = process.env.UPDATES_FILE || path.join(__dirname, 'updates.json');
 const DATA_DIR = path.join(__dirname, 'data');
 const STATE_FILE = process.env.UPDATES_FEED_STATE || path.join(DATA_DIR, 'updatesFeed.json');
 /* Публикуются только свежие записи: если data/ вдруг потеряется или бот
    появится не сразу, в канал не вывалится вся история разом. */
 const DISCORD_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+/* Новости, вышедшие до появления бота, не публикуются вовсе (так решил
+   владелец): первой в #updates и в Logs выходит новость о самом боте. */
+const FEED_SINCE = Date.parse('2026-10-14');
 const RETRY_MS = 15 * 60 * 1000;     // Discord не ответил — пробуем снова позже
 const COLOR = 0x99A1AE;
 // канал #updates на сервере AIBROFIST — туда новости идут всегда
@@ -140,7 +143,7 @@ async function postEverywhere(key, u) {
 async function publish() {
   if (!token() || busy) return;
   const now = Date.now();
-  const fresh = list.filter(u => state.posted.indexOf(u.id) === -1 && now - u.date < DISCORD_MAX_AGE);
+  const fresh = list.filter(u => state.posted.indexOf(u.id) === -1 && u.date >= FEED_SINCE && now - u.date < DISCORD_MAX_AGE);
   if (!fresh.length) return;
   busy = true;
   try {
