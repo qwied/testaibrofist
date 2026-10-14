@@ -18,7 +18,7 @@ const ok = (n, c) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', n);
   // die() для гонки не трогали — она по-прежнему единственная точка входа
   // для смерти от шипов и остаётся no-op в прятках
   ok('die() для гонки не тронута (шипы всё ещё звук+respawn через неё)',
-      /function die\(\)\{\s*\/\/[^\n]*\n\s*if\(mode === "hideAndSeek"\) return;\s*\n\s*if\(pl\.dead \|\| done\) return;/.test(src));
+      /function die\(\)\{\s*\/\/[^\n]*\n\s*if\(mode === "hideAndSeek"\) return;\s*\n(\s*if\(godMode\) return;[^\n]*\n)?\s*if\(pl\.dead \|\| done\) return;/.test(src));
 });
 
 console.log(fails ? '\nПРОВАЛЕНО проверок: ' + fails : '\nвсе проверки пройдены ✓');

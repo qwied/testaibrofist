@@ -42,12 +42,16 @@ const ok = (c, m, x) => { c ? pass++ : fail++; console.log((c ? '  ✓ ' : '  �
   }
   const known = edges.filter(([, r]) => r);
   ok(known.length === PAGES.length, 'у каждой страницы есть .bfWrap', known.length + ' из ' + PAGES.length);
-  const lefts = new Set(known.map(([, r]) => r.left));
-  const widths = new Set(known.map(([, r]) => r.width));
-  ok(lefts.size === 1, 'левый край колонки одинаковый на всех страницах',
-     known.map(([p, r]) => p + '=' + r.left).join(', '));
-  ok(widths.size === 1, 'ширина колонки одинаковая на всех страницах',
-     known.map(([p, r]) => p + '=' + r.width).join(', '));
+  /* Таблицы лидеров и ежедневная награда сделаны шире остальных по прямой
+     просьбе (полноширинные таблицы и колесо) — у них своя, общая для двух
+     колонка. Остальные страницы — одна и та же обычная колонка. */
+  const WIDE = ['/leaderboard.html', '/daily.html'];
+  const std = known.filter(([p]) => WIDE.indexOf(p) === -1), wide = known.filter(([p]) => WIDE.indexOf(p) !== -1);
+  const fmt = (arr, k) => arr.map(([p, r]) => p + '=' + r[k]).join(', ');
+  ok(new Set(std.map(([, r]) => r.left)).size === 1, 'левый край колонки одинаковый на обычных страницах', fmt(std, 'left'));
+  ok(new Set(std.map(([, r]) => r.width)).size === 1, 'ширина колонки одинаковая на обычных страницах', fmt(std, 'width'));
+  ok(new Set(wide.map(([, r]) => r.width)).size === 1 && wide.length === 2 && std.length && wide[0][1].width > std[0][1].width,
+     'лидеры и награда — одинаково широкие и шире обычной колонки', fmt(wide, 'width'));
 
   // ---- Daily Reward: карточка на одной оси с заголовком ----
   await p.goto(BASE + '/daily.html', { waitUntil: 'networkidle' });

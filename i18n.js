@@ -589,6 +589,8 @@
 
     /* ---------- редактор карт: интерфейс инструмента ---------- */
     edVisuals: "Visuals",
+    edProps: "Properties",
+    edWidgets: "Functions",
     edPassive: "Passive",
     edActive: "Active",
     edAutomatic: "Automatic",
@@ -1290,6 +1292,8 @@
     skin_b_crest_f: "Тлеющий доспех",
     skin_b_check: "Зелёное тело",
     edVisuals: "Визуалы",
+    edProps: "Свойства",
+    edWidgets: "Функции",
     edPassive: "Пассивные",
     edActive: "Активные",
     edAutomatic: "Автоматические",

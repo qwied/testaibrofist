@@ -148,7 +148,7 @@ function cleanupUsers() {
     }
     seeker.emit('movePlayer', { position: { x: 895, y: 900, w: 20, h: 60, color: '#111827', say: '', fin: false, hid: false } });
     await sleep(60);
-    const infectedOnH1 = once(h1, 'hsInfected', 5000).catch(() => null);
+    const infectedOnH1 = once(h1, 'hsOut', 5000).catch(() => null);
     seeker.emit('hsCatch', { targetId: h1.id });
     const evH1 = await infectedOnH1;
     ok(!!evH1 && evH1.id === h1.id, 'хайдер1 пойман', JSON.stringify(evH1));
@@ -198,7 +198,7 @@ function cleanupUsers() {
       }
       seekerSock2.emit('movePlayer', { position: { x: 895, y: 900, w: 20, h: 60, color: '#111827', say: '', fin: false, hid: false } });
       await sleep(60);
-      const infected = once(hiderSock, 'hsInfected', 5000).catch(() => null);
+      const infected = once(hiderSock, 'hsOut', 5000).catch(() => null);
       seekerSock2.emit('hsCatch', { targetId: hiderSock.id });
       await infected;
     }

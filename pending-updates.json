@@ -8,6 +8,10 @@
     {
       "title": "No bouncing off objects",
       "text": "Objects no longer push the player back or sideways on their own. Walking into a steep slope or a wall just stops you instead of throwing you back, standing on a slope no longer slides you off, and the edge of a shape touching your head no longer makes you shake. Only objects with Ricochet turned on bounce the player."
+    },
+    {
+      "title": "Stability improvements",
+      "text": "Internal fixes and automated checks so the game stays stable after every update."
     }
   ]
 }

@@ -1307,7 +1307,7 @@
     }
 
     roulTimers.push(setTimeout(function () {
-      pills[target].classList.add('rWin');      // ник искателя становится синим
+      pills[target].classList.add('rWin');      // ник искателя выделяется (.rWin)
       applySeeker(d.winnerId);
       if (window.BFSound) BFSound.roulLand();
       if (d.winnerId === socket.id) {

@@ -31,8 +31,10 @@ ok(/#aaFab span\{display:none\}/.test(aa),
 // (2) владелец резервирует отступ снизу под обе кнопки
 ok(/document\.body\.classList\.add\('ow-has-fab'\)/.test(ow),
    'buildPanel() помечает body классом ow-has-fab');
-ok(/@media\(max-width:860px\)\{body\.ow-has-fab\{padding-bottom:\d+px\}\}/.test(ow),
-   'есть правило, резервирующее нижний отступ для body.ow-has-fab на узких экранах');
+/* Телефоны теперь получают «компьютерную» раскладку (широкий viewport),
+   поэтому правило включается по сенсорному экрану, а не по ширине. */
+ok(/@media\((?:max-width:860px|pointer:coarse)\)\{body\.ow-has-fab\{padding-bottom:\d+px\}\}/.test(ow),
+   'есть правило, резервирующее нижний отступ для body.ow-has-fab на телефонах');
 
 console.log(fail ? ('\n' + fail + ' ошибок') : '\nвсё чисто');
 process.exit(fail ? 1 : 0);

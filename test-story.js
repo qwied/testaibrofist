@@ -38,8 +38,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const shown = await p.evaluate(() => [...document.querySelectorAll('.stMap[data-map]')]
     .map(e => e.dataset.type));
   ok(shown.length >= filtered, 'кнопка «все режимы» показывает не меньше карт', shown.length + ' против ' + filtered);
-  ok(new Set(shown).size > 1 || all.count === race.count || all.count === hns.count,
-     'в общем списке встречаются оба режима', [...new Set(shown)].join(', '));
+  /* Режимы сверяем с тем, что сервер отдаёт на этой же первой странице:
+     если на ней случайно оказались карты только одного режима (а второй
+     ушёл на следующие страницы), «оба режима» тут и не должно быть. */
+  const pageTypes = new Set(((all.maps || all.list) || []).map(m => m.mapType));
+  ok(pageTypes.size > 0 && [...pageTypes].every(t => shown.indexOf(t) !== -1),
+     'в общем списке те же режимы, что на первой странице сервера', [...new Set(shown)].join(', ') + ' / сервер: ' + [...pageTypes].join(', '));
   ok(shown.length === Math.min(10, all.count), 'показаны все карты страницы, а не только свой режим',
      shown.length + ' из ' + all.count);
 

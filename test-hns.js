@@ -48,8 +48,9 @@ ok('плашка в правом верхнем углу, без карточе�
                                  !/className = 'rSkin'/.test(src) && !/className = 'rCard'/.test(src));
 ok('в ленте только ники',       /el\.className = 'rName'/.test(src) &&
                                  /el\.textContent = p\.name/.test(src));
-ok('ник победителя синеет',     /pills\[target\]\.classList\.add\('rWin'\)/.test(src) &&
-                                 /\.rName\.rWin\{color:#60a5fa\}/.test(src));
+// цвет — по монохромной гамме сайта (раньше был синим)
+ok('ник победителя выделяется', /pills\[target\]\.classList\.add\('rWin'\)/.test(src) &&
+                                 /\.rName\.rWin\{color:#[0-9a-f]{6}\}/.test(src));
 ok('итог подписывается только тебе', /roulYouSeek/.test(src) &&
                                  /if \(d\.winnerId === socket\.id\)/.test(src));
 ok('шанс в правом верхнем',     /#gChance\{position:fixed;top:52px/.test(src) &&
