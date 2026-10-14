@@ -185,11 +185,11 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      st.problems.join() === 'none' && st.bot === 'AIBROFIST', JSON.stringify(st.problems));
   ok('в ответе нет ни токена, ни начала команд', !JSON.stringify(st).includes('test-token') && !JSON.stringify(st).includes('qa'));
   let route = null;
-  bot.register({ get: (p, fn) => { route = { p, fn }; } }, { currentUser: req => req.user, isOwner: u => !!u && u.name === 'owner' });
-  const call = async user => { let out = null, code = 200;
-    await route.fn({ user }, { status(c) { code = c; return this; }, json(o) { out = o; } }); return { code, out }; };
-  const asGuest = await call(null), asOwner = await call({ name: 'owner' });
-  ok('/discord/status: только владельцу сайта', route.p === '/discord/status' && asGuest.code === 404 && asOwner.out && asOwner.out.token === true);
+  bot.register({ get: (p, fn) => { route = { p, fn }; } });
+  let page = null;
+  await route.fn({}, { set() {}, json(o) { page = o; } });
+  ok('/discord/status открывается без входа и без секретов', route.p === '/discord/status' && page && page.token === true &&
+     page.gateway.state === 'ready' && !JSON.stringify(page).includes('test-token') && !JSON.stringify(page).includes('qa'));
 
   console.log('\nавтомодерация:');
   t = Date.now();

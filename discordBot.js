@@ -1064,9 +1064,10 @@ function stop() {
   guilds.clear(); setupDone.clear(); lastHit.clear();
 }
 
-/* Страница состояния бота — только владельцу сайта: /discord/status.
-   Без секретов (ни токена, ни начала команд), зато сразу видно, почему
-   бот «не в сети» или не пишет в канал. */
+/* Страница состояния бота: /discord/status. Открыта всем, поэтому в ней
+   нет секретов — ни токена, ни начала команд, ни штрафов игроков; только
+   задан ли токен, подключён ли бот и что ему мешает (почему «не в сети»
+   или не пишет в канал). */
 async function status() {
   const out = { token: !!token(), prefix: !!String(process.env.DISCORD_CMD_PREFIX || '').trim(), problems: [] };
   if (!out.token) out.problems.push('DISCORD_BOT_TOKEN is not set on the hosting (or the site was not restarted after setting it).');
@@ -1088,9 +1089,9 @@ async function status() {
   return out;
 }
 
-function register(app, accounts) {
+function register(app) {
   app.get('/discord/status', async (req, res) => {
-    if (!accounts.isOwner(accounts.currentUser(req))) return res.status(404).json({ status: 'error', message: 'Not available' });
+    res.set('Cache-Control', 'no-store');
     res.json(await status().catch(e => ({ error: e.message })));
   });
 }
