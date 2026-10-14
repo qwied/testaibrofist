@@ -309,6 +309,8 @@ require('./backup.js').register(app, {
 app.post('/abuse/upload', express.json({ limit: '60mb' }));
 // картинка новости приходит тем же способом — base64 в теле запроса
 app.post('/log/upload', express.urlencoded({ extended: false, limit: '20mb' }));
+// нажатия кнопок из Discord: подпись проверяется по сырому телу запроса
+app.post('/discord/interactions', express.raw({ type: '*/*', limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '512kb' }));
 app.use(express.json({ limit: '512kb' }));
 

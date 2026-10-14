@@ -424,7 +424,8 @@ async function onMessage(m, edited) {
                        '\n\nDiscord does not allow accounts of people under 13.').catch(() => {});
   }
   if (!edited) {
-    const fl = flood.add(m.guild_id + ':' + m.author.id, m);
+    // время — из самого сообщения: без живого подключения они приходят пачками
+    const fl = flood.add(m.guild_id + ':' + m.author.id, Object.assign({}, m, { t: Date.parse(m.timestamp) || Date.now() }));
     if (fl) found.push(A.finding(fl.kind, { messages: fl.messages }));
   }
   found.sort((a, b) => b.weight - a.weight);
@@ -661,8 +662,14 @@ const HELP = [
   'Only you can use these commands. The message with a command is removed at once.'
 ].join('\n');
 
-const reply = (i, data) => api('POST', '/interactions/' + i.id + '/' + i.token + '/callback', { type: 4, data: Object.assign({ flags: 64, allowed_mentions: { parse: [] } }, data) });
-const defer = i => api('POST', '/interactions/' + i.id + '/' + i.token + '/callback', { type: 5, data: { flags: 64 } });
+/* Ответ на нажатие. Пришло оно по HTTP (см. /discord/interactions) — первый
+   ответ уходит прямо в тот же запрос, иначе — отдельным запросом к Discord. */
+function respond(i, payload) {
+  if (i._http && !i._http.headersSent) { i._http.json(payload); return Promise.resolve({ status: 204, body: null }); }
+  return api('POST', '/interactions/' + i.id + '/' + i.token + '/callback', payload);
+}
+const reply = (i, data) => respond(i, { type: 4, data: Object.assign({ flags: 64, allowed_mentions: { parse: [] } }, data) });
+const defer = i => respond(i, { type: 5, data: { flags: 64 } });
 const finish = (i, data) => api('PATCH', '/webhooks/' + appId + '/' + i.token + '/messages/@original', Object.assign({ allowed_mentions: { parse: [] } }, data));
 const card = (text, c) => ({ embeds: [{ color: c || R.COLORS.neutral, description: text }] });
 const textChannels = g => [...g.channels.values()].filter(c => c.type === 0 || c.type === 5);
@@ -848,6 +855,7 @@ function updatesModalClassic(g) {
 }
 
 async function showModal(i, modern, classic) {
+  if (i._http) return respond(i, { type: 9, data: modern });     // по HTTP ответ один — сразу новое окно
   const cb = '/interactions/' + i.id + '/' + i.token + '/callback';
   const r = await api('POST', cb, { type: 9, data: modern });
   if (r.status === 400) return api('POST', cb, { type: 9, data: classic });
@@ -970,6 +978,164 @@ async function clearSlashCommands(g) {
   if (ok(r)) { st.slashCleared = true; delete st.commands; save(); }
 }
 
+/* ---------- без живого подключения: работа запросами ----------
+   С хостинга сайта живое подключение к gateway.discord.gg не открывается
+   («Opening handshake has timed out»), а обычные запросы к Discord
+   проходят. Тогда бот работает так:
+   - новые сообщения: раз в 3 секунды один запрос со всеми каналами
+     сервера (у каждого номер последнего сообщения), и только в тех, где он
+     сменился, — сами новые сообщения;
+   - участники (входы, ники, аватарки) — раз в минуту, баны — раз в 5 минут;
+   - кнопки и окна Discord присылает сайту сам (/discord/interactions,
+     подпись проверяется ключом приложения).
+   В Discord такой бот показан «не в сети», но всё делает. Если живое
+   подключение всё-таки откроется, опрос встаёт на паузу. */
+const POLL_MS = Number(process.env.DISCORD_POLL_MS) || 3000;
+const REST_AFTER_MS = Number(process.env.DISCORD_REST_AFTER_MS) || 45000;
+const MEMBERS_MS = Number(process.env.DISCORD_MEMBERS_POLL_MS) || 60000;
+const BANS_MS = 5 * 60 * 1000;
+let rest = null, verifyKey = null;
+const newer = (a, b) => a.length !== b.length ? a.length > b.length : a > b;   // id сообщений — большие числа строкой
+
+async function loadApp() {
+  const r = await api('GET', '/applications/@me');
+  if (!ok(r) || !r.body) return null;
+  appId = r.body.id;
+  verifyKey = r.body.verify_key || verifyKey;
+  return r.body;
+}
+
+// адрес, куда Discord присылает нажатия кнопок и окна
+async function ensureInteractionsUrl() {
+  const app = await loadApp();
+  if (!app) return;
+  const url = require('./discordApi.js').SITE + '/discord/interactions';
+  if (app.interactions_endpoint_url === url) return;
+  const r = await api('PATCH', '/applications/@me', { interactions_endpoint_url: url });
+  if (!ok(r)) log('could not set the interactions URL:', r.status, JSON.stringify(r.body).slice(0, 200));
+}
+
+async function loadGuildRest(id) {
+  const [gr, cr] = [await api('GET', '/guilds/' + id), await api('GET', '/guilds/' + id + '/channels')];
+  if (!ok(gr) || !gr.body || !ok(cr) || !Array.isArray(cr.body)) return null;
+  const g = cacheGuild(Object.assign({}, gr.body, { channels: cr.body }));
+  cr.body.forEach(c => { if (c.last_message_id && !rest.last.has(c.id)) rest.last.set(c.id, c.last_message_id); });
+  return g;
+}
+
+async function startRest() {
+  if (rest || !token()) return;
+  rest = { last: new Map(), blocked: new Map(), members: new Map(), timers: [], busy: false };
+  log('live connection to Discord is not available here, the bot works through requests');
+  const u = await api('GET', '/users/@me');
+  if (ok(u) && u.body) me = u.body;
+  await ensureInteractionsUrl();
+  const gl = await api('GET', '/users/@me/guilds');
+  for (const g0 of (ok(gl) && Array.isArray(gl.body)) ? gl.body : []) {
+    const g = await loadGuildRest(g0.id);
+    if (!g) continue;
+    await setupGuild(g);
+    await pollMembers(g, true);
+    await pollBans(g);
+  }
+  const every = (fn, ms) => { const t = setInterval(() => fn().catch(e => once('rest:' + e.message, 'poll failed:', e.message)), ms); if (t.unref) t.unref(); rest.timers.push(t); };
+  every(pollMessages, POLL_MS);
+  every(async () => { for (const g of guilds.values()) await pollMembers(g, false); }, MEMBERS_MS);
+  every(async () => { for (const g of guilds.values()) await pollBans(g); }, BANS_MS);
+}
+
+function stopRest() {
+  if (!rest) return;
+  rest.timers.forEach(clearInterval);
+  rest = null;
+}
+
+async function pollMessages() {
+  if (!rest || rest.busy || (gw && gw.state === 'ready')) return;     // живое подключение есть — опрос не нужен
+  rest.busy = true;
+  try {
+    for (const g of guilds.values()) {
+      const cr = await api('GET', '/guilds/' + g.id + '/channels');
+      if (!ok(cr) || !Array.isArray(cr.body)) continue;
+      for (const c of cr.body) {
+        g.channels.set(c.id, chan(c));
+        if (c.type !== 0 && c.type !== 5) continue;
+        const last = rest.last.get(c.id);
+        if (!c.last_message_id || last === c.last_message_id) continue;
+        if (!last) { rest.last.set(c.id, c.last_message_id); continue; }   // новый канал: с этого места
+        if ((rest.blocked.get(c.id) || 0) > Date.now()) continue;
+        const r = await api('GET', '/channels/' + c.id + '/messages?after=' + last + '&limit=50');
+        if (r.status === 403 || r.status === 404) { rest.blocked.set(c.id, Date.now() + 10 * 60 * 1000); rest.last.set(c.id, c.last_message_id); continue; }
+        if (!ok(r) || !Array.isArray(r.body)) continue;
+        const list = r.body.slice().sort((a, b) => newer(a.id, b.id) ? 1 : -1);
+        let top = last;
+        for (const m of list) {
+          if (newer(m.id, top)) top = m.id;
+          m.guild_id = g.id;
+          m.member = (rest.members.get(g.id) || new Map()).get(m.author && m.author.id);
+          (m.mentions || []).forEach(u => { if (!u.member) u.member = (rest.members.get(g.id) || new Map()).get(u.id); });
+          await onMessage(m, false).catch(e => log('message check failed:', e.message));
+        }
+        rest.last.set(c.id, newer(c.last_message_id, top) && list.length < 50 ? c.last_message_id : top);
+      }
+    }
+  } finally { if (rest) rest.busy = false; }
+}
+
+// участники: кто зашёл, кто сменил ник или аватарку
+async function pollMembers(g, first) {
+  if (!rest || (!first && gw && gw.state === 'ready')) return;
+  const all = new Map();
+  let after = '0';
+  for (let page = 0; page < 20; page++) {
+    const r = await api('GET', '/guilds/' + g.id + '/members?limit=1000&after=' + after);
+    if (!ok(r) || !Array.isArray(r.body)) return;
+    r.body.forEach(m => { if (m.user) all.set(m.user.id, m); });
+    if (r.body.length < 1000) break;
+    after = r.body[r.body.length - 1].user.id;
+  }
+  const old = rest.members.get(g.id);
+  rest.members.set(g.id, all);
+  const sig = m => [m.nick, m.avatar, m.user.avatar, m.user.global_name, m.user.username, (m.roles || []).join()].join('|');
+  for (const [uid, m] of all) {
+    const d = Object.assign({ guild_id: g.id }, m);
+    if (first) await onMemberUpdate(d).catch(() => {});
+    else if (!old.has(uid)) await onMemberAdd(d).catch(() => {});
+    else if (sig(old.get(uid)) !== sig(m)) await onMemberUpdate(d).catch(() => {});
+  }
+}
+
+async function pollBans(g) {
+  if (!rest) return;
+  const r = await api('GET', '/guilds/' + g.id + '/bans?limit=1000');
+  if (!ok(r) || !Array.isArray(r.body)) return;
+  const known = new Set((state.banned[g.id] || []).map(b => b.id));
+  r.body.forEach(b => { if (b.user && !known.has(b.user.id)) rememberBan(g.id, b.user); });
+}
+
+// подпись Discord: Ed25519, ключ приложения, «время + тело запроса»
+function signedByDiscord(req, body) {
+  const sig = String(req.headers['x-signature-ed25519'] || ''), ts = String(req.headers['x-signature-timestamp'] || '');
+  if (!verifyKey || !/^[0-9a-f]{128}$/i.test(sig) || !ts) return false;
+  try {
+    const key = crypto.createPublicKey({ key: Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), Buffer.from(verifyKey, 'hex')]),
+                                         format: 'der', type: 'spki' });
+    return crypto.verify(null, Buffer.concat([Buffer.from(ts), body]), key, Buffer.from(sig, 'hex'));
+  } catch (e) { return false; }
+}
+
+async function onHttpInteraction(req, res) {
+  const body = Buffer.isBuffer(req.body) ? req.body : Buffer.from(typeof req.body === 'string' ? req.body : '');
+  if (!verifyKey && token()) await loadApp().catch(() => null);
+  if (!signedByDiscord(req, body)) return res.status(401).end('invalid request signature');
+  let i;
+  try { i = JSON.parse(body.toString('utf8')); } catch (e) { return res.status(400).end(); }
+  if (i.type === 1) return res.json({ type: 1 });            // проверка адреса самим Discord
+  i._http = res;
+  await onInteraction(i).catch(e => log('command failed:', e.message));
+  if (!res.headersSent) res.status(204).end();
+}
+
 /* ---------- подключение ---------- */
 async function setupGuild(g) {
   if (setupDone.has(g.id)) return;
@@ -980,7 +1146,7 @@ async function setupGuild(g) {
     const o = await api('GET', '/guilds/' + g.id + '/members/' + g.owner);
     if (ok(o) && o.body && o.body.user) g.ownerName = o.body.nick || o.body.user.global_name || o.body.user.username;
     // ники всех, кто уже на сервере, — тоже проверить (ответ придёт пачками)
-    if (gw) gw.send({ op: 8, d: { guild_id: g.id, query: '', limit: 0 } });
+    if (gw && gw.state === 'ready') gw.send({ op: 8, d: { guild_id: g.id, query: '', limit: 0 } });
   } catch (e) { log('setup failed for ' + g.name + ':', e.message); setupDone.delete(g.id); }
 }
 
@@ -1048,6 +1214,10 @@ function start() {
   log('starting the bot');
   loadState();
   connect(ALL_INTENTS);
+  // живое подключение не открылось — работаем запросами (см. выше)
+  const t0 = setTimeout(() => { if (gw && gw.state !== 'ready') startRest().catch(e => log('requests mode failed:', e.message)); }, REST_AFTER_MS);
+  if (t0.unref) t0.unref();
+  timers.push(t0);
   const t1 = setInterval(() => {
     flood.sweep();
     const now = Date.now();
@@ -1059,7 +1229,8 @@ function start() {
 
 function stop() {
   if (gw) { gw.removeAllListeners(); gw.destroy(); gw = null; }
-  timers.forEach(clearInterval); timers = [];
+  timers.forEach(t => { clearInterval(t); clearTimeout(t); }); timers = [];
+  stopRest();
   saveNow();
   guilds.clear(); setupDone.clear(); lastHit.clear();
 }
@@ -1071,9 +1242,10 @@ function stop() {
 async function status() {
   const out = { token: !!token(), prefix: !!String(process.env.DISCORD_CMD_PREFIX || '').trim(), problems: [] };
   if (!out.token) out.problems.push('DISCORD_BOT_TOKEN is not set on the hosting (or the site was not restarted after setting it).');
+  out.mode = gw && gw.state === 'ready' ? 'live' : rest ? 'requests' : 'starting';
   if (gw) {
     out.gateway = { state: gw.state, intents: gw.intents, lastClose: gw.lastClose, lastError: gw.lastError };
-    if (gw.state !== 'ready') out.problems.push('Not connected to Discord yet: ' +
+    if (gw.state !== 'ready' && !rest) out.problems.push('Not connected to Discord yet: ' +
       (gw.lastError ? gw.lastError.message : gw.lastClose ? 'closed with code ' + gw.lastClose.code : 'connecting'));
     if ((gw.intents & PRIVILEGED) !== PRIVILEGED) out.problems.push('Message Content or Server Members Intent is off in the Developer Portal.');
   }
@@ -1090,6 +1262,7 @@ async function status() {
 }
 
 function register(app) {
+  app.post('/discord/interactions', (req, res) => { onHttpInteraction(req, res).catch(() => { if (!res.headersSent) res.status(500).end(); }); });
   app.get('/discord/status', async (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json(await status().catch(e => ({ error: e.message })));
@@ -1102,4 +1275,4 @@ function feedChannels() {
   return state.feed.slice();
 }
 
-module.exports = { start, stop, feedChannels, register, status, _test: { state: () => state, guilds, punish, reload: () => { loaded = false; loadState(); } } };
+module.exports = { start, stop, feedChannels, register, status, startRest, _test: { state: () => state, guilds, punish, reload: () => { loaded = false; loadState(); } } };

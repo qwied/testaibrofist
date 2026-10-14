@@ -185,7 +185,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      st.problems.join() === 'none' && st.bot === 'AIBROFIST', JSON.stringify(st.problems));
   ok('в ответе нет ни токена, ни начала команд', !JSON.stringify(st).includes('test-token') && !JSON.stringify(st).includes('qa'));
   let route = null;
-  bot.register({ get: (p, fn) => { route = { p, fn }; } });
+  bot.register({ get: (p, fn) => { route = { p, fn }; }, post: () => {} });
   let page = null;
   await route.fn({}, { set() {}, json(o) { page = o; } });
   ok('/discord/status открывается без входа и без секретов', route.p === '/discord/status' && page && page.token === true &&
