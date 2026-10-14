@@ -1025,7 +1025,12 @@ function connect(intents) {
   gw = new Gateway({ token: token(), intents,
     presence: { since: null, afk: false, status: 'online', activities: [{ name: 'aibrofist.online', type: 3 }] } });
   gw.on('dispatch', onDispatch);
-  gw.on('debug', m => { if (process.env.DISCORD_DEBUG) log(m); });
+  // ошибки подключения — в журнал хостинга (каждая разная по одному разу),
+  // остальное — только с DISCORD_DEBUG
+  gw.on('debug', m => {
+    if (process.env.DISCORD_DEBUG) log(m);
+    else if (/error|closed|failed/i.test(m)) once('gw:' + m.replace(/\d+ ms$/, ''), 'gateway: ' + m);
+  });
   gw.on('fatal', (code, why) => log('gateway stopped (' + code + ' ' + why + '): check DISCORD_BOT_TOKEN'));
   gw.on('disallowed', () => {
     // «Message Content Intent» не включён в настройках бота — работаем без
@@ -1040,6 +1045,7 @@ function connect(intents) {
 
 function start() {
   if (!token() || gw) return;
+  log('starting the bot');
   loadState();
   connect(ALL_INTENTS);
   const t1 = setInterval(() => {
@@ -1058,10 +1064,41 @@ function stop() {
   guilds.clear(); setupDone.clear(); lastHit.clear();
 }
 
+/* Страница состояния бота — только владельцу сайта: /discord/status.
+   Без секретов (ни токена, ни начала команд), зато сразу видно, почему
+   бот «не в сети» или не пишет в канал. */
+async function status() {
+  const out = { token: !!token(), prefix: !!String(process.env.DISCORD_CMD_PREFIX || '').trim(), problems: [] };
+  if (!out.token) out.problems.push('DISCORD_BOT_TOKEN is not set on the hosting (or the site was not restarted after setting it).');
+  if (gw) {
+    out.gateway = { state: gw.state, intents: gw.intents, lastClose: gw.lastClose, lastError: gw.lastError };
+    if (gw.state !== 'ready') out.problems.push('Not connected to Discord yet: ' +
+      (gw.lastError ? gw.lastError.message : gw.lastClose ? 'closed with code ' + gw.lastClose.code : 'connecting'));
+    if ((gw.intents & PRIVILEGED) !== PRIVILEGED) out.problems.push('Message Content or Server Members Intent is off in the Developer Portal.');
+  }
+  out.bot = me ? me.username : null;
+  out.guilds = [...guilds.values()].map(g => ({ id: g.id, name: g.name }));
+  const feed = require('./updatesFeed.js');
+  out.updates = feed.status();
+  if (out.token) out.updates.channels = await feed.channels().catch(() => []);
+  const e = out.updates.lastError;
+  if (e && e.status === 403) out.problems.push('The bot cannot write in the updates channel ' + e.channel +
+    ': allow it to send messages and embed links there (or give its role Administrator).');
+  if (!out.problems.length) out.problems.push('none');
+  return out;
+}
+
+function register(app, accounts) {
+  app.get('/discord/status', async (req, res) => {
+    if (!accounts.isOwner(accounts.currentUser(req))) return res.status(404).json({ status: 'error', message: 'Not available' });
+    res.json(await status().catch(e => ({ error: e.message })));
+  });
+}
+
 // каналы для новостей (updatesFeed.js): выбранные командой !updates
 function feedChannels() {
   loadState();
   return state.feed.slice();
 }
 
-module.exports = { start, stop, feedChannels, _test: { state: () => state, guilds, punish, reload: () => { loaded = false; loadState(); } } };
+module.exports = { start, stop, feedChannels, register, status, _test: { state: () => state, guilds, punish, reload: () => { loaded = false; loadState(); } } };

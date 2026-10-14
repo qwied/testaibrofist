@@ -42,6 +42,7 @@ const clean = s => String(s || '').replace(EMOJI, '').replace(/[ \t]{2,}/g, ' ')
 let state = { logged: [], posted: [], channel: '', msgs: {} };
 let list = [];
 let busy = false, extras = null;
+let lastError = null;                // для страницы состояния бота (/discord/status)
 
 function readUpdates() {
   let raw;
@@ -129,6 +130,7 @@ async function postEverywhere(key, u) {
   for (const channel of await channels()) {
     const r = await api('POST', '/channels/' + channel + '/messages', card(u));
     if (ok(r) && r.body) { sent.push({ c: channel, m: r.body.id }); continue; }
+    lastError = { channel, status: r.status, at: Date.now() };
     if (r.status === 403)
       console.log('[updates] боту нельзя писать в канал ' + channel + ' — разрешите ему отправку сообщений и ссылок');
     else
@@ -198,4 +200,8 @@ function start(ex) {
   setInterval(publish, RETRY_MS).unref();
 }
 
-module.exports = { start, readUpdates, clean, card };
+function status() {
+  return { posted: state.posted.slice(-5), lastError };
+}
+
+module.exports = { start, readUpdates, clean, card, status, channels };

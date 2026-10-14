@@ -31,6 +31,10 @@ class Gateway extends EventEmitter {
     this.fails = 0;
     this.stopped = false;
     this.retryTimer = null;
+    // для страницы состояния (/discord/status): что сейчас и что было последним
+    this.state = 'idle';
+    this.lastClose = null;
+    this.lastError = null;
   }
 
   url(resume) {
@@ -44,8 +48,11 @@ class Gateway extends EventEmitter {
     if (this.stopped) return;
     const resume = !!(this.sessionId && this.seq !== null);
     let ws;
-    try { ws = new WebSocket(this.url(resume), { handshakeTimeout: 15000 }); }
-    catch (e) { this.retry('connect failed: ' + e.message); return; }
+    // family:4 — как у HTTP-запросов (discordApi.js): IPv6 у хостинга битый,
+    // и без этого подключение к Discord просто висело, бот был «не в сети»
+    this.state = 'connecting';
+    try { ws = new WebSocket(this.url(resume), { handshakeTimeout: 15000, family: 4 }); }
+    catch (e) { this.lastError = { message: e.message, at: Date.now() }; this.retry('connect failed: ' + e.message); return; }
     this.ws = ws;
     this.acked = true;
     ws.on('message', data => {
@@ -57,9 +64,12 @@ class Gateway extends EventEmitter {
       if (ws !== this.ws) return;              // старое соединение, уже заменили
       this.stopBeat();
       this.ws = null;
+      this.state = 'closed';
+      this.lastClose = { code, reason: reason && reason.length ? String(reason) : '', at: Date.now() };
       if (this.stopped) return;
       if (FATAL[code]) {
         this.stopped = true;
+        this.state = 'stopped';
         this.emit('fatal', code, FATAL[code]);
         return;
       }
@@ -71,7 +81,10 @@ class Gateway extends EventEmitter {
       if (code === 4007 || code === 4009) { this.sessionId = null; this.seq = null; }
       this.retry('closed ' + code + (reason && reason.length ? ' ' + String(reason) : ''));
     });
-    ws.on('error', e => { this.emit('debug', 'socket error: ' + e.message); });
+    ws.on('error', e => {
+      this.lastError = { message: e.message, at: Date.now() };
+      this.emit('debug', 'socket error: ' + e.message);
+    });
   }
 
   onPayload(ws, msg, resume) {
@@ -103,8 +116,10 @@ class Gateway extends EventEmitter {
           this.sessionId = msg.d.session_id;
           this.resumeUrl = msg.d.resume_gateway_url || null;
           this.fails = 0;
+          this.state = 'ready';
         } else if (msg.t === 'RESUMED') {
           this.fails = 0;
+          this.state = 'ready';
         }
         this.emit('dispatch', msg.t, msg.d);
         break;

@@ -179,6 +179,18 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const am = find(calls, 'POST', /auto-moderation\/rules$/).map(c => c.body.trigger_type).sort().join(',');
   ok('включает встроенную AutoMod: спам, оскорбления и 18+, упоминания', am === '3,4,5', am);
 
+  console.log('\nстраница состояния:');
+  const st = await bot.status();
+  ok('подключён, сервер виден, проблем нет', st.token && st.gateway.state === 'ready' && st.guilds.length === 1 &&
+     st.problems.join() === 'none' && st.bot === 'AIBROFIST', JSON.stringify(st.problems));
+  ok('в ответе нет ни токена, ни начала команд', !JSON.stringify(st).includes('test-token') && !JSON.stringify(st).includes('qa'));
+  let route = null;
+  bot.register({ get: (p, fn) => { route = { p, fn }; } }, { currentUser: req => req.user, isOwner: u => !!u && u.name === 'owner' });
+  const call = async user => { let out = null, code = 200;
+    await route.fn({ user }, { status(c) { code = c; return this; }, json(o) { out = o; } }); return { code, out }; };
+  const asGuest = await call(null), asOwner = await call({ name: 'owner' });
+  ok('/discord/status: только владельцу сайта', route.p === '/discord/status' && asGuest.code === 404 && asOwner.out && asOwner.out.token === true);
+
   console.log('\nавтомодерация:');
   t = Date.now();
   say('U0', 'hello there, anyone up for a race?');

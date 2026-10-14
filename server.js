@@ -332,6 +332,7 @@ require('./extras.js').register(app, accounts);
 require('./updatesFeed.js').start(require('./extras.js'));
 // бот Discord: правила в #rules, автомодерация и команды (только с DISCORD_BOT_TOKEN)
 require('./discordBot.js').start();
+require('./discordBot.js').register(app, accounts);   // /discord/status — только владельцу
 require('./dailyRewards.js').register(app, accounts);
 require('./quests.js').register(app, accounts);
 require('./story.js').register(app, accounts);
