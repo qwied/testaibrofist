@@ -12,6 +12,10 @@
     {
       "title": "Stability improvements",
       "text": "Internal fixes and automated checks so the game stays stable after every update."
+    },
+    {
+      "title": "Faster movement",
+      "text": "The player now runs and jumps 1.2 times faster. Jump height and distance stay the same, so every map plays as before, just quicker."
     }
   ]
 }

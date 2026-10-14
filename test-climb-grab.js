@@ -13,6 +13,8 @@
 'use strict';
 const { makeEngine, obj } = require('./harness.js');
 const TARGET = process.argv[2] === 'editor' ? 'editor.html' : 'game.html';
+// темп движения (TEMPO в game.html): подъём и прыжок быстрее во столько же раз
+const TEMPO = +((require('fs').readFileSync(__dirname + '/' + TARGET, 'utf8').match(/var TEMPO = ([\d.]+);/) || [0, 1])[1]);
 const GROUND = 520;
 let fails = 0;
 const ok = (n, c, x) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', n, x === undefined ? '' : x); };
@@ -47,7 +49,7 @@ console.log(TARGET + ':');
       if (!climbed && pl.ground && pl.y + pl.h <= GROUND - 150 + 0.5) climbed = true;
     });
   ok('за кромку ровного блока хватается', grabbed);
-  ok('залезание плавное: несколько кадров, не больше 14 px за кадр', climbFrames >= 5 && maxStep <= 14.01, climbFrames + ' кадров, шаг ' + maxStep.toFixed(1));
+  ok('залезание плавное: несколько кадров, не больше ' + (14 * TEMPO).toFixed(1) + ' px за кадр', climbFrames >= 5 && maxStep <= 14 * TEMPO + 0.01, climbFrames + ' кадров, шаг ' + maxStep.toFixed(1));
   ok('в итоге стоит на блоке', climbed);
 }
 
@@ -71,7 +73,7 @@ console.log(TARGET + ':');
   run([floor(), obj(type, 600, GROUND - 150, 150, 150, props)], [560, GROUND - 100], 240,
     (f) => ({ r: f % 90 < 60, l: f % 90 >= 60, u: true }),
     (f, pl, x0, y0) => { if (pl.grab) grabbed = true; maxDy = Math.max(maxDy, Math.abs(pl.y - y0)); });
-  ok('не хватается за ' + type + (props.rot ? ' rot' + props.rot : props.spins ? ' вращающийся' : props.moves ? ' движущийся' : '') + ', рывков по Y > 45 px нет', !grabbed && maxDy <= 45, 'макс. сдвиг ' + maxDy.toFixed(1));
+  ok('не хватается за ' + type + (props.rot ? ' rot' + props.rot : props.spins ? ' вращающийся' : props.moves ? ' движущийся' : '') + ', рывков по Y > ' + Math.round(45 * TEMPO) + ' px нет', !grabbed && maxDy <= 45 * TEMPO, 'макс. сдвиг ' + maxDy.toFixed(1));
 });
 
 // 4. Над кромкой занято (низкий потолок) — не хватаемся

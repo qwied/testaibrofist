@@ -5,7 +5,9 @@
 'use strict';
 const { makeEngine, obj } = require('./harness.js');
 
-const MAXVX = 6.2 * Math.sqrt(9 * 0.062 / 0.62);   // ~5.88 базовый бег
+// темп движения (TEMPO в game.html) ускоряет бег — базовая скорость берётся с ним
+const TEMPO = +((require('fs').readFileSync(__dirname + '/game.html', 'utf8').match(/var TEMPO = ([\d.]+);/) || [0, 1])[1]);
+const MAXVX = 6.2 * Math.sqrt(9 * 0.062 * TEMPO * TEMPO / 0.62);   // ~5.88 · TEMPO базовый бег
 const GY = 520;
 
 function topSpeed(target, speedMul, frames) {
