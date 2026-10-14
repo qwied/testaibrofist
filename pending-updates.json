@@ -1,9 +1,4 @@
 {
-  "base": "4d972ea992a48bafa7215aa20fb762be5d569219",
-  "updates": [
-    {
-      "title": "Faster Discord bot",
-      "text": "The Discord bot reacts to new messages faster."
-    }
-  ]
+  "base": "af83672b0dc9ded351fb80014cda56d856cc524b",
+  "updates": []
 }
