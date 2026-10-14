@@ -1,29 +1,4 @@
 {
-  "base": "0ade32df5b7a886a8c54c0823426a487b0c8f97f",
-  "updates": [
-    {
-      "title": "No more teleporting on objects",
-      "text": "Objects no longer throw the player around. Ledge grabbing now works only on real flat ledges, not on circles, triangles, tilted or spinning shapes. Climbing a ledge is a smooth climb instead of an instant jump onto the top, and you no longer bounce up right after climbing. Jumping at a block that is too high no longer sends you back to spawn."
-    },
-    {
-      "title": "No bouncing off objects",
-      "text": "Objects no longer push the player back or sideways on their own. Walking into a steep slope or a wall just stops you instead of throwing you back, standing on a slope no longer slides you off, and the edge of a shape touching your head no longer makes you shake. Only objects with Ricochet turned on bounce the player."
-    },
-    {
-      "title": "Stability improvements",
-      "text": "Internal fixes and automated checks so the game stays stable after every update."
-    },
-    {
-      "title": "Faster movement",
-      "text": "The player now runs and jumps 1.2 times faster. Jump height and distance stay the same, so every map plays as before, just quicker."
-    },
-    {
-      "title": "Clearer dark theme",
-      "text": "The dark theme is now a plain dark grey look with white text, and selected buttons are white so you can always see what is picked. Light pills and white lines on the Leaderboard, pink-tinted buttons and hard to read text in Settings and on the Avatar page are fixed."
-    },
-    {
-      "title": "Clearer layer buttons in the editor",
-      "text": "The Order buttons in the map editor are now called Send to back and Bring to front, show a short tip on hover and explain under them what they do: which object is drawn on top where objects overlap, and which platform moves you when two overlap."
-    }
-  ]
+  "base": "f212584264d1ccf2c05e7d1b4c0d15b06f9f3975",
+  "updates": []
 }
