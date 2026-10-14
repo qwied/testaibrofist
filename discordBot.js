@@ -984,7 +984,8 @@ async function clearSlashCommands(g) {
    («Opening handshake has timed out»), а обычные запросы к Discord
    проходят. Тогда бот работает так:
    - новые сообщения: раз в 3 секунды по запросу на каждый текстовый канал
-     («что нового после последнего прочитанного»). Список каналов и роли —
+     («что нового после последнего прочитанного»), по 10 каналов
+     одновременно. Список каналов и роли —
      раз в минуту и отдельно: этот запрос Discord даёт делать лишь ~10 раз
      за 40 секунд, и когда опрос шёл через него, бот подолгу ждал и не
      видел ни команд, ни нарушений;
@@ -1079,38 +1080,44 @@ function stopRest() {
   rest = null;
 }
 
+// новые сообщения одного канала: после последнего прочитанного; в пустом
+// канале — последние, но только новее «from» (то, что было до запуска, не трогаем)
+async function readChannel(c) {
+  const last = rest.last.get(c.id);
+  if (!last && !rest.from.has(c.id)) rest.from.set(c.id, Date.now());
+  const r = await api('GET', '/channels/' + c.id + '/messages?' + (last ? 'after=' + last + '&' : '') + 'limit=50');
+  if (!rest) return [];
+  if (r.status === 403 || r.status === 404) {
+    // закрыт для бота: заглянем позже и начнём с того места, а не со старого
+    rest.blocked.set(c.id, Date.now() + BLOCK_MS);
+    rest.last.delete(c.id);
+    rest.from.set(c.id, Date.now() + BLOCK_MS);
+    return [];
+  }
+  if (!ok(r) || !Array.isArray(r.body)) return [];
+  const list = r.body.slice().sort((a, b) => newer(a.id, b.id) ? 1 : -1);
+  const from = last ? 0 : rest.from.get(c.id);
+  let top = last || '0';
+  for (const m of list) if (newer(m.id, top)) top = m.id;
+  if (top !== '0') { rest.last.set(c.id, top); rest.from.delete(c.id); }
+  return last ? list : list.filter(m => Date.parse(m.timestamp) >= from);
+}
+
 async function pollMessages() {
   if (!rest || rest.busy || (gw && gw.state === 'ready')) return;     // живое подключение есть — опрос не нужен
   rest.busy = true;
   try {
     for (const g of guilds.values()) {
-      for (const c of [...g.channels.values()]) {
-        if (c.type !== 0 && c.type !== 5) continue;
-        if ((rest.blocked.get(c.id) || 0) > Date.now()) continue;
-        // после последнего прочитанного; в пустом канале — последние, но только новее «from»
-        const last = rest.last.get(c.id);
-        if (!last && !rest.from.has(c.id)) rest.from.set(c.id, Date.now());
-        const r = await api('GET', '/channels/' + c.id + '/messages?' + (last ? 'after=' + last + '&' : '') + 'limit=50');
-        if (r.status === 403 || r.status === 404) {
-          // закрыт для бота: заглянем позже и начнём с того места, а не со старого
-          rest.blocked.set(c.id, Date.now() + BLOCK_MS);
-          rest.last.delete(c.id);
-          rest.from.set(c.id, Date.now() + BLOCK_MS);
-          continue;
-        }
-        if (!ok(r) || !Array.isArray(r.body)) continue;
-        const list = r.body.slice().sort((a, b) => newer(a.id, b.id) ? 1 : -1);
-        const from = last ? 0 : rest.from.get(c.id);
-        let top = last || '0';
-        for (const m of list) {
-          if (newer(m.id, top)) top = m.id;
-          if (!last && !(Date.parse(m.timestamp) >= from)) continue;     // было до запуска — не трогаем
+      const chans = [...g.channels.values()].filter(c => (c.type === 0 || c.type === 5) && !((rest.blocked.get(c.id) || 0) > Date.now()));
+      // каналы читаем сразу по 10 (у каждого свой лимит в Discord), а разбираем по очереди
+      for (let i = 0; i < chans.length; i += 10) {
+        const got = await Promise.all(chans.slice(i, i + 10).map(c => readChannel(c).catch(() => [])));
+        for (const list of got) for (const m of list) {
           m.guild_id = g.id;
           m.member = (rest.members.get(g.id) || new Map()).get(m.author && m.author.id);
           (m.mentions || []).forEach(u => { if (!u.member) u.member = (rest.members.get(g.id) || new Map()).get(u.id); });
           await onMessage(m, false).catch(e => log('message check failed:', e.message));
         }
-        if (top !== '0') { rest.last.set(c.id, top); rest.from.delete(c.id); }
       }
     }
     rest.rounds++;
