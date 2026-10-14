@@ -11,9 +11,9 @@
 // Discord, а правку и удаление такой записи повторяет там же.
 //
 // Боту нужна переменная окружения DISCORD_BOT_TOKEN. Каналы для новостей:
-// выбранные командой !updates в Discord (см. discordBot.js) и в
-// DISCORD_UPDATES_CHANNEL_ID (можно несколько через запятую); если нет ни
-// тех, ни других, бот сам находит канал #updates.
+// #updates сервера AIBROFIST (UPDATES_CHANNEL ниже; DISCORD_UPDATES_CHANNEL_ID
+// его заменяет, можно несколько через запятую) и выбранные командой updates
+// в Discord (см. discordBot.js).
 const fs = require('fs');
 const path = require('path');
 const { atomicWriteFileSync } = require('./fsAtomic.js');
@@ -27,6 +27,9 @@ const STATE_FILE = process.env.UPDATES_FEED_STATE || path.join(DATA_DIR, 'update
 const DISCORD_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 const RETRY_MS = 15 * 60 * 1000;     // Discord не ответил — пробуем снова позже
 const COLOR = 0x99A1AE;
+// канал #updates на сервере AIBROFIST — туда новости идут всегда
+// (DISCORD_UPDATES_CHANNEL_ID на хостинге его заменяет)
+const UPDATES_CHANNEL = '1543927183385428028';
 
 // эмодзи, флаги, тона кожи и склейки — в новостях их быть не должно
 const EMOJI = /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}️‍⃣]/gu;
@@ -95,7 +98,7 @@ async function findUpdatesChannel() {
 }
 
 async function channels() {
-  const set = String(process.env.DISCORD_UPDATES_CHANNEL_ID || '').split(',').map(s => s.trim()).filter(s => /^\d+$/.test(s));
+  const set = String(process.env.DISCORD_UPDATES_CHANNEL_ID || UPDATES_CHANNEL).split(',').map(s => s.trim()).filter(s => /^\d+$/.test(s));
   require('./discordBot.js').feedChannels().forEach(c => { if (set.indexOf(c) === -1) set.push(c); });
   if (set.length) return set;
   const c = await findUpdatesChannel();
@@ -106,7 +109,7 @@ async function channels() {
 function card(u) {
   const e = {
     color: COLOR,
-    title: (u.title || 'Update').slice(0, 256),
+    title: (clean(u.title) || 'Update').slice(0, 256),
     url: SITE + '/logs',
     description: clean(u.text).slice(0, 4000) || undefined,
     footer: { text: 'AIBROFIST' },

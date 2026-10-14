@@ -5,8 +5,9 @@
    - автомодерация: удаляет нарушения, наказывает по лестнице, пишет игроку
      в личку и в mod-log, не трогает модераторов и разрешённые каналы;
    - за волну флуда — одно наказание, а не по штрафу за каждое сообщение;
-   - секретные команды владельца «!news», «!updates», «!warn», «!mute»,
-     «!strikes», «!help»: сообщение с командой исчезает, окно видит только
+   - секретные команды владельца (начало задаётся на хостинге, здесь «!qa»):
+     news, updates, warn, mute, strikes, help — сообщение с командой исчезает,
+     без секретного начала не срабатывают, окно видит только
      владелец, у остальных команды не срабатывают; пост с картинками,
      упоминаниями и кнопкой-ссылкой; запасное окно, если новое Discord
      не покажет;
@@ -135,7 +136,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   Object.assign(process.env, {
     DISCORD_BOT_TOKEN: 'test-token', DISCORD_API_BASE: 'http://127.0.0.1:' + port + '/api/v10',
     DISCORD_GATEWAY_URL: 'ws://127.0.0.1:' + port + '/gw', DISCORD_BOT_STATE: path.join(tmp, 'bot.json'),
-    UPDATES_FEED_STATE: path.join(tmp, 'feed.json'), DISCORD_SCAN_IMAGES: '0', DISCORD_TEST_CDN: '127.0.0.1:' + port
+    UPDATES_FEED_STATE: path.join(tmp, 'feed.json'), DISCORD_SCAN_IMAGES: '0', DISCORD_TEST_CDN: '127.0.0.1:' + port,
+    DISCORD_CMD_PREFIX: 'qa'
   });
   delete process.env.DISCORD_UPDATES_CHANNEL_ID; delete process.env.DISCORD_RULES_CHANNEL_ID; delete process.env.DISCORD_MODLOG_CHANNEL_ID;
   const { api } = require('./discordApi.js');
@@ -271,16 +273,16 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     return pm && { msg: pm, id: pm.body.components[0].components[0].custom_id }; };
 
   t = Date.now();
-  const cmd = say(OWNER, '!news');
+  const cmd = say(OWNER, '!qanews');
   await waitFor(() => panelOf(since(t)));
   c = since(t);
   let panel = panelOf(c);
-  ok('«!news» от владельца — сообщение с командой сразу удалено', find(c, 'DELETE', new RegExp('/messages/' + cmd.id + '$')).length === 1);
+  ok('«!qanews» от владельца — сообщение с командой сразу удалено', find(c, 'DELETE', new RegExp('/messages/' + cmd.id + '$')).length === 1);
   ok('вместо него — панель с одной кнопкой, без текста и упоминаний', panel && !panel.msg.body.content && !panel.msg.body.embeds &&
      panel.msg.body.components[0].components.length === 1 && panel.msg.body.allowed_mentions.parse.length === 0);
   t = Date.now();
-  say('U0', '!news');
-  say('U9', '!warn <@U1> test', { member: member([MOD_ROLE]), mentions: [{ id: 'U1' }] });
+  say('U0', '!qanews');
+  say('U9', '!qawarn <@U1> test', { member: member([MOD_ROLE]), mentions: [{ id: 'U1' }] });
   await sleep(300);
   ok('у игрока и модератора «!» команды не срабатывают (и не удаляются)', since(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
   t = Date.now();
@@ -328,7 +330,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   console.log('\nзапасное окно (если Discord не покажет новое):');
   rejectNewModal = true;
   t = Date.now();
-  say(OWNER, '!news');
+  say(OWNER, '!qanews');
   await waitFor(() => panelOf(since(t)));
   panel = panelOf(since(t));
   t = Date.now();
@@ -352,7 +354,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
 
   console.log('\nостальные команды:');
   t = Date.now();
-  say(OWNER, '!updates');
+  say(OWNER, '!qaupdates');
   await waitFor(() => panelOf(since(t)));
   panel = panelOf(since(t));
   t = Date.now();
@@ -366,17 +368,17 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('каналы новостей запомнены', bot.feedChannels().join() === CH.updates + ',' + CH.news2, bot.feedChannels().join());
 
   t = Date.now();
-  const w = say(OWNER, '!warn <@U2> 7 selling coins', { mentions: [{ id: 'U2', member: { roles: [] } }] });
+  const w = say(OWNER, '!qawarn <@U2> 7 selling coins', { mentions: [{ id: 'U2', member: { roles: [] } }] });
   await waitFor(() => find(since(t), 'PATCH', /members\/U2$/).length);
   c = since(t);
   ok('«!warn @игрок 7 причина» — второй балл, мьют на 10 минут, правило 7', find(c, 'DELETE', new RegExp('/messages/' + w.id + '$')).length === 1 &&
      (bot._test.state().strikes[G + ':U2'] || []).length === 2 && (bot._test.state().strikes[G + ':U2'] || [])[1].r === 7);
   t = Date.now();
-  say(OWNER, '!warn <@U3> again', { mentions: [{ id: 'U3', member: { roles: [], communication_disabled_until: new Date(Date.now() + 7 * 86400000).toISOString() } }] });
+  say(OWNER, '!qawarn <@U3> again', { mentions: [{ id: 'U3', member: { roles: [], communication_disabled_until: new Date(Date.now() + 7 * 86400000).toISOString() } }] });
   await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
   ok('уже замьюченного на неделю — мьют не сокращает', find(since(t), 'PATCH', /members\/U3$/).length === 0);
   t = Date.now();
-  say(OWNER, '!mute <@U5> 1h flooding', { mentions: [{ id: 'U5', member: { roles: [] } }] });
+  say(OWNER, '!qamute <@U5> 1h flooding', { mentions: [{ id: 'U5', member: { roles: [] } }] });
   await waitFor(() => find(since(t), 'PATCH', /members\/U5$/).length);
   const m5 = find(since(t), 'PATCH', /members\/U5$/)[0];
   const u5 = Date.parse(m5.body.communication_disabled_until) - Date.now();
@@ -385,13 +387,13 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const conf = find(since(t), 'POST', /^\/channels\/300\/messages$/).find(x => /muted for 1 hour/.test(x.body.content || ''));
   ok('подтверждение в канале без пинга, исчезает само', conf && conf.body.allowed_mentions.parse.length === 0);
   t = Date.now();
-  say(OWNER, '!mute <@' + OWNER + '> 1h');
-  say(OWNER, '!warn <@U9> x', { mentions: [{ id: 'U9', member: { roles: [MOD_ROLE] } }] });
+  say(OWNER, '!qamute <@' + OWNER + '> 1h');
+  say(OWNER, '!qawarn <@U9> x', { mentions: [{ id: 'U9', member: { roles: [MOD_ROLE] } }] });
   await sleep(300);
   ok('себя наказать нельзя; модератора можно', find(since(t), 'PATCH', new RegExp('members/' + OWNER + '$')).length === 0 &&
      (bot._test.state().strikes[G + ':U9'] || []).length === 1);
   t = Date.now();
-  say(OWNER, '!strikes <@U1>', { mentions: [{ id: 'U1' }] });
+  say(OWNER, '!qastrikes <@U1>', { mentions: [{ id: 'U1' }] });
   await waitFor(() => panelOf(since(t)));
   panel = panelOf(since(t));
   t = Date.now();
@@ -399,21 +401,23 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => cb(since(t), bid).length);
   ok('«!strikes» — список баллов только владельцу', cb(since(t), bid)[0].body.data.flags === 64 && /rule 1/.test(JSON.stringify(cb(since(t), bid)[0].body)));
   t = Date.now();
-  say(OWNER, '!help');
+  say(OWNER, '!qa help');
   await waitFor(() => panelOf(since(t)));
   panel = panelOf(since(t));
   t = Date.now();
   bid = press(OWNER, panel.id);
   await waitFor(() => cb(since(t), bid).length);
-  ok('«!help» — список команд только владельцу', /!news/.test(JSON.stringify(cb(since(t), bid)[0].body)) && cb(since(t), bid)[0].body.data.flags === 64);
+  ok('«!qa help» — список команд (с секретным началом) только владельцу', /!qanews/.test(JSON.stringify(cb(since(t), bid)[0].body)) && cb(since(t), bid)[0].body.data.flags === 64);
   t = Date.now();
   bid = press(OWNER, panel.id);
   await waitFor(() => cb(since(t), bid).length);
   ok('нажатая панель больше не работает', /expired/.test(JSON.stringify(cb(since(t), bid)[0].body)));
   t = Date.now();
   say(OWNER, '!hello there');
+  say(OWNER, '!news');
+  say(OWNER, '!help');
   await sleep(250);
-  ok('неизвестная «!» команда — обычное сообщение, не трогаем', since(t).length === 0);
+  ok('без секретного начала и неизвестные команды — обычные сообщения, не трогаем', since(t).length === 0);
 
   console.log('\nновости и Logs в Discord:');
   process.env.DISCORD_UPDATES_CHANNEL_ID = CH.updates;

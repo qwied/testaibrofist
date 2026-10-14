@@ -8,10 +8,11 @@
 //     отправить оскорбления и спам упоминаниями вовсе;
 //   - пишет игроку в личку, за что и как он наказан, а модераторам — в
 //     канал mod-log (если он есть);
-//   - секретные команды владельца сервера прямо в канале: !news (пост в
-//     любой канал с картинками и кнопкой-ссылкой — в окне, которое видит
-//     только он), !updates (в какие каналы идут новости), !warn, !mute,
-//     !unmute, !strikes, !pardon, !modlog, !help. Остальным они не видны.
+//   - секретные команды владельца сервера прямо в канале (начало команд —
+//     DISCORD_CMD_PREFIX на хостинге): news (пост в любой канал с
+//     картинками и кнопкой-ссылкой — в окне, которое видит только он),
+//     updates (в какие каналы идут новости), warn, mute, unmute, strikes,
+//     pardon, modlog, help. Остальным они не видны и не работают.
 // Правила сервера владелец пишет в #rules сам; номера правил в
 // уведомлениях бота — из discordRules.js.
 // Новости в #updates публикует updatesFeed.js — каналы для них берёт отсюда.
@@ -474,19 +475,27 @@ async function ensureNativeAutomod(g) {
 const PANEL_MS = 60 * 1000;
 const CONFIRM_MS = 5 * 1000;
 const COMMANDS = ['news', 'updates', 'warn', 'mute', 'unmute', 'strikes', 'pardon', 'modlog', 'help'];
+/* Начало команд задаётся на хостинге (DISCORD_CMD_PREFIX, например «!ab3»
+   -> «!ab3news»). В открытом коде его нет — по исходникам не узнать, что
+   набирать. Без настройки команды начинаются просто с «!». */
+const PREFIX = (() => {
+  const p = String(process.env.DISCORD_CMD_PREFIX || '').trim().toLowerCase().replace(/\s+/g, '');
+  return p.charAt(0) === '!' ? p : '!' + p;
+})();
 const panels = new Map();          // id -> { kind, guild, channel, message, data }
 const DURATIONS = { '10m': ['10 minutes', 10 * R.MIN], '1h': ['1 hour', R.HOUR], '6h': ['6 hours', 6 * R.HOUR],
                     '1d': ['1 day', R.DAY], '3d': ['3 days', 3 * R.DAY], '7d': ['7 days', 7 * R.DAY] };
 
 const HELP = [
-  '**!news** - write a post: channel, title, text, up to 4 images and a link button',
-  '**!updates** - choose the channels for automatic game updates',
-  '**!warn @user reason** - give a strike, punished by the same ladder as automod (add a rule number: !warn @user 2 spam)',
-  '**!mute @user 1h reason** - mute for 10m, 1h, 6h, 1d, 3d or 7d',
-  '**!unmute @user** - lift a mute',
-  '**!strikes @user** - show active strikes',
-  '**!pardon @user** - remove all strikes',
-  '**!modlog** - send moderation logs to this channel, **!modlog off** to stop',
+  '**' + PREFIX + 'news** - write a post: channel, title, text, up to 4 images and a link button',
+  '**' + PREFIX + 'updates** - choose the channels for automatic game updates',
+  '**' + PREFIX + 'warn @user reason** - give a strike, punished by the same ladder as automod ' +
+    '(add a rule number: ' + PREFIX + 'warn @user 2 spam)',
+  '**' + PREFIX + 'mute @user 1h reason** - mute for 10m, 1h, 6h, 1d, 3d or 7d',
+  '**' + PREFIX + 'unmute @user** - lift a mute',
+  '**' + PREFIX + 'strikes @user** - show active strikes',
+  '**' + PREFIX + 'pardon @user** - remove all strikes',
+  '**' + PREFIX + 'modlog** - send moderation logs to this channel, **' + PREFIX + 'modlog off** to stop',
   '',
   'Only you can use these commands. The message with a command is removed at once.'
 ].join('\n');
@@ -559,7 +568,9 @@ function strikesText(g, uid) {
 
 // «!команда ...» от владельца; true — команда узнана и выполнена
 async function onOwnerCommand(g, m) {
-  const mm = /^!([a-z]+)(?:\s+([\s\S]*))?$/i.exec(String(m.content || '').trim());
+  const text = String(m.content || '').trim();
+  if (text.toLowerCase().indexOf(PREFIX) !== 0) return false;
+  const mm = /^\s*([a-z]+)(?:\s+([\s\S]*))?$/i.exec(text.slice(PREFIX.length));
   if (!mm || COMMANDS.indexOf(mm[1].toLowerCase()) === -1) return false;
   const cmd = mm[1].toLowerCase(), args = (mm[2] || '').trim();
   api('DELETE', '/channels/' + m.channel_id + '/messages/' + m.id).catch(() => {});
@@ -575,7 +586,7 @@ async function onOwnerCommand(g, m) {
 
   // дальше — команды над игроком: @упоминание или id
   const idm = /^(?:<@!?(\w+)>|(\d{5,}))\s*([\s\S]*)$/.exec(args);
-  if (!idm) { await confirm(m.channel_id, 'Mention the member: !' + cmd + ' @user'); return true; }
+  if (!idm) { await confirm(m.channel_id, 'Mention the member: ' + PREFIX + cmd + ' @user'); return true; }
   const uid = idm[1] || idm[2], rest = idm[3].trim();
   const mention = (m.mentions || []).find(u => u && u.id === uid);
   const target = mention || { id: uid };
