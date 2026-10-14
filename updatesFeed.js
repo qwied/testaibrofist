@@ -11,7 +11,7 @@
 // Discord, а правку и удаление такой записи повторяет там же.
 //
 // Боту нужна переменная окружения DISCORD_BOT_TOKEN. Каналы для новостей:
-// заданные командой /updates в Discord (см. discordBot.js) и в
+// выбранные командой !updates в Discord (см. discordBot.js) и в
 // DISCORD_UPDATES_CHANNEL_ID (можно несколько через запятую); если нет ни
 // тех, ни других, бот сам находит канал #updates.
 const fs = require('fs');

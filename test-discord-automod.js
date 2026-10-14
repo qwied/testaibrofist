@@ -72,14 +72,9 @@ const want = [[1, 'Warning'], [2, 'Mute for 10 minutes'], [3, 'Mute for 1 hour']
 want.forEach(([n, d]) => ok(n + ' -> ' + d, R.describe(R.punishmentFor(n)) === d, R.describe(R.punishmentFor(n))));
 ok('баллы сгорают через 30 дней', R.STRIKE_TTL === 30 * R.DAY);
 
-console.log('\nправила для #rules:');
-const msg = R.rulesMessage();
-const size = msg.embeds.reduce((n, e) => n + (e.title || '').length + (e.description || '').length, 0);
-ok('укладываются в лимит Discord (6000 знаков на сообщение)', size < 6000 && msg.embeds.every(e => (e.description || '').length <= 4096), size + ' знаков');
-ok('12 правил, у каждого подробный текст', R.RULES.length === 12 && R.RULES.every(r => r.text.length > 80));
-ok('без эмодзи', !/\p{Extended_Pictographic}/u.test(JSON.stringify(msg)));
-ok('без упоминаний', msg.allowed_mentions && msg.allowed_mentions.parse.length === 0);
-ok('таблица наказаний собрана из той же лестницы', R.ladderLines().every(l => msg.embeds[2].description.indexOf(l) !== -1));
+console.log('\nправила (для названий в уведомлениях):');
+ok('12 правил по порядку, у каждого название', R.RULES.length === 12 && R.RULES.every((r, i) => r.id === i + 1 && r.title));
+ok('без эмодзи', !/\p{Extended_Pictographic}/u.test(JSON.stringify(R.RULES)));
 
 console.log(fails ? '\nПРОВАЛЕНО проверок: ' + fails : '\nвсе проверки пройдены ✓');
 process.exit(fails ? 1 : 0);

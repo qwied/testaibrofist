@@ -1,8 +1,6 @@
 // ============ DISCORD-БОТ: правила, автомодерация, команды ============
 // Работает, только если на хостинге задан DISCORD_BOT_TOKEN; без него
 // модуль ничего не делает. Что умеет:
-//   - выкладывает правила сервера в #rules и правит то же сообщение, когда
-//     текст правил меняется (не постит заново при каждом перезапуске);
 //   - автомодерация: проверяет каждое сообщение (discordAutomod.js),
 //     удаляет нарушения, даёт штрафные баллы и наказывает по лестнице из
 //     discordRules.js — предупреждение, мьюты, бан только в крайнем случае;
@@ -10,12 +8,12 @@
 //     отправить оскорбления и спам упоминаниями вовсе;
 //   - пишет игроку в личку, за что и как он наказан, а модераторам — в
 //     канал mod-log (если он есть);
-//   - команды — только для владельца сервера: /post (сообщение в любой
-//     канал), /updates (в какие каналы идут новости), /relay, /rules,
-//     /modlog, /warn, /mute, /unmute, /warnings, /pardon;
-//   - пишет от своего имени то, что владелец прислал ему в личку: в канал
-//     по умолчанию или в «#канал» в начале сообщения, с картинками;
-//     правка и удаление сообщения в личке повторяются в канале.
+//   - секретные команды владельца сервера прямо в канале: !news (пост в
+//     любой канал с картинками и кнопкой-ссылкой — в окне, которое видит
+//     только он), !updates (в какие каналы идут новости), !warn, !mute,
+//     !unmute, !strikes, !pardon, !modlog, !help. Остальным они не видны.
+// Правила сервера владелец пишет в #rules сам; номера правил в
+// уведомлениях бота — из discordRules.js.
 // Новости в #updates публикует updatesFeed.js — каналы для них берёт отсюда.
 // Состояние — data/discordBot.json.
 'use strict';
@@ -32,10 +30,8 @@ const { atomicWriteFileSync } = require('./fsAtomic.js');
 const STATE_FILE = process.env.DISCORD_BOT_STATE || path.join(__dirname, 'data', 'discordBot.json');
 const SCAN_IMAGES = process.env.DISCORD_SCAN_IMAGES !== '0';
 
-const INTENT = { GUILDS: 1, GUILD_MESSAGES: 1 << 9, DIRECT_MESSAGES: 1 << 12, MESSAGE_CONTENT: 1 << 15,
-                 AUTOMOD_EXECUTION: 1 << 21 };
-const ALL_INTENTS = INTENT.GUILDS | INTENT.GUILD_MESSAGES | INTENT.DIRECT_MESSAGES | INTENT.MESSAGE_CONTENT |
-                    INTENT.AUTOMOD_EXECUTION;
+const INTENT = { GUILDS: 1, GUILD_MESSAGES: 1 << 9, MESSAGE_CONTENT: 1 << 15, AUTOMOD_EXECUTION: 1 << 21 };
+const ALL_INTENTS = INTENT.GUILDS | INTENT.GUILD_MESSAGES | INTENT.MESSAGE_CONTENT | INTENT.AUTOMOD_EXECUTION;
 
 const PERM = { KICK: 1n << 1n, BAN: 1n << 2n, ADMIN: 1n << 3n, MANAGE_GUILD: 1n << 5n,
                MANAGE_MESSAGES: 1n << 13n, MODERATE: 1n << 40n };
@@ -45,8 +41,7 @@ const STAFF = PERM.ADMIN | PERM.MANAGE_GUILD | PERM.MANAGE_MESSAGES | PERM.MODER
 const COOLDOWN = 30 * 1000;      // за одну волну спама — одно наказание, а не восемь
 const NOTICE_MS = 10 * 1000;     // короткое предупреждение в канале исчезает само
 
-// relay — куда идут сообщения владельца из лички; relayed — что во что переслано
-let state = { feed: [], guilds: {}, strikes: {}, cases: 0, relay: {}, relayed: {} };
+let state = { feed: [], guilds: {}, strikes: {}, cases: 0 };
 let loaded = false, saveTimer = null;
 const guilds = new Map();        // id -> { id, name, owner, roles: Map, channels: Map }
 const setupDone = new Set();
@@ -70,9 +65,7 @@ function loadState() {
       feed: Array.isArray(s.feed) ? s.feed.filter(x => /^\d+$/.test(x)) : [],
       guilds: s.guilds && typeof s.guilds === 'object' ? s.guilds : {},
       strikes: s.strikes && typeof s.strikes === 'object' ? s.strikes : {},
-      cases: Number(s.cases) || 0,
-      relay: s.relay && typeof s.relay === 'object' ? s.relay : {},
-      relayed: s.relayed && typeof s.relayed === 'object' ? s.relayed : {}
+      cases: Number(s.cases) || 0
     };
   } catch (e) { /* первый запуск */ }
 }
@@ -89,12 +82,10 @@ function save() { if (!saveTimer) saveTimer = setTimeout(saveNow, 500); }
 function gstate(gid) {
   if (!state.guilds[gid]) state.guilds[gid] = {};
   const g = state.guilds[gid];
-  if (!g.rules) g.rules = { channel: '', msgs: [], hash: '' };
   if (!g.automod) g.automod = {};
   return g;
 }
 
-const hash = v => crypto.createHash('sha1').update(JSON.stringify(v)).digest('hex');
 
 /* ---------- штрафные баллы ---------- */
 function activeStrikes(gid, uid) {
@@ -381,12 +372,12 @@ async function pumpImages() {
 
 /* ---------- сообщения ---------- */
 async function onMessage(m, edited) {
-  if (!m || !m.author || m.author.bot || m.webhook_id) return;
-  if (!m.guild_id) return onDirect(m, edited);
+  if (!m || !m.guild_id || !m.author || m.author.bot || m.webhook_id) return;
   if (m.type !== undefined && m.type !== 0 && m.type !== 19) return;   // обычное сообщение и ответ
   if (edited && !(m.member && m.member.roles)) return;   // без ролей не отличить модератора
   const g = guilds.get(m.guild_id);
   if (!g) return;
+  if (!edited && m.author.id === g.owner && /^!/.test(m.content || '') && await onOwnerCommand(g, m)) return;
   if (memberPerms(g, m.author.id, m.member && m.member.roles) & STAFF) return;   // модераторов не трогаем
   const ch = channelInfo(g, m.channel_id);
   const allowAds = /promo|advert|реклам|самопиар/i.test(ch.name);
@@ -436,147 +427,6 @@ async function onAutomodExecution(d) {
   await punish(g, { id: d.user_id }, f, { channel: d.channel_id, excerpt: d.content, silent: true });
 }
 
-/* ---------- сообщения от имени бота ----------
-   Владелец пишет боту в личку — бот публикует это в канале как своё
-   сообщение. Куда: «#канал» в начале сообщения (запоминается для
-   следующих), иначе канал из /relay, иначе #general/#chat. В тексте
-   «#имя-канала» и «@роль» превращаются в настоящие ссылку и упоминание;
-   @everyone и @here работают. Картинки и файлы из лички переносятся.
-   Чужие сообщения в личку бот не пересылает и на них не отвечает. */
-const RELAY_HELP = 'Send me a message and I will post it as the bot. Start it with #channel-name to choose ' +
-  'the channel (it is remembered for the next messages). Files and images are posted too. Edit or delete your ' +
-  'message here and I will do the same in the channel.';
-
-function ownedGuilds(uid) { return [...guilds.values()].filter(g => g.owner === uid); }
-
-const textChannels = g => [...g.channels.values()].filter(c => c.type === 0 || c.type === 5);
-function channelByName(list, name) {
-  name = String(name || '').toLowerCase();
-  for (const g of list) {
-    const c = textChannels(g).find(c => c.name.toLowerCase() === name || c.id === name);
-    if (c) return { g, c };
-  }
-  return null;
-}
-
-// «#news» -> <#id>, «@Players» -> <@&id>; чего на сервере нет — остаётся текстом
-function linkify(g, text) {
-  return text
-    .replace(/(^|[^<\w])#([\w-]{1,100})/g, (all, pre, name) => {
-      const c = textChannels(g).find(c => c.name.toLowerCase() === name.toLowerCase());
-      return c ? pre + '<#' + c.id + '>' : all;
-    })
-    .replace(/(^|[^<\w])@([\w-]{1,100})/g, (all, pre, name) => {
-      if (/^(everyone|here)$/i.test(name)) return all;
-      const r = [...g.roles.entries()].find(([id, r]) => id !== g.id && r.name.toLowerCase() === name.toLowerCase());
-      return r ? pre + '<@&' + r[0] + '>' : all;
-    });
-}
-
-async function dmReply(m, text) {
-  await api('POST', '/channels/' + m.channel_id + '/messages',
-            { content: text, allowed_mentions: { parse: [] }, message_reference: { message_id: m.id, fail_if_not_exists: false } });
-}
-
-async function onDirect(m, edited) {
-  const mine = ownedGuilds(m.author.id);
-  if (!mine.length) return;                                // не владелец — молчим
-  let text = String(m.content || '');
-
-  if (edited) {
-    const done = state.relayed[m.id];
-    if (!done) return;
-    const g = guilds.get(done.g);
-    await api('PATCH', '/channels/' + done.c + '/messages/' + done.m, { content: linkify(g || mine[0], text.replace(/^\s*(?:<#(\d+)>|#([\w-]+))\s*/, '')) });
-    return;
-  }
-  if (/^\s*(help|помощь|\?)\s*$/i.test(text)) return dmReply(m, RELAY_HELP);
-
-  // куда: «#канал» или <#id> в начале
-  let target = null;
-  const head = /^\s*(?:<#(\d+)>|#([\w-]+))\s*/.exec(text);
-  if (head) {
-    target = channelByName(mine, head[1] || head[2]);
-    if (!target) return dmReply(m, 'I cannot find the channel #' + (head[2] || head[1]) + '.');
-    text = text.slice(head[0].length);
-    state.relay[m.author.id] = target.c.id;
-    save();
-  } else {
-    const saved = state.relay[m.author.id] || String(process.env.DISCORD_RELAY_CHANNEL_ID || '').trim();
-    target = saved ? channelByName(mine, saved) : null;
-    if (!target) {
-      for (const g of mine) {
-        const id = findChannel(g, /^(?:[^a-zа-я]*)(?:general|chat|main|общий|основной|чат)$/i);
-        if (id) { target = { g, c: g.channels.get(id) }; break; }
-      }
-    }
-    if (!target) return dmReply(m, 'Where should I post it? Start your message with #channel-name.');
-  }
-
-  // файлы из лички: ссылки на них временные, поэтому загружаем заново
-  const files = [], skipped = [];
-  for (const a of (m.attachments || []).slice(0, 10)) {
-    if ((a.size || 0) > 10 * 1024 * 1024) { skipped.push(a.filename); continue; }
-    try {
-      const f = await download(a.url, 10 * 1024 * 1024);
-      files.push({ name: a.filename || 'file', data: f.buf, type: a.content_type || f.type });
-    } catch (e) { skipped.push(a.filename); }
-  }
-  text = linkify(target.g, text.trim()).slice(0, 2000);
-  if (!text && !files.length) {
-    return dmReply(m, 'Next messages go to <#' + target.c.id + '>.');
-  }
-  const body = { content: text || undefined, allowed_mentions: { parse: ['users', 'roles', 'everyone'] } };
-  const r = await api('POST', '/channels/' + target.c.id + '/messages', body, files.length ? { files } : undefined);
-  if (!ok(r) || !r.body) {
-    return dmReply(m, 'Could not post in <#' + target.c.id + '> (error ' + r.status + '). Check that I can send messages there.');
-  }
-  state.relayed[m.id] = { g: target.g.id, c: target.c.id, m: r.body.id };
-  const keys = Object.keys(state.relayed);
-  if (keys.length > 300) keys.slice(0, keys.length - 300).forEach(k => { delete state.relayed[k]; });
-  save();
-  await dmReply(m, 'Posted in <#' + target.c.id + '>.' + (skipped.length ? ' Not attached (too big or unavailable): ' + skipped.join(', ') + '.' : ''));
-}
-
-async function onDirectDelete(d) {
-  const done = state.relayed[d.id];
-  if (!done) return;
-  await api('DELETE', '/channels/' + done.c + '/messages/' + done.m);
-  delete state.relayed[d.id];
-  save();
-}
-
-/* ---------- правила в #rules ---------- */
-async function ensureRules(g, opts) {
-  opts = opts || {};
-  const st = gstate(g.id);
-  const env = String(process.env.DISCORD_RULES_CHANNEL_ID || '').trim();
-  const channel = opts.channel || st.rules.channel || env ||
-                  findChannel(g, /^(?:[^a-zа-я]*)(?:rules|правила)$/i, /rules|правила/i);
-  if (!channel) {
-    once('norules:' + g.id, 'no #rules channel in ' + g.name + ': create one or use /rules');
-    return { status: 'no-channel' };
-  }
-  const body = R.rulesMessage();
-  const h = hash(body);
-  if (st.rules.msgs.length && st.rules.channel !== channel) {
-    // правила переехали в другой канал — старое сообщение убираем
-    for (const id of st.rules.msgs) await api('DELETE', '/channels/' + st.rules.channel + '/messages/' + id).catch(() => {});
-    st.rules.msgs = [];
-  }
-  if (st.rules.msgs.length && st.rules.hash === h && !opts.force) return { status: 'same', channel };
-  if (st.rules.msgs.length) {
-    const r = await api('PATCH', '/channels/' + channel + '/messages/' + st.rules.msgs[0], body);
-    if (ok(r)) { st.rules.hash = h; save(); return { status: 'updated', channel }; }
-    if (r.status !== 404) return { status: 'error', channel, code: r.status };
-  }
-  const r = await sendMessage(channel, body);
-  if (!ok(r) || !r.body) return { status: 'error', channel, code: r.status };
-  st.rules = { channel, msgs: [r.body.id], hash: h };
-  save();
-  return { status: 'posted', channel };
-}
-
 /* ---------- встроенная AutoMod Discord ----------
    Создаём свои правила один раз. Если администратор потом удалит какое-то
    из них — не возвращаем: значит, оно серверу не нужно. */
@@ -610,190 +460,342 @@ async function ensureNativeAutomod(g) {
   save();
 }
 
-/* ---------- команды ---------- */
-/* Командами пользуется только владелец сервера. «0» прячет их от всех,
-   кроме администраторов, а остальное проверяет сам бот (ownerOnly). */
-const OWNER_ONLY = '0';
-const USER = (desc) => ({ type: 6, name: 'user', description: desc, required: true });
-const DURATIONS = [['10 minutes', 10 * R.MIN], ['1 hour', R.HOUR], ['6 hours', 6 * R.HOUR],
-                   ['1 day', R.DAY], ['3 days', 3 * R.DAY], ['7 days', 7 * R.DAY]];
 
-function commandDefs() {
-  return [
-    { name: 'post', description: 'Post a formatted message to any channel', default_member_permissions: OWNER_ONLY,
-      options: [{ type: 7, name: 'channel', description: 'Where to post', required: true, channel_types: [0, 5] },
-                { type: 3, name: 'style', description: 'Card (default) or plain text', required: false,
-                  choices: [{ name: 'card', value: 'embed' }, { name: 'plain text', value: 'plain' }] }] },
-    { name: 'updates', description: 'Choose the channels that receive game updates', default_member_permissions: OWNER_ONLY,
-      options: [
-        { type: 1, name: 'add', description: 'Post game updates in this channel too',
-          options: [{ type: 7, name: 'channel', description: 'Channel', required: true, channel_types: [0, 5] }] },
-        { type: 1, name: 'remove', description: 'Stop posting game updates in this channel',
-          options: [{ type: 7, name: 'channel', description: 'Channel', required: true, channel_types: [0, 5] }] },
-        { type: 1, name: 'list', description: 'Show the channels that receive game updates' }] },
-    { name: 'relay', description: 'Choose where the messages you send me in DMs are posted', default_member_permissions: OWNER_ONLY,
-      options: [{ type: 7, name: 'channel', description: 'Channel', required: true, channel_types: [0, 5] }] },
-    { name: 'rules', description: 'Post or refresh the server rules', default_member_permissions: OWNER_ONLY,
-      options: [{ type: 7, name: 'channel', description: 'Rules channel (default: #rules)', required: false, channel_types: [0, 5] }] },
-    { name: 'modlog', description: 'Set the channel for moderation logs, or turn them off', default_member_permissions: OWNER_ONLY,
-      options: [{ type: 7, name: 'channel', description: 'Leave empty to turn logs off', required: false, channel_types: [0, 5] }] },
-    { name: 'warn', description: 'Give a member a strike', default_member_permissions: OWNER_ONLY,
-      options: [USER('Member to warn'),
-                { type: 4, name: 'rule', description: 'Broken rule', required: false,
-                  choices: R.RULES.map(r => ({ name: r.id + '. ' + r.title, value: r.id })) },
-                { type: 3, name: 'reason', description: 'Reason the member will see', required: false, max_length: 300 }] },
-    { name: 'mute', description: 'Mute a member for a while', default_member_permissions: OWNER_ONLY,
-      options: [USER('Member to mute'),
-                { type: 3, name: 'duration', description: 'How long', required: true,
-                  choices: DURATIONS.map(([n]) => ({ name: n, value: n })) },
-                { type: 3, name: 'reason', description: 'Reason the member will see', required: false, max_length: 300 }] },
-    { name: 'unmute', description: 'Lift a mute', default_member_permissions: OWNER_ONLY,
-      options: [USER('Member to unmute')] },
-    { name: 'warnings', description: 'Show the active strikes of a member', default_member_permissions: OWNER_ONLY,
-      options: [USER('Member')] },
-    { name: 'pardon', description: 'Remove all strikes of a member', default_member_permissions: OWNER_ONLY,
-      options: [USER('Member')] }
-  ];
-}
+/* ---------- секретные команды владельца ----------
+   Команды пишутся прямо в канале и начинаются с «!». Срабатывают только
+   у владельца сервера, сообщение с командой бот сразу удаляет, у всех
+   остальных они просто ничего не делают — снаружи их не видно и не
+   найти в списке команд Discord.
+   Окна (редактор поста, выбор каналов) Discord показывает только по
+   нажатию кнопки, поэтому на месте команды появляется маленькая панель
+   с одной кнопкой. Открыть её может только владелец, а исчезает она,
+   как только её нажали (или через минуту). Само окно и ответы бота
+   видит только владелец. В закрытом канале не видно даже панели. */
+const PANEL_MS = 60 * 1000;
+const CONFIRM_MS = 5 * 1000;
+const COMMANDS = ['news', 'updates', 'warn', 'mute', 'unmute', 'strikes', 'pardon', 'modlog', 'help'];
+const panels = new Map();          // id -> { kind, guild, channel, message, data }
+const DURATIONS = { '10m': ['10 minutes', 10 * R.MIN], '1h': ['1 hour', R.HOUR], '6h': ['6 hours', 6 * R.HOUR],
+                    '1d': ['1 day', R.DAY], '3d': ['3 days', 3 * R.DAY], '7d': ['7 days', 7 * R.DAY] };
 
-async function registerCommands(g) {
-  if (!appId) return;
-  const st = gstate(g.id);
-  const defs = commandDefs(), h = hash(defs);
-  if (st.commands === h) return;
-  const r = await api('PUT', '/applications/' + appId + '/guilds/' + g.id + '/commands', defs);
-  if (ok(r)) { st.commands = h; save(); }
-  else log('slash commands not registered in ' + g.name + ':', r.status, JSON.stringify(r.body).slice(0, 200));
-}
+const HELP = [
+  '**!news** - write a post: channel, title, text, up to 4 images and a link button',
+  '**!updates** - choose the channels for automatic game updates',
+  '**!warn @user reason** - give a strike, punished by the same ladder as automod (add a rule number: !warn @user 2 spam)',
+  '**!mute @user 1h reason** - mute for 10m, 1h, 6h, 1d, 3d or 7d',
+  '**!unmute @user** - lift a mute',
+  '**!strikes @user** - show active strikes',
+  '**!pardon @user** - remove all strikes',
+  '**!modlog** - send moderation logs to this channel, **!modlog off** to stop',
+  '',
+  'Only you can use these commands. The message with a command is removed at once.'
+].join('\n');
 
 const reply = (i, data) => api('POST', '/interactions/' + i.id + '/' + i.token + '/callback', { type: 4, data: Object.assign({ flags: 64, allowed_mentions: { parse: [] } }, data) });
 const defer = i => api('POST', '/interactions/' + i.id + '/' + i.token + '/callback', { type: 5, data: { flags: 64 } });
 const finish = (i, data) => api('PATCH', '/webhooks/' + appId + '/' + i.token + '/messages/@original', Object.assign({ allowed_mentions: { parse: [] } }, data));
 const card = (text, c) => ({ embeds: [{ color: c || R.COLORS.neutral, description: text }] });
+const textChannels = g => [...g.channels.values()].filter(c => c.type === 0 || c.type === 5);
+const channelByName = (g, name) => {
+  name = String(name || '').trim().replace(/^#/, '').toLowerCase();
+  return textChannels(g).find(c => c.name.toLowerCase() === name || c.id === name) || null;
+};
 
-const opt = (list, name) => { const o = (list || []).find(x => x.name === name); return o ? o.value : undefined; };
+// «#канал» и «@Роль» в тексте поста -> настоящая ссылка и упоминание
+function linkify(g, text) {
+  return String(text || '')
+    .replace(/(^|[^<\w])#([\w-]{1,100})/g, (all, pre, name) => {
+      const c = channelByName(g, name);
+      return c ? pre + '<#' + c.id + '>' : all;
+    })
+    .replace(/(^|[^<\w])@([\w-]{1,100})/g, (all, pre, name) => {
+      if (/^(everyone|here)$/i.test(name)) return all;
+      const r = [...g.roles.entries()].find(([id, r]) => id !== g.id && r.name.toLowerCase() === name.toLowerCase());
+      return r ? pre + '<@&' + r[0] + '>' : all;
+    });
+}
+
+// упоминания в карточке не срабатывают — их выносим строкой над ней
+function pings(text) {
+  const out = String(text || '').match(/@everyone|@here|<@&\d+>/g) || [];
+  return [...new Set(out)];
+}
+
+async function confirm(channel, text) {
+  const r = await sendMessage(channel, { content: text, allowed_mentions: { parse: [] } });
+  if (ok(r) && r.body) {
+    const t = setTimeout(() => api('DELETE', '/channels/' + channel + '/messages/' + r.body.id).catch(() => {}), CONFIRM_MS);
+    if (t.unref) t.unref();
+  }
+}
+
+async function openPanel(g, m, kind, data) {
+  const id = crypto.randomBytes(9).toString('hex');
+  const label = { news: 'Open the post editor', updates: 'Choose update channels', help: 'Show commands',
+                  strikes: 'Show strikes' }[kind];
+  const r = await sendMessage(m.channel_id, { allowed_mentions: { parse: [] },
+    components: [{ type: 1, components: [{ type: 2, style: 2, label, custom_id: 'panel:' + id }] }] });
+  if (!ok(r) || !r.body) return;
+  panels.set(id, { kind, guild: g.id, channel: m.channel_id, message: r.body.id, data: data || {} });
+  const t = setTimeout(() => closePanel(id), PANEL_MS);
+  if (t.unref) t.unref();
+}
+
+function closePanel(id) {
+  const p = panels.get(id);
+  if (!p) return;
+  panels.delete(id);
+  api('DELETE', '/channels/' + p.channel + '/messages/' + p.message).catch(() => {});
+}
+
+function strikesText(g, uid) {
+  const list = activeStrikes(g.id, uid);
+  if (!list.length) return '<@' + uid + '> has no active strikes.';
+  const lines = list.map(s => '<t:' + Math.floor(s.t / 1000) + ':R> ' + R.strikes(s.p) + (s.r ? ', rule ' + s.r : '') + ', ' +
+    ((A.KIND[s.k] && A.KIND[s.k].note) || (s.k === 'manual' ? 'warned by the owner' : s.k)) +
+    (s.by && s.by !== 'auto' ? ', by <@' + s.by + '>' : ''));
+  return '**<@' + uid + '> has ' + R.strikes(points(list)) + ':**\n' + lines.join('\n');
+}
+
+// «!команда ...» от владельца; true — команда узнана и выполнена
+async function onOwnerCommand(g, m) {
+  const mm = /^!([a-z]+)(?:\s+([\s\S]*))?$/i.exec(String(m.content || '').trim());
+  if (!mm || COMMANDS.indexOf(mm[1].toLowerCase()) === -1) return false;
+  const cmd = mm[1].toLowerCase(), args = (mm[2] || '').trim();
+  api('DELETE', '/channels/' + m.channel_id + '/messages/' + m.id).catch(() => {});
+
+  if (cmd === 'news' || cmd === 'updates' || cmd === 'help') { await openPanel(g, m, cmd); return true; }
+  if (cmd === 'modlog') {
+    const off = /^off$/i.test(args);
+    gstate(g.id).modlog = off ? '' : m.channel_id;
+    save();
+    await confirm(m.channel_id, off ? 'Moderation logs are off.' : 'Moderation logs will be posted here.');
+    return true;
+  }
+
+  // дальше — команды над игроком: @упоминание или id
+  const idm = /^(?:<@!?(\w+)>|(\d{5,}))\s*([\s\S]*)$/.exec(args);
+  if (!idm) { await confirm(m.channel_id, 'Mention the member: !' + cmd + ' @user'); return true; }
+  const uid = idm[1] || idm[2], rest = idm[3].trim();
+  const mention = (m.mentions || []).find(u => u && u.id === uid);
+  const target = mention || { id: uid };
+  if (cmd === 'strikes') { await openPanel(g, m, 'strikes', { user: uid }); return true; }
+  if (cmd === 'pardon') {
+    delete state.strikes[g.id + ':' + uid];
+    const caseNo = ++state.cases;
+    save();
+    await modlog(g, { caseNo, title: 'Strikes removed', color: R.COLORS.ok, user: uid, by: m.author.id });
+    await confirm(m.channel_id, 'All strikes of <@' + uid + '> are removed.');
+    return true;
+  }
+  // Discord не даёт наказывать администраторов, а себя и бота — незачем
+  const roles = mention && mention.member && mention.member.roles;
+  if (uid === g.owner || (me && uid === me.id) || target.bot || (memberPerms(g, uid, roles) & PERM.ADMIN)) {
+    await confirm(m.channel_id, 'Administrators and bots cannot be punished.');
+    return true;
+  }
+  const until = Date.parse(mention && mention.member && mention.member.communication_disabled_until) || 0;
+
+  if (cmd === 'warn') {
+    const rm = /^(\d{1,2})\b\s*([\s\S]*)$/.exec(rest);
+    const rule = rm && R.ruleById(Number(rm[1])) ? Number(rm[1]) : 0;
+    const reason = (rule ? rm[2] : rest).trim().slice(0, 300);
+    const f = { kind: 'manual', rule, weight: 1, note: reason || (rule ? R.ruleById(rule).title : 'Warned by the owner') };
+    await punish(g, target, f, { by: m.author.id, channel: m.channel_id, until });
+    return true;
+  }
+  if (cmd === 'mute') {
+    const dm2 = /^(\S+)\s*([\s\S]*)$/.exec(rest) || [];
+    const d = DURATIONS[String(dm2[1] || '').toLowerCase()];
+    if (!d) { await confirm(m.channel_id, 'Choose a duration: 10m, 1h, 6h, 1d, 3d or 7d.'); return true; }
+    const reason = (dm2[2] || '').trim().slice(0, 300) || 'Muted by the owner';
+    const caseNo = ++state.cases;
+    save();
+    const done = until > Date.now() + d[1] ? true : await timeout(g, uid, d[1], 'Case ' + caseNo + ': ' + reason);
+    if (done) {
+      await dm(uid, { embeds: [{ color: R.COLORS.mute, title: 'You have been muted',
+        description: 'You were muted in **' + g.name + '** for ' + d[0] + '.',
+        fields: [{ name: 'Reason', value: reason }],
+        footer: { text: 'If you think this is a mistake, message a moderator.' } }] }).catch(() => {});
+      await modlog(g, { caseNo, title: 'Mute for ' + d[0], color: R.COLORS.mute, user: uid, by: m.author.id, reason });
+    }
+    await confirm(m.channel_id, done ? '<@' + uid + '> is muted for ' + d[0] + '.' : 'I could not mute them: my role must be above theirs and have Timeout Members.');
+    return true;
+  }
+  if (cmd === 'unmute') {
+    const done = await timeout(g, uid, 0, 'Unmuted by the owner');
+    if (done) { await modlog(g, { caseNo: ++state.cases, title: 'Mute lifted', color: R.COLORS.ok, user: uid, by: m.author.id }); save(); }
+    await confirm(m.channel_id, done ? '<@' + uid + '> can talk again.' : 'I could not unmute them.');
+    return true;
+  }
+  return true;
+}
+
+/* ---------- окна: редактор поста и каналы новостей ----------
+   Новые окна Discord умеют выпадающий список каналов и загрузку картинок.
+   Если Discord откажется их показать, бот откроет простое окно из
+   текстовых полей: канал по имени, картинки ссылками. */
+const row = (custom_id, label, style, extra) => ({ type: 1, components: [Object.assign({ type: 4, custom_id, label, style, required: false }, extra || {})] });
+const field = (label, description, component) => Object.assign({ type: 18, label }, description ? { description } : {}, { component });
+
+function newsModal(g, p) {
+  return { custom_id: 'news:' + p.channel, title: 'New post', components: [
+    field('Channel', null, { type: 8, custom_id: 'channel', channel_types: [0, 5], min_values: 1, max_values: 1,
+                             default_values: [{ id: p.channel, type: 'channel' }] }),
+    field('Title', null, { type: 4, custom_id: 'title', style: 1, required: false, max_length: 256 }),
+    field('Text', 'Links work. @everyone, @here and @Role names ping.',
+          { type: 4, custom_id: 'text', style: 2, required: false, max_length: 4000 }),
+    field('Images', 'Up to 4', { type: 19, custom_id: 'images', min_values: 0, max_values: 4, required: false }),
+    field('Link button', 'Optional: a button under the post', { type: 4, custom_id: 'link', style: 1, required: false,
+                                                               max_length: 512, placeholder: 'https://aibrofist.online' })
+  ] };
+}
+function newsModalClassic(g, p) {
+  const c = g.channels.get(p.channel);
+  return { custom_id: 'news:' + p.channel, title: 'New post', components: [
+    row('channel', 'Channel', 1, { required: true, max_length: 100, value: c ? c.name : '' }),
+    row('title', 'Title', 1, { max_length: 256 }),
+    row('text', 'Text', 2, { max_length: 4000 }),
+    row('images', 'Image links (one per line, up to 4)', 2, { max_length: 2000 }),
+    row('link', 'Link button', 1, { max_length: 512, placeholder: 'https://aibrofist.online' })
+  ] };
+}
+function updatesModal(g) {
+  const mine = state.feed.filter(c => g.channels.has(c));
+  return { custom_id: 'updates:' + g.id, title: 'Game update channels', components: [
+    field('Channels', 'Leave empty to use #updates', { type: 8, custom_id: 'channels', channel_types: [0, 5],
+      min_values: 0, max_values: 5, required: false, default_values: mine.map(id => ({ id, type: 'channel' })) })
+  ] };
+}
+function updatesModalClassic(g) {
+  const mine = state.feed.filter(c => g.channels.has(c)).map(c => g.channels.get(c).name);
+  return { custom_id: 'updates:' + g.id, title: 'Game update channels', components: [
+    row('channels', 'Channel names, separated by commas', 1, { max_length: 400, value: mine.join(', '),
+                                                              placeholder: 'updates, news' })
+  ] };
+}
+
+async function showModal(i, modern, classic) {
+  const cb = '/interactions/' + i.id + '/' + i.token + '/callback';
+  const r = await api('POST', cb, { type: 9, data: modern });
+  if (r.status === 400) return api('POST', cb, { type: 9, data: classic });
+  return r;
+}
+
+function modalValues(i) {
+  const out = {};
+  const walk = c => {
+    if (!c) return;
+    if (Array.isArray(c)) { c.forEach(walk); return; }
+    if (c.custom_id) {
+      if (Array.isArray(c.values)) out[c.custom_id] = c.values;
+      else if (typeof c.value === 'string') out[c.custom_id] = c.value;
+    }
+    walk(c.components);
+    walk(c.component);
+  };
+  walk(i.data && i.data.components);
+  return out;
+}
+
+async function onNewsSubmit(i, g) {
+  await defer(i);
+  const v = modalValues(i);
+  const chosen = Array.isArray(v.channel) ? g.channels.get(v.channel[0]) : channelByName(g, v.channel);
+  if (!chosen || (chosen.type !== 0 && chosen.type !== 5)) return finish(i, card('I cannot find that channel.'));
+  const title = String(v.title || '').trim(), text = String(v.text || '').trim();
+  let link = String(v.link || '').trim();
+  if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
+  let host = '';
+  if (link) {
+    try { host = new URL(link).hostname.replace(/^www\./, ''); }
+    catch (e) { return finish(i, card('The link button needs a web address, like https://aibrofist.online.')); }
+  }
+
+  // картинки: загруженные в окне — переносим в пост (их ссылки временные),
+  // в простом окне — это просто ссылки https
+  const images = [], files = [], skipped = [];
+  if (Array.isArray(v.images)) {
+    const res = (i.data.resolved && i.data.resolved.attachments) || {};
+    for (const id of v.images.slice(0, 4)) {
+      const a = res[id];
+      if (!a) continue;
+      if (!/^image\//.test(a.content_type || '') || (a.size || 0) > 10 * 1024 * 1024) { skipped.push(a.filename); continue; }
+      try {
+        const f = await download(a.url, 10 * 1024 * 1024);
+        const ext = ((/\.(png|jpe?g|gif|webp)$/i.exec(a.filename || '') || [])[1] || 'png').toLowerCase();
+        const name = 'image' + (files.length + 1) + '.' + ext;
+        files.push({ name, data: f.buf, type: a.content_type });
+        images.push('attachment://' + name);
+      } catch (e) { skipped.push(a.filename); }
+    }
+  } else if (v.images) {
+    String(v.images).split(/\s+/).filter(u => /^https:\/\/\S+$/i.test(u)).slice(0, 4).forEach(u => images.push(u));
+  }
+  if (!title && !text && !images.length) return finish(i, card('The post is empty: add a title, text or an image.'));
+
+  // карточка; несколько картинок — сеткой (у карточек один адрес)
+  const body = linkify(g, text);
+  const embed = { color: R.COLORS.neutral };
+  if (title) embed.title = title.slice(0, 256);
+  if (body) embed.description = body.slice(0, 4000);
+  if (images.length) embed.image = { url: images[0] };
+  const gallery = link || require('./discordApi.js').SITE;
+  if (link || images.length > 1) embed.url = gallery;
+  const msg = { embeds: [embed].concat(images.slice(1).map(u => ({ url: gallery, image: { url: u } }))),
+                allowed_mentions: { parse: ['everyone', 'roles'] } };
+  const p = pings(body);
+  if (p.length) msg.content = p.join(' ');
+  if (link) msg.components = [{ type: 1, components: [{ type: 2, style: 5, label: host.slice(0, 80), url: link }] }];
+
+  const r = await api('POST', '/channels/' + chosen.id + '/messages', msg, files.length ? { files } : undefined);
+  if (!ok(r) || !r.body) return finish(i, card('Could not post in <#' + chosen.id + '> (error ' + r.status + '). Check that I can send messages, embeds and files there.'));
+  return finish(i, card('Posted in <#' + chosen.id + '>: https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.body.id +
+                        (skipped.length ? '\nNot attached (not an image, too big or unavailable): ' + skipped.join(', ') : '')));
+}
+
+async function onUpdatesSubmit(i, g) {
+  await defer(i);
+  const v = modalValues(i);
+  const list = Array.isArray(v.channels)
+    ? v.channels.filter(c => g.channels.has(c))
+    : String(v.channels || '').split(',').map(n => channelByName(g, n)).filter(Boolean).map(c => c.id);
+  // каналы других серверов (если бот где-то ещё) не трогаем
+  state.feed = state.feed.filter(c => !g.channels.has(c)).concat([...new Set(list)]);
+  save();
+  return finish(i, card(list.length ? 'Game updates will be posted in: ' + list.map(c => '<#' + c + '>').join(', ') + '.'
+                                    : 'No channels chosen: game updates go to the #updates channel.'));
+}
 
 async function onInteraction(i) {
   if (!i || !i.guild_id) return;
   const g = guilds.get(i.guild_id);
   if (!g) return;
-  const mod = i.member && i.member.user && i.member.user.id;
-  if (mod !== g.owner) return reply(i, card('Only the server owner can use this bot.'));
-  if (i.type === 5) return onModal(i, g);
-  if (i.type !== 2 || !i.data) return;
-  const name = i.data.name, o = i.data.options || [];
-  const resolvedUser = id => (i.data.resolved && i.data.resolved.users && i.data.resolved.users[id]) || { id };
-
-  if (name === 'post') {
-    const channel = opt(o, 'channel'), style = opt(o, 'style') || 'embed';
-    if (!g.channels.has(channel)) return reply(i, card('I cannot see that channel.'));
-    return api('POST', '/interactions/' + i.id + '/' + i.token + '/callback', { type: 9, data: {
-      custom_id: 'post:' + channel + ':' + style, title: 'Post a message',
-      components: [
-        { type: 1, components: [{ type: 4, custom_id: 'title', label: 'Title (optional)', style: 1, required: false, max_length: 256 }] },
-        { type: 1, components: [{ type: 4, custom_id: 'text', label: 'Message', style: 2, required: true, max_length: style === 'plain' ? 1900 : 4000 }] }
-      ] } });
+  const uid = i.member && i.member.user && i.member.user.id;
+  const cid = String((i.data && i.data.custom_id) || '');
+  if (i.type !== 3 && i.type !== 5) return;
+  if (uid !== g.owner) return reply(i, card('Only the server owner can use this.'));
+  if (i.type === 3 && cid.indexOf('panel:') === 0) {
+    const id = cid.slice(6), p = panels.get(id);
+    if (!p) return reply(i, card('This panel has expired. Type the command again.'));
+    closePanel(id);
+    if (p.kind === 'news') return showModal(i, newsModal(g, p), newsModalClassic(g, p));
+    if (p.kind === 'updates') return showModal(i, updatesModal(g), updatesModalClassic(g));
+    if (p.kind === 'help') return reply(i, card(HELP));
+    if (p.kind === 'strikes') return reply(i, card(strikesText(g, p.data.user)));
+    return;
   }
-
-  await defer(i);
-  if (name === 'updates') {
-    const sub = o[0] || {}, channel = opt(sub.options, 'channel');
-    if (sub.name === 'add' && state.feed.indexOf(channel) === -1) state.feed.push(channel);
-    if (sub.name === 'remove') state.feed = state.feed.filter(c => c !== channel);
-    save();
-    const list = state.feed.length ? state.feed.map(c => '<#' + c + '>').join(', ')
-                                   : 'none set, updates go to the #updates channel';
-    return finish(i, card('Game updates are posted in: ' + list + '.'));
-  }
-  if (name === 'rules') {
-    const r = await ensureRules(g, { channel: opt(o, 'channel'), force: true });
-    const text = r.status === 'posted' ? 'Rules posted in <#' + r.channel + '>.'
-               : r.status === 'updated' || r.status === 'same' ? 'Rules updated in <#' + r.channel + '>.'
-               : r.status === 'no-channel' ? 'There is no #rules channel. Create one or choose a channel.'
-               : 'Could not post the rules (error ' + r.code + '). Check that I can send messages and embeds there.';
-    return finish(i, card(text));
-  }
-  if (name === 'relay') {
-    const channel = opt(o, 'channel');
-    state.relay[mod] = channel;
-    save();
-    return finish(i, card('Messages you send me in DMs will be posted in <#' + channel + '>. ' +
-                          'Start a message with #channel-name to post somewhere else.'));
-  }
-  if (name === 'modlog') {
-    const channel = opt(o, 'channel');
-    gstate(g.id).modlog = channel || '';
-    save();
-    return finish(i, card(channel ? 'Moderation logs go to <#' + channel + '>.' : 'Moderation logs are off.'));
-  }
-
-  const target = resolvedUser(opt(o, 'user'));
-  const targetMember = i.data.resolved && i.data.resolved.members && i.data.resolved.members[target.id];
-  if (name === 'warnings') {
-    const list = activeStrikes(g.id, target.id);
-    if (!list.length) return finish(i, card('<@' + target.id + '> has no active strikes.'));
-    const lines = list.map(s => '<t:' + Math.floor(s.t / 1000) + ':R> ' + s.p + (s.p === 1 ? ' strike' : ' strikes') +
-      (s.r ? ', rule ' + s.r : '') + ', ' + ((A.KIND[s.k] && A.KIND[s.k].note) || (s.k === 'manual' ? 'warned by a moderator' : s.k)) +
-      (s.by && s.by !== 'auto' ? ', by <@' + s.by + '>' : ''));
-    return finish(i, card('**<@' + target.id + '> has ' + R.strikes(points(list)) + ':**\n' + lines.join('\n')));
-  }
-  if (name === 'pardon') {
-    delete state.strikes[g.id + ':' + target.id];
-    const caseNo = ++state.cases;
-    save();
-    await modlog(g, { caseNo, title: 'Strikes removed', color: R.COLORS.ok, user: target.id, by: mod });
-    return finish(i, card('All strikes of <@' + target.id + '> are removed.'));
-  }
-  // Discord не даёт мьютить администраторов, а себя владелец наказывать не станет
-  if (target.id === g.owner || (targetMember && memberPerms(g, target.id, targetMember.roles) & PERM.ADMIN))
-    return finish(i, card('Administrators cannot be punished.'));
-  if (target.id === (me && me.id)) return finish(i, card('That is me.'));
-
-  if (name === 'warn') {
-    const rule = opt(o, 'rule'), reason = opt(o, 'reason');
-    const f = { kind: 'manual', rule: rule || 0, weight: 1, note: reason || (rule ? R.ruleById(rule).title : 'Warned by a moderator') };
-    const res = await punish(g, target, f, { by: mod,
-      until: Date.parse(targetMember && targetMember.communication_disabled_until) || 0 });
-    return finish(i, card('<@' + target.id + '> now has ' + R.strikes(res.total) + '. Action: ' + R.describe(res.step).toLowerCase() +
-                          (res.done ? '.' : ' (failed: I lack permission).'), color(res.step)));
-  }
-  if (name === 'mute') {
-    const d = DURATIONS.find(([n]) => n === opt(o, 'duration')) || DURATIONS[0];
-    const reason = opt(o, 'reason') || 'Muted by a moderator';
-    const caseNo = ++state.cases;
-    save();
-    const done = await timeout(g, target.id, d[1], 'Case ' + caseNo + ': ' + reason);
-    if (done) {
-      await dm(target.id, { embeds: [{ color: R.COLORS.mute, title: 'You have been muted',
-        description: 'A moderator of **' + g.name + '** muted you for ' + d[0] + '.',
-        fields: [{ name: 'Reason', value: reason.slice(0, 1000) }],
-        footer: { text: 'If you think this is a mistake, message a moderator.' } }] }).catch(() => {});
-      await modlog(g, { caseNo, title: 'Mute for ' + d[0], color: R.COLORS.mute, user: target.id, by: mod, reason });
-    }
-    return finish(i, card(done ? '<@' + target.id + '> is muted for ' + d[0] + '.' : 'I could not mute them. My role must be above theirs and have Timeout Members.'));
-  }
-  if (name === 'unmute') {
-    const done = await timeout(g, target.id, 0, 'Unmuted by a moderator');
-    if (done) await modlog(g, { caseNo: ++state.cases, title: 'Mute lifted', color: R.COLORS.ok, user: target.id, by: mod });
-    save();
-    return finish(i, card(done ? '<@' + target.id + '> can talk again.' : 'I could not unmute them.'));
-  }
+  if (i.type === 5 && cid.indexOf('news:') === 0) return onNewsSubmit(i, g);
+  if (i.type === 5 && cid.indexOf('updates:') === 0) return onUpdatesSubmit(i, g);
 }
 
-async function onModal(i, g) {
-  const id = String(i.data && i.data.custom_id || '');
-  const m = /^post:(\d+):(embed|plain)$/.exec(id);
-  if (!m) return;
-  const values = {};
-  (i.data.components || []).forEach(row => (row.components || []).forEach(c => { values[c.custom_id] = String(c.value || ''); }));
-  const title = (values.title || '').trim(), text = (values.text || '').trim();
-  await defer(i);
-  const body = m[2] === 'plain'
-    ? { content: (title ? '**' + title + '**\n' : '') + text, allowed_mentions: { parse: ['users', 'roles', 'everyone'] } }
-    : { embeds: [{ color: R.COLORS.neutral, title: title || undefined, description: text }], allowed_mentions: { parse: [] } };
-  const r = await sendMessage(m[1], body);
-  if (!ok(r)) return finish(i, card('Could not post in <#' + m[1] + '> (error ' + r.status + '). Check that I can send messages and embeds there.'));
-  return finish(i, card('Posted in <#' + m[1] + '>: https://discord.com/channels/' + g.id + '/' + m[1] + '/' + r.body.id));
+/* Слэш-команд у бота больше нет — все команды секретные, с «!». Если
+   прежняя версия успела их зарегистрировать, один раз убираем. */
+async function clearSlashCommands(g) {
+  const st = gstate(g.id);
+  if (!appId || st.slashCleared) return;
+  const r = await api('PUT', '/applications/' + appId + '/guilds/' + g.id + '/commands', []);
+  if (ok(r)) { st.slashCleared = true; delete st.commands; save(); }
 }
 
 /* ---------- подключение ---------- */
@@ -801,8 +803,7 @@ async function setupGuild(g) {
   if (setupDone.has(g.id)) return;
   setupDone.add(g.id);
   try {
-    await registerCommands(g);
-    await ensureRules(g);
+    await clearSlashCommands(g);
     await ensureNativeAutomod(g);
   } catch (e) { log('setup failed for ' + g.name + ':', e.message); setupDone.delete(g.id); }
 }
@@ -833,7 +834,6 @@ function onDispatch(t, d) {
     // правка сообщения проверяется так же: иначе нарушение дописали бы позже
     // (без edited_timestamp это Discord дорисовал превью ссылки, а не правка)
     case 'MESSAGE_UPDATE': if (typeof d.content === 'string' && d.author && d.edited_timestamp) onMessage(d, true).catch(() => {}); break;
-    case 'MESSAGE_DELETE': if (!d.guild_id) onDirectDelete(d).catch(() => {}); break;
     case 'AUTO_MODERATION_ACTION_EXECUTION': onAutomodExecution(d).catch(e => log('automod event failed:', e.message)); break;
     case 'INTERACTION_CREATE': onInteraction(d).catch(e => log('command failed:', e.message)); break;
   }
@@ -875,10 +875,10 @@ function stop() {
   guilds.clear(); setupDone.clear(); lastHit.clear();
 }
 
-// каналы для новостей (updatesFeed.js): заданные командой /updates
+// каналы для новостей (updatesFeed.js): выбранные командой !updates
 function feedChannels() {
   loadState();
   return state.feed.slice();
 }
 
-module.exports = { start, stop, feedChannels, commandDefs, _test: { state: () => state, guilds, ensureRules, punish, reload: () => { loaded = false; loadState(); } } };
+module.exports = { start, stop, feedChannels, _test: { state: () => state, guilds, punish, reload: () => { loaded = false; loadState(); } } };

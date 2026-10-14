@@ -1,14 +1,15 @@
 /* Бот Discord целиком, против поддельного Discord (свой HTTP API и Gateway
    на localhost — настоящий токен не нужен):
-   - входит с нужными intents, регистрирует команды, выкладывает правила в
-     #rules и включает встроенную AutoMod;
+   - входит с нужными intents, включает встроенную AutoMod, правил в #rules
+     сам не пишет (их пишет владелец) и слэш-команд не заводит;
    - автомодерация: удаляет нарушения, наказывает по лестнице, пишет игроку
      в личку и в mod-log, не трогает модераторов и разрешённые каналы;
    - за волну флуда — одно наказание, а не по штрафу за каждое сообщение;
-   - командами пользуется только владелец сервера: /warnings, /warn, /post,
-     /updates, /relay;
-   - что владелец пишет боту в личку, бот публикует в канале от своего
-     имени (с картинкой), правку и удаление повторяет; чужую личку не трогает;
+   - секретные команды владельца «!news», «!updates», «!warn», «!mute»,
+     «!strikes», «!help»: сообщение с командой исчезает, окно видит только
+     владелец, у остальных команды не срабатывают; пост с картинками,
+     упоминаниями и кнопкой-ссылкой; запасное окно, если новое Discord
+     не покажет;
    - новости и записи Logs уходят во все выбранные каналы, правка и удаление
      повторяются в Discord;
    - после обрыва продолжает сессию (resume), после перезапуска ничего не
@@ -36,7 +37,7 @@ const MOD_ROLE = '200';
 
 /* ---------- поддельный Discord ---------- */
 const calls = [];
-let msgId = 5000, rateLimitedOnce = false;
+let msgId = 5000, rateLimitedOnce = false, rejectNewModal = false;
 const known = new Set();
 const server = http.createServer((req, res) => {
   let body = '';
@@ -73,7 +74,11 @@ const server = http.createServer((req, res) => {
       if (m[1] === 'other') return send(200, { guild: { id: '555' } });
       return send(404, { code: 10006 });
     }
-    if (/\/callback$/.test(p)) return send(204);
+    if (/\/callback$/.test(p)) {
+      const comps = json && json.type === 9 && json.data && json.data.components;
+      if (rejectNewModal && comps && comps[0] && comps[0].type === 18) return send(400, { code: 50035, message: 'Invalid Form Body' });
+      return send(204);
+    }
     if (/^\/webhooks\//.test(p)) return send(200, {});
     if (p === '/users/@me/guilds') return send(200, [{ id: G }]);
     send(404, { message: 'unknown route ' + p });
@@ -145,15 +150,12 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   let t = Date.now();
   bot.start();
   const ident = await waitFor(() => gwLog.find(m => m.op === 2));
-  ok('входит с intents: серверы, сообщения, личка, их текст, события AutoMod', ident && ident.d.intents === (1 | 512 | 4096 | 32768 | 2097152), ident && ident.d.intents);
+  ok('входит с intents: серверы, сообщения, их текст, события AutoMod', ident && ident.d.intents === (1 | 512 | 32768 | 2097152), ident && ident.d.intents);
   ok('токен — из DISCORD_BOT_TOKEN', ident && ident.d.token === 'test-token');
   await waitFor(() => find(calls, 'POST', /auto-moderation\/rules$/).length >= 3);
   const cmds = find(calls, 'PUT', /^\/applications\/700\/guilds\/100\/commands$/);
-  ok('регистрирует 10 команд на сервере', cmds.length === 1 && cmds[0].body.length === 10, cmds[0] && cmds[0].body.map(c => c.name).join(','));
-  ok('команды скрыты ото всех, кроме владельца и администраторов', cmds[0] && cmds[0].body.every(c => c.default_member_permissions === '0'));
-  const rules = find(calls, 'POST', /^\/channels\/301\/messages$/);
-  ok('правила выложены в #rules: 3 карточки, без упоминаний', rules.length === 1 && rules[0].body.embeds.length === 3 &&
-     rules[0].body.allowed_mentions.parse.length === 0);
+  ok('слэш-команд нет (старые, если были, убраны)', cmds.length === 1 && Array.isArray(cmds[0].body) && cmds[0].body.length === 0);
+  ok('правила в #rules сам не пишет', find(calls, 'POST', /^\/channels\/301\/messages$/).length === 0);
   const am = find(calls, 'POST', /auto-moderation\/rules$/).map(c => c.body.trigger_type).sort().join(',');
   ok('включает встроенную AutoMod: спам, оскорбления и 18+, упоминания', am === '3,4,5', am);
 
@@ -253,119 +255,165 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const banCall = c.findIndex(x => x.method === 'PUT' && /bans\/U8$/.test(x.path));
   ok('сначала личное сообщение, потом бан (иначе не дойдёт)', dmBan !== -1 && banCall > dmBan);
 
-  console.log('\nкоманды:');
-  t = Date.now();
-  dispatch('INTERACTION_CREATE', { id: 'i1', token: 'tok1', type: 2, guild_id: G, channel_id: CH.general,
-    member: { user: { id: OWNER }, permissions: String(1n << 3n) },
-    data: { name: 'warnings', options: [{ name: 'user', type: 6, value: 'U1' }], resolved: { users: { U1: { id: 'U1' } } } } });
-  await waitFor(() => find(since(t), 'PATCH', /@original$/).length);
-  c = since(t);
-  ok('/warnings: сначала «думаю», потом список баллов (видит только владелец)', find(c, 'POST', /i1\/tok1\/callback$/)[0].body.type === 5 &&
-     /rule 1/.test(JSON.stringify(find(c, 'PATCH', /@original$/)[0].body)));
-  t = Date.now();
-  dispatch('INTERACTION_CREATE', { id: 'i2', token: 'tok2', type: 2, guild_id: G, channel_id: CH.general,
-    member: { user: { id: 'U0' }, permissions: '1024' },
-    data: { name: 'warn', options: [{ name: 'user', type: 6, value: 'U2' }], resolved: { users: { U2: { id: 'U2' } } } } });
-  await waitFor(() => find(since(t), 'POST', /i2\/tok2\/callback$/).length);
-  ok('игроку команда отказывает', /Only the server owner/.test(JSON.stringify(find(since(t), 'POST', /i2\/tok2\/callback$/)[0].body)));
-  t = Date.now();
-  dispatch('INTERACTION_CREATE', { id: 'i2b', token: 'tok2b', type: 2, guild_id: G, channel_id: CH.general,
-    member: { user: { id: 'M1' }, permissions: String((1n << 40n) | (1n << 3n)) },
-    data: { name: 'warn', options: [{ name: 'user', type: 6, value: 'U2' }], resolved: { users: { U2: { id: 'U2' } } } } });
-  await waitFor(() => find(since(t), 'POST', /i2b\/tok2b\/callback$/).length);
-  ok('модератору и администратору — тоже, только владельцу', /Only the server owner/.test(JSON.stringify(find(since(t), 'POST', /i2b\/tok2b\/callback$/)[0].body)) &&
-     find(since(t), 'PATCH', /members\/U2$/).length === 0);
-  t = Date.now();
-  dispatch('INTERACTION_CREATE', { id: 'i3', token: 'tok3', type: 2, guild_id: G, channel_id: CH.general,
-    member: { user: { id: OWNER }, permissions: String(1n << 3n) },
-    data: { name: 'warn', options: [{ name: 'user', type: 6, value: 'U2' }, { name: 'rule', type: 4, value: 7 }],
-            resolved: { users: { U2: { id: 'U2' } }, members: { U2: { roles: [] } } } } });
-  await waitFor(() => find(since(t), 'PATCH', /@original$/).length);
-  ok('/warn: второй балл — мьют на 10 минут', find(since(t), 'PATCH', /members\/U2$/).length === 1 &&
-     /2 strikes/.test(JSON.stringify(find(since(t), 'PATCH', /@original$/)[0].body)));
-  t = Date.now();
-  dispatch('INTERACTION_CREATE', { id: 'i3b', token: 'tok3b', type: 2, guild_id: G, channel_id: CH.general,
-    member: { user: { id: OWNER }, permissions: String(1n << 3n) },
-    data: { name: 'warn', options: [{ name: 'user', type: 6, value: 'U3' }],
-            resolved: { users: { U3: { id: 'U3' } }, members: { U3: { roles: [], communication_disabled_until: new Date(Date.now() + 7 * 86400000).toISOString() } } } } });
-  await waitFor(() => find(since(t), 'PATCH', /tok3b\/messages\/@original$/).length);
-  ok('/warn уже замьюченного на неделю — мьют не сокращает', find(since(t), 'PATCH', /members\/U3$/).length === 0);
-  t = Date.now();
-  dispatch('INTERACTION_CREATE', { id: 'i4', token: 'tok4', type: 2, guild_id: G, channel_id: CH.general,
-    member: { user: { id: OWNER }, permissions: String(1n << 3n) },
-    data: { name: 'post', options: [{ name: 'channel', type: 7, value: CH.news2 }] } });
-  await waitFor(() => find(since(t), 'POST', /i4\/tok4\/callback$/).length);
-  ok('/post открывает окно для текста', find(since(t), 'POST', /i4\/tok4\/callback$/)[0].body.type === 9);
-  t = Date.now();
-  dispatch('INTERACTION_CREATE', { id: 'i5', token: 'tok5', type: 5, guild_id: G, channel_id: CH.general,
-    member: { user: { id: OWNER }, permissions: String(1n << 3n) },
-    data: { custom_id: 'post:' + CH.news2 + ':embed', components: [
-      { type: 1, components: [{ type: 4, custom_id: 'title', value: 'Tournament on Friday' }] },
-      { type: 1, components: [{ type: 4, custom_id: 'text', value: '- Starts at 18:00\n- Prizes for top 3' }] }] } });
-  await waitFor(() => find(since(t), 'POST', /^\/channels\/306\/messages$/).length);
-  const posted = find(since(t), 'POST', /^\/channels\/306\/messages$/)[0];
-  ok('сообщение выложено в выбранный канал карточкой', posted && posted.body.embeds[0].title === 'Tournament on Friday');
-  t = Date.now();
-  dispatch('INTERACTION_CREATE', { id: 'i6', token: 'tok6', type: 2, guild_id: G, channel_id: CH.general,
-    member: { user: { id: OWNER }, permissions: String(1n << 3n) },
-    data: { name: 'updates', options: [{ name: 'add', type: 1, options: [{ name: 'channel', type: 7, value: CH.news2 }] }] } });
-  await waitFor(() => find(since(t), 'PATCH', /@original$/).length);
-  ok('/updates add: канал для новостей запомнен', bot.feedChannels().indexOf(CH.news2) !== -1);
+  console.log('\nсекретные команды владельца:');
+  const cb = (list, id) => find(list, 'POST', new RegExp('^/interactions/' + id + '/[^/]+/callback$'));
+  let iid = 0;
+  const press = (uid, customId) => { const id = 'b' + (++iid);
+    dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type: 3, guild_id: G, channel_id: CH.general,
+      member: { user: { id: uid }, permissions: uid === OWNER ? String(1n << 3n) : '1024' },
+      message: { id: 'panelmsg' }, data: { custom_id: customId, component_type: 2 } });
+    return id; };
+  const submit = (customId, components, resolved) => { const id = 'm' + (++iid);
+    dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type: 5, guild_id: G, channel_id: CH.general,
+      member: { user: { id: OWNER }, permissions: String(1n << 3n) }, data: { custom_id: customId, components, resolved } });
+    return id; };
+  const panelOf = list => { const pm = find(list, 'POST', /^\/channels\/300\/messages$/).find(x => x.body && x.body.components);
+    return pm && { msg: pm, id: pm.body.components[0].components[0].custom_id }; };
 
-  console.log('\nсообщения от имени бота (личка владельца):');
-  let dmId = 900000;
-  const dmMsg2 = (uid, content, extra) => {
-    const m = Object.assign({ id: String(++dmId), channel_id: 'dm' + uid, type: 0, content, author: { id: uid, username: 'u' + uid },
-                              attachments: [], mentions: [], mention_roles: [] }, extra || {});
-    dispatch('MESSAGE_CREATE', m);
-    return m;
-  };
-  const dmReplies = list => find(list, 'POST', new RegExp('^/channels/dm' + OWNER + '/messages$'));
   t = Date.now();
-  dmMsg2(OWNER, 'Hello everyone, new maps today!');
-  await waitFor(() => dmReplies(since(t)).length);
-  let rel = find(since(t), 'POST', /^\/channels\/300\/messages$/)[0];
-  ok('без выбора канала — в #general, обычным сообщением бота', rel && rel.body.content === 'Hello everyone, new maps today!' && !rel.body.embeds);
-  ok('владельцу в личку — короткое «опубликовано»', /^Posted in <#300>\.$/.test(dmReplies(since(t))[0].body.content));
+  const cmd = say(OWNER, '!news');
+  await waitFor(() => panelOf(since(t)));
+  c = since(t);
+  let panel = panelOf(c);
+  ok('«!news» от владельца — сообщение с командой сразу удалено', find(c, 'DELETE', new RegExp('/messages/' + cmd.id + '$')).length === 1);
+  ok('вместо него — панель с одной кнопкой, без текста и упоминаний', panel && !panel.msg.body.content && !panel.msg.body.embeds &&
+     panel.msg.body.components[0].components.length === 1 && panel.msg.body.allowed_mentions.parse.length === 0);
   t = Date.now();
-  const big = dmMsg2(OWNER, '#news Big tournament @everyone, ask @Moderator, rules in #rules');
-  await waitFor(() => dmReplies(since(t)).length);
-  rel = find(since(t), 'POST', /^\/channels\/306\/messages$/)[0];
-  ok('«#канал» в начале — публикует туда', !!rel);
-  ok('#канал и @роль в тексте становятся ссылкой и упоминанием, @everyone работает',
-     rel && rel.body.content === 'Big tournament @everyone, ask <@&' + MOD_ROLE + '>, rules in <#' + CH.rules + '>' &&
-     rel.body.allowed_mentions.parse.indexOf('everyone') !== -1, rel && rel.body.content);
-  const bigRel = rel && rel.resId;
-  t = Date.now();
-  dmMsg2(OWNER, 'second message', { attachments: [{ id: 'a1', filename: 'pic.png', size: 7, content_type: 'image/png',
-    url: 'http://127.0.0.1:' + port + '/cdn/pic.png' }] });
-  await waitFor(() => dmReplies(since(t)).length);
-  rel = find(since(t), 'POST', /^\/channels\/306\/messages$/)[0];
-  ok('следующее сообщение — в тот же канал, с картинкой (загружена заново)', rel && /multipart\/form-data/.test(rel.ct) &&
-     /filename="pic\.png"/.test(rel.raw) && /PNGDATA/.test(rel.raw) && /second message/.test(rel.raw));
-  t = Date.now();
-  dispatch('MESSAGE_UPDATE', { id: big.id, channel_id: 'dm' + OWNER, content: '#news Big tournament on Friday',
-    author: { id: OWNER }, edited_timestamp: new Date().toISOString(), attachments: [] });
-  await waitFor(() => find(since(t), 'PATCH', new RegExp('^/channels/306/messages/' + bigRel + '$')).length);
-  rel = find(since(t), 'PATCH', new RegExp('^/channels/306/messages/' + bigRel + '$'))[0];
-  ok('правка в личке — правится и в канале', rel && rel.body.content === 'Big tournament on Friday');
-  t = Date.now();
-  dispatch('MESSAGE_DELETE', { id: big.id, channel_id: 'dm' + OWNER });
-  await waitFor(() => find(since(t), 'DELETE', new RegExp('^/channels/306/messages/' + bigRel + '$')).length);
-  ok('удаление в личке — удаляется и в канале', find(since(t), 'DELETE', new RegExp('^/channels/306/messages/' + bigRel + '$')).length === 1);
-  t = Date.now();
-  dmMsg2('U1', 'post this please @everyone');
+  say('U0', '!news');
+  say('U9', '!warn <@U1> test', { member: member([MOD_ROLE]), mentions: [{ id: 'U1' }] });
   await sleep(300);
-  ok('личка не от владельца — ничего не публикует и не отвечает', since(t).length === 0);
+  ok('у игрока и модератора «!» команды не срабатывают (и не удаляются)', since(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
   t = Date.now();
-  dmMsg2(OWNER, '#nochannel hi');
-  await waitFor(() => dmReplies(since(t)).length);
-  ok('нет такого канала — говорит об этом и ничего не публикует', /cannot find the channel #nochannel/.test(dmReplies(since(t))[0].body.content) &&
-     find(since(t), 'POST', /^\/channels\/3\d\d\/messages$/).length === 0);
+  let bid = press('U0', panel.id);
+  await waitFor(() => cb(since(t), bid).length);
+  ok('чужое нажатие на кнопку — отказ, видит только он', cb(since(t), bid)[0].body.type === 4 && cb(since(t), bid)[0].body.data.flags === 64 &&
+     /Only the server owner/.test(JSON.stringify(cb(since(t), bid)[0].body)));
   t = Date.now();
-  dmMsg2(OWNER, 'help');
-  await waitFor(() => dmReplies(since(t)).length);
-  ok('«help» — короткая инструкция', /#channel-name/.test(dmReplies(since(t))[0].body.content));
+  bid = press(OWNER, panel.id);
+  await waitFor(() => cb(since(t), bid).length);
+  const modal = cb(since(t), bid)[0].body;
+  const types = modal.data.components.map(x => x.type + ':' + x.component.type).join(',');
+  ok('владелец нажал — открылось окно: канал списком, заголовок, текст, картинки, кнопка-ссылка', modal.type === 9 && types === '18:8,18:4,18:4,18:19,18:4', types);
+  ok('в окне по умолчанию — канал, где набрана команда', modal.data.components[0].component.default_values[0].id === CH.general);
+  await sleep(150);
+  ok('панель исчезла сразу после нажатия', find(since(t), 'DELETE', new RegExp('^/channels/300/messages/' + panel.msg.resId + '$')).length === 1);
+
+  t = Date.now();
+  const sid = submit('news:' + CH.general, [
+    { type: 18, id: 1, component: { type: 8, custom_id: 'channel', values: [CH.news2] } },
+    { type: 18, id: 2, component: { type: 4, custom_id: 'title', value: 'Tournament on Friday' } },
+    { type: 18, id: 3, component: { type: 4, custom_id: 'text', value: 'Join us @everyone, ask @Moderator in #general.\nhttps://aibrofist.online/race' } },
+    { type: 18, id: 4, component: { type: 19, custom_id: 'images', values: ['att1', 'att2'] } },
+    { type: 18, id: 5, component: { type: 4, custom_id: 'link', value: 'aibrofist.online/race' } }
+  ], { attachments: {
+    att1: { id: 'att1', filename: 'one.png', content_type: 'image/png', size: 7, url: 'http://127.0.0.1:' + port + '/cdn/pic.png' },
+    att2: { id: 'att2', filename: 'two.png', content_type: 'image/png', size: 7, url: 'http://127.0.0.1:' + port + '/cdn/pic.png' } } });
+  await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + sid + '/messages/@original$')).length);
+  c = since(t);
+  ok('окно отправлено — сначала «думаю» (только владельцу)', cb(c, sid)[0] && cb(c, sid)[0].body.type === 5 && cb(c, sid)[0].body.data.flags === 64);
+  const post = find(c, 'POST', /^\/channels\/306\/messages$/)[0];
+  const payload = post && JSON.parse((/name="payload_json"\r\nContent-Type: application\/json\r\n\r\n(.*)\r\n/.exec(post.raw) || [])[1] || 'null');
+  ok('пост ушёл в выбранный канал с двумя картинками (загружены заново)', post && /multipart/.test(post.ct) &&
+     /filename="image1\.png"/.test(post.raw) && /filename="image2\.png"/.test(post.raw));
+  ok('карточка: заголовок, текст, картинки сеткой', payload && payload.embeds[0].title === 'Tournament on Friday' &&
+     payload.embeds[0].image.url === 'attachment://image1.png' && payload.embeds[1].image.url === 'attachment://image2.png' &&
+     payload.embeds[0].url === payload.embeds[1].url);
+  ok('@Роль и #канал в тексте стали упоминанием и ссылкой', payload && /<@&200>/.test(payload.embeds[0].description) && /<#300>/.test(payload.embeds[0].description));
+  ok('@everyone и роль пингуют (вынесены над карточкой)', payload && payload.content === '@everyone <@&200>' &&
+     payload.allowed_mentions.parse.indexOf('everyone') !== -1);
+  ok('кнопка-ссылка под постом', payload && payload.components[0].components[0].style === 5 &&
+     payload.components[0].components[0].url === 'https://aibrofist.online/race' && payload.components[0].components[0].label === 'aibrofist.online');
+  ok('владельцу — «опубликовано» со ссылкой на пост', /Posted in <#306>: https:\/\/discord\.com\/channels\/100\/306\/\d+/.test(JSON.stringify(find(c, 'PATCH', new RegExp('tk' + sid + '/messages/@original$'))[0].body)));
+
+  console.log('\nзапасное окно (если Discord не покажет новое):');
+  rejectNewModal = true;
+  t = Date.now();
+  say(OWNER, '!news');
+  await waitFor(() => panelOf(since(t)));
+  panel = panelOf(since(t));
+  t = Date.now();
+  bid = press(OWNER, panel.id);
+  await waitFor(() => cb(since(t), bid).length >= 2);
+  const second = cb(since(t), bid)[1] && cb(since(t), bid)[1].body;
+  ok('после отказа показывает простое окно из текстовых полей', second && second.type === 9 && second.data.components.every(x => x.type === 1) &&
+     second.data.components[0].components[0].value === 'general');
+  rejectNewModal = false;
+  t = Date.now();
+  const sid2 = submit('news:' + CH.general, [
+    { type: 1, components: [{ type: 4, custom_id: 'channel', value: '#news' }] },
+    { type: 1, components: [{ type: 4, custom_id: 'title', value: '' }] },
+    { type: 1, components: [{ type: 4, custom_id: 'text', value: 'Short note' }] },
+    { type: 1, components: [{ type: 4, custom_id: 'images', value: 'https://aibrofist.online/a.png' }] },
+    { type: 1, components: [{ type: 4, custom_id: 'link', value: '' }] }]);
+  await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + sid2 + '/messages/@original$')).length);
+  const post2 = find(since(t), 'POST', /^\/channels\/306\/messages$/)[0];
+  ok('пост из простого окна: канал по имени, картинка по ссылке', post2 && post2.body.embeds[0].description === 'Short note' &&
+     post2.body.embeds[0].image.url === 'https://aibrofist.online/a.png' && !post2.body.content && !post2.body.components);
+
+  console.log('\nостальные команды:');
+  t = Date.now();
+  say(OWNER, '!updates');
+  await waitFor(() => panelOf(since(t)));
+  panel = panelOf(since(t));
+  t = Date.now();
+  bid = press(OWNER, panel.id);
+  await waitFor(() => cb(since(t), bid).length);
+  const um = cb(since(t), bid)[0].body;
+  ok('«!updates» — окно со списком каналов (до 5)', um.type === 9 && um.data.components[0].component.type === 8 && um.data.components[0].component.max_values === 5);
+  t = Date.now();
+  const sid3 = submit('updates:' + G, [{ type: 18, component: { type: 8, custom_id: 'channels', values: [CH.updates, CH.news2] } }]);
+  await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + sid3 + '/messages/@original$')).length);
+  ok('каналы новостей запомнены', bot.feedChannels().join() === CH.updates + ',' + CH.news2, bot.feedChannels().join());
+
+  t = Date.now();
+  const w = say(OWNER, '!warn <@U2> 7 selling coins', { mentions: [{ id: 'U2', member: { roles: [] } }] });
+  await waitFor(() => find(since(t), 'PATCH', /members\/U2$/).length);
+  c = since(t);
+  ok('«!warn @игрок 7 причина» — второй балл, мьют на 10 минут, правило 7', find(c, 'DELETE', new RegExp('/messages/' + w.id + '$')).length === 1 &&
+     (bot._test.state().strikes[G + ':U2'] || []).length === 2 && (bot._test.state().strikes[G + ':U2'] || [])[1].r === 7);
+  t = Date.now();
+  say(OWNER, '!warn <@U3> again', { mentions: [{ id: 'U3', member: { roles: [], communication_disabled_until: new Date(Date.now() + 7 * 86400000).toISOString() } }] });
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
+  ok('уже замьюченного на неделю — мьют не сокращает', find(since(t), 'PATCH', /members\/U3$/).length === 0);
+  t = Date.now();
+  say(OWNER, '!mute <@U5> 1h flooding', { mentions: [{ id: 'U5', member: { roles: [] } }] });
+  await waitFor(() => find(since(t), 'PATCH', /members\/U5$/).length);
+  const m5 = find(since(t), 'PATCH', /members\/U5$/)[0];
+  const u5 = Date.parse(m5.body.communication_disabled_until) - Date.now();
+  ok('«!mute @игрок 1h» — мьют на час', u5 > 59 * 60000 && u5 <= 60 * 60000);
+  await sleep(200);
+  const conf = find(since(t), 'POST', /^\/channels\/300\/messages$/).find(x => /muted for 1 hour/.test(x.body.content || ''));
+  ok('подтверждение в канале без пинга, исчезает само', conf && conf.body.allowed_mentions.parse.length === 0);
+  t = Date.now();
+  say(OWNER, '!mute <@' + OWNER + '> 1h');
+  say(OWNER, '!warn <@U9> x', { mentions: [{ id: 'U9', member: { roles: [MOD_ROLE] } }] });
+  await sleep(300);
+  ok('себя наказать нельзя; модератора можно', find(since(t), 'PATCH', new RegExp('members/' + OWNER + '$')).length === 0 &&
+     (bot._test.state().strikes[G + ':U9'] || []).length === 1);
+  t = Date.now();
+  say(OWNER, '!strikes <@U1>', { mentions: [{ id: 'U1' }] });
+  await waitFor(() => panelOf(since(t)));
+  panel = panelOf(since(t));
+  t = Date.now();
+  bid = press(OWNER, panel.id);
+  await waitFor(() => cb(since(t), bid).length);
+  ok('«!strikes» — список баллов только владельцу', cb(since(t), bid)[0].body.data.flags === 64 && /rule 1/.test(JSON.stringify(cb(since(t), bid)[0].body)));
+  t = Date.now();
+  say(OWNER, '!help');
+  await waitFor(() => panelOf(since(t)));
+  panel = panelOf(since(t));
+  t = Date.now();
+  bid = press(OWNER, panel.id);
+  await waitFor(() => cb(since(t), bid).length);
+  ok('«!help» — список команд только владельцу', /!news/.test(JSON.stringify(cb(since(t), bid)[0].body)) && cb(since(t), bid)[0].body.data.flags === 64);
+  t = Date.now();
+  bid = press(OWNER, panel.id);
+  await waitFor(() => cb(since(t), bid).length);
+  ok('нажатая панель больше не работает', /expired/.test(JSON.stringify(cb(since(t), bid)[0].body)));
+  t = Date.now();
+  say(OWNER, '!hello there');
+  await sleep(250);
+  ok('неизвестная «!» команда — обычное сообщение, не трогаем', since(t).length === 0);
 
   console.log('\nновости и Logs в Discord:');
   process.env.DISCORD_UPDATES_CHANNEL_ID = CH.updates;
@@ -403,12 +451,12 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bot._test.reload();
   bot.start();
   const ident2 = await waitFor(() => gwLog.slice(before).filter(m => m.op === 2).length >= 2 && gwLog.slice(before).filter(m => m.op === 2)[1], 8000);
-  ok('без Message Content Intent переподключается без него', ident2 && ident2.d.intents === (1 | 512 | 4096 | 2097152), ident2 && ident2.d.intents);
+  ok('без Message Content Intent переподключается без него', ident2 && ident2.d.intents === (1 | 512 | 2097152), ident2 && ident2.d.intents);
   await sleep(800);
   c = since(t);
-  ok('после перезапуска ничего не постит заново (правила, команды, AutoMod)',
-     find(c, 'POST', /^\/channels\/301\/messages$/).length === 0 && find(c, 'PUT', /commands$/).length === 0 &&
-     find(c, 'POST', /auto-moderation/).length === 0 && find(c, 'PATCH', /^\/channels\/301\//).length === 0);
+  ok('после перезапуска ничего не постит заново (команды, AutoMod)',
+     find(c, 'PUT', /commands$/).length === 0 && find(c, 'POST', /auto-moderation/).length === 0 &&
+     find(c, 'POST', /^\/channels\/301\/messages$/).length === 0);
   ok('баллы пережили перезапуск', (bot._test.state().strikes[G + ':U1'] || []).length === 1);
 
   bot.stop();

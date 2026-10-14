@@ -1,8 +1,7 @@
 // ============ DISCORD: правила сервера и лестница наказаний ============
-// Один источник и для текста в #rules, и для автомодерации: номер правила
-// в уведомлении игроку совпадает с тем, что он читает в #rules, а таблица
-// наказаний в канале собирается из тех же чисел, по которым бот действует.
-// Текст — по-английски, как и весь сайт.
+// Правила в #rules владелец пишет сам — здесь те же 12 правил в том же
+// порядке: по ним бот называет игроку номер и название нарушенного
+// правила («rule 2, No spam»). Поменялся порядок в #rules — поменять и тут.
 'use strict';
 
 const MIN = 60 * 1000, HOUR = 60 * MIN, DAY = 24 * HOUR;
@@ -91,41 +90,10 @@ function describe(p) {
 
 const strikes = n => n + (n === 1 ? ' strike' : ' strikes');
 
-function ladderLines() {
-  return LADDER.map((s, i) => {
-    const next = LADDER[i + 1];
-    const range = next && next.at - s.at > 1 ? s.at + ' to ' + (next.at - 1) + ' strikes' : strikes(s.at);
-    return '**' + range + '** - ' + describe(s);
-  });
-}
-
 // цвета полосы слева у сообщений бота: без эмодзи, но с понятным оттенком
 const COLORS = { neutral: 0x99A1AE, warn: 0xE0A100, mute: 0xE67E22, ban: 0xE04141, ok: 0x3BA55D };
 
-/* Сообщение для #rules: три карточки — вступление, правила и как работает
-   модерация. Всё вместе укладывается в лимит Discord (6000 знаков). */
-function rulesMessage() {
-  return {
-    allowed_mentions: { parse: [] },
-    embeds: [
-      { color: COLORS.neutral, title: 'AIBROFIST Server Rules',
-        description: 'Welcome to the AIBROFIST community. These rules keep the server friendly and safe ' +
-                     'for everyone. By chatting here you agree to follow them.' },
-      { color: COLORS.neutral,
-        description: RULES.map(r => '**' + r.id + '. ' + r.title + '**\n' + r.text).join('\n\n') },
-      { color: COLORS.neutral, title: 'How moderation works',
-        description: 'The bot checks messages for spam, slurs, advertising, adult content, scams and ' +
-          'harmful files, removes the ones that break the rules and gives strikes. A normal break gives ' +
-          '1 strike, slurs, adult content and other people\'s personal data give 2, scams and harmful ' +
-          'links give 3. Strikes expire after 30 days. The punishment depends on your active strikes:\n\n' +
-          ladderLines().join('\n') +
-          '\n\nModerators can also give strikes for anything the bot cannot see. If you think the bot ' +
-          'made a mistake, message a moderator: they can remove strikes and lift a mute.' }
-    ]
-  };
-}
-
 module.exports = {
   RULES, ruleById, LADDER, STRIKE_TTL, punishmentFor, describe, duration, strikes,
-  ladderLines, rulesMessage, COLORS, MIN, HOUR, DAY
+  COLORS, MIN, HOUR, DAY
 };

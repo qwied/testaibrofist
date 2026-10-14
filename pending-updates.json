@@ -3,7 +3,7 @@
   "updates": [
     {
       "title": "Discord bot",
-      "text": "Our Discord server now has its own bot. It posts every game update in the updates channel, keeps the server rules in the rules channel and removes spam, scams, adult content and insults automatically. Breaking the rules first gives a warning, then short mutes; bans are only for repeated serious cases."
+      "text": "Our Discord server now has its own bot. It posts every game update in the updates channel and removes spam, scams, adult content and insults automatically. Breaking the rules first gives a warning, then short mutes; bans are only for repeated serious cases."
     }
   ]
 }
