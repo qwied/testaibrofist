@@ -5,11 +5,11 @@
 <title>AIBrofist — Race</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Race in AIBrofist: be the first to reach the finish.">
-<link rel="stylesheet" href="ui.css?v=168">
+<link rel="stylesheet" href="ui.css?v=169">
 <script src="offline.js?v=2"></script>
-<script src="theme.js?v=168"></script>
-<script src="device.js?v=168"></script>
-<script src="sound.js?v=168"></script>
+<script src="theme.js?v=169"></script>
+<script src="device.js?v=169"></script>
+<script src="sound.js?v=169"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -29,7 +29,7 @@
   border-radius:50%;background:var(--blue)}
 .mdPlay{display:inline-flex;align-items:center;justify-content:center;gap:10px;
   min-width:220px;padding:16px 30px;border:none;border-radius:14px;cursor:pointer;
-  font-size:19px;font-weight:800;letter-spacing:.4px;color:#fff;text-transform:uppercase;
+  font-size:19px;font-weight:800;letter-spacing:.4px;color:var(--on-brand,#fff);text-transform:uppercase;
   background:var(--bf-grad,var(--blue));box-shadow:0 12px 26px -12px rgba(17,24,39,.5)}
 .mdPlay:hover{filter:brightness(.95)}
 .mdPlay:active{transform:translateY(1px)}
@@ -40,7 +40,7 @@
 .mdStoryBtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
   padding:12px 22px;border-radius:12px;border:2px solid var(--blue);
   color:var(--blue);text-decoration:none;font-weight:700;font-size:15px}
-.mdStoryBtn:hover{background:var(--blue);color:#fff}
+.mdStoryBtn:hover{background:var(--blue);color:var(--on-brand,#fff)}
 .mdStoryHint{margin-top:8px;font-size:13px;color:var(--muted)}
 .rlTitle{font-size:13px;color:var(--muted);margin:14px 0 6px;font-weight:600;
   text-transform:uppercase;letter-spacing:.4px}
@@ -104,15 +104,15 @@
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=168">
-<script src="i18n.js?v=168"></script>
-<script src="coin.js?v=168"></script>
-<script src="skinRender.js?v=168"></script>
-<script src="skinAvatar.js?v=168" defer></script>
-<script src="shell.js?v=168"></script>
-<script src="abuseShow.js?v=168" defer></script>
-<script src="account.js?v=168" defer></script>
-<script src="roomList.js?v=168"></script>
+<link rel="stylesheet" href="mobile.css?v=169">
+<script src="i18n.js?v=169"></script>
+<script src="coin.js?v=169"></script>
+<script src="skinRender.js?v=169"></script>
+<script src="skinAvatar.js?v=169" defer></script>
+<script src="shell.js?v=169"></script>
+<script src="abuseShow.js?v=169" defer></script>
+<script src="account.js?v=169" defer></script>
+<script src="roomList.js?v=169"></script>
 <script>
 document.getElementById('mdPlay').onclick = function () {
   location.href = 'game?mode=race';

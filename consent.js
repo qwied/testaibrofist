@@ -38,7 +38,7 @@
     + '#bfConsentBox button{flex:1 1 180px;min-height:46px;padding:12px 18px;border-radius:11px;'
     + 'font-size:15px;font-weight:600;cursor:pointer;border:1px solid var(--line,#e5e7eb);'
     + 'background:var(--panel,#fff);color:var(--ink,#111827)}'
-    + '#bfConsentBox button.go{background:var(--bf-grad,var(--blue,#111827));color:#fff;border-color:transparent}'
+    + '#bfConsentBox button.go{background:var(--bf-grad,var(--blue,#111827));color:var(--on-brand,#fff);border-color:transparent}'
     + '#bfConsentBox button.go:hover{filter:brightness(.95)}'
     + '#bfConsentBox button.no:hover{background:#f1f3f7}'
     + '@media(max-width:520px){#bfConsentBox{padding:18px 16px 16px}#bfConsentBox h2{font-size:19px}}';

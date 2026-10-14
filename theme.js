@@ -98,8 +98,9 @@
     raised: '#262b35',   // то, что лежит поверх: списки, поля
     line:   '#333a46',
     ink:    '#e7eaf0',
-    muted:  '#98a1b0',
-    head:   '#1a1e26'
+    muted:  '#a3acba',
+    head:   '#1a1e26',
+    accent: '#eef1f5'    // акцент: почти белый, подписи на нём тёмные
   };
 
   /* Кнопка должна отличаться от подложки, иначе её просто не видно.
@@ -168,6 +169,13 @@
 
     var onA, onB, onC, onD;
 
+    /* Тёмная тема монохромная, как и светлая: там акцент чёрный, тут
+       почти белый, а фон, карточки и рамки — нейтральные серые. Цвета
+       палитры сюда не подмешиваем: из серого базового цвета fitOn()
+       делал «грязно-розовый» акцент (у серого оттенок 0° — красный),
+       а подкраска фона и рамок им же давала бурые плашки. */
+    if (dark) { c = 1; A = B = C = D = DARK.accent; }
+
     /* Фон страницы. Раньше подмешивалось 5% цвета — на глаз это почти
        белый лист. Теперь заметный оттенок, а при нескольких цветах —
        мягкий переход между ними по диагонали. Больше 22% не берём:
@@ -175,7 +183,7 @@
     var tint = dark
       ? function (col, k) { return mix(DARK.bg, col, k * 0.55); }
       : function (col, k) { return mix('#ffffff', col, k); };
-    var pageBg = dark ? mix(DARK.bg, A, 0.07) : tint(A, 0.17);
+    var pageBg = dark ? DARK.bg : tint(A, 0.17);
 
     // подгоняем акценты под получившуюся подложку
     A = fitOn(A, pageBg); B = fitOn(B, pageBg);
@@ -190,17 +198,21 @@
       ? 'linear-gradient(90deg,' + [A, B, C, D].slice(0, c).join(',') + ')'
       : A;
 
-    var pageImg = c > 1
+    var pageImg = dark
+      ? 'linear-gradient(160deg,' + DARK.bg2 + ' 0%,' + DARK.bg + ' 100%)'
+      : c > 1
       ? 'linear-gradient(160deg,' + tint(A, 0.20) + ' 0%,' +
         (c > 2 ? tint(B, 0.16) + ' 45%,' + tint(C, 0.20) : tint(B, 0.20)) + ' 100%)'
       : 'linear-gradient(160deg,' + tint(A, 0.22) + ' 0%,' + tint(A, 0.09) + ' 100%)';
 
-    var cardBg  = dark ? mix(DARK.panel,  C, 0.05) : tint(C, 0.05);
-    var panelBg = dark ? mix(DARK.panel,  C, 0.03) : tint(C, 0.03);
-    var raised  = dark ? mix(DARK.raised, C, 0.05) : '#ffffff';
+    var cardBg  = dark ? DARK.panel  : tint(C, 0.05);
+    var panelBg = dark ? DARK.panel  : tint(C, 0.03);
+    var raised  = dark ? DARK.raised : '#ffffff';
     var ink     = dark ? DARK.ink   : p.ink;
     var muted   = dark ? DARK.muted : p.muted;
-    var line    = dark ? mix(DARK.line, C, 0.14) : mix('#e5e7eb', C, 0.3);
+    var line    = dark ? DARK.line  : mix('#e5e7eb', C, 0.3);
+    // рамка карточек: в тёмной теме светлая рамка смотрелась белой обводкой
+    var cardLine = dark ? DARK.line : mix('#e5e7eb', C, 0.42);
 
     return [
       ':root{',
@@ -208,7 +220,7 @@
       '--brand-2:', B, ';--brand-3:', C, ';--brand-4:', D, ';',
       '--on-brand:', onA, ';',
       '--ink:', ink, ';--muted:', muted, ';--line:', line, ';',
-      '--soft:', dark ? mix(DARK.raised, C, 0.06) : mix('#ffffff', C, 0.07), ';',
+      '--soft:', dark ? DARK.raised : mix('#ffffff', C, 0.07), ';',
       '--panel:', raised, ';',
       '--bf-grad:', grad, ';',
       /* обычные (не залитые цветом) кнопки на тёмном фоне светлеют
@@ -252,8 +264,8 @@
          именно по этой причине (.msThreads/.msPane уже покрыты ниже,
          в блоке dark ? [...]). */
       '.bfCard,.mbRow,.sbCard,.upRow,.upSkin,.thSet,.mdArt,.qCard{',
-      'background:', cardBg, ';border-color:', mix('#e5e7eb', C, 0.42), '}',
-      '.bfPanel{background:', panelBg, ';border-color:', mix('#e5e7eb', C, 0.42), '}',
+      'background:', cardBg, ';border-color:', cardLine, '}',
+      '.bfPanel{background:', panelBg, ';border-color:', cardLine, '}',
       '.ow-box{background:', raised, ';color:', ink, ';border-color:', line, '}',
       '.ow-i,.ow-bar input,.ow-sk input{background:', dark ? DARK.bg : '#fff', ';color:', ink, ';',
       'border-color:', line, '}',
@@ -261,7 +273,7 @@
       /* Подложки под фигурками оставляем светлыми: это картинки игры,
          и на цветном фоне персонаж читался бы хуже. */
       '.seStage,.avStage,.sbArt,.avArt,.upSkin .art{background:#eef3f9}',
-      '.bfHint{color:', p.muted, '}',
+      '.bfHint{color:', muted, '}',
 
       /* --- выделения и вкладки: четвёртый цвет --- */
       '.bfChip.on{background:', D, ';border-color:transparent;color:', onD, '}',
@@ -271,8 +283,8 @@
       '.bfLangItem.on,.thSet.on{border-color:', D, '}',
       '.bfLangItem.on{background:', D, ';color:', onD, '}',
       '.bfPager button{border-color:', D, ';color:', D, '}',
-      '.mbRate.up{color:', mix(C, '#15803d', 0.4), '}',
-      '.bfCoin{color:', mix(A, '#7a5c00', 0.45), '}',
+      '.mbRate.up{color:', dark ? '#4ade80' : mix(C, '#15803d', 0.4), '}',
+      '.bfCoin{color:', dark ? '#f5c518' : mix(A, '#7a5c00', 0.45), '}',
 
       /* --- поля ввода --- */
       '.bfInput,.bfSelect,textarea{background:', raised, ';color:', ink, ';',
@@ -284,7 +296,7 @@
       '.bfDrop{border-color:', line, ';background:', raised, ';color:', ink, '}',
       '.bfDropName{color:', muted, '}',
       '.bfLangItem{border-color:', line, ';color:', ink, '}',
-      '.bfLangItem:hover{background:', mix('#ffffff', B, 0.14), '}',
+      '.bfLangItem:hover{background:', dark ? 'rgba(255,255,255,.09)' : mix('#ffffff', B, 0.14), '}',
 
       /* --- редактор и панель владельца --- */
       '.tool.on,.modeBtn.on,.sBtn.on{background:', grad, ' !important;color:', onA, ' !important}',
@@ -323,7 +335,30 @@
         '.msHead{border-color:', line, '}',
         '.msSend{border-color:', line, '}',
         '.msSend input{background:', DARK.bg, ';color:', ink, ';border-color:', line, '}',
-        '.msAddBtn{background:', raised, '}',
+        '.msAddBtn,.mbCommentForm button{background:', raised, '}',
+        /* таблица лидеров: вкладки, разделители строк и подсказка были
+           заданы в разметке светлыми — в тёмной теме это белые плашки
+           с серым текстом и белые полосы между строками */
+        '.lbTab{background:', raised, ';color:', muted, ';border-color:', line, '}',
+        '.lbTab:hover{color:', ink, '}',
+        '.lbTab.on{background:', A, ';color:', onA, ';border-color:', A, '}',
+        '.lbRow{border-bottom-color:', line, '}',
+        '.mine{border-color:', line, ';color:', muted, '}',
+        '.empty,.lbPageLabel{color:', muted, '}',
+        '#bfConsentBox button.no:hover{background:', DARK.panel, '}',
+        /* окно настроек (account.js): выбранный вариант был почти чёрным
+           на тёмной панели — теперь, как и везде, светлым. Стиль окна
+           вставляется позже темы, поэтому здесь селекторы с html впереди. */
+        'html .bf-b{border-color:', line, '}',
+        'html .bf-b:hover,html .bf-opt.on{background:', A, ';border-color:', A, ';color:', onA, '}',
+        'html .bf-opt:hover{border-color:', ink, '}',
+        'html .bf-x,html .bf-e{color:#f87171}',
+        'html #bfLogoutAll{color:#f87171 !important;border-color:#f87171 !important}',
+        'html #bfLogoutAll:hover{background:rgba(248,113,113,.12)}',
+        /* страница Avatar: цена на светлой кнопке и подложка под фигуркой —
+           чёрный персонаж на тёмном окне был почти не виден */
+        '.avPrice{color:', onA, ';background:rgba(17,24,39,.10)}',
+        '.avSkinBox{background:#eef3f9}',
         'input,select,textarea{color-scheme:dark}',
         /* редактор: панели и холст */
         ':root{--panel:', DARK.panel, ';--ink:', ink, ';--line:', line, ';--muted:', muted, '}',

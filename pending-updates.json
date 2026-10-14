@@ -16,6 +16,14 @@
     {
       "title": "Faster movement",
       "text": "The player now runs and jumps 1.2 times faster. Jump height and distance stay the same, so every map plays as before, just quicker."
+    },
+    {
+      "title": "Clearer dark theme",
+      "text": "The dark theme is now a plain dark grey look with white text, and selected buttons are white so you can always see what is picked. Light pills and white lines on the Leaderboard, pink-tinted buttons and hard to read text in Settings and on the Avatar page are fixed."
+    },
+    {
+      "title": "Clearer layer buttons in the editor",
+      "text": "The Order buttons in the map editor are now called Send to back and Bring to front, show a short tip on hover and explain under them what they do: which object is drawn on top where objects overlap, and which platform moves you when two overlap."
     }
   ]
 }

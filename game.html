@@ -131,9 +131,10 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
   width:24px;height:24px;line-height:1;cursor:pointer;font-size:14px;flex:0 0 auto;padding:0}
 .pClearBtn:hover{background:#ef4444;color:#fff;border-color:#ef4444}
 .zBtns{display:flex;gap:5px;margin-top:5px}
-.zBtns div{flex:1;text-align:center;padding:6px 0;border:1px solid var(--line);border-radius:7px;
+.zBtns div{flex:1;text-align:center;padding:6px 3px;border:1px solid var(--line);border-radius:7px;
   font-size:11px;cursor:pointer;background:#fafbfd}
 .zBtns div:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.zBtns div.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 /* Связи кликом: уже выбранные цели — чипами, добавление — одной кнопкой вместо ручного ввода ID */
 .lnkChips{display:flex;flex-wrap:wrap;gap:5px}
 .lnkEmpty{font-size:11px;color:var(--muted)}
@@ -253,15 +254,15 @@ body.mob #msg h1{font-size:38px}
 body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="offline.js?v=2"></script>
-<script src="device.js?v=168"></script>
-        <script src="sound.js?v=168"></script>
-        <script src="skinRender.js?v=168"></script>
-        <script src="skinCanvas.js?v=168"></script>
-        <script src="gifuct.bundle.js?v=168"></script>
-        <script src="gifPlayer.js?v=168"></script>
-        <script src="coin.js?v=168"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=168">
-        <script src="theme.js?v=168"></script>
+<script src="device.js?v=169"></script>
+        <script src="sound.js?v=169"></script>
+        <script src="skinRender.js?v=169"></script>
+        <script src="skinCanvas.js?v=169"></script>
+        <script src="gifuct.bundle.js?v=169"></script>
+        <script src="gifPlayer.js?v=169"></script>
+        <script src="coin.js?v=169"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=169">
+        <script src="theme.js?v=169"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -3519,14 +3520,23 @@ function inspect(){
 
   grp(TR("grpOrder","Порядок"));
   var z = document.createElement("div"); z.className = "zBtns";
-  z.innerHTML = "<div data-z='b'>" + TR("zBack","На зад") + "</div><div data-z='f'>" + TR("zFront","Вперёд") + "</div>";
+  z.innerHTML = "<div data-z='b' title='" + TR("zBackTip","Убрать объект под все остальные") + "'>" + TR("zBack","На задний план") + "</div>" +
+                "<div data-z='f' title='" + TR("zFrontTip","Поставить объект поверх всех остальных") + "'>" + TR("zFront","На передний план") + "</div>";
   z.addEventListener("click", function(e){
     var b = e.target.closest("[data-z]"); if(!b) return;
     commit();
     objects = objects.filter(function(o){ return o !== sel; });
     b.dataset.z === "f" ? objects.push(sel) : objects.unshift(sel);
+    // короткая подсветка: без неё на карте без наложений нажатие
+    // выглядело так, будто ничего не произошло
+    b.classList.add("on"); setTimeout(function(){ b.classList.remove("on"); }, 450);
   });
   props.appendChild(z);
+  // что вообще делают эти кнопки — раньше было непонятно
+  var zh = document.createElement("div"); zh.className = "pHelp"; zh.style.cursor = "default";
+  var zhb = document.createElement("div"); zhb.className = "pHelpBody"; zhb.style.display = "block";
+  zhb.textContent = TR("zHint","Какой объект рисуется сверху, когда объекты накладываются друг на друга. Если игрок стоит там, где наложены две платформы, его ведёт верхняя (например, полоса ускорения поверх пола).");
+  zh.appendChild(zhb); props.appendChild(zh);
 
   /* ---------- вкладка «Функции»: что объект умеет и с чем связан ---------- */
   inspTarget = widgetsEl;
@@ -3982,8 +3992,8 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=168"></script>
-        <script src="i18n.js?v=168"></script>
-        <script src="skinAvatar.js?v=168" defer></script>
+<script src="game.js?v=169"></script>
+        <script src="i18n.js?v=169"></script>
+        <script src="skinAvatar.js?v=169" defer></script>
 </body>
 </html>

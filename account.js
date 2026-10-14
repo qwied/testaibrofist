@@ -261,7 +261,7 @@
 
     open('<div class="bf-x">X</div>'
        + '<div class="bf-t">' + T('settings', 'Настройки') + '</div>'
-       + '<div style="text-align:center;font-size:13px;color:#6b7280;margin-bottom:4px">' + name + '</div>'
+       + '<div style="text-align:center;font-size:13px;color:var(--muted,#6b7280);margin-bottom:4px">' + name + '</div>'
        + '<div class="bf-b" id="bfProfile">' + T('viewProfile', 'Мой профиль') + '</div>'
        + '<div class="bf-b ghost2" id="bfLogoutAll" style="border-color:#dc2626;color:#dc2626">'
        +   T('logoutAll', 'Выйти на всех устройствах') + '</div>'

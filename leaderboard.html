@@ -4,11 +4,11 @@
         <title>AIBrofist — Leaderboards</title>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-        <link rel="stylesheet" type="text/css" href="style.css?v=168">
+        <link rel="stylesheet" type="text/css" href="style.css?v=169">
         <script src="offline.js?v=2"></script>
-<script src="device.js?v=168"></script>
-        <script src="sound.js?v=168"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=168">
+<script src="device.js?v=169"></script>
+        <script src="sound.js?v=169"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=169">
         <style>
                 /* Обёртка страницы обычно .bfWrap, 1080px, как у остальных
                    разделов — но на этой странице теперь до двух колонок
@@ -48,7 +48,7 @@
                    сайте (см. svg() в shell.js), а не голая цветная плашка. */
                 .lbScoreBadge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px 3px 8px;
                         border-radius:16px;font-size:10.5px;
-                        font-weight:700;color:#fff;background:var(--blue);text-transform:uppercase;letter-spacing:.02em}
+                        font-weight:700;color:var(--on-brand,#fff);background:var(--blue);text-transform:uppercase;letter-spacing:.02em}
                 .lbScoreBadge svg{width:10px;height:10px;flex:none}
                 /* Ранг навыка рядом с именем — только в режимных таблицах:
                    монеты о мастерстве ничего не говорят (см. /getLeaderboard).
@@ -65,7 +65,7 @@
                 .lbRank.big{min-width:46px;padding:5px 12px;font-size:13.5px;border-radius:9px}
                 .lbRank.big[data-r="Declassified"]{font-size:10.5px}
                 .lbRank[data-r="S"]{color:var(--panel);background:var(--ink);border-color:var(--ink)}
-                .lbRank[data-r="A+"],.lbRank[data-r="A"]{color:#fff;background:var(--blue);border-color:var(--blue)}
+                .lbRank[data-r="A+"],.lbRank[data-r="A"]{color:var(--on-brand,#fff);background:var(--blue);border-color:var(--blue)}
                 .lbRank[data-r="B+"],.lbRank[data-r="B"]{color:var(--blue);background:transparent;border-color:var(--blue)}
                 .lbRank[data-r="Declassified"]{color:var(--muted);background:transparent;border-color:var(--line);
                         font-size:9.5px;font-weight:700}
@@ -76,7 +76,7 @@
                 .lbTabs{display:flex;gap:7px;margin-bottom:10px;flex-wrap:wrap}
                 .lbTab{padding:7px 15px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;
                         color:#5b6570;background:#f0f3f7;border:1px solid transparent;user-select:none}
-                .lbTab.on{color:#fff;background:var(--blue);border-color:var(--blue)}
+                .lbTab.on{color:var(--on-brand,#fff);background:var(--blue);border-color:var(--blue)}
                 .lbPeriodTabs{margin-bottom:20px}
 
                 .lbPager{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px}
@@ -88,8 +88,8 @@
                 @media (pointer:coarse){ .lbArrow{width:44px;height:44px} }
                 .lbPageLabel{color:#8b93a1;font-size:13px;min-width:40px;text-align:center}
         </style>
-        <link rel="stylesheet" href="ui.css?v=168">
-        <script src="theme.js?v=168"></script>
+        <link rel="stylesheet" href="ui.css?v=169">
+        <script src="theme.js?v=169"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -148,7 +148,7 @@
         </div>
 </div>
 
-<script src="account.js?v=168" defer></script>
+<script src="account.js?v=169" defer></script>
 <script>
 (function () {
         var listEl = document.getElementById('lbList');
@@ -321,12 +321,12 @@
         setInterval(function () { load(); loadRanks(); }, 15000);
 })();
 </script>
-        <script src="i18n.js?v=168"></script>
-        <script src="owner.js?v=168" defer></script>
-        <script src="coin.js?v=168"></script>
-        <script src="skinRender.js?v=168"></script>
-        <script src="skinAvatar.js?v=168" defer></script>
-        <script src="shell.js?v=168"></script>
-<script src="abuseShow.js?v=168" defer></script>
+        <script src="i18n.js?v=169"></script>
+        <script src="owner.js?v=169" defer></script>
+        <script src="coin.js?v=169"></script>
+        <script src="skinRender.js?v=169"></script>
+        <script src="skinAvatar.js?v=169" defer></script>
+        <script src="shell.js?v=169"></script>
+<script src="abuseShow.js?v=169" defer></script>
 </body>
 </html>

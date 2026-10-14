@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <title>AIBrofist — Story Mode</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=168">
+<link rel="stylesheet" href="ui.css?v=169">
 <script src="offline.js?v=2"></script>
-<script src="theme.js?v=168"></script>
-<script src="device.js?v=168"></script>
-<script src="sound.js?v=168"></script>
+<script src="theme.js?v=169"></script>
+<script src="device.js?v=169"></script>
+<script src="sound.js?v=169"></script>
 <style>
 .stForm{display:flex;flex-direction:column;gap:14px;max-width:520px}
 .stField label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:5px}
@@ -19,7 +19,7 @@
 .stMap{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;
   border-radius:8px;cursor:pointer;font-size:13.5px}
 .stMap:hover{background:var(--soft)}
-.stMap.on{background:var(--blue);color:#fff}
+.stMap.on{background:var(--blue);color:var(--on-brand,#fff)}
 .stMap .a{color:var(--muted);font-size:12px}
 .stMap.on .a{color:#dbeafe}
 /* Режим больше не задаётся страницей, с которой пришли, — его задаёт
@@ -30,7 +30,7 @@
 .stFilter{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
 .stFilter button{border:1px solid var(--line);background:var(--panel);color:var(--ink);
   border-radius:999px;padding:6px 13px;font-size:12.5px;cursor:pointer}
-.stFilter button.on{border-color:var(--blue);background:var(--blue);color:#fff;font-weight:700}
+.stFilter button.on{border-color:var(--blue);background:var(--blue);color:var(--on-brand,#fff);font-weight:700}
 .stPager{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13px;color:var(--muted)}
 .stPager button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:4px 10px;cursor:pointer}
 .stPager button:disabled{opacity:.4;cursor:default}
@@ -106,15 +106,15 @@
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=168">
-<script src="i18n.js?v=168"></script>
-<script src="coin.js?v=168"></script>
-<script src="skinRender.js?v=168"></script>
-<script src="skinAvatar.js?v=168" defer></script>
-<script src="shell.js?v=168"></script>
-<script src="abuseShow.js?v=168" defer></script>
-<script src="account.js?v=168" defer></script>
-<script src="owner.js?v=168" defer></script>
+<link rel="stylesheet" href="mobile.css?v=169">
+<script src="i18n.js?v=169"></script>
+<script src="coin.js?v=169"></script>
+<script src="skinRender.js?v=169"></script>
+<script src="skinAvatar.js?v=169" defer></script>
+<script src="shell.js?v=169"></script>
+<script src="abuseShow.js?v=169" defer></script>
+<script src="account.js?v=169" defer></script>
+<script src="owner.js?v=169" defer></script>
 <script>
 (function () {
   'use strict';

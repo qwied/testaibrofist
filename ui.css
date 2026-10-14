@@ -68,14 +68,14 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
    мельче .85 её мелкие детали (глаза, лапки) смазываются */
 .bfSocial svg{opacity:1}
 .bfNavItem:hover{background:var(--sb-hover)}
-.bfNavItem.on{background:var(--blue);color:#fff}
+.bfNavItem.on{background:var(--blue);color:var(--on-brand,#fff)}
 /* Красный кружок с числом у пункта меню: непрочитанные сообщения и новые
    карты друзей (см. shell.js). Он всегда есть в разметке и включается
    классом, поэтому появление счётчика не двигает сам пункт. */
 .bfNavDot{display:none;margin-left:auto;flex:0 0 auto;min-width:18px;height:18px;padding:0 5px;
   border-radius:9px;background:#ef4444;color:#fff;font:700 11px/18px sans-serif;text-align:center}
 .bfNavDot.on{display:block}
-.bfNavItem.on .bfNavDot{background:#fff;color:var(--blue)}
+.bfNavItem.on .bfNavDot{background:var(--on-brand,#fff);color:var(--blue)}
 .bfNavItem.on svg{opacity:1}
 .bfDailyCard{display:flex;align-items:center;gap:10px;margin:12px 2px;padding:10px 11px;
   border-radius:11px;background:var(--sb-bg2);text-decoration:none;color:var(--sb-ink)}
@@ -148,10 +148,10 @@ body.bfHasSidebar{padding-left:var(--sbw)}
 .bfPanel{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:14px}
 .bfBtn{display:block;width:100%;font-size:16px;padding:12px 0;border-radius:10px;
   border:1px solid var(--blue);background:var(--panel);color:var(--blue);cursor:pointer;margin-bottom:9px}
-.bfBtn:hover{background:var(--blue);color:#fff}
+.bfBtn:hover{background:var(--blue);color:var(--on-brand,#fff)}
 .bfBtn.ghost{border-color:#cfd6de;color:var(--muted)}
 .bfBtn.ghost:hover{background:var(--hover);color:var(--ink)}
-.bfBtn.go{background:var(--blue);color:#fff}
+.bfBtn.go{background:var(--blue);color:var(--on-brand,#fff)}
 .bfBtn.go:hover{background:#0d7fd4}
 .bfInput,.bfSelect{width:100%;font-size:15px;padding:11px 12px;border:1px solid #cfd6de;
   border-radius:10px;background:var(--panel);color:var(--ink);margin-bottom:9px}
@@ -167,7 +167,7 @@ body.bfHasSidebar{padding-left:var(--sbw)}
 .bfCardMeta{font-size:12px;color:var(--muted);margin-bottom:6px}
 .bfMini{font-size:13px;padding:8px 0;border-radius:8px;border:1px solid var(--blue);
   background:var(--panel);color:var(--blue);cursor:pointer;width:100%}
-.bfMini:hover{background:var(--blue);color:#fff}
+.bfMini:hover{background:var(--blue);color:var(--on-brand,#fff)}
 .bfMini.own{border-color:var(--green);color:var(--green)}
 .bfMini.own:hover{background:var(--green);color:#fff}
 .bfMini[disabled]{border-color:#cbd5e1;color:#94a3b8;background:#f8fafc;cursor:default}
@@ -176,7 +176,7 @@ body.bfHasSidebar{padding-left:var(--sbw)}
 .bfChips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
 .bfChip{border:1px solid #d7dee6;border-radius:22px;padding:8px 16px;cursor:pointer;
   font-size:14px;background:var(--panel);white-space:nowrap}
-.bfChip.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.bfChip.on{background:var(--blue);border-color:var(--blue);color:var(--on-brand,#fff)}
 
 /* ---------- вкладки ---------- */
 .bfTabs{display:flex;border-bottom:1px solid var(--line);margin-bottom:14px;overflow-x:auto;
