@@ -45,6 +45,7 @@ const MOD_ROLE = '200';
 const calls = [];
 let msgId = 5000, rateLimitedOnce = false, rejectNewModal = false;
 const known = new Set();
+const denied = new Set();            // каналы, куда боту писать нельзя (403)
 const server = http.createServer((req, res) => {
   let body = '';
   req.on('data', c => { body += c; });
@@ -62,6 +63,7 @@ const server = http.createServer((req, res) => {
       return send(200, { fine: true });
     }
     if (req.method === 'POST' && (m = /^\/channels\/(\w+)\/messages$/.exec(p))) {
+      if (denied.has(m[1])) return send(403, { code: 50013, message: 'Missing Permissions' });
       const id = String(++msgId); known.add(id);
       calls[calls.length - 1].resId = id;
       return send(200, { id, channel_id: m[1] });
@@ -528,6 +530,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     { id: today + '-1', date: today, title: 'Discord bot 🎉', text: '- First line\n- Second line' }]));
   const logged = [];
   t = Date.now();
+  denied.add(CH.updates);              // в #updates боту пока писать нельзя
   feed.start({ onLogChange: fn => { hook = fn; }, removeAutoLogs: () => 0, addAutoLog: (src, title) => { logged.push(src + '|' + title); } });
   await waitFor(() => logged.length);
   await sleep(200);
@@ -536,11 +539,15 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      logged[0] === 'upd:' + today + '-1|Discord bot', logged.join());
   ok('и в Discord, и в Logs — без эмодзи', fresh[0] && fresh[0].body.embeds[0].title === 'Discord bot');
   ok('новости, вышедшие до появления бота, не публикуются', !JSON.stringify(fresh).includes('Old news'));
+  const err = feed.status().lastError;
+  ok('нет прав в #updates — это видно на странице состояния', err && err.channel === CH.updates && err.status === 403, err);
+  denied.delete(CH.updates);           // права выдали
   t = Date.now();
   hook('add', { id: 77, title: 'New maps', text: '- Two new race maps\n- Faster loading', images: [{ u: '/logimg/a.png' }], date: Date.now() });
   await waitFor(() => find(since(t), 'POST', /^\/channels\/(302|306)\/messages$/).length >= 2);
   const sent = find(since(t), 'POST', /^\/channels\/(302|306)\/messages$/);
   ok('запись Logs ушла во все каналы новостей (#updates и выбранный командой)', sent.length === 2);
+  ok('права выдали — старая ошибка со страницы состояния ушла', feed.status().lastError === null, feed.status().lastError);
   const e = sent[0] && sent[0].body.embeds[0];
   ok('карточка: заголовок, список, ссылка на Logs, картинка, дата', e && e.title === 'New maps' && /^- Two/.test(e.description) &&
      /\/logs$/.test(e.url) && /\/logimg\/a\.png$/.test(e.image.url) && e.timestamp && e.footer.text === 'AIBROFIST');

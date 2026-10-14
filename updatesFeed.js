@@ -129,7 +129,12 @@ async function postEverywhere(key, u) {
   const sent = [];
   for (const channel of await channels()) {
     const r = await api('POST', '/channels/' + channel + '/messages', card(u));
-    if (ok(r) && r.body) { sent.push({ c: channel, m: r.body.id }); continue; }
+    if (ok(r) && r.body) {
+      sent.push({ c: channel, m: r.body.id });
+      // права выдали — прошлая ошибка этого канала больше не актуальна
+      if (lastError && lastError.channel === channel) lastError = null;
+      continue;
+    }
     lastError = { channel, status: r.status, at: Date.now() };
     if (r.status === 403)
       console.log('[updates] боту нельзя писать в канал ' + channel + ' — разрешите ему отправку сообщений и ссылок');
