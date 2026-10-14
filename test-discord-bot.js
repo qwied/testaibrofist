@@ -5,7 +5,10 @@
    - автомодерация: удаляет нарушения, наказывает по лестнице, пишет игроку
      в личку и в mod-log, не трогает модераторов и разрешённые каналы;
    - за волну флуда — одно наказание, а не по штрафу за каждое сообщение;
-   - команды /warnings, /warn, /post, /updates, права на них;
+   - командами пользуется только владелец сервера: /warnings, /warn, /post,
+     /updates, /relay;
+   - что владелец пишет боту в личку, бот публикует в канале от своего
+     имени (с картинкой), правку и удаление повторяет; чужую личку не трогает;
    - новости и записи Logs уходят во все выбранные каналы, правка и удаление
      повторяются в Discord;
    - после обрыва продолжает сессию (resume), после перезапуска ничего не
@@ -42,9 +45,11 @@ const server = http.createServer((req, res) => {
     const p = req.url.replace(/^\/api\/v10/, '');
     let json = null;
     try { json = body ? JSON.parse(body) : null; } catch (e) {}
-    calls.push({ method: req.method, path: p, body: json, reason: req.headers['x-audit-log-reason'], t: Date.now() });
+    calls.push({ method: req.method, path: p, body: json, raw: body, ct: req.headers['content-type'] || '',
+                 reason: req.headers['x-audit-log-reason'], t: Date.now() });
     const send = (status, obj) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(obj === undefined ? '' : JSON.stringify(obj)); };
     let m;
+    if (p === '/cdn/pic.png') { res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(Buffer.from('PNGDATA')); }
     if (p === '/ratelimit') {
       if (!rateLimitedOnce) { rateLimitedOnce = true; return send(429, { retry_after: 0.08, global: false }); }
       return send(200, { fine: true });
@@ -125,7 +130,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   Object.assign(process.env, {
     DISCORD_BOT_TOKEN: 'test-token', DISCORD_API_BASE: 'http://127.0.0.1:' + port + '/api/v10',
     DISCORD_GATEWAY_URL: 'ws://127.0.0.1:' + port + '/gw', DISCORD_BOT_STATE: path.join(tmp, 'bot.json'),
-    UPDATES_FEED_STATE: path.join(tmp, 'feed.json'), DISCORD_SCAN_IMAGES: '0'
+    UPDATES_FEED_STATE: path.join(tmp, 'feed.json'), DISCORD_SCAN_IMAGES: '0', DISCORD_TEST_CDN: '127.0.0.1:' + port
   });
   delete process.env.DISCORD_UPDATES_CHANNEL_ID; delete process.env.DISCORD_RULES_CHANNEL_ID; delete process.env.DISCORD_MODLOG_CHANNEL_ID;
   const { api } = require('./discordApi.js');
@@ -140,12 +145,12 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   let t = Date.now();
   bot.start();
   const ident = await waitFor(() => gwLog.find(m => m.op === 2));
-  ok('входит с intents: серверы, сообщения, их текст, события AutoMod', ident && ident.d.intents === (1 | 512 | 32768 | 2097152), ident && ident.d.intents);
+  ok('входит с intents: серверы, сообщения, личка, их текст, события AutoMod', ident && ident.d.intents === (1 | 512 | 4096 | 32768 | 2097152), ident && ident.d.intents);
   ok('токен — из DISCORD_BOT_TOKEN', ident && ident.d.token === 'test-token');
   await waitFor(() => find(calls, 'POST', /auto-moderation\/rules$/).length >= 3);
   const cmds = find(calls, 'PUT', /^\/applications\/700\/guilds\/100\/commands$/);
-  ok('регистрирует 9 команд на сервере', cmds.length === 1 && cmds[0].body.length === 9, cmds[0] && cmds[0].body.map(c => c.name).join(','));
-  ok('команды скрыты от обычных игроков (нужны права)', cmds[0] && cmds[0].body.every(c => c.default_member_permissions));
+  ok('регистрирует 10 команд на сервере', cmds.length === 1 && cmds[0].body.length === 10, cmds[0] && cmds[0].body.map(c => c.name).join(','));
+  ok('команды скрыты ото всех, кроме владельца и администраторов', cmds[0] && cmds[0].body.every(c => c.default_member_permissions === '0'));
   const rules = find(calls, 'POST', /^\/channels\/301\/messages$/);
   ok('правила выложены в #rules: 3 карточки, без упоминаний', rules.length === 1 && rules[0].body.embeds.length === 3 &&
      rules[0].body.allowed_mentions.parse.length === 0);
@@ -251,21 +256,28 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   console.log('\nкоманды:');
   t = Date.now();
   dispatch('INTERACTION_CREATE', { id: 'i1', token: 'tok1', type: 2, guild_id: G, channel_id: CH.general,
-    member: { user: { id: 'M1' }, permissions: String(1n << 40n) },
+    member: { user: { id: OWNER }, permissions: String(1n << 3n) },
     data: { name: 'warnings', options: [{ name: 'user', type: 6, value: 'U1' }], resolved: { users: { U1: { id: 'U1' } } } } });
   await waitFor(() => find(since(t), 'PATCH', /@original$/).length);
   c = since(t);
-  ok('/warnings: сначала «думаю», потом список баллов только для модератора', find(c, 'POST', /i1\/tok1\/callback$/)[0].body.type === 5 &&
+  ok('/warnings: сначала «думаю», потом список баллов (видит только владелец)', find(c, 'POST', /i1\/tok1\/callback$/)[0].body.type === 5 &&
      /rule 1/.test(JSON.stringify(find(c, 'PATCH', /@original$/)[0].body)));
   t = Date.now();
   dispatch('INTERACTION_CREATE', { id: 'i2', token: 'tok2', type: 2, guild_id: G, channel_id: CH.general,
     member: { user: { id: 'U0' }, permissions: '1024' },
     data: { name: 'warn', options: [{ name: 'user', type: 6, value: 'U2' }], resolved: { users: { U2: { id: 'U2' } } } } });
   await waitFor(() => find(since(t), 'POST', /i2\/tok2\/callback$/).length);
-  ok('без прав команда отказывает', /permission/.test(JSON.stringify(find(since(t), 'POST', /i2\/tok2\/callback$/)[0].body)));
+  ok('игроку команда отказывает', /Only the server owner/.test(JSON.stringify(find(since(t), 'POST', /i2\/tok2\/callback$/)[0].body)));
+  t = Date.now();
+  dispatch('INTERACTION_CREATE', { id: 'i2b', token: 'tok2b', type: 2, guild_id: G, channel_id: CH.general,
+    member: { user: { id: 'M1' }, permissions: String((1n << 40n) | (1n << 3n)) },
+    data: { name: 'warn', options: [{ name: 'user', type: 6, value: 'U2' }], resolved: { users: { U2: { id: 'U2' } } } } });
+  await waitFor(() => find(since(t), 'POST', /i2b\/tok2b\/callback$/).length);
+  ok('модератору и администратору — тоже, только владельцу', /Only the server owner/.test(JSON.stringify(find(since(t), 'POST', /i2b\/tok2b\/callback$/)[0].body)) &&
+     find(since(t), 'PATCH', /members\/U2$/).length === 0);
   t = Date.now();
   dispatch('INTERACTION_CREATE', { id: 'i3', token: 'tok3', type: 2, guild_id: G, channel_id: CH.general,
-    member: { user: { id: 'M1' }, permissions: String(1n << 40n) },
+    member: { user: { id: OWNER }, permissions: String(1n << 3n) },
     data: { name: 'warn', options: [{ name: 'user', type: 6, value: 'U2' }, { name: 'rule', type: 4, value: 7 }],
             resolved: { users: { U2: { id: 'U2' } }, members: { U2: { roles: [] } } } } });
   await waitFor(() => find(since(t), 'PATCH', /@original$/).length);
@@ -273,7 +285,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      /2 strikes/.test(JSON.stringify(find(since(t), 'PATCH', /@original$/)[0].body)));
   t = Date.now();
   dispatch('INTERACTION_CREATE', { id: 'i3b', token: 'tok3b', type: 2, guild_id: G, channel_id: CH.general,
-    member: { user: { id: 'M1' }, permissions: String(1n << 40n) },
+    member: { user: { id: OWNER }, permissions: String(1n << 3n) },
     data: { name: 'warn', options: [{ name: 'user', type: 6, value: 'U3' }],
             resolved: { users: { U3: { id: 'U3' } }, members: { U3: { roles: [], communication_disabled_until: new Date(Date.now() + 7 * 86400000).toISOString() } } } } });
   await waitFor(() => find(since(t), 'PATCH', /tok3b\/messages\/@original$/).length);
@@ -299,6 +311,61 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     data: { name: 'updates', options: [{ name: 'add', type: 1, options: [{ name: 'channel', type: 7, value: CH.news2 }] }] } });
   await waitFor(() => find(since(t), 'PATCH', /@original$/).length);
   ok('/updates add: канал для новостей запомнен', bot.feedChannels().indexOf(CH.news2) !== -1);
+
+  console.log('\nсообщения от имени бота (личка владельца):');
+  let dmId = 900000;
+  const dmMsg2 = (uid, content, extra) => {
+    const m = Object.assign({ id: String(++dmId), channel_id: 'dm' + uid, type: 0, content, author: { id: uid, username: 'u' + uid },
+                              attachments: [], mentions: [], mention_roles: [] }, extra || {});
+    dispatch('MESSAGE_CREATE', m);
+    return m;
+  };
+  const dmReplies = list => find(list, 'POST', new RegExp('^/channels/dm' + OWNER + '/messages$'));
+  t = Date.now();
+  dmMsg2(OWNER, 'Hello everyone, new maps today!');
+  await waitFor(() => dmReplies(since(t)).length);
+  let rel = find(since(t), 'POST', /^\/channels\/300\/messages$/)[0];
+  ok('без выбора канала — в #general, обычным сообщением бота', rel && rel.body.content === 'Hello everyone, new maps today!' && !rel.body.embeds);
+  ok('владельцу в личку — короткое «опубликовано»', /^Posted in <#300>\.$/.test(dmReplies(since(t))[0].body.content));
+  t = Date.now();
+  const big = dmMsg2(OWNER, '#news Big tournament @everyone, ask @Moderator, rules in #rules');
+  await waitFor(() => dmReplies(since(t)).length);
+  rel = find(since(t), 'POST', /^\/channels\/306\/messages$/)[0];
+  ok('«#канал» в начале — публикует туда', !!rel);
+  ok('#канал и @роль в тексте становятся ссылкой и упоминанием, @everyone работает',
+     rel && rel.body.content === 'Big tournament @everyone, ask <@&' + MOD_ROLE + '>, rules in <#' + CH.rules + '>' &&
+     rel.body.allowed_mentions.parse.indexOf('everyone') !== -1, rel && rel.body.content);
+  const bigRel = rel && rel.resId;
+  t = Date.now();
+  dmMsg2(OWNER, 'second message', { attachments: [{ id: 'a1', filename: 'pic.png', size: 7, content_type: 'image/png',
+    url: 'http://127.0.0.1:' + port + '/cdn/pic.png' }] });
+  await waitFor(() => dmReplies(since(t)).length);
+  rel = find(since(t), 'POST', /^\/channels\/306\/messages$/)[0];
+  ok('следующее сообщение — в тот же канал, с картинкой (загружена заново)', rel && /multipart\/form-data/.test(rel.ct) &&
+     /filename="pic\.png"/.test(rel.raw) && /PNGDATA/.test(rel.raw) && /second message/.test(rel.raw));
+  t = Date.now();
+  dispatch('MESSAGE_UPDATE', { id: big.id, channel_id: 'dm' + OWNER, content: '#news Big tournament on Friday',
+    author: { id: OWNER }, edited_timestamp: new Date().toISOString(), attachments: [] });
+  await waitFor(() => find(since(t), 'PATCH', new RegExp('^/channels/306/messages/' + bigRel + '$')).length);
+  rel = find(since(t), 'PATCH', new RegExp('^/channels/306/messages/' + bigRel + '$'))[0];
+  ok('правка в личке — правится и в канале', rel && rel.body.content === 'Big tournament on Friday');
+  t = Date.now();
+  dispatch('MESSAGE_DELETE', { id: big.id, channel_id: 'dm' + OWNER });
+  await waitFor(() => find(since(t), 'DELETE', new RegExp('^/channels/306/messages/' + bigRel + '$')).length);
+  ok('удаление в личке — удаляется и в канале', find(since(t), 'DELETE', new RegExp('^/channels/306/messages/' + bigRel + '$')).length === 1);
+  t = Date.now();
+  dmMsg2('U1', 'post this please @everyone');
+  await sleep(300);
+  ok('личка не от владельца — ничего не публикует и не отвечает', since(t).length === 0);
+  t = Date.now();
+  dmMsg2(OWNER, '#nochannel hi');
+  await waitFor(() => dmReplies(since(t)).length);
+  ok('нет такого канала — говорит об этом и ничего не публикует', /cannot find the channel #nochannel/.test(dmReplies(since(t))[0].body.content) &&
+     find(since(t), 'POST', /^\/channels\/3\d\d\/messages$/).length === 0);
+  t = Date.now();
+  dmMsg2(OWNER, 'help');
+  await waitFor(() => dmReplies(since(t)).length);
+  ok('«help» — короткая инструкция', /#channel-name/.test(dmReplies(since(t))[0].body.content));
 
   console.log('\nновости и Logs в Discord:');
   process.env.DISCORD_UPDATES_CHANNEL_ID = CH.updates;
@@ -336,7 +403,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bot._test.reload();
   bot.start();
   const ident2 = await waitFor(() => gwLog.slice(before).filter(m => m.op === 2).length >= 2 && gwLog.slice(before).filter(m => m.op === 2)[1], 8000);
-  ok('без Message Content Intent переподключается без него', ident2 && ident2.d.intents === (1 | 512 | 2097152), ident2 && ident2.d.intents);
+  ok('без Message Content Intent переподключается без него', ident2 && ident2.d.intents === (1 | 512 | 4096 | 2097152), ident2 && ident2.d.intents);
   await sleep(800);
   c = since(t);
   ok('после перезапуска ничего не постит заново (правила, команды, AutoMod)',

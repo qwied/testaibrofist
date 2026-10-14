@@ -28,16 +28,34 @@ let globalUntil = 0;
 
 const sleep = ms => new Promise(ok => setTimeout(ok, ms));
 
+/* Сообщение с файлами — multipart/form-data: JSON сообщения в поле
+   payload_json и сами файлы в files[0], files[1], ... */
+function multipart(body, files) {
+  const boundary = 'aibrofist' + Date.now().toString(16) + Math.random().toString(16).slice(2);
+  const parts = [];
+  const head = (name, extra) => Buffer.from('--' + boundary + '\r\nContent-Disposition: form-data; name="' + name + '"' + extra + '\r\n');
+  parts.push(head('payload_json', ''), Buffer.from('Content-Type: application/json\r\n\r\n' + JSON.stringify(body) + '\r\n'));
+  files.forEach((f, i) => {
+    const name = String(f.name || 'file').replace(/["\r\n]/g, '_');
+    parts.push(head('files[' + i + ']', '; filename="' + name + '"'),
+               Buffer.from('Content-Type: ' + (f.type || 'application/octet-stream') + '\r\n\r\n'), f.data, Buffer.from('\r\n'));
+  });
+  parts.push(Buffer.from('--' + boundary + '--\r\n'));
+  return { data: Buffer.concat(parts), type: 'multipart/form-data; boundary=' + boundary };
+}
+
 function raw(method, p, body, opts) {
   return new Promise((resolve, reject) => {
     const url = new URL(BASE + p);
-    const data = body === undefined || body === null ? null : JSON.stringify(body);
+    let data = null, type = 'application/json';
+    if (opts && opts.files && opts.files.length) ({ data, type } = multipart(body || {}, opts.files));
+    else if (body !== undefined && body !== null) data = JSON.stringify(body);
     const headers = {
       'Authorization': 'Bot ' + token(),
       'User-Agent': 'DiscordBot (' + SITE + ', 2.0)'
     };
     if (data !== null) {
-      headers['Content-Type'] = 'application/json';
+      headers['Content-Type'] = type;
       headers['Content-Length'] = Buffer.byteLength(data);
     }
     // причина действия видна модераторам в журнале аудита сервера
@@ -62,7 +80,9 @@ function raw(method, p, body, opts) {
 }
 
 /* Запрос к API. Возвращает { status, body } и не бросает исключений на
-   ответы Discord — только на обрыв сети. До трёх повторов при 429. */
+   ответы Discord — только на обрыв сети. До трёх повторов при 429.
+   opts.reason — причина для журнала аудита, opts.files — файлы
+   ({ name, data: Buffer, type }) к сообщению. */
 async function api(method, p, body, opts) {
   const key = routeKey(method, p);
   for (let attempt = 0; attempt < 4; attempt++) {

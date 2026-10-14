@@ -10,9 +10,12 @@
 //     отправить оскорбления и спам упоминаниями вовсе;
 //   - пишет игроку в личку, за что и как он наказан, а модераторам — в
 //     канал mod-log (если он есть);
-//   - команды для владельца и модераторов: /post (сообщение в любой
-//     канал), /updates (в какие каналы идут новости), /rules, /modlog,
-//     /warn, /mute, /unmute, /warnings, /pardon.
+//   - команды — только для владельца сервера: /post (сообщение в любой
+//     канал), /updates (в какие каналы идут новости), /relay, /rules,
+//     /modlog, /warn, /mute, /unmute, /warnings, /pardon;
+//   - пишет от своего имени то, что владелец прислал ему в личку: в канал
+//     по умолчанию или в «#канал» в начале сообщения, с картинками;
+//     правка и удаление сообщения в личке повторяются в канале.
 // Новости в #updates публикует updatesFeed.js — каналы для них берёт отсюда.
 // Состояние — data/discordBot.json.
 'use strict';
@@ -29,8 +32,10 @@ const { atomicWriteFileSync } = require('./fsAtomic.js');
 const STATE_FILE = process.env.DISCORD_BOT_STATE || path.join(__dirname, 'data', 'discordBot.json');
 const SCAN_IMAGES = process.env.DISCORD_SCAN_IMAGES !== '0';
 
-const INTENT = { GUILDS: 1, GUILD_MESSAGES: 1 << 9, MESSAGE_CONTENT: 1 << 15, AUTOMOD_EXECUTION: 1 << 21 };
-const ALL_INTENTS = INTENT.GUILDS | INTENT.GUILD_MESSAGES | INTENT.MESSAGE_CONTENT | INTENT.AUTOMOD_EXECUTION;
+const INTENT = { GUILDS: 1, GUILD_MESSAGES: 1 << 9, DIRECT_MESSAGES: 1 << 12, MESSAGE_CONTENT: 1 << 15,
+                 AUTOMOD_EXECUTION: 1 << 21 };
+const ALL_INTENTS = INTENT.GUILDS | INTENT.GUILD_MESSAGES | INTENT.DIRECT_MESSAGES | INTENT.MESSAGE_CONTENT |
+                    INTENT.AUTOMOD_EXECUTION;
 
 const PERM = { KICK: 1n << 1n, BAN: 1n << 2n, ADMIN: 1n << 3n, MANAGE_GUILD: 1n << 5n,
                MANAGE_MESSAGES: 1n << 13n, MODERATE: 1n << 40n };
@@ -40,7 +45,8 @@ const STAFF = PERM.ADMIN | PERM.MANAGE_GUILD | PERM.MANAGE_MESSAGES | PERM.MODER
 const COOLDOWN = 30 * 1000;      // за одну волну спама — одно наказание, а не восемь
 const NOTICE_MS = 10 * 1000;     // короткое предупреждение в канале исчезает само
 
-let state = { feed: [], guilds: {}, strikes: {}, cases: 0 };
+// relay — куда идут сообщения владельца из лички; relayed — что во что переслано
+let state = { feed: [], guilds: {}, strikes: {}, cases: 0, relay: {}, relayed: {} };
 let loaded = false, saveTimer = null;
 const guilds = new Map();        // id -> { id, name, owner, roles: Map, channels: Map }
 const setupDone = new Set();
@@ -64,7 +70,9 @@ function loadState() {
       feed: Array.isArray(s.feed) ? s.feed.filter(x => /^\d+$/.test(x)) : [],
       guilds: s.guilds && typeof s.guilds === 'object' ? s.guilds : {},
       strikes: s.strikes && typeof s.strikes === 'object' ? s.strikes : {},
-      cases: Number(s.cases) || 0
+      cases: Number(s.cases) || 0,
+      relay: s.relay && typeof s.relay === 'object' ? s.relay : {},
+      relayed: s.relayed && typeof s.relayed === 'object' ? s.relayed : {}
     };
   } catch (e) { /* первый запуск */ }
 }
@@ -314,12 +322,14 @@ const imgQueue = [];
 let imgBusy = false;
 const IMG_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif' };
 const CDN = /^(?:cdn\.discordapp\.com|media\.discordapp\.net)$/;
+const TEST_CDN = String(process.env.DISCORD_TEST_CDN || '');      // только тесты: свой сервер вместо CDN
 
 function download(url, limit) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
-    if (u.protocol !== 'https:' || !CDN.test(u.hostname)) return reject(new Error('not a Discord CDN url'));
-    const req = https.get(u, { family: 4, timeout: 15000 }, res => {
+    const test = TEST_CDN && u.protocol === 'http:' && u.host === TEST_CDN;
+    if (!test && (u.protocol !== 'https:' || !CDN.test(u.hostname))) return reject(new Error('not a Discord CDN url'));
+    const req = (test ? require('http') : https).get(u, { family: 4, timeout: 15000 }, res => {
       if (res.statusCode !== 200) { res.resume(); return reject(new Error('status ' + res.statusCode)); }
       const chunks = []; let size = 0;
       res.on('data', c => { size += c.length; if (size > limit) req.destroy(new Error('too big')); else chunks.push(c); });
@@ -371,7 +381,8 @@ async function pumpImages() {
 
 /* ---------- сообщения ---------- */
 async function onMessage(m, edited) {
-  if (!m || !m.guild_id || !m.author || m.author.bot || m.webhook_id) return;
+  if (!m || !m.author || m.author.bot || m.webhook_id) return;
+  if (!m.guild_id) return onDirect(m, edited);
   if (m.type !== undefined && m.type !== 0 && m.type !== 19) return;   // обычное сообщение и ответ
   if (edited && !(m.member && m.member.roles)) return;   // без ролей не отличить модератора
   const g = guilds.get(m.guild_id);
@@ -423,6 +434,116 @@ async function onAutomodExecution(d) {
   if (last && now - last.t < COOLDOWN && last.weight >= f.weight) return;
   lastHit.set(hk, { t: now, weight: f.weight });
   await punish(g, { id: d.user_id }, f, { channel: d.channel_id, excerpt: d.content, silent: true });
+}
+
+/* ---------- сообщения от имени бота ----------
+   Владелец пишет боту в личку — бот публикует это в канале как своё
+   сообщение. Куда: «#канал» в начале сообщения (запоминается для
+   следующих), иначе канал из /relay, иначе #general/#chat. В тексте
+   «#имя-канала» и «@роль» превращаются в настоящие ссылку и упоминание;
+   @everyone и @here работают. Картинки и файлы из лички переносятся.
+   Чужие сообщения в личку бот не пересылает и на них не отвечает. */
+const RELAY_HELP = 'Send me a message and I will post it as the bot. Start it with #channel-name to choose ' +
+  'the channel (it is remembered for the next messages). Files and images are posted too. Edit or delete your ' +
+  'message here and I will do the same in the channel.';
+
+function ownedGuilds(uid) { return [...guilds.values()].filter(g => g.owner === uid); }
+
+const textChannels = g => [...g.channels.values()].filter(c => c.type === 0 || c.type === 5);
+function channelByName(list, name) {
+  name = String(name || '').toLowerCase();
+  for (const g of list) {
+    const c = textChannels(g).find(c => c.name.toLowerCase() === name || c.id === name);
+    if (c) return { g, c };
+  }
+  return null;
+}
+
+// «#news» -> <#id>, «@Players» -> <@&id>; чего на сервере нет — остаётся текстом
+function linkify(g, text) {
+  return text
+    .replace(/(^|[^<\w])#([\w-]{1,100})/g, (all, pre, name) => {
+      const c = textChannels(g).find(c => c.name.toLowerCase() === name.toLowerCase());
+      return c ? pre + '<#' + c.id + '>' : all;
+    })
+    .replace(/(^|[^<\w])@([\w-]{1,100})/g, (all, pre, name) => {
+      if (/^(everyone|here)$/i.test(name)) return all;
+      const r = [...g.roles.entries()].find(([id, r]) => id !== g.id && r.name.toLowerCase() === name.toLowerCase());
+      return r ? pre + '<@&' + r[0] + '>' : all;
+    });
+}
+
+async function dmReply(m, text) {
+  await api('POST', '/channels/' + m.channel_id + '/messages',
+            { content: text, allowed_mentions: { parse: [] }, message_reference: { message_id: m.id, fail_if_not_exists: false } });
+}
+
+async function onDirect(m, edited) {
+  const mine = ownedGuilds(m.author.id);
+  if (!mine.length) return;                                // не владелец — молчим
+  let text = String(m.content || '');
+
+  if (edited) {
+    const done = state.relayed[m.id];
+    if (!done) return;
+    const g = guilds.get(done.g);
+    await api('PATCH', '/channels/' + done.c + '/messages/' + done.m, { content: linkify(g || mine[0], text.replace(/^\s*(?:<#(\d+)>|#([\w-]+))\s*/, '')) });
+    return;
+  }
+  if (/^\s*(help|помощь|\?)\s*$/i.test(text)) return dmReply(m, RELAY_HELP);
+
+  // куда: «#канал» или <#id> в начале
+  let target = null;
+  const head = /^\s*(?:<#(\d+)>|#([\w-]+))\s*/.exec(text);
+  if (head) {
+    target = channelByName(mine, head[1] || head[2]);
+    if (!target) return dmReply(m, 'I cannot find the channel #' + (head[2] || head[1]) + '.');
+    text = text.slice(head[0].length);
+    state.relay[m.author.id] = target.c.id;
+    save();
+  } else {
+    const saved = state.relay[m.author.id] || String(process.env.DISCORD_RELAY_CHANNEL_ID || '').trim();
+    target = saved ? channelByName(mine, saved) : null;
+    if (!target) {
+      for (const g of mine) {
+        const id = findChannel(g, /^(?:[^a-zа-я]*)(?:general|chat|main|общий|основной|чат)$/i);
+        if (id) { target = { g, c: g.channels.get(id) }; break; }
+      }
+    }
+    if (!target) return dmReply(m, 'Where should I post it? Start your message with #channel-name.');
+  }
+
+  // файлы из лички: ссылки на них временные, поэтому загружаем заново
+  const files = [], skipped = [];
+  for (const a of (m.attachments || []).slice(0, 10)) {
+    if ((a.size || 0) > 10 * 1024 * 1024) { skipped.push(a.filename); continue; }
+    try {
+      const f = await download(a.url, 10 * 1024 * 1024);
+      files.push({ name: a.filename || 'file', data: f.buf, type: a.content_type || f.type });
+    } catch (e) { skipped.push(a.filename); }
+  }
+  text = linkify(target.g, text.trim()).slice(0, 2000);
+  if (!text && !files.length) {
+    return dmReply(m, 'Next messages go to <#' + target.c.id + '>.');
+  }
+  const body = { content: text || undefined, allowed_mentions: { parse: ['users', 'roles', 'everyone'] } };
+  const r = await api('POST', '/channels/' + target.c.id + '/messages', body, files.length ? { files } : undefined);
+  if (!ok(r) || !r.body) {
+    return dmReply(m, 'Could not post in <#' + target.c.id + '> (error ' + r.status + '). Check that I can send messages there.');
+  }
+  state.relayed[m.id] = { g: target.g.id, c: target.c.id, m: r.body.id };
+  const keys = Object.keys(state.relayed);
+  if (keys.length > 300) keys.slice(0, keys.length - 300).forEach(k => { delete state.relayed[k]; });
+  save();
+  await dmReply(m, 'Posted in <#' + target.c.id + '>.' + (skipped.length ? ' Not attached (too big or unavailable): ' + skipped.join(', ') + '.' : ''));
+}
+
+async function onDirectDelete(d) {
+  const done = state.relayed[d.id];
+  if (!done) return;
+  await api('DELETE', '/channels/' + done.c + '/messages/' + done.m);
+  delete state.relayed[d.id];
+  save();
 }
 
 /* ---------- правила в #rules ---------- */
@@ -490,43 +611,47 @@ async function ensureNativeAutomod(g) {
 }
 
 /* ---------- команды ---------- */
-const P_ADMIN = String(PERM.MANAGE_GUILD), P_MOD = String(PERM.MODERATE);
+/* Командами пользуется только владелец сервера. «0» прячет их от всех,
+   кроме администраторов, а остальное проверяет сам бот (ownerOnly). */
+const OWNER_ONLY = '0';
 const USER = (desc) => ({ type: 6, name: 'user', description: desc, required: true });
 const DURATIONS = [['10 minutes', 10 * R.MIN], ['1 hour', R.HOUR], ['6 hours', 6 * R.HOUR],
                    ['1 day', R.DAY], ['3 days', 3 * R.DAY], ['7 days', 7 * R.DAY]];
 
 function commandDefs() {
   return [
-    { name: 'post', description: 'Post a formatted message to any channel', default_member_permissions: P_ADMIN,
+    { name: 'post', description: 'Post a formatted message to any channel', default_member_permissions: OWNER_ONLY,
       options: [{ type: 7, name: 'channel', description: 'Where to post', required: true, channel_types: [0, 5] },
                 { type: 3, name: 'style', description: 'Card (default) or plain text', required: false,
                   choices: [{ name: 'card', value: 'embed' }, { name: 'plain text', value: 'plain' }] }] },
-    { name: 'updates', description: 'Choose the channels that receive game updates', default_member_permissions: P_ADMIN,
+    { name: 'updates', description: 'Choose the channels that receive game updates', default_member_permissions: OWNER_ONLY,
       options: [
         { type: 1, name: 'add', description: 'Post game updates in this channel too',
           options: [{ type: 7, name: 'channel', description: 'Channel', required: true, channel_types: [0, 5] }] },
         { type: 1, name: 'remove', description: 'Stop posting game updates in this channel',
           options: [{ type: 7, name: 'channel', description: 'Channel', required: true, channel_types: [0, 5] }] },
         { type: 1, name: 'list', description: 'Show the channels that receive game updates' }] },
-    { name: 'rules', description: 'Post or refresh the server rules', default_member_permissions: P_ADMIN,
+    { name: 'relay', description: 'Choose where the messages you send me in DMs are posted', default_member_permissions: OWNER_ONLY,
+      options: [{ type: 7, name: 'channel', description: 'Channel', required: true, channel_types: [0, 5] }] },
+    { name: 'rules', description: 'Post or refresh the server rules', default_member_permissions: OWNER_ONLY,
       options: [{ type: 7, name: 'channel', description: 'Rules channel (default: #rules)', required: false, channel_types: [0, 5] }] },
-    { name: 'modlog', description: 'Set the channel for moderation logs, or turn them off', default_member_permissions: P_ADMIN,
+    { name: 'modlog', description: 'Set the channel for moderation logs, or turn them off', default_member_permissions: OWNER_ONLY,
       options: [{ type: 7, name: 'channel', description: 'Leave empty to turn logs off', required: false, channel_types: [0, 5] }] },
-    { name: 'warn', description: 'Give a member a strike', default_member_permissions: P_MOD,
+    { name: 'warn', description: 'Give a member a strike', default_member_permissions: OWNER_ONLY,
       options: [USER('Member to warn'),
                 { type: 4, name: 'rule', description: 'Broken rule', required: false,
                   choices: R.RULES.map(r => ({ name: r.id + '. ' + r.title, value: r.id })) },
                 { type: 3, name: 'reason', description: 'Reason the member will see', required: false, max_length: 300 }] },
-    { name: 'mute', description: 'Mute a member for a while', default_member_permissions: P_MOD,
+    { name: 'mute', description: 'Mute a member for a while', default_member_permissions: OWNER_ONLY,
       options: [USER('Member to mute'),
                 { type: 3, name: 'duration', description: 'How long', required: true,
                   choices: DURATIONS.map(([n]) => ({ name: n, value: n })) },
                 { type: 3, name: 'reason', description: 'Reason the member will see', required: false, max_length: 300 }] },
-    { name: 'unmute', description: 'Lift a mute', default_member_permissions: P_MOD,
+    { name: 'unmute', description: 'Lift a mute', default_member_permissions: OWNER_ONLY,
       options: [USER('Member to unmute')] },
-    { name: 'warnings', description: 'Show the active strikes of a member', default_member_permissions: P_MOD,
+    { name: 'warnings', description: 'Show the active strikes of a member', default_member_permissions: OWNER_ONLY,
       options: [USER('Member')] },
-    { name: 'pardon', description: 'Remove all strikes of a member', default_member_permissions: P_MOD,
+    { name: 'pardon', description: 'Remove all strikes of a member', default_member_permissions: OWNER_ONLY,
       options: [USER('Member')] }
   ];
 }
@@ -552,13 +677,11 @@ async function onInteraction(i) {
   if (!i || !i.guild_id) return;
   const g = guilds.get(i.guild_id);
   if (!g) return;
-  const perms = BigInt((i.member && i.member.permissions) || '0');
-  if (i.type === 5) return onModal(i, g, perms);
+  const mod = i.member && i.member.user && i.member.user.id;
+  if (mod !== g.owner) return reply(i, card('Only the server owner can use this bot.'));
+  if (i.type === 5) return onModal(i, g);
   if (i.type !== 2 || !i.data) return;
   const name = i.data.name, o = i.data.options || [];
-  const need = ['post', 'updates', 'rules', 'modlog'].indexOf(name) !== -1 ? PERM.MANAGE_GUILD : PERM.MODERATE;
-  if (!(perms & PERM.ADMIN) && !(perms & need)) return reply(i, card('You do not have permission to use this command.'));
-  const mod = i.member.user.id;
   const resolvedUser = id => (i.data.resolved && i.data.resolved.users && i.data.resolved.users[id]) || { id };
 
   if (name === 'post') {
@@ -590,6 +713,13 @@ async function onInteraction(i) {
                : 'Could not post the rules (error ' + r.code + '). Check that I can send messages and embeds there.';
     return finish(i, card(text));
   }
+  if (name === 'relay') {
+    const channel = opt(o, 'channel');
+    state.relay[mod] = channel;
+    save();
+    return finish(i, card('Messages you send me in DMs will be posted in <#' + channel + '>. ' +
+                          'Start a message with #channel-name to post somewhere else.'));
+  }
   if (name === 'modlog') {
     const channel = opt(o, 'channel');
     gstate(g.id).modlog = channel || '';
@@ -614,8 +744,9 @@ async function onInteraction(i) {
     await modlog(g, { caseNo, title: 'Strikes removed', color: R.COLORS.ok, user: target.id, by: mod });
     return finish(i, card('All strikes of <@' + target.id + '> are removed.'));
   }
-  if (targetMember && memberPerms(g, target.id, targetMember.roles) & STAFF)
-    return finish(i, card('Moderators cannot be punished with bot commands.'));
+  // Discord не даёт мьютить администраторов, а себя владелец наказывать не станет
+  if (target.id === g.owner || (targetMember && memberPerms(g, target.id, targetMember.roles) & PERM.ADMIN))
+    return finish(i, card('Administrators cannot be punished.'));
   if (target.id === (me && me.id)) return finish(i, card('That is me.'));
 
   if (name === 'warn') {
@@ -649,11 +780,10 @@ async function onInteraction(i) {
   }
 }
 
-async function onModal(i, g, perms) {
+async function onModal(i, g) {
   const id = String(i.data && i.data.custom_id || '');
   const m = /^post:(\d+):(embed|plain)$/.exec(id);
   if (!m) return;
-  if (!(perms & PERM.ADMIN) && !(perms & PERM.MANAGE_GUILD)) return reply(i, card('You do not have permission to post.'));
   const values = {};
   (i.data.components || []).forEach(row => (row.components || []).forEach(c => { values[c.custom_id] = String(c.value || ''); }));
   const title = (values.title || '').trim(), text = (values.text || '').trim();
@@ -703,6 +833,7 @@ function onDispatch(t, d) {
     // правка сообщения проверяется так же: иначе нарушение дописали бы позже
     // (без edited_timestamp это Discord дорисовал превью ссылки, а не правка)
     case 'MESSAGE_UPDATE': if (typeof d.content === 'string' && d.author && d.edited_timestamp) onMessage(d, true).catch(() => {}); break;
+    case 'MESSAGE_DELETE': if (!d.guild_id) onDirectDelete(d).catch(() => {}); break;
     case 'AUTO_MODERATION_ACTION_EXECUTION': onAutomodExecution(d).catch(e => log('automod event failed:', e.message)); break;
     case 'INTERACTION_CREATE': onInteraction(d).catch(e => log('command failed:', e.message)); break;
   }
