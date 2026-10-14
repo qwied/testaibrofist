@@ -1,9 +1,4 @@
 {
-  "base": "f212584264d1ccf2c05e7d1b4c0d15b06f9f3975",
-  "updates": [
-    {
-      "title": "Discord bot",
-      "text": "Our Discord server now has its own bot. It posts every game update in the updates channel and removes spam, scams, adult content and insults automatically. Breaking the rules first gives a warning, then short mutes; bans are only for repeated serious cases."
-    }
-  ]
+  "base": "c331a40f18b4f5217679d1813a1c0a16a410557f",
+  "updates": []
 }
