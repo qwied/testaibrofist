@@ -330,6 +330,8 @@ app.use('/abusefile', express.static(require('./abuse.js').FILE_DIR,
 require('./extras.js').register(app, accounts);
 // новые записи updates.json -> лента Logs и канал #updates в Discord
 require('./updatesFeed.js').start(require('./extras.js'));
+// бот Discord: правила в #rules, автомодерация и команды (только с DISCORD_BOT_TOKEN)
+require('./discordBot.js').start();
 require('./dailyRewards.js').register(app, accounts);
 require('./quests.js').register(app, accounts);
 require('./story.js').register(app, accounts);

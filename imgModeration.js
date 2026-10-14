@@ -225,10 +225,8 @@ function scanGoreHeuristic(width, height, data) {
   return ratio > RED_RATIO_LIMIT ? { reason: 'red', ratio } : null;
 }
 
-/** RGBA-буфер -> вердикт нейросети или null. Кидает исключение, если модель
- *  недоступна (см. getModel) — вызывающий код должен в этом случае ОТКАЗАТЬ
- *  публикации, а не пропустить её без проверки (отказываем безопасно). */
-async function classifyFrame(width, height, data) {
+// RGBA-буфер -> вероятности классов нейросети ({Porn, Hentai, Sexy, ...})
+async function scoreFrame(width, height, data) {
   const model = await getModel();
   const total = width * height;
   const rgb = new Int32Array(total * 3);
@@ -242,6 +240,14 @@ async function classifyFrame(width, height, data) {
   finally { tensor.dispose(); }
   const byClass = {};
   predictions.forEach((p) => { byClass[p.className] = p.probability; });
+  return byClass;
+}
+
+/** RGBA-буфер -> вердикт нейросети или null. Кидает исключение, если модель
+ *  недоступна (см. getModel) — вызывающий код должен в этом случае ОТКАЗАТЬ
+ *  публикации, а не пропустить её без проверки (отказываем безопасно). */
+async function classifyFrame(width, height, data) {
+  const byClass = await scoreFrame(width, height, data);
   const porn = byClass.Porn || 0, hentai = byClass.Hentai || 0, sexy = byClass.Sexy || 0;
   if (porn > NSFW_PORN_LIMIT || hentai > NSFW_HENTAI_LIMIT || sexy > NSFW_SEXY_LIMIT ||
       (porn + hentai + sexy * 0.5) > NSFW_COMBINED_LIMIT)
@@ -265,7 +271,19 @@ async function scanForBlockedContent(decoded) {
   return null;
 }
 
+/** Наибольшие вероятности классов нейросети по всем кадрам — без
+ *  эвристики крови и без порогов скинов: для картинок в Discord пороги
+ *  свои (см. discordBot.js), а красный кадр из игры там не нарушение. */
+async function nsfwScores(decoded) {
+  const top = {};
+  for (const data of (decoded && decoded.frames) || []) {
+    const c = await scoreFrame(decoded.width, decoded.height, data);
+    Object.keys(c).forEach((k) => { top[k] = Math.max(top[k] || 0, c[k]); });
+  }
+  return top;
+}
+
 module.exports = {
-  decodeImage, scanForBlockedContent, getModel,
+  decodeImage, scanForBlockedContent, getModel, nsfwScores,
   MIN_DIM, MAX_DIM, MAX_GIF_DIM, MAX_GIF_FRAMES
 };

@@ -125,6 +125,16 @@ function addAutoLog(src, title, text, date) {
   return entry;
 }
 
+/* Подписка на изменения ленты, которые владелец делает в игре (добавил,
+   исправил, удалил запись), — по ней бот повторяет их в Discord
+   (см. updatesFeed.js). Добавление и правку сообщаем уже после перевода на
+   английский, чтобы в Discord ушёл готовый текст. */
+const logWatchers = [];
+function onLogChange(fn) { logWatchers.push(fn); }
+function logChanged(type, entry) {
+  logWatchers.forEach(fn => { try { fn(type, entry); } catch (e) { /* подписчик не должен ронять ленту */ } });
+}
+
 /* Убрать из ленты все новости из updates.json (метка src «upd:…»): они
    выходят в Logs только вместе с постом бота в Discord, а пока бота нет,
    лента от них должна быть пустой (см. updatesFeed.js). */
@@ -382,7 +392,8 @@ function register(app, acc) {
     save();
     res.json({ status: 'success', images: images.length });
     // перевод на английский — уже после ответа, чтобы публикация не ждала сеть
-    translateToEnglish(title, text).then(r => { entry.title = r.title; entry.text = r.text; save(); }).catch(() => {});
+    translateToEnglish(title, text).then(r => { entry.title = r.title; entry.text = r.text; save(); })
+      .catch(() => {}).then(() => logChanged('add', entry));
   });
 
   /* Правка уже выложенной новости: можно дописать текст и добавить или
@@ -401,7 +412,8 @@ function register(app, acc) {
     save();
     dropImages(was.filter(i => !images.some(n => n.u === i.u)));   // отцепленные файлы убираем
     res.json({ status: 'success' });
-    translateToEnglish(title, text).then(r => { l.title = r.title; l.text = r.text; save(); }).catch(() => {});
+    translateToEnglish(title, text).then(r => { l.title = r.title; l.text = r.text; save(); })
+      .catch(() => {}).then(() => logChanged('edit', l));
   });
 
   app.post('/deleteLog', (req, res) => {
@@ -409,10 +421,12 @@ function register(app, acc) {
     const id = parseInt(req.body.id);
     const i = logs.findIndex(l => l.id === id);
     if (i > -1) {
-      const gone = logs[i].images || [];
+      const entry = logs[i];
+      const gone = entry.images || [];
       logs.splice(i, 1);
       save();
       dropImages(gone);      // файлы удалённой новости на диске не остаются
+      logChanged('delete', entry);
     }
     res.json({ status: 'success' });
   });
@@ -712,4 +726,4 @@ function register(app, acc) {
   });
 }
 
-module.exports = { register, reload: load, IMG_DIR, recordGeoHit, addAutoLog, removeAutoLogs };
+module.exports = { register, reload: load, IMG_DIR, recordGeoHit, addAutoLog, removeAutoLogs, onLogChange };
