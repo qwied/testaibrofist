@@ -288,15 +288,21 @@ async function punish(g, user, f, ctx) {
   save();
   const rule = R.ruleById(f.rule);
   const ruleText = rule ? rule.id + '. ' + rule.title : f.kind === 'custom' ? 'Server rules' : 'Moderator decision';
-  const action = R.describe(step);
+  // правила для всех, но Discord не даёт мьютить и банить владельца сервера, а мьютить — администраторов
+  const owner = user.id === g.owner;
+  const admin = !owner && !!(memberPerms(g, user.id, ctx.roles) & PERM.ADMIN);
+  const blocked = owner ? (step.type !== 'warn' ? 'the server owner cannot be muted or banned' : '')
+                        : admin && step.type === 'mute' ? 'administrators cannot be muted' : '';
+  const action = R.describe(step) + (blocked ? ' (not applied: ' + blocked + ')' : '');
   const why = f.note + (f.detail ? ' (' + f.detail + ')' : '');
   const reason = 'Case ' + caseNo + ': ' + (rule ? 'rule ' + rule.id + ', ' : '') + why;
 
   // личное сообщение — до бана, иначе оно уже не дойдёт
   await dm(user.id, { embeds: [{
     color: color(step),
-    title: step.type === 'ban' ? (step.ms ? 'You have been banned for ' + R.duration(step.ms) : 'You have been banned permanently')
-         : step.type === 'mute' ? 'You have been muted' : 'Warning',
+    title: blocked || step.type === 'warn' ? 'Warning'
+         : step.type === 'ban' ? (step.ms ? 'You have been banned for ' + R.duration(step.ms) : 'You have been banned permanently')
+         : 'You have been muted',
     description: ctx.dm || ((ctx.by ? 'A moderator of **' : 'Your message in **') + g.name + (ctx.by ? '** gave you a strike.' : '** was removed.')),
     fields: [
       { name: 'Rule', value: ruleText, inline: true },
@@ -307,17 +313,17 @@ async function punish(g, user, f, ctx) {
     footer: { text: 'If you think this is a mistake, message a moderator.' }
   }] }).catch(() => false);
 
-  let done = true;
-  if (step.type === 'mute') {
+  let done = true;                                     // blocked — наказывать нечем: только балл и предупреждение
+  if (!blocked && step.type === 'mute') {
     // уже замьючен дольше (например, модератором на неделю) — не сокращаем
     if (!(ctx.until && ctx.until > Date.now() + step.ms)) done = await timeout(g, user.id, step.ms, reason);
   }
-  else if (step.type === 'ban') {
+  else if (!blocked && step.type === 'ban') {
     done = await ban(g, user.id, reason);
     if (done) setUnban(g.id, user.id, step.ms);
   }
 
-  if (ctx.channel && !ctx.silent && step.type !== 'ban') {
+  if (ctx.channel && !ctx.silent && (step.type !== 'ban' || blocked)) {
     const what = ctx.by ? 'you received a strike' : 'your message was removed';
     await notice(ctx.channel, user.id, what + (rule ? ': rule ' + rule.id + ', ' + rule.title.toLowerCase() : '') +
                  '. ' + action + ', ' + R.strikes(total) + '.').catch(() => {});
@@ -339,7 +345,7 @@ async function enforce(g, m, f) {
   await deleteMessages(msgs, f.note).catch(e => log('delete failed:', e.message));
   if (repeat) return null;
   const until = Date.parse(m.member && m.member.communication_disabled_until) || 0;
-  return punish(g, m.author, f, { channel: m.channel_id, excerpt: m.content, until });
+  return punish(g, m.author, f, { channel: m.channel_id, excerpt: m.content, until, roles: m.member && m.member.roles });
 }
 
 /* ---------- приглашения на чужие серверы ---------- */
@@ -454,7 +460,7 @@ async function onMessage(m, edited) {
   const g = guilds.get(m.guild_id);
   if (!g) return;
   if (!edited && m.author.id === g.owner && /^!/.test(m.content || '') && await onOwnerCommand(g, m)) return;
-  if (memberPerms(g, m.author.id, m.member && m.member.roles) & STAFF) return;   // модераторов не трогаем
+  // правила — для всех: и для модераторов, и для владельца (см. punish — что Discord не даёт)
   const ch = channelInfo(g, m.channel_id);
   const allowAds = /promo|advert|реклам|самопиар/i.test(ch.name);
   const key = g.id + ':' + m.author.id;
@@ -552,16 +558,21 @@ async function checkName(g, d) {
   const uid = d.user.id, shown = displayName(d), key = g.id + ':' + uid;
   if (nameSeen.get(key) === shown) return;            // этот ник уже разобран
   nameSeen.set(key, shown);
-  const v = A.checkName(shown, { owner: g.ownerName });
-  if (!v) return;
+  const owner = uid === g.owner;
+  const staff = owner || !!(memberPerms(g, uid, d.roles) & STAFF);
+  let v = A.checkName(shown, { owner: owner ? '' : g.ownerName });
+  if (v && v.kind === 'impersonation' && staff) v = null;   // настоящему модератору «Mod» в нике можно
+  if (!v || (owner && v.kind !== 'bad-name')) return;     // владельцу ник Discord менять не даёт
   const nick = v.kind === 'hoist' && v.clean ? v.clean : 'Player ' + uid.slice(-4);
   const why = v.kind === 'impersonation' ? 'pretending to be staff' : v.kind === 'bad-name' ? 'inappropriate name' : 'unreadable name';
-  const r = await api('PATCH', '/guilds/' + g.id + '/members/' + uid, { nick }, { reason: 'Rule 9: ' + why });
-  if (r.status === 403) once('nonick:' + g.id, 'cannot change nicknames in ' + g.name + ': give the bot Manage Nicknames and move its role above member roles');
-  nameSeen.set(key, nick);
+  if (!owner) {
+    const r = await api('PATCH', '/guilds/' + g.id + '/members/' + uid, { nick }, { reason: 'Rule 9: ' + why });
+    if (r.status === 403) once('nonick:' + g.id, 'cannot change nicknames in ' + g.name + ': give the bot Manage Nicknames and move its role above member roles');
+    nameSeen.set(key, nick);
+  }
   if (v.kind === 'bad-name' || v.kind === 'impersonation') {
-    await punish(g, d.user, A.finding(v.kind, { detail: shown.slice(0, 60) }), { silent: true,
-      dm: 'Your name in **' + g.name + '** breaks the rules, so it was changed to "' + nick + '".' });
+    await punish(g, d.user, A.finding(v.kind, { detail: shown.slice(0, 60) }), { silent: true, roles: d.roles,
+      dm: 'Your name in **' + g.name + '** breaks the rules' + (owner ? '. Please change it.' : ', so it was changed to "' + nick + '".') });
   }
 }
 
@@ -641,8 +652,7 @@ async function onMemberAdd(d) {
 
 async function onMemberUpdate(d) {
   const g = guilds.get(d.guild_id);
-  if (!g || !d.user || d.user.bot || d.user.id === g.owner) return;
-  if (memberPerms(g, d.user.id, d.roles) & STAFF) return;      // модераторов не трогаем
+  if (!g || !d.user || d.user.bot) return;
   await checkName(g, d);
   queueAvatar(g, d);
 }
@@ -831,12 +841,13 @@ async function onOwnerCommand(g, m) {
     await confirm(m.channel_id, ok(r) ? '<@' + uid + '> is unbanned.' : r.status === 404 ? '<@' + uid + '> is not banned.' : 'I could not unban them.');
     return true;
   }
-  // Discord не даёт наказывать администраторов, а себя и бота — незачем
+  // себя (владельца Discord наказать не даёт) и ботов — незачем; администраторов — можно, кроме мьюта
   const roles = mention && mention.member && mention.member.roles;
-  if (uid === g.owner || (me && uid === me.id) || target.bot || (memberPerms(g, uid, roles) & PERM.ADMIN)) {
-    await confirm(m.channel_id, 'Administrators and bots cannot be punished.');
+  if (uid === g.owner || (me && uid === me.id) || target.bot) {
+    await confirm(m.channel_id, 'The server owner and bots cannot be punished.');
     return true;
   }
+  const admin = !!(memberPerms(g, uid, roles) & PERM.ADMIN);
   const until = Date.parse(mention && mention.member && mention.member.communication_disabled_until) || 0;
 
   if (cmd === 'warn') {
@@ -844,13 +855,14 @@ async function onOwnerCommand(g, m) {
     const rule = rm && R.ruleById(Number(rm[1])) ? Number(rm[1]) : 0;
     const reason = (rule ? rm[2] : rest).trim().slice(0, 300);
     const f = { kind: 'manual', rule, weight: 1, note: reason || (rule ? R.ruleById(rule).title : 'Warned by the owner') };
-    await punish(g, target, f, { by: m.author.id, channel: m.channel_id, until });
+    await punish(g, target, f, { by: m.author.id, channel: m.channel_id, until, roles });
     return true;
   }
   if (cmd === 'mute') {
     const dm2 = /^(\S+)\s*([\s\S]*)$/.exec(rest) || [];
     const d = DURATIONS[String(dm2[1] || '').toLowerCase()];
     if (!d) { await confirm(m.channel_id, 'Choose a duration: 10m, 1h, 6h, 1d, 3d or 7d.'); return true; }
+    if (admin) { await confirm(m.channel_id, 'Discord does not allow muting administrators: use warn or ban.'); return true; }
     const reason = (dm2[2] || '').trim().slice(0, 300) || 'Muted by the owner';
     const caseNo = ++state.cases;
     save();

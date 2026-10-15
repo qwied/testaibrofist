@@ -3,7 +3,7 @@
    - через несколько секунд без подключения сам переходит на запросы и
      указывает Discord адрес для кнопок (/discord/interactions);
    - новые сообщения находит опросом: старые (до запуска) не трогает,
-     нарушения удаляет и наказывает, модераторов не трогает, волна флуда —
+     нарушения удаляет и наказывает (и модераторов тоже), волна флуда —
      одно наказание;
    - секретная команда владельца работает так же;
    - кнопки приходят по HTTP: подпись Discord проверяется (чужая — 401),
@@ -133,10 +133,13 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('новое нарушение — удалено и мьют', find(since(t), 'DELETE', new RegExp('/messages/' + bad.id + '$')).length === 1 &&
      find(since(t), 'PATCH', /members\/U1$/).length === 1);
   t = Date.now();
-  say('M1', 'ты пидор');
+  const modBad = say('M1', 'ты пидор');
   say(OWNER, 'hello everyone');
-  await sleep(700);
-  ok('модератора (роль из списка участников) и владельца не трогает', find(since(t), 'DELETE', /messages/).length === 0);
+  await waitFor(() => find(since(t), 'PATCH', /members\/M1$/).length);
+  await sleep(300);
+  ok('модератора — как всех (роль из списка участников), обычное сообщение владельца не трогает',
+     find(since(t), 'DELETE', /messages/).length === 1 && find(since(t), 'DELETE', new RegExp('/messages/' + modBad.id + '$')).length === 1 &&
+     find(since(t), 'PATCH', /members\/M1$/).length === 1);
   t = Date.now();
   for (let i = 0; i < 8; i++) say('U2', 'spam ' + i);
   await waitFor(() => find(since(t), 'POST', /^\/channels\/dmU2\/messages$/).length);
@@ -158,13 +161,15 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(since(t), 'DELETE', new RegExp('/messages/' + inThread.id + '$')).length);
   ok('новую ветку бот находит сам и проверяет с её начала', find(since(t), 'DELETE', new RegExp('/messages/' + inThread.id + '$')).length === 1);
   // владелец выдал роли новые права, перезапуска не было
-  roles.push({ id: '201', name: 'Helper', permissions: String(1n << 13n) });
+  roles.push({ id: '201', name: 'Helper', permissions: '8' });          // роль с «Администратором»
   members.set('U3', { user: { id: 'U3', username: 'helper' }, roles: ['201'], joined_at: '2024-01-01T00:00:00Z' });
   await sleep(1500);
   t = Date.now();
-  say('U3', 'ты пидор');
-  await sleep(800);
-  ok('права, выданные роли после запуска, учтены (помощника не наказывает)', find(since(t), 'DELETE', /messages/).length === 0);
+  const helperBad = say('U3', 'ты пидор');
+  await waitFor(() => find(since(t), 'DELETE', new RegExp('/messages/' + helperBad.id + '$')).length);
+  await sleep(500);
+  ok('права, выданные роли после запуска, учтены (администратора — удалено, без мьюта)',
+     find(since(t), 'DELETE', new RegExp('/messages/' + helperBad.id + '$')).length === 1 && find(since(t), 'PATCH', /members\/U3$/).length === 0);
 
   console.log('\nсекретная команда и кнопки по HTTP:');
   t = Date.now();

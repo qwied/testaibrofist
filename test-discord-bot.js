@@ -3,7 +3,8 @@
    - входит с нужными intents, включает встроенную AutoMod, правил в #rules
      сам не пишет (их пишет владелец) и слэш-команд не заводит;
    - автомодерация: удаляет нарушения, наказывает по лестнице, пишет игроку
-     в личку и в mod-log, не трогает модераторов и разрешённые каналы;
+     в личку и в mod-log; правила — и для модераторов, и для владельца
+     (владельцу и администраторам — балл без мьюта: Discord их мьютить не даёт);
    - за волну флуда — одно наказание, а не по штрафу за каждое сообщение;
    - участники: плохой ник меняется (и балл), значки в начале убираются,
      ники всех, кто уже на сервере, тоже проверяются; рейд (много входов
@@ -103,7 +104,8 @@ let sock = null, seq = 0, closeNextIdentify = 0;
 const wss = new WebSocket.Server({ server, path: '/gw' });
 const guildCreate = () => ({
   id: G, name: 'AIBROFIST', owner_id: OWNER,
-  roles: [{ id: G, name: '@everyone', permissions: '1024' }, { id: MOD_ROLE, name: 'Moderator', permissions: String(1n << 13n) }],
+  roles: [{ id: G, name: '@everyone', permissions: '1024' }, { id: MOD_ROLE, name: 'Moderator', permissions: String(1n << 13n) },
+          { id: '202', name: 'Developer', permissions: '8' }],
   channels: [
     { id: CH.general, name: 'general', type: 0 }, { id: CH.rules, name: 'rules', type: 0 },
     { id: CH.updates, name: 'updates', type: 0 }, { id: CH.modlog, name: 'mod-log', type: 0 },
@@ -175,7 +177,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(calls, 'PATCH', /members\/E1$/).length);
   const e1 = find(calls, 'PATCH', /members\/E1$/)[0];
   ok('у старого участника значки в начале ника убраны (без балла)', e1 && e1.body.nick === 'Hoister' && !(bot._test.state().strikes[G + ':E1'] || []).length);
-  ok('модератора с ником Admin и обычный ник не трогает', find(calls, 'PATCH', /members\/(E2|E3)$/).length === 0);
+  ok('настоящему модератору ник «Admin» можно, обычный ник не трогает', find(calls, 'PATCH', /members\/(E2|E3)$/).length === 0);
   ok('токен — из DISCORD_BOT_TOKEN', ident && ident.d.token === 'test-token');
   await waitFor(() => find(calls, 'POST', /auto-moderation\/rules$/).length >= 3);
   const cmds = find(calls, 'PUT', /^\/applications\/700\/guilds\/100\/commands$/);
@@ -231,10 +233,24 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('предупреждение в канале само удаляется через 10 с', note && find(calls, 'DELETE', new RegExp('^/channels/300/messages/' + note.resId + '$')).length === 1);
 
   t = Date.now();
-  say('U9', 'ты пидор', { member: member([MOD_ROLE]) });
-  say(OWNER, 'ты пидор');
-  await sleep(250);
-  ok('модераторов и владельца не трогает', since(t).length === 0);
+  const modMsg = say('U19', 'ты пидор', { member: member([MOD_ROLE]) });
+  await waitFor(() => find(since(t), 'PATCH', /members\/U19$/).length);
+  ok('модератора — как всех: удалено и мьют', find(since(t), 'DELETE', new RegExp('/messages/' + modMsg.id + '$')).length === 1 &&
+     find(since(t), 'PATCH', /members\/U19$/).length === 1);
+  t = Date.now();
+  const ownMsg = say(OWNER, 'ты пидор');
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/dm900\/messages$/).length);
+  const ownDm = JSON.stringify(find(since(t), 'POST', /^\/channels\/dm900\/messages$/)[0].body);
+  ok('владельца тоже: удалено, балл и предупреждение, но без мьюта (Discord не даёт)',
+     find(since(t), 'DELETE', new RegExp('/messages/' + ownMsg.id + '$')).length === 1 &&
+     (bot._test.state().strikes[G + ':' + OWNER] || []).length === 1 && find(since(t), 'PATCH', new RegExp('members/' + OWNER + '$')).length === 0 &&
+     /not applied: the server owner cannot be muted or banned/.test(ownDm), ownDm.slice(0, 200));
+  t = Date.now();
+  const admMsg = say('A1', 'ты пидор', { member: member(['202']) });
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/dmA1\/messages$/).length);
+  ok('администратора: удалено и балл, мьюта нет (Discord не даёт мьютить администраторов)',
+     find(since(t), 'DELETE', new RegExp('/messages/' + admMsg.id + '$')).length === 1 && find(since(t), 'PATCH', /members\/A1$/).length === 0 &&
+     /administrators cannot be muted/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/dmA1\/messages$/)[0].body)));
 
   t = Date.now();
   for (let i = 0; i < 8; i++) say('U2', 'spam number ' + i);

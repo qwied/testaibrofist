@@ -154,13 +154,13 @@ const ruWord = (n, more) => { const k = n % 10 === 1 && n % 100 !== 11 && !more 
 function rulesText(lang) {
   if (lang === 'ru') {
     return RULES_RU.map((r, i) => '**' + (i + 1) + '. ' + r[0] + '.** ' + r[1]).join('\n') +
-      '\n\nПравила без пометки бот проверяет сам, круглосуточно.' +
+      '\n\nПравила действуют для всех, в том числе для модераторов и владельца. Правила без пометки бот проверяет сам, круглосуточно.' +
       '\n\n**Наказания**\nЗа нарушение даются штрафные баллы, они сгорают через 30 дней. Мошенничество и опасные ' +
       'ссылки дают сразу 3 балла; оскорбления по признаку, 18+ и чужие личные данные — 2.\n' +
       ladderLines(ruWord, describeRu).join('\n') + '\nВременный бан бот снимает сам, когда срок выйдет.';
   }
   return RULES.map((r, i) => '**' + r.id + '. ' + r.title + '.** ' + SHORT_EN[i]).join('\n') +
-    '\n\nRules without a note are checked by the bot automatically, around the clock.' +
+    '\n\nThe rules apply to everyone, including moderators and the owner. Rules without a note are checked by the bot automatically, around the clock.' +
     '\n\n**Punishments**\nBreaking a rule gives strikes, which expire after 30 days. Scams and harmful links give ' +
     '3 strikes at once; slurs, adult content and personal information give 2.\n' +
     ladderLines((n, more) => n === 1 && !more ? 'strike' : 'strikes', describe).join('\n') +
