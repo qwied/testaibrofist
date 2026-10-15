@@ -933,13 +933,15 @@ function updatesModalClassic(g) {
    нажавший), свои запрещённые слова. Сразу вписаны стандартные правила
    и лестница наказаний — бот следит именно за ними. */
 const RULES_TITLE = 'AIBROFIST Server Rules';
+// канал #rules сервера AIBROFIST (DISCORD_RULES_CHANNEL_ID на хостинге его заменяет)
+const RULES_CHANNEL = String(process.env.DISCORD_RULES_CHANNEL_ID || '1543921319563886643').trim();
 function rulesNow(g) {
   const st = gstate(g.id), r = st.rules || {};
   return { channel: r.channel || '', title: r.title || RULES_TITLE, en: r.en || R.rulesText('en'),
            ru: r.ru === undefined ? R.rulesText('ru') : r.ru, words: (st.words || []).join(', ') };
 }
 function rulesModal(g, p) {
-  const r = rulesNow(g), channel = r.channel && g.channels.has(r.channel) ? r.channel : p.channel;
+  const r = rulesNow(g), channel = [r.channel, RULES_CHANNEL].find(c => c && g.channels.has(c)) || p.channel;
   return { custom_id: 'rules:' + p.channel, title: 'Server rules', components: [
     field('Channel', null, { type: 8, custom_id: 'channel', channel_types: [0, 5], min_values: 1, max_values: 1,
                              default_values: [{ id: channel, type: 'channel' }] }),
@@ -953,7 +955,7 @@ function rulesModal(g, p) {
   ] };
 }
 function rulesModalClassic(g, p) {
-  const r = rulesNow(g), c = g.channels.get(r.channel && g.channels.has(r.channel) ? r.channel : p.channel);
+  const r = rulesNow(g), c = g.channels.get([r.channel, RULES_CHANNEL].find(x => x && g.channels.has(x)) || p.channel);
   return { custom_id: 'rules:' + p.channel, title: 'Server rules', components: [
     row('channel', 'Channel', 1, { required: true, max_length: 100, value: c ? c.name : '' }),
     row('title', 'Title', 1, { required: true, max_length: 100, value: r.title }),
@@ -996,11 +998,26 @@ async function onRulesSubmit(i, g) {
     '\n' + (words.length ? 'Extra banned words: ' + words.length + '. Messages with them are removed and get a strike.' : 'No extra banned words.')));
 }
 
+/* Правила ещё не выкладывались — бот сам кладёт стандартные в #rules,
+   один раз. Дальше их правит владелец командой rules; удалил пост —
+   бот его не возвращает. */
+async function postDefaultRules(g) {
+  const st = gstate(g.id);
+  const c = g.channels.get(RULES_CHANNEL);
+  if ((st.rules && st.rules.message) || !c) return;
+  const r0 = rulesNow(g);
+  const r = await api('POST', '/channels/' + c.id + '/messages', rulesPost(r0.title, linkify(g, r0.en), r0.ru));
+  if (!ok(r) || !r.body) { log('could not post the rules in #' + c.name + ':', r.status); return; }
+  st.rules = { channel: c.id, message: r.body.id, title: r0.title, en: r0.en, ru: r0.ru };
+  save();
+}
+
 // кнопка «Русский» под правилами — нажать может любой, ответ видит только он
+// (и в личке у владельца, где лежит превью: там берём правила сервера бота)
 function rulesInRussian(i, g) {
-  const r = gstate(g.id).rules;
-  if (!r || !r.ru) return reply(i, card('Русской версии правил пока нет.'));
-  const box = frame({ color: R.COLORS.neutral, title: 'Правила сервера', text: linkify(g, r.ru) });
+  const r = g && gstate(g.id).rules;
+  const text = r && r.ru ? r.ru : R.rulesText('ru');
+  const box = frame({ color: R.COLORS.neutral, title: 'Правила сервера', text: g ? linkify(g, text) : text });
   return respond(i, { type: 4, data: Object.assign(box, { flags: box.flags | 64 }) });
 }
 
@@ -1104,13 +1121,14 @@ async function onUpdatesSubmit(i, g) {
 }
 
 async function onInteraction(i) {
-  if (!i || !i.guild_id) return;
+  if (!i) return;
+  const cid = String((i.data && i.data.custom_id) || '');
+  if (i.type === 3 && cid === 'rules:ru') return rulesInRussian(i, i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value);
+  if (!i.guild_id) return;
   const g = guilds.get(i.guild_id);
   if (!g) return;
   const uid = i.member && i.member.user && i.member.user.id;
-  const cid = String((i.data && i.data.custom_id) || '');
   if (i.type !== 3 && i.type !== 5) return;
-  if (i.type === 3 && cid === 'rules:ru') return rulesInRussian(i, g);
   if (uid !== g.owner) return reply(i, card('Only the server owner can use this.'));
   if (i.type === 3 && cid.indexOf('panel:') === 0) {
     const id = cid.slice(6), p = panels.get(id);
@@ -1141,9 +1159,12 @@ async function clearSlashCommands(g) {
    С хостинга сайта живое подключение к gateway.discord.gg не открывается
    («Opening handshake has timed out»), а обычные запросы к Discord
    проходят. Тогда бот работает так:
-   - новые сообщения: раз в 3 секунды по запросу на каждый текстовый канал
+   - новые сообщения: раз в секунду по запросу на каждый канал с текстом
      («что нового после последнего прочитанного»), по 10 каналов
-     одновременно. Список каналов и роли —
+     одновременно: обычные каналы, объявления, чаты голосовых каналов и
+     сцен, ветки. Каналы, где 10 минут тихо, — раз в 3 секунды: так
+     запросов втрое меньше, и Discord не режет бота за перегрузку. Ветки
+     ищем раз в 10 секунд. Список каналов и роли —
      раз в минуту и отдельно: этот запрос Discord даёт делать лишь ~10 раз
      за 40 секунд, и когда опрос шёл через него, бот подолгу ждал и не
      видел ни команд, ни нарушений;
@@ -1152,7 +1173,14 @@ async function clearSlashCommands(g) {
      подпись проверяется ключом приложения).
    В Discord такой бот показан «не в сети», но всё делает. Если живое
    подключение всё-таки откроется, опрос встаёт на паузу. */
-const POLL_MS = Number(process.env.DISCORD_POLL_MS) || 3000;
+const POLL_MS = Number(process.env.DISCORD_POLL_MS) || 1000;
+const QUIET_EVERY = 3;               // тихие каналы — каждый третий круг
+const HOT_MS = 10 * 60 * 1000;       // «тихий» — без сообщений 10 минут
+const THREADS_MS = Number(process.env.DISCORD_THREADS_POLL_MS) || 10000;
+// где бывают сообщения: текст, чат голосового, объявления, ветки (3 вида), чат сцены
+const TEXT_TYPES = new Set([0, 2, 5, 10, 11, 12, 13]);
+const THREAD_TYPES = new Set([10, 11, 12]);
+const createdAt = id => Number((BigInt(id) >> 22n) + 1420070400000n);   // время из id Discord
 const REST_AFTER_MS = Number(process.env.DISCORD_REST_AFTER_MS) || 45000;
 const MEMBERS_MS = Number(process.env.DISCORD_MEMBERS_POLL_MS) || 60000;
 const CHANNELS_MS = Number(process.env.DISCORD_CHANNELS_POLL_MS) || 60000;
@@ -1202,13 +1230,29 @@ async function refreshGuild(g) {
   if (!ok(cr) || !Array.isArray(cr.body)) return;
   const seen = new Set();
   cr.body.forEach(c => { g.channels.set(c.id, chan(c)); seen.add(c.id); });
-  for (const id of [...g.channels.keys()]) if (!seen.has(id)) g.channels.delete(id);
+  for (const [id, c] of [...g.channels]) if (!seen.has(id) && !THREAD_TYPES.has(c.type)) g.channels.delete(id);   // ветки — ниже
+}
+
+// открытые ветки сервера — раз в 10 секунд; в новой ветке проверяем всё с её создания
+async function refreshThreads(g, first) {
+  const r = await api('GET', '/guilds/' + g.id + '/threads/active', null, { once: true });
+  if (!rest || !ok(r) || !r.body || !Array.isArray(r.body.threads)) return;
+  const seen = new Set();
+  for (const t of r.body.threads) {
+    seen.add(t.id);
+    if (!g.channels.has(t.id) && !rest.last.has(t.id)) {
+      if (first) { if (t.last_message_id) rest.last.set(t.id, t.last_message_id); }
+      else rest.from.set(t.id, Math.max(rest.since, createdAt(t.id)));
+    }
+    g.channels.set(t.id, chan(t));
+  }
+  for (const [id, c] of [...g.channels]) if (THREAD_TYPES.has(c.type) && !seen.has(id)) g.channels.delete(id);
 }
 
 async function startRest() {
   if (rest || !token()) return;
-  rest = { last: new Map(), from: new Map(), blocked: new Map(), members: new Map(), timers: [], busy: false, listing: false,
-           since: Date.now(), rounds: 0, lastRound: 0 };
+  rest = { last: new Map(), from: new Map(), blocked: new Map(), members: new Map(), hot: new Map(), timers: [], busy: false,
+           listing: false, threading: false, since: Date.now(), rounds: 0, lastRound: 0 };
   log('live connection to Discord is not available here, the bot works through requests');
   const u = await api('GET', '/users/@me');
   if (ok(u) && u.body) me = u.body;
@@ -1217,6 +1261,7 @@ async function startRest() {
   for (const g0 of (ok(gl) && Array.isArray(gl.body)) ? gl.body : []) {
     const g = await loadGuildRest(g0.id);
     if (!g) continue;
+    await refreshThreads(g, true);
     await setupGuild(g);
     await pollMembers(g, true);
     await pollBans(g);
@@ -1228,6 +1273,11 @@ async function startRest() {
     rest.listing = true;
     try { for (const g of guilds.values()) await refreshGuild(g); } finally { if (rest) rest.listing = false; }
   }, CHANNELS_MS);
+  every(async () => {
+    if (!rest || rest.threading) return;
+    rest.threading = true;
+    try { for (const g of guilds.values()) await refreshThreads(g, false); } finally { if (rest) rest.threading = false; }
+  }, THREADS_MS);
   every(async () => { for (const g of guilds.values()) await pollMembers(g, false); }, MEMBERS_MS);
   every(async () => { for (const g of guilds.values()) await pollBans(g); }, BANS_MS);
 }
@@ -1254,6 +1304,7 @@ async function readChannel(c) {
   }
   if (!ok(r) || !Array.isArray(r.body)) return [];
   const list = r.body.slice().sort((a, b) => newer(a.id, b.id) ? 1 : -1);
+  if (list.length) rest.hot.set(c.id, Date.now());
   const from = last ? 0 : rest.from.get(c.id);
   let top = last || '0';
   for (const m of list) if (newer(m.id, top)) top = m.id;
@@ -1266,7 +1317,10 @@ async function pollMessages() {
   rest.busy = true;
   try {
     for (const g of guilds.values()) {
-      const chans = [...g.channels.values()].filter(c => (c.type === 0 || c.type === 5) && !((rest.blocked.get(c.id) || 0) > Date.now()));
+      // тихие каналы — не каждый круг (см. выше)
+      const now = Date.now(), quiet = rest.rounds % QUIET_EVERY === 0;
+      const chans = [...g.channels.values()].filter(c => TEXT_TYPES.has(c.type) && !((rest.blocked.get(c.id) || 0) > now) &&
+                                                        (quiet || now - (rest.hot.get(c.id) || 0) < HOT_MS));
       // каналы читаем сразу по 10 (у каждого свой лимит в Discord), а разбираем по очереди
       for (let i = 0; i < chans.length; i += 10) {
         const got = await Promise.all(chans.slice(i, i + 10).map(c => readChannel(c).catch(() => [])));
@@ -1344,6 +1398,7 @@ async function setupGuild(g) {
   try {
     await clearSlashCommands(g);
     await ensureNativeAutomod(g);
+    await postDefaultRules(g);
     const o = await api('GET', '/guilds/' + g.id + '/members/' + g.owner);
     if (ok(o) && o.body && o.body.user) g.ownerName = o.body.nick || o.body.user.global_name || o.body.user.username;
     // ники всех, кто уже на сервере, — тоже проверить (ответ придёт пачками)
@@ -1448,7 +1503,7 @@ async function status() {
   const ago = t => t ? Math.round((Date.now() - t) / 1000) + 's ago' : 'never';
   if (rest) {
     let channels = 0;
-    for (const g of guilds.values()) for (const c of g.channels.values()) if ((c.type === 0 || c.type === 5) && !((rest.blocked.get(c.id) || 0) > Date.now())) channels++;
+    for (const g of guilds.values()) for (const c of g.channels.values()) if (TEXT_TYPES.has(c.type) && !((rest.blocked.get(c.id) || 0) > Date.now())) channels++;
     out.reading = { channels, rounds: rest.rounds, lastRound: ago(rest.lastRound), lastCommand: ago(lastCommandAt) };
     const idle = Date.now() - (rest.lastRound || rest.since);
     if (idle > 90000) out.problems.push('The bot has not read new messages for ' + Math.round(idle / 1000) + ' seconds.');

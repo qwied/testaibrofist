@@ -1,4 +1,9 @@
 {
   "base": "b12b883ab7478b6902815da3f283faea76c4397a",
-  "updates": []
+  "updates": [
+    {
+      "title": "Discord moderation everywhere",
+      "text": "The Discord bot posts the server rules in the rules channel and now checks every channel, voice chat and thread about once a second."
+    }
+  ]
 }

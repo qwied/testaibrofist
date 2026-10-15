@@ -34,7 +34,8 @@ const verifyHex = publicKey.export({ format: 'der', type: 'spki' }).slice(-32).t
 /* ---------- поддельный Discord: только HTTP, живого подключения нет ---------- */
 let snow = 1000000;
 const nextId = () => String(++snow);
-const store = { [CH.general]: [], [CH.news]: [] };
+const store = { [CH.general]: [], [CH.news]: [], '399': [], '410': [] };
+const threads = [];                 // открытые ветки сервера
 const members = new Map([
   [OWNER, { user: { id: OWNER, username: 'qwied' }, roles: [], joined_at: '2024-01-01T00:00:00Z' }],
   ['M1', { user: { id: 'M1', username: 'moder' }, roles: [MOD_ROLE], joined_at: '2024-01-01T00:00:00Z' }],
@@ -74,6 +75,7 @@ const server = http.createServer((req, res) => {
       { id: CH.general, name: 'general', type: 0, last_message_id: (store[CH.general].slice(-1)[0] || {}).id || null },
       { id: CH.news, name: 'news', type: 5, last_message_id: (store[CH.news].slice(-1)[0] || {}).id || null },
       { id: '399', name: 'voice', type: 2 }]);
+    if (p === '/guilds/' + G + '/threads/active') return send(200, { threads, members: [] });
     if ((m = /^\/channels\/(\d+)\/messages$/.exec(p)) && req.method === 'GET') {
       const after = u.searchParams.get('after') || '0';
       const newer = (a, b) => a.length !== b.length ? a.length > b.length : a > b;
@@ -109,7 +111,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     DISCORD_GATEWAY_URL: 'ws://127.0.0.1:1/gw',                 // живое подключение не откроется
     DISCORD_BOT_STATE: path.join(tmp, 'bot.json'), UPDATES_FEED_STATE: path.join(tmp, 'feed.json'),
     DISCORD_SCAN_IMAGES: '0', DISCORD_CMD_PREFIX: 'qa',
-    DISCORD_REST_AFTER_MS: '800', DISCORD_POLL_MS: '250', DISCORD_MEMBERS_POLL_MS: '600', DISCORD_CHANNELS_POLL_MS: '500'
+    DISCORD_REST_AFTER_MS: '800', DISCORD_POLL_MS: '250', DISCORD_MEMBERS_POLL_MS: '600', DISCORD_CHANNELS_POLL_MS: '500',
+    DISCORD_THREADS_POLL_MS: '300'
   });
   // сообщение, отправленное ДО запуска бота, — его бот не трогает
   const old = say('U1', 'ты пидор');
@@ -145,6 +148,15 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(since(t), 'DELETE', new RegExp('/messages/' + inNews.id + '$')).length);
   ok('в канале, где до запуска не было сообщений, первое же нарушение замечено',
      find(since(t), 'DELETE', new RegExp('/messages/' + inNews.id + '$')).length === 1);
+  t = Date.now();
+  const inVoice = say('U1', 'ты пидор', { channel: '399' });
+  await waitFor(() => find(since(t), 'DELETE', new RegExp('/messages/' + inVoice.id + '$')).length);
+  ok('чат голосового канала тоже проверяется', find(since(t), 'DELETE', new RegExp('/messages/' + inVoice.id + '$')).length === 1);
+  t = Date.now();
+  threads.push({ id: '410', name: 'help thread', type: 11, parent_id: CH.general });
+  const inThread = say('U1', 'ты пидор', { channel: '410' });
+  await waitFor(() => find(since(t), 'DELETE', new RegExp('/messages/' + inThread.id + '$')).length);
+  ok('новую ветку бот находит сам и проверяет с её начала', find(since(t), 'DELETE', new RegExp('/messages/' + inThread.id + '$')).length === 1);
   // владелец выдал роли новые права, перезапуска не было
   roles.push({ id: '201', name: 'Helper', permissions: String(1n << 13n) });
   members.set('U3', { user: { id: 'U3', username: 'helper' }, roles: ['201'], joined_at: '2024-01-01T00:00:00Z' });
@@ -160,7 +172,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(since(t), 'POST', /^\/channels\/300\/messages$/).some(x => x.body && x.body.components));
   ok('«!qanews» удалено, вместо него панель с кнопкой', find(since(t), 'DELETE', new RegExp('/messages/' + cmd.id + '$')).length === 1);
   const st = await bot.status();
-  ok('на странице состояния видно, что бот читает каналы и узнал команду', st.reading && st.reading.channels === 2 && st.reading.rounds > 0 &&
+  ok('на странице состояния видно, что бот читает каналы и узнал команду', st.reading && st.reading.channels === 4 && st.reading.rounds > 0 &&
      /s ago$/.test(st.reading.lastRound) && /s ago$/.test(st.reading.lastCommand) && st.problems.join() === 'none', st.reading);
   // панель — сообщение с кнопкой (не предупреждение, которое могло прийти позже)
   const panelCall = find(since(t), 'POST', /^\/channels\/300\/messages$/).find(x => x.body && x.body.components);

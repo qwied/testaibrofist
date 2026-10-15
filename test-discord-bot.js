@@ -153,9 +153,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     DISCORD_BOT_TOKEN: 'test-token', DISCORD_API_BASE: 'http://127.0.0.1:' + port + '/api/v10',
     DISCORD_GATEWAY_URL: 'ws://127.0.0.1:' + port + '/gw', DISCORD_BOT_STATE: path.join(tmp, 'bot.json'),
     UPDATES_FEED_STATE: path.join(tmp, 'feed.json'), DISCORD_SCAN_IMAGES: '0', DISCORD_TEST_CDN: '127.0.0.1:' + port,
-    DISCORD_CMD_PREFIX: 'qa', UPDATES_FILE: path.join(tmp, 'updates.json')
+    DISCORD_CMD_PREFIX: 'qa', UPDATES_FILE: path.join(tmp, 'updates.json'), DISCORD_RULES_CHANNEL_ID: CH.rules
   });
-  delete process.env.DISCORD_UPDATES_CHANNEL_ID; delete process.env.DISCORD_RULES_CHANNEL_ID; delete process.env.DISCORD_MODLOG_CHANNEL_ID;
+  delete process.env.DISCORD_UPDATES_CHANNEL_ID; delete process.env.DISCORD_MODLOG_CHANNEL_ID;
   const { api } = require('./discordApi.js');
   const bot = require('./discordBot.js');
 
@@ -180,7 +180,14 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(calls, 'POST', /auto-moderation\/rules$/).length >= 3);
   const cmds = find(calls, 'PUT', /^\/applications\/700\/guilds\/100\/commands$/);
   ok('слэш-команд нет (старые, если были, убраны)', cmds.length === 1 && Array.isArray(cmds[0].body) && cmds[0].body.length === 0);
-  ok('правила в #rules сам не пишет', find(calls, 'POST', /^\/channels\/301\/messages$/).length === 0);
+  await waitFor(() => find(calls, 'POST', /^\/channels\/301\/messages$/).length);
+  const rauto = find(calls, 'POST', /^\/channels\/301\/messages$/);
+  const rpost = rauto[0], rbtn = rpost && (partsOf(rpost.body, 1)[0] || { components: [] }).components[0];
+  ok('стандартные правила сам выложил в #rules — один раз, карточкой в рамке, никого не пингуя', rauto.length === 1 &&
+     rpost.body.flags === 32768 && partsOf(rpost.body, 10)[0].content === '## AIBROFIST Server Rules' &&
+     /1\. Be respectful/.test(partsOf(rpost.body, 10)[1].content) && /Permanent ban/.test(partsOf(rpost.body, 10)[1].content) &&
+     rpost.body.allowed_mentions.parse.length === 0);
+  ok('под правилами — кнопка «Русский»', rbtn && rbtn.style === 2 && rbtn.label === 'Русский' && rbtn.custom_id === 'rules:ru');
   const am = find(calls, 'POST', /auto-moderation\/rules$/).map(c => c.body.trigger_type).sort().join(',');
   ok('включает встроенную AutoMod: спам, оскорбления и 18+, упоминания', am === '3,4,5', am);
 
@@ -563,14 +570,12 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     { type: 18, component: { type: 4, custom_id: 'ru', value: pre('ru').value } },
     { type: 18, component: { type: 4, custom_id: 'words', value: words } }];
   t = Date.now();
+  ok('в окне по умолчанию — канал #rules', pre('channel').default_values && pre('channel').default_values[0].id === CH.rules);
   const rid = submit('rules:' + CH.general, rulesForm('bananas, Free  Robux\nbananas', 'Server Rules'));
   await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + rid + '/messages/@original$')).length);
-  const rpost = find(since(t), 'POST', /^\/channels\/301\/messages$/)[0];
-  const rbtn = rpost && (partsOf(rpost.body, 1)[0] || { components: [] }).components[0];
-  ok('правила вышли в выбранный канал карточкой в рамке, никого не пингуя', rpost && rpost.body.flags === 32768 &&
-     partsOf(rpost.body, 10)[0].content === '## Server Rules' && /1\. Be respectful/.test(partsOf(rpost.body, 10)[1].content) &&
-     rpost.body.allowed_mentions.parse.length === 0);
-  ok('под правилами — кнопка «Русский»', rbtn && rbtn.style === 2 && rbtn.label === 'Русский' && rbtn.custom_id === 'rules:ru');
+  const redit = find(since(t), 'PATCH', new RegExp('^/channels/301/messages/' + (rpost && rpost.resId) + '$'))[0];
+  ok('правила в #rules исправлены на месте (тот же пост, нового нет)', redit && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 &&
+     partsOf(redit.body, 10)[0].content === '## Server Rules' && partsOf(redit.body, 1)[0].components[0].custom_id === 'rules:ru');
   ok('свои слова запомнены, без повторов', JSON.stringify(bot._test.state().guilds[G].words) === '["bananas","free robux"]',
      JSON.stringify(bot._test.state().guilds[G].words));
   t = Date.now();
@@ -579,6 +584,12 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const rru = cb(since(t), bid)[0] && cb(since(t), bid)[0].body;
   ok('«Русский» может нажать любой — русские правила видит только он', rru && rru.type === 4 && rru.data.flags === (64 | 32768) &&
      /Уважайте друг друга/.test(JSON.stringify(rru.data.components)));
+  t = Date.now();
+  dispatch('INTERACTION_CREATE', { id: 'dm1', token: 'tkdm1', type: 3, channel_id: 'dmOWNER', user: { id: OWNER },
+    data: { custom_id: 'rules:ru', component_type: 2 } });
+  await waitFor(() => cb(since(t), 'dm1').length);
+  ok('и в личке (превью правил) кнопка «Русский» тоже работает', cb(since(t), 'dm1')[0] &&
+     /Уважайте друг друга/.test(JSON.stringify(cb(since(t), 'dm1')[0].body.data.components)));
   t = Date.now();
   const bw = say('U20', 'I really love bananas');
   await waitFor(() => find(since(t), 'DELETE', new RegExp('/messages/' + bw.id + '$')).length);
