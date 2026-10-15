@@ -368,13 +368,24 @@ let imgBusy = false;
 const IMG_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif' };
 const CDN = /^(?:cdn\.discordapp\.com|media\.discordapp\.net)$/;
 const TEST_CDN = String(process.env.DISCORD_TEST_CDN || '');      // только тесты: свой сервер вместо CDN
+/* Посредник в Cloudflare (cloudflare/discord-relay.mjs): хостинг не достаёт
+   до файлов Discord и до живого подключения — через него достаёт. Задаётся
+   на хостинге: DISCORD_RELAY_URL (https://relay.aibrofist.online) и
+   DISCORD_RELAY_KEY (тот же секрет, что RELAY_KEY у посредника). */
+const RELAY = { url: String(process.env.DISCORD_RELAY_URL || '').trim().replace(/\/+$/, ''),
+                key: String(process.env.DISCORD_RELAY_KEY || '').trim() };
+const relayOn = () => !!(RELAY.url && RELAY.key);
 
 function download(url, limit) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const test = TEST_CDN && u.protocol === 'http:' && u.host === TEST_CDN;
     if (!test && (u.protocol !== 'https:' || !CDN.test(u.hostname))) return reject(new Error('not a Discord CDN url'));
-    const req = (test ? require('http') : https).get(u, { family: 4, timeout: 15000 }, res => {
+    // есть посредник — файл берём через него (сам хостинг до CDN не достаёт)
+    const via = !test && relayOn() ? new URL(RELAY.url + '/cdn?url=' + encodeURIComponent(u.toString())) : u;
+    const opts = { family: 4, timeout: 15000 };
+    if (via !== u) opts.headers = { 'x-relay-key': RELAY.key };
+    const req = (via.protocol === 'http:' ? require('http') : https).get(via, opts, res => {
       if (res.statusCode !== 200) { res.resume(); return reject(new Error('status ' + res.statusCode)); }
       const chunks = []; let size = 0;
       res.on('data', c => { size += c.length; if (size > limit) req.destroy(new Error('too big')); else chunks.push(c); });
@@ -389,9 +400,9 @@ function download(url, limit) {
 const cdn = { at: 0, ok: null, error: '' };
 function checkCdn() {
   if (Date.now() - cdn.at < 10 * 60 * 1000) return;
-  if (process.env.DISCORD_API_BASE && !TEST_CDN) return;          // тесты без своего CDN
+  if (process.env.DISCORD_API_BASE && !TEST_CDN && !relayOn()) return;   // тесты без своего CDN
   cdn.at = Date.now();
-  const url = TEST_CDN ? 'http://' + TEST_CDN + '/cdn/pic.png' : 'https://cdn.discordapp.com/embed/avatars/0.png';
+  const url = TEST_CDN && !relayOn() ? 'http://' + TEST_CDN + '/cdn/pic.png' : 'https://cdn.discordapp.com/embed/avatars/0.png';
   download(url, 1024 * 1024).then(() => { cdn.ok = true; cdn.error = ''; }, e => { cdn.ok = false; cdn.error = e.message; });
 }
 
@@ -1456,7 +1467,7 @@ function onDispatch(t, d) {
 }
 
 function connect(intents) {
-  gw = new Gateway({ token: token(), intents,
+  gw = new Gateway({ token: token(), intents, relay: relayOn() ? RELAY : null,
     presence: { since: null, afk: false, status: 'online', activities: [{ name: 'aibrofist.online', type: 3 }] } });
   gw.on('dispatch', onDispatch);
   // ошибки подключения — в журнал хостинга (каждая разная по одному разу),
@@ -1535,8 +1546,11 @@ async function status() {
   if (out.token) {
     checkCdn();
     out.cdn = cdn.ok === null ? 'not checked yet' : cdn.ok ? 'ok' : 'unreachable: ' + cdn.error;
-    if (cdn.ok === false) out.problems.push('The site cannot download images from Discord (' + cdn.error + '): pictures added ' +
-                                            'in the post editor are shown by link and may disappear later.');
+    out.relay = relayOn() ? 'on' : 'off';
+    if (cdn.ok === false) out.problems.push(relayOn()
+      ? 'The Cloudflare helper does not answer (' + cdn.error + '): check DISCORD_RELAY_URL and DISCORD_RELAY_KEY on the hosting and RELAY_KEY in Cloudflare.'
+      : 'The site cannot download images from Discord (' + cdn.error + '): pictures added in the post editor are shown by link ' +
+        'and may disappear later, and pictures are not checked. Set up the Cloudflare helper (DISCORD_RELAY_URL, DISCORD_RELAY_KEY).');
   }
   const e = out.updates.lastError;
   if (e && e.status === 403) out.problems.push('The bot cannot write in the updates channel ' + e.channel +

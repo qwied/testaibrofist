@@ -4,7 +4,9 @@
 // Здесь только транспорт: пульс (heartbeat), вход (identify), продолжение
 // сессии после обрыва (resume) и переподключение с паузой. Что делать с
 // событиями, решает discordBot.js.
-// DISCORD_GATEWAY_URL подменяют только тесты.
+// DISCORD_GATEWAY_URL подменяют только тесты. opts.relay — посредник в
+// Cloudflare (cloudflare/discord-relay.mjs), если сам хостинг до Discord не
+// достаёт: подключение идёт к нему, а он соединяет с нужным хостом Discord.
 'use strict';
 const EventEmitter = require('events');
 const WebSocket = require('ws');
@@ -22,6 +24,7 @@ class Gateway extends EventEmitter {
     this.intents = opts.intents;
     this.presence = opts.presence || null;
     this.baseUrl = String(opts.url || process.env.DISCORD_GATEWAY_URL || DEFAULT_URL).replace(/\/+$/, '');
+    this.relay = opts.relay && opts.relay.url && opts.relay.key ? opts.relay : null;
     this.ws = null;
     this.seq = null;
     this.sessionId = null;
@@ -38,7 +41,13 @@ class Gateway extends EventEmitter {
   }
 
   url(resume) {
-    const u = new URL(resume && this.resumeUrl ? this.resumeUrl : this.baseUrl);
+    const target = resume && this.resumeUrl ? this.resumeUrl : this.baseUrl;
+    let u;
+    if (this.relay) {
+      // через посредника: он сам подключится к этому хосту Discord
+      u = new URL(this.relay.url.replace(/^http/, 'ws').replace(/\/+$/, '') + '/gateway');
+      u.searchParams.set('host', new URL(target).hostname);
+    } else u = new URL(target);
     u.searchParams.set('v', '10');
     u.searchParams.set('encoding', 'json');
     return u.toString();
@@ -51,7 +60,9 @@ class Gateway extends EventEmitter {
     // family:4 — как у HTTP-запросов (discordApi.js): IPv6 у хостинга битый,
     // и без этого подключение к Discord просто висело, бот был «не в сети»
     this.state = 'connecting';
-    try { ws = new WebSocket(this.url(resume), { handshakeTimeout: 15000, family: 4 }); }
+    const opts = { handshakeTimeout: 15000, family: 4 };
+    if (this.relay) opts.headers = { 'x-relay-key': this.relay.key };
+    try { ws = new WebSocket(this.url(resume), opts); }
     catch (e) { this.lastError = { message: e.message, at: Date.now() }; this.retry('connect failed: ' + e.message); return; }
     this.ws = ws;
     this.acked = true;
