@@ -1,9 +1,4 @@
 {
-  "base": "5b535b28355b9eff3b2fb437e00a86d66ada5b2a",
-  "updates": [
-    {
-      "title": "Picture checks in Discord",
-      "text": "The Discord bot now also checks pictures and avatars, and shows as online."
-    }
-  ]
+  "base": "668f57a4c40358050e40c0fee4788edac4838049",
+  "updates": []
 }
