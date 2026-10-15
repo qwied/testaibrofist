@@ -54,7 +54,7 @@ const WEEK = 7 * 24 * 60 * 60 * 1000;
 const NOTICE_MS = 10 * 1000;     // короткое предупреждение в канале исчезает само
 
 // banned — приметы забаненных (аватарка, имя): по ним ловим обход бана
-let state = { feed: [], guilds: {}, strikes: {}, cases: 0, banned: {}, unbans: {} };
+let state = { feed: [], guilds: {}, strikes: {}, cases: 0, banned: {}, unbans: {}, fixes: {} };
 let loaded = false, saveTimer = null;
 const guilds = new Map();        // id -> { id, name, owner, roles: Map, channels: Map }
 const setupDone = new Set();
@@ -63,7 +63,6 @@ const inviteCache = new Map();   // код приглашения -> { guild, t 
 const dmChannels = new Map();
 const said = new Set();          // какие подсказки владельцу уже были в журнале
 const flood = new A.FloodWatch();
-const flaggedAvatars = new Map(); // guild:user -> аватарка 18+, которую ещё не сменили
 const avatarSeen = new Map();     // guild:user -> какую аватарку уже проверили
 const nameSeen = new Map();       // guild:user -> какой ник уже разобрали
 const joins = new Map();          // guild -> времена входов за последнюю минуту
@@ -86,9 +85,19 @@ function loadState() {
       strikes: s.strikes && typeof s.strikes === 'object' ? s.strikes : {},
       cases: Number(s.cases) || 0,
       banned: s.banned && typeof s.banned === 'object' ? s.banned : {},
-      unbans: s.unbans && typeof s.unbans === 'object' ? s.unbans : {}     // «сервер:игрок» -> когда снять бан
+      unbans: s.unbans && typeof s.unbans === 'object' ? s.unbans : {},    // «сервер:игрок» -> когда снять бан
+      fixes: s.fixes && typeof s.fixes === 'object' ? s.fixes : {}         // разовые исправления, уже сделанные
     };
   } catch (e) { /* первый запуск */ }
+  // баллы за аватарку от прежней проверки сняты: нейросеть принимала обычные фото за 18+
+  if (!state.fixes.avatarStrikes) {
+    for (const k of Object.keys(state.strikes)) {
+      state.strikes[k] = (state.strikes[k] || []).filter(x => x.k !== 'nsfw-avatar');
+      if (!state.strikes[k].length) delete state.strikes[k];
+    }
+    state.fixes.avatarStrikes = true;
+    save();
+  }
 }
 
 function saveNow() {
@@ -419,7 +428,16 @@ function queueImages(g, m) {
   pumpImages();
 }
 
-const isAdult = s => { const porn = s.Porn || 0, hentai = s.Hentai || 0; return porn >= 0.85 || hentai >= 0.85 || porn + hentai >= 0.92; };
+/* Нейросеть ошибается на обычных фото с бежевыми и телесными тонами: одетого
+   человека в коридоре сочла «порно» на 87%. Поэтому сама бот убирает только
+   очень уверенное (95%+), сомнительное (85%+) — показывает модераторам и
+   ничего не удаляет. remove | review | null */
+function imageVerdict(s) {
+  const porn = s.Porn || 0, hentai = s.Hentai || 0;
+  if (porn >= 0.95 || hentai >= 0.95 || porn + hentai >= 0.97) return 'remove';
+  if (porn >= 0.85 || hentai >= 0.85 || porn + hentai >= 0.92) return 'review';
+  return null;
+}
 
 async function pumpImages() {
   if (imgBusy) return;
@@ -440,8 +458,11 @@ async function pumpImages() {
           const img = require('./imgModeration.js');
           const decoded = img.decodeImage(buf, ext);
           if (!decoded || !decoded.frames) continue;
-          if (isAdult(await img.nsfwScores(decoded))) {
-            await enforce(job.g, job.m, A.finding('nsfw-image'));
+          const verdict = imageVerdict(await img.nsfwScores(decoded));
+          if (verdict === 'remove') { await enforce(job.g, job.m, A.finding('nsfw-image')); break; }
+          if (verdict === 'review') {
+            await alert(job.g, 'Picture may be 18+', '<@' + job.m.author.id + '> in <#' + job.m.channel_id + '>: https://discord.com/channels/' +
+              job.g.id + '/' + job.m.channel_id + '/' + job.m.id + '\nThe bot is not sure, so the message was not removed. Please check it.');
             break;
           }
         } catch (e) {
@@ -463,13 +484,8 @@ async function onMessage(m, edited) {
   // правила — для всех: и для модераторов, и для владельца (см. punish — что Discord не даёт)
   const ch = channelInfo(g, m.channel_id);
   const allowAds = /promo|advert|реклам|самопиар/i.test(ch.name);
-  const key = g.id + ':' + m.author.id;
 
-  // аватарка 18+ ещё не сменена — писать нельзя, пока не сменит (без новых баллов)
-  const avatar = (m.member && m.member.avatar) || m.author.avatar;
   queueAvatar(g, { user: m.author, avatar: m.member && m.member.avatar });   // кто пишет — проверим и аватарку
-  if (avatar && flaggedAvatars.get(key) === avatar)
-    return softRemove(m, 'please change your avatar first, it breaks rule 4.');
   // совсем новый аккаунт только что зашёл и сразу шлёт ссылку — так пишут спам-боты
   const joined = Date.parse(m.member && m.member.joined_at) || 0;
   if (!edited && joined && Date.now() - joined < NEWBIE_MS && accountAge(m.author.id) < WEEK &&
@@ -546,10 +562,10 @@ async function softRemove(m, text) {
 }
 
 async function alert(g, title, text) {
+  const embed = { color: R.COLORS.warn, title: 'Alert | ' + title, description: text, timestamp: new Date().toISOString() };
   const ch = modlogChannel(g);
-  if (!ch) return;
-  await sendMessage(ch, { embeds: [{ color: R.COLORS.warn, title: 'Alert | ' + title, description: text,
-                                     timestamp: new Date().toISOString() }], allowed_mentions: { parse: [] } });
+  if (ch) await sendMessage(ch, { embeds: [embed], allowed_mentions: { parse: [] } });
+  else if (g.owner) await dm(g.owner, { embeds: [embed] });     // журнала нет — владельцу в личку
 }
 
 const displayName = d => d.nick || (d.user && (d.user.global_name || d.user.username)) || '';
@@ -578,9 +594,8 @@ async function checkName(g, d) {
 
 function queueAvatar(g, d) {
   const key = g.id + ':' + d.user.id, hash = d.avatar || d.user.avatar;
-  if (!hash) { flaggedAvatars.delete(key); return; }
+  if (!hash) return;
   if (avatarSeen.get(key) === hash) return;
-  if (flaggedAvatars.has(key) && flaggedAvatars.get(key) !== hash) flaggedAvatars.delete(key);   // сменил
   if (SCAN_IMAGES && imgQueue.length > 20) return;     // очередь полна — проверим в другой раз
   avatarSeen.set(key, hash);
   if (!SCAN_IMAGES) return;
@@ -595,10 +610,20 @@ async function checkAvatar(job) {
   if (type !== 'image/png') return;
   const img = require('./imgModeration.js');
   const decoded = img.decodeImage(buf, 'png');
-  if (!decoded || !decoded.frames || !isAdult(await img.nsfwScores(decoded))) return;
-  flaggedAvatars.set(job.g.id + ':' + job.user.id, job.hash);
-  await punish(job.g, job.user, A.finding('nsfw-avatar'), { silent: true,
-    dm: 'Your avatar in **' + job.g.name + '** breaks rule 4. Change it: until then your messages there are removed.' });
+  if (!decoded || !decoded.frames) return;
+  await onAvatarScores(job.g, job.user, await img.nsfwScores(decoded), job.hash);
+}
+
+// аватарку бот только показывает модераторам: из-за ошибки нейросети
+// человек не смог бы писать вообще, поэтому решают люди
+async function onAvatarScores(g, user, scores, hash) {
+  if (!imageVerdict(scores) || user.id === g.owner) return;          // свою аватарку владелец видит сам
+  const st = gstate(g.id);
+  st.avatarAlerts = st.avatarAlerts || {};
+  if (hash && st.avatarAlerts[user.id] === hash) return;             // об этой аватарке уже сообщали
+  if (hash) { st.avatarAlerts[user.id] = hash; save(); }
+  await alert(g, 'Avatar may be 18+', '<@' + user.id + '> (' + user.id + ')\nThe bot can mistake ordinary photos for 18+, so nothing ' +
+    'was done. If the avatar really breaks rule 4, give a strike for rule 4.');
 }
 
 // много входов за минуту — рейд: новые аккаунты на 10 минут получают мьют на час
@@ -1585,4 +1610,4 @@ function feedChannels() {
   return state.feed.slice();
 }
 
-module.exports = { start, stop, feedChannels, register, status, startRest, _test: { state: () => state, guilds, punish, releaseBans, reload: () => { loaded = false; loadState(); } } };
+module.exports = { start, stop, feedChannels, register, status, startRest, _test: { state: () => state, guilds, punish, releaseBans, imageVerdict, onAvatarScores, reload: () => { loaded = false; loadState(); } } };

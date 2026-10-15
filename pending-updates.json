@@ -1,4 +1,9 @@
 {
   "base": "2f233228abdbf5cb9d2cc61e96eb1c01f13b66fb",
-  "updates": []
+  "updates": [
+    {
+      "title": "Fairer picture checks",
+      "text": "The Discord bot no longer punishes anyone for their avatar by itself: doubtful avatars are shown to moderators instead. Pictures in messages are removed only when the bot is sure, and earlier avatar strikes were cleared."
+    }
+  ]
 }

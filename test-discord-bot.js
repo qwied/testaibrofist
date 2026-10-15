@@ -371,6 +371,29 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('рейд: 10 входов за минуту — сообщение владельцу и мьют новых аккаунтов', /Raid/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/))) &&
      find(since(t), 'PATCH', /members\/\d+$/).filter(x => x.body.communication_disabled_until).length >= 1);
 
+  console.log('\nкартинки и аватарки (нейросеть может ошибаться):');
+  // настоящие цифры: аватарка владельца (одетый человек в коридоре) — «порно» 87%
+  const ownerAvatar = { Porn: 0.87, Neutral: 0.12, Sexy: 0.007, Hentai: 0.003 };
+  ok('уверенное 18+ (95%+) — удалить', bot._test.imageVerdict({ Porn: 0.97 }) === 'remove' && bot._test.imageVerdict({ Hentai: 0.96 }) === 'remove');
+  ok('сомнительное (как та аватарка) — только показать модераторам', bot._test.imageVerdict(ownerAvatar) === 'review');
+  ok('обычная картинка — ничего', bot._test.imageVerdict({ Neutral: 0.9, Porn: 0.05 }) === null);
+  t = Date.now();
+  await bot._test.onAvatarScores(bot._test.guilds.get(G), { id: 'AV1' }, ownerAvatar);
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
+  c = since(t);
+  ok('аватарка: без балла и без наказания — уведомление модераторам', !(bot._test.state().strikes[G + ':AV1'] || []).length &&
+     find(c, 'PATCH', /members\/AV1$/).length === 0 && /Avatar may be 18\+/.test(JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/)[0].body)));
+  t = Date.now();
+  await bot._test.onAvatarScores(bot._test.guilds.get(G), { id: 'AV3' }, ownerAvatar, 'h1');
+  await bot._test.onAvatarScores(bot._test.guilds.get(G), { id: 'AV3' }, ownerAvatar, 'h1');
+  await bot._test.onAvatarScores(bot._test.guilds.get(G), { id: OWNER }, ownerAvatar, 'h2');
+  await sleep(200);
+  ok('об одной аватарке — одно уведомление, о своей владельцу не пишет', find(since(t), 'POST', /^\/channels\/303\/messages$/).length === 1);
+  t = Date.now();
+  const avMsg = say('AV1', 'hello, is anyone here?');
+  await sleep(300);
+  ok('и писать человек может как обычно', find(since(t), 'DELETE', new RegExp('/messages/' + avMsg.id + '$')).length === 0);
+
   console.log('\nлестница до бана:');
   const g = bot._test.guilds.get(G);
   const A = require('./discordAutomod.js');
@@ -703,6 +726,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   // правила в #rules — стандартные, но старой версии (владелец свои не писал)
   const sf = JSON.parse(fs.readFileSync(process.env.DISCORD_BOT_STATE, 'utf8'));
   Object.assign(sf.guilds[G].rules, { custom: false, en: 'old default rules', ru: 'старые правила' });
+  // баллы за аватарку от прежней (ошибавшейся) проверки
+  sf.strikes[G + ':AV2'] = [{ t: Date.now(), p: 2, r: 4, k: 'nsfw-avatar', by: 'auto' }, { t: Date.now(), p: 1, r: 2, k: 'caps', by: 'auto' }];
+  sf.fixes = {};
   fs.writeFileSync(process.env.DISCORD_BOT_STATE, JSON.stringify(sf));
   const before = gwLog.length;
   closeNextIdentify = 4014;
@@ -715,6 +741,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const rfix = find(c, 'PATCH', new RegExp('^/channels/301/messages/' + (rpost && rpost.resId) + '$'))[0];
   ok('стандартные правила обновились — бот исправил тот же пост в #rules', rfix &&
      /\(Checked by moderators\.\)/.test(JSON.stringify(rfix.body)) && bot._test.state().guilds[G].rules.ru !== 'старые правила');
+  ok('баллы за аватарку от прежней проверки сняты, остальные остались', JSON.stringify((bot._test.state().strikes[G + ':AV2'] || []).map(x => x.k)) === '["caps"]');
   ok('после перезапуска ничего не постит заново (команды, AutoMod)',
      find(c, 'PUT', /commands$/).length === 0 && find(c, 'POST', /auto-moderation/).length === 0 &&
      find(c, 'POST', /^\/channels\/301\/messages$/).length === 0);
