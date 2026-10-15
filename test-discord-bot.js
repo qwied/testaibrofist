@@ -302,6 +302,13 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await sleep(200);
   ok('блок встроенной AutoMod засчитывается (1 балл), без сообщения в канал', (bot._test.state().strikes[G + ':U6'] || []).length === 1 &&
      find(since(t), 'POST', /^\/channels\/300\/messages$/).length === 0);
+  dispatch('AUTO_MODERATION_ACTION_EXECUTION', { guild_id: G, action: { type: 1 }, rule_id: 'r3', rule_trigger_type: 3,
+    user_id: 'U8', channel_id: CH.general, content: 'hey check this out' });
+  dispatch('AUTO_MODERATION_ACTION_EXECUTION', { guild_id: G, action: { type: 1 }, rule_id: 'r4', rule_trigger_type: 4,
+    user_id: 'U9', channel_id: CH.general, content: 'some word from the preset list' });
+  await sleep(250);
+  ok('догадки Discord (спам, общий список слов) — без баллов: AutoMod и так не пропустила',
+     !(bot._test.state().strikes[G + ':U8'] || []).length && !(bot._test.state().strikes[G + ':U9'] || []).length);
 
   console.log('\nправила 7, 10, 12 и новички:');
   t = Date.now();
@@ -310,8 +317,22 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('продажа аккаунта за деньги — удалено, правило 7', (bot._test.state().strikes[G + ':V1'] || [])[0].r === 7);
   t = Date.now();
   const pol = say('V2', 'а что вы думаете про путина?');
-  await waitFor(() => find(since(t), 'DELETE', new RegExp(pol.id + '$')).length);
-  ok('политика — удалено, правило 10', (bot._test.state().strikes[G + ':V2'] || [])[0].r === 10);
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/300\/messages$/).length);
+  ok('политика — удалено с объяснением, но без балла (правило 10)', find(since(t), 'DELETE', new RegExp(pol.id + '$')).length === 1 &&
+     !(bot._test.state().strikes[G + ':V2'] || []).length && /rule 10/.test(find(since(t), 'POST', /^\/channels\/300\/messages$/)[0].body.content));
+  t = Date.now();
+  const ip = say('V5', 'my ip is 85.143.20.11 add me');
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
+  c = since(t);
+  ok('похоже на IP — скрыто, без балла, модераторам сообщение', find(c, 'DELETE', new RegExp(ip.id + '$')).length === 1 &&
+     !(bot._test.state().strikes[G + ':V5'] || []).length && /IP address/.test(JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/)[0].body)));
+  t = Date.now();
+  const ch7 = say('V6', 'кидаю чит бесплатно скачать');
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
+  await sleep(150);
+  c = since(t);
+  ok('разговор о читах — не удалён, без балла, модераторам ссылка на сообщение', find(c, 'DELETE', new RegExp(ch7.id + '$')).length === 0 &&
+     !(bot._test.state().strikes[G + ':V6'] || []).length && JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/)[0].body).includes(ch7.id));
   t = Date.now();
   const kid = say('V3', 'привет всем, мне 11 лет');
   await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
@@ -355,10 +376,17 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('оскорбление в имени — ник заменён', find(since(t), 'PATCH', /members\/W2$/)[0].body.nick === 'Player W2');
   t = Date.now();
   dispatch('GUILD_BAN_ADD', { guild_id: G, user: { id: 'B1', username: 'badguy', avatar: 'cafe1234' } });
-  dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: 'B2', username: 'newguy', avatar: 'cafe1234' }, roles: [] });
-  await waitFor(() => find(since(t), 'PUT', /bans\/B2$/).length);
-  ok('та же аватарка, что у забаненного, — бан за обход (правило 11)', find(since(t), 'PUT', /bans\/B2$/).length === 1 &&
-     /ban evasion/.test(decodeURIComponent(find(since(t), 'PUT', /bans\/B2$/)[0].reason || '')));
+  const B2 = snow(Date.now() - 86400000);
+  dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: B2, username: 'newguy', avatar: 'cafe1234' }, roles: [] });
+  await waitFor(() => find(since(t), 'PUT', new RegExp('bans/' + B2 + '$')).length);
+  ok('новый аккаунт с той же аватаркой, что у забаненного, — бан за обход (правило 11)', find(since(t), 'PUT', new RegExp('bans/' + B2 + '$')).length === 1 &&
+     /ban evasion/.test(decodeURIComponent(find(since(t), 'PUT', new RegExp('bans/' + B2 + '$'))[0].reason || '')));
+  t = Date.now();
+  const B4 = snow(Date.now() - 400 * 86400000);
+  dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: B4, username: 'someone', avatar: 'cafe1234' }, roles: [] });
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
+  ok('старый аккаунт с той же картинкой — не бан, только сообщение модераторам', find(since(t), 'PUT', new RegExp('bans/' + B4 + '$')).length === 0 &&
+     /same avatar/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/)[0].body)));
   t = Date.now();
   dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: 'B3', username: 'badguy' }, roles: [] });
   await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);

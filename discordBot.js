@@ -68,6 +68,7 @@ const nameSeen = new Map();       // guild:user -> какой ник уже ра
 const joins = new Map();          // guild -> времена входов за последнюю минуту
 const raidUntil = new Map();
 const softHit = new Map();        // guild:user -> когда последний раз писали «подожди»
+const reviewHit = new Map();      // guild:user:вид -> когда последний раз сообщали модераторам
 let gw = null, me = null, appId = null, timers = [];
 
 const log = (...a) => console.log('[discord]', ...a);
@@ -508,7 +509,9 @@ async function onMessage(m, edited) {
     if (fl) found.push(A.finding(fl.kind, { messages: fl.messages }));
   }
   found.sort((a, b) => b.weight - a.weight);
-  if (found.length) return enforce(g, m, found[0]);
+  // спорные находки (слова бывают и невинными) — без балла: решают модераторы
+  const sure = found.filter(f => !f.mode);
+  if (sure.length) return enforce(g, m, sure[0]);
 
   if (!allowAds) {
     const codes = A.inviteCodes(m.content);
@@ -516,6 +519,11 @@ async function onMessage(m, edited) {
       const code = await foreignInvite(g, codes).catch(() => null);
       if (code) return enforce(g, m, A.finding('invite', { detail: 'discord.gg/' + code }));
     }
+  }
+  if (found.length) {
+    const f = found.find(x => x.mode === 'hide') || found.find(x => x.mode === 'soft') || found[0];
+    await gentle(g, m, f, edited);
+    if (f.mode !== 'review') return;                                    // сообщение уже убрано
   }
   if (SCAN_IMAGES && !ch.nsfw && !edited) queueImages(g, m);
 }
@@ -533,12 +541,15 @@ async function onAutomodExecution(d) {
   seenExec.set(key, now);
   for (const [k, t] of seenExec) if (now - t > 60000) seenExec.delete(k);
 
+  // спам по догадке Discord и его общие списки слов тоже ошибаются: сообщение
+  // AutoMod уже не пропустила, а балл — только за то, что подтвердили сами
   let f;
   if (d.rule_trigger_type === 5) f = A.finding('mentions');
-  else if (d.rule_trigger_type === 3) f = A.finding('native-spam');
+  else if (d.rule_trigger_type === 3) return;
   else if (d.rule_trigger_type === 4) {
     const w = A.checkWords({ content: d.content || d.matched_content || '' });
-    f = w.length && w[0].kind === 'slur' ? A.finding('slur') : A.finding('nsfw-text');
+    if (!(w.length && w[0].kind === 'slur')) return;
+    f = A.finding('slur');
   } else f = A.finding('native-word', { detail: d.matched_keyword || undefined });
 
   const hk = g.id + ':' + d.user_id, last = lastHit.get(hk);
@@ -559,6 +570,23 @@ async function softRemove(m, text) {
   if (now - (softHit.get(key) || 0) < COOLDOWN) return;
   softHit.set(key, now);
   await notice(m.channel_id, m.author.id, text).catch(() => {});
+}
+
+const jump = m => 'https://discord.com/channels/' + m.guild_id + '/' + m.channel_id + '/' + m.id;
+const SOFT_TEXT = {
+  politics: 'politics is off-topic here (rule 10). No strike, just keep it out of the chat.',
+  doxx: 'it looked like an IP address, so it was hidden to protect privacy (rule 6). No strike.'
+};
+async function gentle(g, m, f, edited) {
+  if (f.mode === 'soft' || f.mode === 'hide') await softRemove(m, SOFT_TEXT[f.kind] || 'please keep to the rules.');
+  if (f.mode === 'soft' || edited) return;
+  const key = g.id + ':' + m.author.id + ':' + f.kind, now = Date.now();
+  if (now - (reviewHit.get(key) || 0) < 10 * 60 * 1000) return;       // не заваливать журнал
+  reviewHit.set(key, now);
+  for (const [k, t] of reviewHit) if (now - t > 10 * 60 * 1000) reviewHit.delete(k);
+  await alert(g, f.note + ' (rule ' + f.rule + ')', '<@' + m.author.id + '> in <#' + m.channel_id + '>' +
+    (f.mode === 'hide' ? ' (message hidden)' : ': ' + jump(m)) + '\n>>> ' + quote(m.content) +
+    '\n\nThe bot is not sure, so no strike was given. If it breaks the rules, give a strike with the command.').catch(() => {});
 }
 
 async function alert(g, title, text) {
@@ -653,6 +681,11 @@ async function checkEvasion(g, d) {
   const list = state.banned[g.id] || [];
   const u = d.user, name = String(u.global_name || u.username || '').toLowerCase();
   const same = u.avatar && list.find(b => b.a && b.a === u.avatar && b.id !== u.id);
+  if (same && accountAge(u.id) >= 30 * R.DAY) {
+    alert(g, 'Possible second account', '<@' + u.id + '> has the same avatar as banned member <@' + same.id + '>. ' +
+          'The account is not new, so the bot did not ban it. Please check.').catch(() => {});
+    return false;
+  }
   if (same) {
     // та же картинка аватарки, что у забаненного, — это он
     const caseNo = ++state.cases;

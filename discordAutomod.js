@@ -29,8 +29,11 @@ const KIND = {
   'nsfw-text': { rule: 4, weight: 2, note: 'Sexual content' },
   'native-spam': { rule: 2, weight: 1, note: 'Spam blocked by Discord AutoMod' },
   'native-word': { rule: 1, weight: 1, note: 'Blocked by a server AutoMod rule' },
-  cheat:       { rule: 7, weight: 1, note: 'Cheats or trading for real money' },
-  politics:    { rule: 10, weight: 1, note: 'Politics' },
+  cheat:       { rule: 7, weight: 1, note: 'Trading for real money' },
+  // mode: review — только сообщить модераторам; soft — убрать сообщение без балла;
+  // hide — убрать без балла и сообщить модераторам. Так — где слова бывают и невинными
+  'cheat-talk': { rule: 7, weight: 0, mode: 'review', note: 'Talk about cheats' },
+  politics:    { rule: 10, weight: 0, mode: 'soft', note: 'Politics' },
   'scam-text': { rule: 5, weight: 2, note: 'Known scam message' },
   'everyone-link': { rule: 5, weight: 2, note: 'Mass ping with a link' },
   'bad-name':  { rule: 9, weight: 1, note: 'Inappropriate name' },
@@ -39,7 +42,7 @@ const KIND = {
   evasion:     { rule: 11, weight: 0, note: 'Ban evasion with another account' },
   // без баллов: только сообщить владельцу (Discord запрещает аккаунты младше 13 лет)
   underage:    { rule: 12, weight: 0, note: 'Says they are under 13' },
-  doxx:        { rule: 6, weight: 2, note: 'Posting an IP address' },
+  doxx:        { rule: 6, weight: 0, mode: 'hide', note: 'Possible IP address' },
   badfile:     { rule: 5, weight: 2, note: 'Executable file' },
   // свои запрещённые слова сервера (владелец задаёт их командой rules)
   custom:      { rule: 0, weight: 1, note: 'Word banned on this server' },
@@ -139,25 +142,31 @@ const SELF_HARM = [
   L('kill\\s+(?:your\\s*self|yo\\s*self|ur\\s*self|urself|yourselves)'),
   L('hope\\s+(?:you|u)\\s+die'),
   L('go\\s+(?:hang|kill)\\s+(?:your\\s*self|urself)'),
-  C('убей(?:те)?\\s+себя|убейся|убейтесь|повесься|повесьтесь|выпились|выпилитесь|сдохни|сдохните|вскройся')
+  C('убей(?:те)?\\s+себя|убейся|убейтесь|повесься|повесьтесь|выпились|выпилитесь|вскройся')
 ];
 
 // оскорбление, обращённое к человеку: «ты дебил», «you idiot», «иди нахуй»
 const INSULT_EN = 'idiots?|morons?|stupid|dumb|dumbass|retards?|losers?|bitch|whore|slut|cunt|dickhead|asshole|bastard|scum';
-const INSULT_RU = 'дебил[а-я]*|идиот[а-я]*|тупой|тупая|тупица|урод[а-я]*|лох|лошар[а-я]*|чмо|мраз[а-я]*|' +
-                  'твар[а-я]*|сука|шлюх[а-я]*|даун[а-я]*|дегенерат[а-я]*|долбо[её]б[а-я]*|долба[её]б[а-я]*|' +
+const INSULT_RU = 'дебил[а-я]*|идиот[а-я]*|тупой|тупая|тупица|урод(?:ы|а|ов|ом|ина|ец|ка)?|лох|лошар[а-я]*|чмо|мраз[а-я]*|' +
+                  'твар[а-я]*|сука|шлюх[а-я]*|даун(?:ы|а|ов|ом)?|дегенерат[а-я]*|долбо[её]б[а-я]*|долба[её]б[а-я]*|' +
                   'еблан[а-я]*|у[её]б[оа][кн][а-я]*|гнид[а-я]*|ничтожеств[а-я]*|кретин[а-я]*';
+const FILL_RU = 'же|ж|что|че|реально|такой|такая|такие|просто|конченый|конченая|конченный|полный|полная|настоящий|' +
+                'настоящая|какой|какая|прям|вообще|точно|тупой|тупая|тупые|еще|тоже|совсем|правда|блин|бля|блять|сам|сама|' +
+                'сами|как|ну|ебаный|ебаная|ебучий|гребаный|долбаный|жирный|мелкий|старый|натуральный|самый|самая';
 const DIRECTED = [
   L('(?:you|u|ur|you\\s+re|youre)\\s+(?:are\\s+|r\\s+|a\\s+|an\\s+|such\\s+a\\s+|so\\s+|a\\s+fucking\\s+|fucking\\s+){0,2}(?:' + INSULT_EN + ')'),
   L('f+u+c+k+\\s+(?:you|u|off)'),
-  C('(?:ты|вы)\\s+(?:[а-я]+\\s+){0,2}(?:' + INSULT_RU + ')'),
+  // между «ты» и словом — только усилители: «ты же дебил», но не «ты не лох», «ты убил тварь»
+  C('(?:ты|вы)\\s+(?:(?:' + FILL_RU + ')\\s+){0,2}(?:' + INSULT_RU + ')'),
   C('(?:иди|идите|пошел|пошла|пошли|пошёл)\\s+(?:на\\s*)?(?:хуй|хер|нахуй|нахер)|нахуй\\s+(?:иди|пошел|пошла)')
 ];
-// при ответе или упоминании — только явные оскорбления-существительные
+// при ответе или упоминании, в коротком сообщении — явные оскорбления-существительные
+// («@bob idiot»); в длинном слово скорее про что-то другое («@bob this boss is an idiot»)
 const NOUN_INSULT = [
   L('idiot|moron|dumbass|retard|loser|bitch|whore|slut|cunt|dickhead|asshole|bastard'),
-  C('дебил|идиот|урод|лох|лошара|чмо|мразь|тварь|шлюха|даун|дегенерат|долбо[её]б|еблан|гнида|кретин')
+  C('дебил|идиот|урод|лох|лошара|чмо|мразь|тварь|шлюха|даун|дегенерат|долбо[её]б|еблан|гнида|кретин|сдохни|сдохните')
 ];
+const shortReply = content => String(content || '').replace(/<[@#][!&]?\d+>/g, ' ').trim().split(/\s+/).filter(Boolean).length <= 4;
 
 /* ---------- ссылки ---------- */
 const OFFICIAL = ['discord.com', 'discord.gg', 'discordapp.com', 'discordapp.net', 'discord.media',
@@ -167,7 +176,8 @@ const OFFICIAL = ['discord.com', 'discord.gg', 'discordapp.com', 'discordapp.net
   'steamcommunity.com', 'steampowered.com', 'steamstatic.com', 'steam.tv', 'steamdeck.com',
   'roblox.com', 'rbxcdn.com', 'youtube.com', 'youtu.be', 'twitch.tv', 'github.com', 'tenor.com',
   'giphy.com', 'aibrofist.online', 'epicgames.com', 'minecraft.net', 'x.com', 'twitter.com',
-  'reddit.com', 'imgur.com', 'google.com', 'wikipedia.org', 'tiktok.com', 'instagram.com'];
+  'reddit.com', 'imgur.com', 'google.com', 'wikipedia.org', 'tiktok.com', 'instagram.com',
+  'top.gg', 'discordbots.org', 'discord.bots.gg', 'discordservers.com'];
 const BRANDS = [
   { name: 'discord', dist: 1 }, { name: 'discordapp', dist: 1 }, { name: 'steamcommunity', dist: 2 },
   { name: 'steampowered', dist: 2 }, { name: 'roblox', dist: 1 }
@@ -188,6 +198,7 @@ const NSFW_SITES = ['pornhub.com', 'xvideos.com', 'xnxx.com', 'xhamster.com', 'r
   'danbooru.donmai.us', 'hentai2read.com', 'pornpics.com', 'erome.com'];
 const NSFW_TLD = /\.(?:xxx|porn|sex|adult|sexy)$/;
 const BAD_EXT = /\.(?:exe|scr|bat|cmd|com|msi|vbs|vbe|ps1|jar|dll|lnk|hta|cpl|reg|pif|wsf|apk)$/i;
+const BAD_LINK_EXT = /\.(?:exe|scr|bat|cmd|msi|vbs|vbe|ps1|jar|dll|lnk|hta|cpl|reg|pif|wsf|apk)$/i;  // «.com» в ссылке — обычно сайт
 const INVITE = /(?:https?:\/\/)?(?:www\.)?(?:discord(?:app)?\.com\/invite|discord\.gg|dsc\.gg|discord\.me|discord\.io|invite\.gg|discord\.link)\/([a-z0-9-]{2,32})/gi;
 const URL_RE = /(?:https?:\/\/)?((?:[a-z0-9-]+\.)+[a-z]{2,24})(?::\d+)?(\/[^\s<>"')]*)?/gi;
 
@@ -254,10 +265,13 @@ function checkLinks(content) {
   const res = [];
   const text = String(content || '').toLowerCase();
   for (const l of links(content)) {
+    // «discord.Then», «roblox.Do you?» — пропущенный пробел, а не сайт: без http и без
+    // пути такой «адрес» даже не кликается, на подделку его не проверяем
+    const real = l.explicit || l.path.length > 1;
     if (onDomain(l.host, GRABBERS)) res.push(finding('grabber', { detail: l.host }));
-    else if (isPhish(l.host, l.path, text)) res.push(finding('scam', { detail: l.host }));
+    else if (real && isPhish(l.host, l.path, text)) res.push(finding('scam', { detail: l.host }));
     else if (onDomain(l.host, NSFW_SITES) || NSFW_TLD.test(l.host)) res.push(finding('nsfw-link', { detail: l.host }));
-    else if (l.explicit && BAD_EXT.test(l.path)) res.push(finding('badfile', { detail: l.host + l.path.slice(0, 60) }));
+    else if (l.explicit && BAD_LINK_EXT.test(l.path) && !onDomain(l.host, OFFICIAL)) res.push(finding('badfile', { detail: l.host + l.path.slice(0, 60) }));
   }
   return res;
 }
@@ -302,7 +316,7 @@ function checkWords(msg) {
   const res = [];
   if (SLURS.some(test)) res.push(finding('slur'));
   if (SELF_HARM.some(test)) res.push(finding('selfharm'));
-  const aimed = (msg.mentions && msg.mentions.length) || !!msg.message_reference;
+  const aimed = ((msg.mentions && msg.mentions.length) || !!msg.message_reference) && shortReply(content);
   if (DIRECTED.some(test) || (aimed && NOUN_INSULT.some(test))) res.push(finding('insult'));
   return res;
 }
@@ -339,27 +353,34 @@ function checkFiles(msg) {
    Работают по исходному тексту (знаки денег, цифры возраста важны), с
    границами слов и для кириллицы. */
 const B = src => new RegExp('(?<![a-zа-яё0-9])(?:' + src + ')(?![a-zа-яё0-9])', 'iu');
-const SELL = B('продам|продаю|продаём|куплю|покупаю|скупаю|обменяю|sell|selling|buy|buying|trade|trading|wts|wtb');
+// только предложения сделки: «can I buy coins?» и «trade» в игре — не продажа
+const SELL = B('продам|продаю|продаём|куплю|покупаю|скупаю|обменяю|sell|selling|buying|wts|wtb');
 const GOODS = B('акк|акка|акков|аккаунт[а-я]*|монет[а-я]*|коин[а-я]*|account|accounts|acc|accs|coins?');
 const MONEY = /(?:руб|₽|грн|\$|usd|долл|евро|€|деньг|реал|paypal|qiwi|киви|сбер|на\s*карт|донат|money|cash|venmo|crypto|btc|usdt)/i;
-const CHEAT = B('чит|читы|читов|хак|хаки|взлом[а-я]*|инжектор[а-я]*|аимбот|aimbot|wallhack|speedhack|спидхак|дюп|cheat|cheats|hack|hacks|injector|exploit|dupe');
+const CHEAT = B('чит|читы|читов|хак|хаки|взлом|взломы|инжектор[а-я]*|аимбот|aimbot|wallhack|speedhack|спидхак|дюп|cheat|cheats|hack|hacks|injector|exploit|dupe');
 const SHARE = B('скачать|скачай|ссылк[а-я]*|раздаю|продаю|бесплатн[а-я]*|кидаю|download|free|selling|sell');
 const POLITICS = B('путин[а-я]*|зеленск[а-я]*|лукашенк[а-я]*|навальн[а-я]*|байден[а-я]*|трамп(?:а|у|ом|е)?|сво|спецоперац[а-я]*|мобилизац[а-я]*|' +
-                   'putin|zelensk[a-z]*|lukashenk[a-z]*|navaln[a-z]*|biden|trump|' +
+                   'putin|zelensk[a-z]*|lukashenk[a-z]*|navaln[a-z]*|biden|' +          // trump — ещё и «козырь»
                    'войн[аеуыо]\\s+(?:с|на|в)\\s+(?:украин[а-я]*|росси[а-я]*)|(?:war\\s+in|war\\s+with)\\s+(?:ukraine|russia)|слава\\s+украине');
 const SCAM_TEXT = [
   /(?:accidentally|accidently|mistakenly)\s+report(?:ed)?\s+(?:you|u|your)/i,
   /случайно\s+(?:кинул|отправил|подал|зарепортил|пожаловался)[а-я]*\s+(?:на\s+тебя|репорт|жалоб)/i,
   /(?:free|бесплатн[а-я]*)\s+(?:discord\s+)?(?:nitro|нитро)/i
 ];
+// предупреждают о мошенниках — цитируют их же слова: «never click free nitro links»
+const WARNING = B('scam|scams|scammer[a-z]*|fake|beware|careful|never|dont|don\'t|ignore|скам|развод[а-я]*|мошен[а-я]*|фейк[а-я]*|' +
+                  'осторожн[а-я]*|не\\s+ведитесь|не\\s+верьте|не\\s+переходите|не\\s+нажимайте|не\\s+кликайте');
 const AGE = [/мне\s+(\d{1,2})\s*(?:лет|год|годик)/i, /(?:i\s+am|i'?m)\s+(\d{1,2})\s*(?:years?\s*old|y\/?o|yrs?\s*old)/i];
 
 function checkRules(msg) {
   const text = String(msg.content || '').normalize('NFKC').replace(STRIP, '').toLowerCase();
   const res = [];
-  if (SCAM_TEXT.some(re => re.test(text))) res.push(finding('scam-text'));
-  if (/@(?:everyone|here)/.test(text) && links(text).length) res.push(finding('everyone-link'));
-  if ((SELL.test(text) && GOODS.test(text) && MONEY.test(text)) || (CHEAT.test(text) && SHARE.test(text))) res.push(finding('cheat'));
+  if (SCAM_TEXT.some(re => re.test(text)) && !WARNING.test(text)) res.push(finding('scam-text'));
+  // @everyone, который не пинганул (у автора нет такого права), со ссылкой — так пишут
+  // взломанные аккаунты; объявление администрации пингует всех на самом деле
+  if (/@(?:everyone|here)/.test(text) && !msg.mention_everyone && links(text).some(l => l.explicit)) res.push(finding('everyone-link'));
+  if (SELL.test(text) && GOODS.test(text) && MONEY.test(text)) res.push(finding('cheat'));
+  else if (CHEAT.test(text) && SHARE.test(text)) res.push(finding('cheat-talk'));
   if (POLITICS.test(text)) res.push(finding('politics'));
   for (const re of AGE) {
     const m = re.exec(text);
@@ -372,7 +393,9 @@ function checkRules(msg) {
    Ник проверяется при входе на сервер и при каждой смене. Оскорбление или
    ссылка в нике и «Admin»/«Модератор» — новый ник и балл; значки в начале
    (чтобы стоять первым в списке) и нечитаемый ник — просто новый ник. */
-const STAFF_WORDS = /^(?:admin|administrator|moderator|staff|owner|support|system|aibrofist|админ|администратор|модератор|модер|владелец|поддержка|система)$/;
+const STAFF_WORDS = /^(?:admin|administrator|moderator|staff|админ|администратор|администрация|модератор|модер)$/;
+// эти слова бывают и в обычных никах («Tech Support Guy», «aibrofist fan») — только если ник из них одних
+const STAFF_ONLY = /^(?:admin|administrator|moderator|staff|owner|support|system|official|aibrofist|админ|администратор|администрация|модератор|модер|владелец|поддержка|система)$/;
 function checkName(name, opts) {
   opts = opts || {};
   const n = String(name || '');
@@ -381,10 +404,11 @@ function checkName(name, opts) {
   if (words.some(f => f.kind === 'slur' || f.kind === 'insult' || f.kind === 'selfharm') ||
       inviteCodes(n).length || checkLinks(n).length || /https?:\/\/|discord\.gg/i.test(n))
     return { kind: 'bad-name' };
-  const tokens = (latinForm(n, false) + ' ' + cyrForm(n, false)).split(/\s+/).filter(Boolean);
+  const forms = [latinForm(n, false), cyrForm(n, false)].map(f => f.split(/\s+/).filter(Boolean));
   const flat = latinForm(n).replace(/\s+/g, '');
   const owner = opts.owner ? latinForm(opts.owner).replace(/\s+/g, '') : '';
-  if (tokens.some(t => STAFF_WORDS.test(t)) || (owner.length >= 3 && flat === owner)) return { kind: 'impersonation' };
+  if (forms.some(ts => ts.some(t => STAFF_WORDS.test(t)) || (ts.length && ts.every(t => STAFF_ONLY.test(t)))) ||
+      (owner.length >= 3 && flat === owner)) return { kind: 'impersonation' };
   const marks = (n.match(/\p{M}/gu) || []).length;
   const readable = n.replace(/[^\p{L}\p{N}]/gu, '');
   if (marks >= 5 || !readable.length) return { kind: 'unreadable' };
@@ -430,7 +454,7 @@ class FloodWatch {
       recent.forEach(x => { x.done = true; });
       return { kind: 'flood', messages: ids.map(x => ({ id: x.id, channel: x.channel })) };
     }
-    if (text.length >= 6) {
+    if (text.length >= 15 || /https?:\/\//.test(text)) {
       const same = list.filter(x => x.text === text);
       if (same.length >= this.dupCount) {
         const ids = same.filter(x => !x.done);

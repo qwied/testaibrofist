@@ -26,7 +26,7 @@ console.log('\nнарушения ловим:');
 [
   ['n1gg3r', 'slur'], ['n i g g e r', 'slur'], ['n.i.g.g.a', 'slur'], ['ты пидор', 'slur'], ['пuдор', 'slur'],
   ['жиды', 'slur'], ['чурка', 'slur'], ['хохлы', 'slur'], ['faggot', 'slur'], ['retarded', 'slur'],
-  ['kys', 'selfharm'], ['убейся', 'selfharm'], ['сдохни', 'selfharm'], ['kill yourself', 'selfharm'],
+  ['kys', 'selfharm'], ['убейся', 'selfharm'], ['повесься', 'selfharm'], ['kill yourself', 'selfharm'],
   ['ты дебил', 'insult'], ['you are so stupid', 'insult'], ['u r a idiot', 'insult'], ['fuck you', 'insult'],
   ['иди нахуй', 'insult'], ['ты тупой', 'insult'],
   ['https://dlscord.gift/xyz', 'scam'], ['free nitro https://discord-nitro.ru', 'scam'],
@@ -50,7 +50,7 @@ ok('тяжёлое нарушение первым', kinds('ты дебил http
 
 console.log('\nправила 5, 7, 10, 12 (мошенничество, читы, политика, возраст):');
 [
-  ['продам акк за 500 руб', 'cheat'], ['selling account 20$ paypal', 'cheat'], ['кидаю чит бесплатно скачать', 'cheat'],
+  ['продам акк за 500 руб', 'cheat'], ['selling account 20$ paypal', 'cheat'], ['кидаю чит бесплатно скачать', 'cheat-talk'],
   ['путин', 'politics'], ['трамп', 'politics'], ['war in ukraine', 'politics'], ['мне 11 лет', 'underage'],
   ['im 12 years old', 'underage'], ['I accidentally reported you', 'scam-text'], ['free nitro, dm me', 'scam-text'],
   ['@everyone https://bit.ly/x', 'everyone-link'], ['русня', 'slur'], ['рашка', 'slur']
@@ -59,13 +59,31 @@ console.log('\nправила 5, 7, 10, 12 (мошенничество, читы
  'hack the level lol', 'I played 12 years ago', 'the war level is hard', 'who sells skins in the shop?']
   .forEach(t => ok('не нарушение: ' + JSON.stringify(t), kinds(t).length === 0, kinds(t).join(',')));
 
+console.log('\nобычные фразы, на которых бот раньше ошибался:');
+['I found this server on discord.Then I joined', 'i play roblox.Do you?', 'see you on discord.ok?', 'i use discordbots.org, the bot is free',
+ 'у меня взломали аккаунт, скинь ссылку на поддержку', 'can I buy coins with real money?', 'how to buy coins, is it $5?',
+ 'ты убил тварь?', 'вы видели этого урода в подземелье?', 'ты видел уродливого босса', 'сдохни зомби!', 'ты же не дебил, всё понял',
+ 'ты не лох, просто не повезло', 'that trump card was great', 'free nitro? no thanks, scam', 'never click free nitro links',
+ 'бесплатный нитро это скам, не ведитесь', 'download: https://aibrofist.online/app.apk', 'https://web.archive.org/web/2020/https://google.com',
+ '@everyone hi all.see you tonight']
+  .forEach(t => ok(JSON.stringify(t), kinds(t).length === 0, kinds(t).join(',')));
+ok('«@bob the bot is an idiot» — не о человеке', kinds('<@1> the bot is an idiot', { mentions: [{ id: '1' }] }).length === 0);
+ok('«сдохни» в ответ человеку — оскорбление', kinds('сдохни', { message_reference: {} })[0] === 'insult');
+ok('объявление администрации с @everyone (пинганул на самом деле) — не нарушение',
+   kinds('@everyone new update! https://aibrofist.online/news', { mention_everyone: true }).length === 0);
+ok('спорное — без балла: политика убирается, IP скрывается, про читы сообщают модераторам',
+   A.KIND.politics.mode === 'soft' && A.KIND.doxx.mode === 'hide' && A.KIND['cheat-talk'].mode === 'review' &&
+   !A.KIND.politics.weight && !A.KIND.doxx.weight && !A.KIND['cheat-talk'].weight);
+
 console.log('\nники (правило 9):');
 const name = (n, o) => (A.checkName(n, { owner: o || 'qwied' }) || {}).kind || '-';
 [['Admin', 'impersonation'], ['[Admin] Bob', 'impersonation'], ['Модератор', 'impersonation'], ['AiBrofist', 'impersonation'],
+ ['AiBrofist Support', 'impersonation'], ['Owner', 'impersonation'],
  ['qwied', 'impersonation'], ['n1gg3r', 'bad-name'], ['discord.gg/xyz', 'bad-name'], ['!!!Bob', 'hoist'],
  ['★★★', 'unreadable'], ['z̷̛̛͓̫a̷l̷g̷o̷', 'unreadable']]
   .forEach(([n, want]) => ok('ник ' + JSON.stringify(n) + ' -> ' + want, name(n) === want, name(n)));
-['Bob', 'Modern', 'Vasya_2010', 'Мишка', 'xX_Pro_Xx', 'Administrative Bob'].forEach(n => ok('нормальный ник ' + JSON.stringify(n), name(n) === '-', name(n)));
+['Bob', 'Modern', 'Vasya_2010', 'Мишка', 'xX_Pro_Xx', 'Administrative Bob', 'aibrofist fan', 'Tech Support Guy', 'System Error',
+ 'Owner of cats', 'roblox.lover'].forEach(n => ok('нормальный ник ' + JSON.stringify(n), name(n) === '-', name(n)));
 ok('значки в начале ника просто убираются', A.checkName('!!!Bob').clean === 'Bob');
 
 console.log('\nфлуд и повторы:');
@@ -84,6 +102,10 @@ console.log('\nфлуд и повторы:');
   let calm = null; t = 0;
   for (let i = 0; i < 10; i++) calm = q.add('y', { id: 'q' + i, channel_id: 'c', content: 'talk ' + i, t: t += 2000 }) || calm;
   ok('обычная переписка (раз в 2 секунды) — не флуд', calm === null);
+  const th = new A.FloodWatch();
+  let thanks = null; t = 0;
+  for (let i = 0; i < 3; i++) thanks = th.add('z', { id: 't' + i, channel_id: 'c', content: 'спасибо!', t: t += 10000 }) || thanks;
+  ok('«спасибо!» трём людям за минуту — не повтор', thanks === null);
 }
 
 console.log('\nлестница наказаний (сначала мьюты, потом бан на неделю, бан навсегда — в крайнем случае):');
