@@ -1,7 +1,8 @@
 // ============ DISCORD: правила сервера и лестница наказаний ============
-// Правила в #rules владелец пишет сам — здесь те же 12 правил в том же
-// порядке: по ним бот называет игроку номер и название нарушенного
-// правила («rule 2, No spam»). Поменялся порядок в #rules — поменять и тут.
+// Правила в #rules выкладывает команда rules (текст можно поправить в её
+// окне) — здесь те же 12 правил в том же порядке: по ним бот называет
+// игроку номер и название нарушенного правила («rule 2, No spam»).
+// Поменялся порядок в #rules — поменять и тут.
 'use strict';
 
 const MIN = 60 * 1000, HOUR = 60 * MIN, DAY = 24 * HOUR;
@@ -55,8 +56,9 @@ const ruleById = id => RULES.find(r => r.id === id) || null;
 /* Штрафные баллы: обычное нарушение — 1, слово-оскорбление по признаку,
    18+ и чужие личные данные — 2, мошенничество и вредные ссылки — 3.
    Баллы сгорают через 30 дней. Наказание — по сумме действующих баллов
-   после нарушения: сначала предупреждение, дальше мьюты растут, бан —
-   только при восьми баллах за месяц. */
+   после нарушения: сначала предупреждение, дальше мьюты растут, с семи
+   баллов за месяц — бан на неделю (бот сам снимает его), с девяти — бан
+   навсегда. */
 const STRIKE_TTL = 30 * DAY;
 const LADDER = [
   { at: 1, type: 'warn' },
@@ -65,7 +67,8 @@ const LADDER = [
   { at: 4, type: 'mute', ms: 6 * HOUR },
   { at: 5, type: 'mute', ms: DAY },
   { at: 6, type: 'mute', ms: 3 * DAY },
-  { at: 8, type: 'ban' }
+  { at: 7, type: 'ban', ms: 7 * DAY },
+  { at: 9, type: 'ban' }
 ];
 
 function punishmentFor(points) {
@@ -84,16 +87,88 @@ function duration(ms) {
 function describe(p) {
   if (!p) return 'No action';
   if (p.type === 'warn') return 'Warning';
-  if (p.type === 'ban') return 'Ban';
+  if (p.type === 'ban') return p.ms ? 'Ban for ' + duration(p.ms) : 'Permanent ban';
   return 'Mute for ' + duration(p.ms);
 }
 
+// то же по-русски — для русской версии правил
+function durationRu(ms) {
+  const n = ms >= DAY ? Math.round(ms / DAY) : ms >= HOUR ? Math.round(ms / HOUR) : Math.max(1, Math.round(ms / MIN));
+  const forms = ms >= DAY ? ['день', 'дня', 'дней'] : ms >= HOUR ? ['час', 'часа', 'часов'] : ['минуту', 'минуты', 'минут'];
+  const k = n % 10 === 1 && n % 100 !== 11 ? 0 : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 1 : 2;
+  return n + ' ' + forms[k];
+}
+function describeRu(p) {
+  if (!p) return 'Без наказания';
+  if (p.type === 'warn') return 'Предупреждение';
+  if (p.type === 'ban') return p.ms ? 'Бан на ' + durationRu(p.ms) : 'Бан навсегда';
+  return 'Мьют на ' + durationRu(p.ms);
+}
+
 const strikes = n => n + (n === 1 ? ' strike' : ' strikes');
+
+/* Готовый текст правил для #rules (команда rules): те же 12 правил коротко
+   и лестница наказаний — по-английски и по-русски. Владелец может его
+   поправить в окне, но номера правил лучше не менять: бот пишет
+   нарушителю номер и название правила. */
+const SHORT_EN = [
+  'No harassment, insults, threats or hate speech. No slurs about race, nationality, religion, gender, sexuality or disability. Never tell anyone to hurt themselves, even as a joke.',
+  'No flooding, copy-paste, walls of text, all caps, emoji spam or mass mentions.',
+  'No invites to other servers and no self-promotion without staff permission, in chat or in DMs.',
+  'No sexual, gory or shocking content in messages, images, links, names or avatars.',
+  'No phishing, fake giveaways, "free Nitro", IP grabbers, malware or suspicious files. Never ask for anyone\'s password or account.',
+  'Do not share anyone\'s personal information: real names, addresses, phone numbers, IP addresses or photos.',
+  'No cheats, hacks or exploits. No buying or selling accounts or coins for real money. Found a bug? Report it to the staff.',
+  'Keep each topic in its channel and read the pinned messages.',
+  'Usernames, nicknames, avatars and statuses must be appropriate. Do not impersonate the staff or other players.',
+  'No politics or religion debates. If a talk gets heated, drop it.',
+  'Follow moderator instructions. Do not argue about punishments in chat, message a moderator instead. Using another account to avoid a mute or ban leads to a ban.',
+  'Follow the Discord Terms of Service and Community Guidelines. You must be at least 13 years old.'
+];
+const RULES_RU = [
+  ['Уважайте друг друга', 'Без травли, оскорблений, угроз и ненависти, в том числе по расе, национальности, религии, полу, ориентации или инвалидности. Никогда не желайте никому навредить себе, даже в шутку.'],
+  ['Без спама', 'Без флуда, копипасты, простыней текста, капса, спама эмодзи и массовых упоминаний.'],
+  ['Без рекламы', 'Без приглашений на другие серверы и самопиара без разрешения администрации, ни в чате, ни в личке.'],
+  ['Без контента 18+', 'Без сексуального, жестокого или шокирующего контента в сообщениях, картинках, ссылках, никах и аватарках.'],
+  ['Без мошенничества и опасных ссылок', 'Без фишинга, фейковых розыгрышей, «бесплатного Nitro», IP-логгеров, вирусов и подозрительных файлов. Не просите чужие пароли и аккаунты.'],
+  ['Уважайте личные данные', 'Не публикуйте чужую личную информацию: настоящие имена, адреса, номера телефонов, IP-адреса и фото.'],
+  ['Играйте честно', 'Без читов, взломов и эксплойтов. Никакой покупки и продажи аккаунтов или монет за реальные деньги. Нашли баг? Сообщите администрации.'],
+  ['Пишите в нужные каналы', 'Каждая тема — в своём канале, читайте закреплённые сообщения.'],
+  ['Приличные ники и профили', 'Имена, ники, аватарки и статусы должны быть приличными. Не выдавайте себя за администрацию или других игроков.'],
+  ['Без острых тем', 'Без споров о политике и религии. Если разговор накаляется, закончите его.'],
+  ['Слушайте администрацию', 'Выполняйте указания модераторов. Не спорьте о наказаниях в чате, напишите модератору. Обход мьюта или бана с другого аккаунта ведёт к бану.'],
+  ['Соблюдайте правила Discord', 'Соблюдайте условия использования и правила сообщества Discord. Вам должно быть не меньше 13 лет.']
+];
+
+// «1 strike: Warning», «7-8 strikes: Ban for 7 days», «9+ strikes: Permanent ban»
+function ladderLines(word, say) {
+  return LADDER.map((step, i) => {
+    const next = LADDER[i + 1];
+    const range = !next ? step.at + '+' : next.at - 1 > step.at ? step.at + '-' + (next.at - 1) : String(step.at);
+    return '- ' + range + ' ' + word(step.at, !next) + ': ' + say(step);
+  });
+}
+const ruWord = (n, more) => { const k = n % 10 === 1 && n % 100 !== 11 && !more ? 0 : n % 10 >= 2 && n % 10 <= 4 && !more ? 1 : 2;
+                               return ['балл', 'балла', 'баллов'][k]; };
+
+function rulesText(lang) {
+  if (lang === 'ru') {
+    return RULES_RU.map((r, i) => '**' + (i + 1) + '. ' + r[0] + '.** ' + r[1]).join('\n') +
+      '\n\n**Наказания**\nЗа нарушение даются штрафные баллы, они сгорают через 30 дней. Мошенничество и опасные ' +
+      'ссылки дают сразу 3 балла; оскорбления по признаку, 18+ и чужие личные данные — 2.\n' +
+      ladderLines(ruWord, describeRu).join('\n') + '\nВременный бан бот снимает сам, когда срок выйдет.';
+  }
+  return RULES.map((r, i) => '**' + r.id + '. ' + r.title + '.** ' + SHORT_EN[i]).join('\n') +
+    '\n\n**Punishments**\nBreaking a rule gives strikes, which expire after 30 days. Scams and harmful links give ' +
+    '3 strikes at once; slurs, adult content and personal information give 2.\n' +
+    ladderLines((n, more) => n === 1 && !more ? 'strike' : 'strikes', describe).join('\n') +
+    '\nA temporary ban is lifted automatically when it ends.';
+}
 
 // цвета полосы слева у сообщений бота: без эмодзи, но с понятным оттенком
 const COLORS = { neutral: 0x99A1AE, warn: 0xE0A100, mute: 0xE67E22, ban: 0xE04141, ok: 0x3BA55D };
 
 module.exports = {
-  RULES, ruleById, LADDER, STRIKE_TTL, punishmentFor, describe, duration, strikes,
+  RULES, ruleById, LADDER, STRIKE_TTL, punishmentFor, describe, describeRu, duration, strikes, rulesText,
   COLORS, MIN, HOUR, DAY
 };

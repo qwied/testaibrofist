@@ -86,15 +86,32 @@ console.log('\nфлуд и повторы:');
   ok('обычная переписка (раз в 2 секунды) — не флуд', calm === null);
 }
 
-console.log('\nлестница наказаний (мягкая, бан только в крайнем случае):');
+console.log('\nлестница наказаний (сначала мьюты, потом бан на неделю, бан навсегда — в крайнем случае):');
 const want = [[1, 'Warning'], [2, 'Mute for 10 minutes'], [3, 'Mute for 1 hour'], [4, 'Mute for 6 hours'],
-              [5, 'Mute for 1 day'], [6, 'Mute for 3 days'], [7, 'Mute for 3 days'], [8, 'Ban'], [12, 'Ban']];
+              [5, 'Mute for 1 day'], [6, 'Mute for 3 days'], [7, 'Ban for 7 days'], [8, 'Ban for 7 days'],
+              [9, 'Permanent ban'], [12, 'Permanent ban']];
 want.forEach(([n, d]) => ok(n + ' -> ' + d, R.describe(R.punishmentFor(n)) === d, R.describe(R.punishmentFor(n))));
 ok('баллы сгорают через 30 дней', R.STRIKE_TTL === 30 * R.DAY);
 
 console.log('\nправила (для названий в уведомлениях):');
 ok('12 правил по порядку, у каждого название', R.RULES.length === 12 && R.RULES.every((r, i) => r.id === i + 1 && r.title));
 ok('без эмодзи', !/\p{Extended_Pictographic}/u.test(JSON.stringify(R.RULES)));
+const en = R.rulesText('en'), ru = R.rulesText('ru');
+ok('готовые правила для #rules: 12 пунктов и лестница наказаний, влезают в окно Discord',
+   /^\*\*1\. Be respectful\.\*\*/.test(en) && /\*\*12\. /.test(en) && /- 7-8 strikes: Ban for 7 days/.test(en) &&
+   /- 9\+ strikes: Permanent ban/.test(en) && en.length < 3700, en.length);
+ok('и по-русски, с той же нумерацией', /^\*\*1\. Уважайте друг друга\.\*\*/.test(ru) && /\*\*12\. /.test(ru) &&
+   /- 2 балла: Мьют на 10 минут/.test(ru) && /- 5 баллов: Мьют на 1 день/.test(ru) && /- 9\+ баллов: Бан навсегда/.test(ru) && ru.length < 3700, ru.length);
+
+console.log('\nсвои запрещённые слова сервера:');
+const W = ['bananas', 'плохое слово', 'лох'];
+const hit = t => (A.checkCustom(t, W) || {}).detail || null;
+ok('слово целиком, с обходами (пробелы, цифры вместо букв)', hit('I love bananas') === 'bananas' && hit('b a n a n a s') === 'bananas' &&
+   hit('b4n4n4s') === 'bananas' && hit('ты л0х') === 'лох');
+ok('фраза из нескольких слов', hit('это плохое  слово') === 'плохое слово');
+ok('части других слов и похожие слова не задевает', !hit('banana') && !hit('ох как') && !hit('Лохматый кот') && !hit('плохоеслово'));
+ok('находка — по правилам сервера, 1 балл', A.checkCustom('bananas', W).kind === 'custom' && A.checkCustom('bananas', W).weight === 1);
+ok('слов нет — проверки нет', A.checkCustom('bananas', []) === null && A.checkCustom('bananas', undefined) === null);
 
 console.log(fails ? '\nПРОВАЛЕНО проверок: ' + fails : '\nвсе проверки пройдены ✓');
 process.exit(fails ? 1 : 0);

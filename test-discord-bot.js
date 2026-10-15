@@ -355,8 +355,14 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const r1 = await bot._test.punish(g, { id: 'U8' }, A.finding('scam'), {});
   const r2 = await bot._test.punish(g, { id: 'U8' }, A.finding('scam'), {});
   const r3 = await bot._test.punish(g, { id: 'U8' }, A.finding('scam'), {});
-  ok('3, 6, 9 баллов: мьют на час, на 3 дня, бан', r1.step.ms === 3600000 && r2.step.ms === 3 * 86400000 && r3.step.type === 'ban',
+  ok('3, 6, 9 баллов: мьют на час, на 3 дня, бан навсегда', r1.step.ms === 3600000 && r2.step.ms === 3 * 86400000 &&
+     r3.step.type === 'ban' && !r3.step.ms && !bot._test.state().unbans[G + ':U8'],
      [r1, r2, r3].map(r => require('./discordRules.js').describe(r.step)).join(' / '));
+  await bot._test.punish(g, { id: 'U18' }, A.finding('scam'), {});
+  await bot._test.punish(g, { id: 'U18' }, A.finding('scam'), {});
+  const r7 = await bot._test.punish(g, { id: 'U18' }, A.finding('caps'), {});
+  ok('7 баллов — бан на неделю, бот запомнил, когда его снять', r7.step.type === 'ban' && r7.step.ms === 7 * 86400000 &&
+     bot._test.state().unbans[G + ':U18'] > Date.now() + 6 * 86400000);
   c = since(t);
   const dmBan = c.findIndex(x => x.method === 'POST' && x.path === '/channels/dmU8/messages' && /banned/.test(JSON.stringify(x.body)));
   const banCall = c.findIndex(x => x.method === 'PUT' && /bans\/U8$/.test(x.path));
@@ -535,6 +541,82 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   say(OWNER, '!help');
   await sleep(250);
   ok('без секретного начала и неизвестные команды — обычные сообщения, не трогаем', since(t).length === 0);
+
+  console.log('\nправила сервера и свои запрещённые слова:');
+  t = Date.now();
+  say(OWNER, '!qarules');
+  await waitFor(() => panelOf(since(t)));
+  panel = panelOf(since(t));
+  t = Date.now();
+  bid = press(OWNER, panel.id);
+  await waitFor(() => cb(since(t), bid).length);
+  const rm = cb(since(t), bid)[0].body;
+  const rtypes = rm.data.components.map(x => x.type + ':' + x.component.type).join(',');
+  ok('«!rules» — окно: канал, заголовок, правила по-английски и по-русски, свои слова', rm.type === 9 && rtypes === '18:8,18:4,18:4,18:4,18:4', rtypes);
+  const pre = id => (rm.data.components.find(x => x.component.custom_id === id) || {}).component || {};
+  ok('в окне уже вписаны стандартные правила и наказания', /1\. Be respectful/.test(pre('en').value) && /Permanent ban/.test(pre('en').value) &&
+     /Бан навсегда/.test(pre('ru').value) && !pre('words').value);
+  const rulesForm = (words, title) => [
+    { type: 18, component: { type: 8, custom_id: 'channel', values: [CH.rules] } },
+    { type: 18, component: { type: 4, custom_id: 'title', value: title } },
+    { type: 18, component: { type: 4, custom_id: 'en', value: pre('en').value } },
+    { type: 18, component: { type: 4, custom_id: 'ru', value: pre('ru').value } },
+    { type: 18, component: { type: 4, custom_id: 'words', value: words } }];
+  t = Date.now();
+  const rid = submit('rules:' + CH.general, rulesForm('bananas, Free  Robux\nbananas', 'Server Rules'));
+  await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + rid + '/messages/@original$')).length);
+  const rpost = find(since(t), 'POST', /^\/channels\/301\/messages$/)[0];
+  const rbtn = rpost && (partsOf(rpost.body, 1)[0] || { components: [] }).components[0];
+  ok('правила вышли в выбранный канал карточкой в рамке, никого не пингуя', rpost && rpost.body.flags === 32768 &&
+     partsOf(rpost.body, 10)[0].content === '## Server Rules' && /1\. Be respectful/.test(partsOf(rpost.body, 10)[1].content) &&
+     rpost.body.allowed_mentions.parse.length === 0);
+  ok('под правилами — кнопка «Русский»', rbtn && rbtn.style === 2 && rbtn.label === 'Русский' && rbtn.custom_id === 'rules:ru');
+  ok('свои слова запомнены, без повторов', JSON.stringify(bot._test.state().guilds[G].words) === '["bananas","free robux"]',
+     JSON.stringify(bot._test.state().guilds[G].words));
+  t = Date.now();
+  bid = press('U0', 'rules:ru');
+  await waitFor(() => cb(since(t), bid).length);
+  const rru = cb(since(t), bid)[0] && cb(since(t), bid)[0].body;
+  ok('«Русский» может нажать любой — русские правила видит только он', rru && rru.type === 4 && rru.data.flags === (64 | 32768) &&
+     /Уважайте друг друга/.test(JSON.stringify(rru.data.components)));
+  t = Date.now();
+  const bw = say('U20', 'I really love bananas');
+  await waitFor(() => find(since(t), 'DELETE', new RegExp('/messages/' + bw.id + '$')).length);
+  await sleep(150);
+  const s20 = bot._test.state().strikes[G + ':U20'] || [];
+  ok('сообщение со своим запрещённым словом удалено, балл по правилам сервера', s20.length === 1 && s20[0].k === 'custom');
+  t = Date.now();
+  const rid2 = submit('rules:' + CH.general, rulesForm('', 'Server Rules'));
+  await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + rid2 + '/messages/@original$')).length);
+  ok('повторный «!rules» в тот же канал правит прежний пост, а не дублирует', rpost &&
+     find(since(t), 'PATCH', new RegExp('^/channels/301/messages/' + rpost.resId + '$')).length === 1 &&
+     find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0);
+  ok('слова можно убрать', bot._test.state().guilds[G].words.length === 0);
+
+  console.log('\nбан и разбан:');
+  t = Date.now();
+  say(OWNER, '!qaban <@U21> 7d cheating', { mentions: [{ id: 'U21', member: { roles: [] } }] });
+  await waitFor(() => find(since(t), 'PUT', /bans\/U21$/).length);
+  await sleep(150);
+  c = since(t);
+  const un21 = bot._test.state().unbans[G + ':U21'];
+  ok('«!ban @игрок 7d причина» — бан на неделю, бот запомнил, когда снять', un21 && Math.abs(un21 - Date.now() - 7 * 86400000) < 60000);
+  const dm21 = c.findIndex(x => x.method === 'POST' && x.path === '/channels/dmU21/messages' && /banned for 7 days/.test(JSON.stringify(x.body)));
+  ok('сначала личное сообщение со сроком, потом бан', dm21 !== -1 && c.findIndex(x => x.method === 'PUT' && /bans\/U21$/.test(x.path)) > dm21);
+  t = Date.now();
+  await bot._test.releaseBans(Date.now() + 8 * 86400000);
+  ok('срок вышел — бот сам снимает бан и пишет в журнал', find(since(t), 'DELETE', /bans\/U21$/).length === 1 &&
+     !bot._test.state().unbans[G + ':U21'] && /Temporary ban is over/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/))));
+  t = Date.now();
+  say(OWNER, '!qaban <@U22> scam links', { mentions: [{ id: 'U22', member: { roles: [] } }] });
+  await waitFor(() => find(since(t), 'PUT', /bans\/U22$/).length);
+  await sleep(100);
+  ok('«!ban» без срока — навсегда', !bot._test.state().unbans[G + ':U22'] &&
+     /Case \d+: scam links/.test(decodeURIComponent(find(since(t), 'PUT', /bans\/U22$/)[0].reason || '')));
+  t = Date.now();
+  say(OWNER, '!qaunban <@U22>', { mentions: [{ id: 'U22' }] });
+  await waitFor(() => find(since(t), 'DELETE', /bans\/U22$/).length);
+  ok('«!unban» снимает бан', find(since(t), 'DELETE', /bans\/U22$/).length === 1);
 
   console.log('\nновости и Logs в Discord:');
   process.env.DISCORD_UPDATES_CHANNEL_ID = CH.updates;

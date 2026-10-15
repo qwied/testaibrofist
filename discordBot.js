@@ -54,7 +54,7 @@ const WEEK = 7 * 24 * 60 * 60 * 1000;
 const NOTICE_MS = 10 * 1000;     // короткое предупреждение в канале исчезает само
 
 // banned — приметы забаненных (аватарка, имя): по ним ловим обход бана
-let state = { feed: [], guilds: {}, strikes: {}, cases: 0, banned: {} };
+let state = { feed: [], guilds: {}, strikes: {}, cases: 0, banned: {}, unbans: {} };
 let loaded = false, saveTimer = null;
 const guilds = new Map();        // id -> { id, name, owner, roles: Map, channels: Map }
 const setupDone = new Set();
@@ -85,7 +85,8 @@ function loadState() {
       guilds: s.guilds && typeof s.guilds === 'object' ? s.guilds : {},
       strikes: s.strikes && typeof s.strikes === 'object' ? s.strikes : {},
       cases: Number(s.cases) || 0,
-      banned: s.banned && typeof s.banned === 'object' ? s.banned : {}
+      banned: s.banned && typeof s.banned === 'object' ? s.banned : {},
+      unbans: s.unbans && typeof s.unbans === 'object' ? s.unbans : {}     // «сервер:игрок» -> когда снять бан
     };
   } catch (e) { /* первый запуск */ }
 }
@@ -223,7 +224,7 @@ async function modlog(g, entry) {
     { name: 'User', value: '<@' + entry.user + '> (' + entry.user + ')', inline: true },
     { name: 'By', value: entry.by ? '<@' + entry.by + '>' : 'Automod', inline: true }
   ];
-  if (entry.rule !== undefined) fields.push({ name: 'Rule', value: ruleLine(entry.rule), inline: true });
+  if (entry.rule !== undefined) fields.push({ name: 'Rule', value: entry.ruleText || ruleLine(entry.rule), inline: true });
   if (entry.reason) fields.push({ name: 'Reason', value: String(entry.reason).slice(0, 1000) });
   if (entry.strikes !== undefined) fields.push({ name: 'Active strikes', value: String(entry.strikes), inline: true });
   if (entry.channel) fields.push({ name: 'Channel', value: '<#' + entry.channel + '>', inline: true });
@@ -247,6 +248,34 @@ async function ban(g, uid, reason) {
   return ok(r);
 }
 
+/* Временный бан: когда снять. ms нет — бан навсегда, снимать нечего. */
+function setUnban(gid, uid, ms) {
+  if (ms) state.unbans[gid + ':' + uid] = Date.now() + ms;
+  else delete state.unbans[gid + ':' + uid];
+  save();
+}
+
+// бан снят (сам или владельцем): это тот же игрок, а не второй аккаунт — из приметы убираем
+function forgetBan(gid, uid) {
+  delete state.unbans[gid + ':' + uid];
+  if (state.banned[gid]) state.banned[gid] = state.banned[gid].filter(b => b.id !== uid);
+  save();
+}
+
+// срок временных банов вышел — снимаем (проверка раз в минуту)
+async function releaseBans(now) {
+  now = now || Date.now();
+  for (const [key, until] of Object.entries(state.unbans)) {
+    if (until > now) continue;
+    const [gid, uid] = key.split(':');
+    const r = await api('DELETE', '/guilds/' + gid + '/bans/' + uid, null, { reason: 'Temporary ban is over' });
+    if (!ok(r) && r.status !== 404) continue;                    // не вышло — попробуем через минуту
+    forgetBan(gid, uid);
+    const g = guilds.get(gid);
+    if (g && ok(r)) await modlog(g, { caseNo: ++state.cases, title: 'Temporary ban is over', color: R.COLORS.ok, user: uid }).catch(() => {});
+  }
+}
+
 /* Штраф + наказание по лестнице. f — находка ({rule, weight, kind, note}),
    ctx.by — модератор (для /warn), ctx.channel — где было нарушение,
    ctx.silent — не писать в канал (сообщение и так не появилось),
@@ -258,6 +287,7 @@ async function punish(g, user, f, ctx) {
   const caseNo = ++state.cases;
   save();
   const rule = R.ruleById(f.rule);
+  const ruleText = rule ? rule.id + '. ' + rule.title : f.kind === 'custom' ? 'Server rules' : 'Moderator decision';
   const action = R.describe(step);
   const why = f.note + (f.detail ? ' (' + f.detail + ')' : '');
   const reason = 'Case ' + caseNo + ': ' + (rule ? 'rule ' + rule.id + ', ' : '') + why;
@@ -265,10 +295,11 @@ async function punish(g, user, f, ctx) {
   // личное сообщение — до бана, иначе оно уже не дойдёт
   await dm(user.id, { embeds: [{
     color: color(step),
-    title: step.type === 'ban' ? 'You have been banned' : step.type === 'mute' ? 'You have been muted' : 'Warning',
+    title: step.type === 'ban' ? (step.ms ? 'You have been banned for ' + R.duration(step.ms) : 'You have been banned permanently')
+         : step.type === 'mute' ? 'You have been muted' : 'Warning',
     description: ctx.dm || ((ctx.by ? 'A moderator of **' : 'Your message in **') + g.name + (ctx.by ? '** gave you a strike.' : '** was removed.')),
     fields: [
-      { name: 'Rule', value: rule ? rule.id + '. ' + rule.title : 'Moderator decision', inline: true },
+      { name: 'Rule', value: ruleText, inline: true },
       { name: 'Action', value: action, inline: true },
       { name: 'Reason', value: why.slice(0, 1000) },
       { name: 'Active strikes', value: total + ' (each strike expires after 30 days)' }
@@ -281,7 +312,10 @@ async function punish(g, user, f, ctx) {
     // уже замьючен дольше (например, модератором на неделю) — не сокращаем
     if (!(ctx.until && ctx.until > Date.now() + step.ms)) done = await timeout(g, user.id, step.ms, reason);
   }
-  else if (step.type === 'ban') done = await ban(g, user.id, reason);
+  else if (step.type === 'ban') {
+    done = await ban(g, user.id, reason);
+    if (done) setUnban(g.id, user.id, step.ms);
+  }
 
   if (ctx.channel && !ctx.silent && step.type !== 'ban') {
     const what = ctx.by ? 'you received a strike' : 'your message was removed';
@@ -289,7 +323,7 @@ async function punish(g, user, f, ctx) {
                  '. ' + action + ', ' + R.strikes(total) + '.').catch(() => {});
   }
   await modlog(g, { caseNo, title: action + (done ? '' : ' (failed: no permission)'), color: color(step),
-                    user: user.id, by: ctx.by, rule: f.rule || 0, reason: why, strikes: total,
+                    user: user.id, by: ctx.by, rule: f.rule || 0, ruleText, reason: why, strikes: total,
                     channel: ctx.channel, excerpt: ctx.excerpt }).catch(() => {});
   return { step, total, caseNo, done };
 }
@@ -426,6 +460,8 @@ async function onMessage(m, edited) {
     return softRemove(m, 'new members can post links 10 minutes after joining.');
 
   const found = A.inspect(m, { nsfw: ch.nsfw });
+  const custom = A.checkCustom(m.content, gstate(g.id).words);
+  if (custom) found.push(custom);
   // «мне 11 лет» — не наказание, а сообщение владельцу: решать ему
   const young = found.findIndex(f => f.kind === 'underage');
   if (young !== -1) {
@@ -646,7 +682,7 @@ async function ensureNativeAutomod(g) {
    видит только владелец. В закрытом канале не видно даже панели. */
 const PANEL_MS = 60 * 1000;
 const CONFIRM_MS = 5 * 1000;
-const COMMANDS = ['news', 'updates', 'warn', 'mute', 'unmute', 'strikes', 'pardon', 'modlog', 'help'];
+const COMMANDS = ['news', 'updates', 'rules', 'warn', 'mute', 'unmute', 'ban', 'unban', 'strikes', 'pardon', 'modlog', 'help'];
 /* Начало команд задаётся на хостинге (DISCORD_CMD_PREFIX, например «!ab3»
    -> «!ab3news»). В открытом коде его нет — по исходникам не узнать, что
    набирать. Без настройки команды начинаются просто с «!». */
@@ -655,16 +691,20 @@ const PREFIX = (() => {
   return p.charAt(0) === '!' ? p : '!' + p;
 })();
 const panels = new Map();          // id -> { kind, guild, channel, message, data }
+const BANS = { '1d': R.DAY, '3d': 3 * R.DAY, '7d': 7 * R.DAY, '30d': 30 * R.DAY, 'forever': 0, 'perm': 0 };
 const DURATIONS = { '10m': ['10 minutes', 10 * R.MIN], '1h': ['1 hour', R.HOUR], '6h': ['6 hours', 6 * R.HOUR],
                     '1d': ['1 day', R.DAY], '3d': ['3 days', 3 * R.DAY], '7d': ['7 days', 7 * R.DAY] };
 
 const HELP = [
   '**' + PREFIX + 'news** - write a post: channel, title, text, up to 4 images and a link button',
   '**' + PREFIX + 'updates** - choose the channels for automatic game updates',
+  '**' + PREFIX + 'rules** - post the server rules (English, with a Russian button) and set extra banned words',
   '**' + PREFIX + 'warn @user reason** - give a strike, punished by the same ladder as automod ' +
     '(add a rule number: ' + PREFIX + 'warn @user 2 spam)',
   '**' + PREFIX + 'mute @user 1h reason** - mute for 10m, 1h, 6h, 1d, 3d or 7d',
   '**' + PREFIX + 'unmute @user** - lift a mute',
+  '**' + PREFIX + 'ban @user 7d reason** - ban for 1d, 3d, 7d or 30d, without a duration - forever',
+  '**' + PREFIX + 'unban @user** - lift a ban (a user ID works too)',
   '**' + PREFIX + 'strikes @user** - show active strikes',
   '**' + PREFIX + 'pardon @user** - remove all strikes',
   '**' + PREFIX + 'modlog** - send moderation logs to this channel, **' + PREFIX + 'modlog off** to stop',
@@ -714,7 +754,7 @@ async function confirm(channel, text) {
 async function openPanel(g, m, kind, data) {
   const id = crypto.randomBytes(9).toString('hex');
   const label = { news: 'Open the post editor', updates: 'Choose update channels', help: 'Show commands',
-                  strikes: 'Show strikes' }[kind];
+                  strikes: 'Show strikes', rules: 'Open the rules editor' }[kind];
   const r = await sendMessage(m.channel_id, { allowed_mentions: { parse: [] },
     components: [{ type: 1, components: [{ type: 2, style: 2, label, custom_id: 'panel:' + id }] }] });
   if (!ok(r) || !r.body) return;
@@ -749,7 +789,7 @@ async function onOwnerCommand(g, m) {
   lastCommandAt = Date.now();
   api('DELETE', '/channels/' + m.channel_id + '/messages/' + m.id).catch(() => {});
 
-  if (cmd === 'news' || cmd === 'updates' || cmd === 'help') { await openPanel(g, m, cmd); return true; }
+  if (cmd === 'news' || cmd === 'updates' || cmd === 'help' || cmd === 'rules') { await openPanel(g, m, cmd); return true; }
   if (cmd === 'modlog') {
     const off = /^off$/i.test(args);
     gstate(g.id).modlog = off ? '' : m.channel_id;
@@ -771,6 +811,13 @@ async function onOwnerCommand(g, m) {
     save();
     await modlog(g, { caseNo, title: 'Strikes removed', color: R.COLORS.ok, user: uid, by: m.author.id });
     await confirm(m.channel_id, 'All strikes of <@' + uid + '> are removed.');
+    return true;
+  }
+  if (cmd === 'unban') {
+    const r = await api('DELETE', '/guilds/' + g.id + '/bans/' + uid, null, { reason: 'Unbanned by the owner' });
+    if (ok(r) || r.status === 404) forgetBan(g.id, uid);
+    if (ok(r)) await modlog(g, { caseNo: ++state.cases, title: 'Ban lifted', color: R.COLORS.ok, user: uid, by: m.author.id });
+    await confirm(m.channel_id, ok(r) ? '<@' + uid + '> is unbanned.' : r.status === 404 ? '<@' + uid + '> is not banned.' : 'I could not unban them.');
     return true;
   }
   // Discord не даёт наказывать администраторов, а себя и бота — незачем
@@ -805,6 +852,27 @@ async function onOwnerCommand(g, m) {
       await modlog(g, { caseNo, title: 'Mute for ' + d[0], color: R.COLORS.mute, user: uid, by: m.author.id, reason });
     }
     await confirm(m.channel_id, done ? '<@' + uid + '> is muted for ' + d[0] + '.' : 'I could not mute them: my role must be above theirs and have Timeout Members.');
+    return true;
+  }
+  if (cmd === 'ban') {
+    const bm = /^(\S+)\s*([\s\S]*)$/.exec(rest) || [];
+    const key = String(bm[1] || '').toLowerCase();
+    const ms = key in BANS ? BANS[key] : 0;                        // без срока — навсегда
+    const reason = ((key in BANS ? bm[2] : rest) || '').trim().slice(0, 300) || 'Banned by the owner';
+    const what = ms ? 'Ban for ' + R.duration(ms) : 'Permanent ban';
+    const caseNo = ++state.cases;
+    save();
+    // личное сообщение — до бана, иначе оно уже не дойдёт
+    await dm(uid, { embeds: [{ color: R.COLORS.ban, title: ms ? 'You have been banned for ' + R.duration(ms) : 'You have been banned permanently',
+      description: 'You were banned from **' + g.name + '**.', fields: [{ name: 'Reason', value: reason }],
+      footer: { text: ms ? 'The ban is lifted automatically when it ends.' : 'If you think this is a mistake, message a moderator.' } }] }).catch(() => {});
+    const done = await ban(g, uid, 'Case ' + caseNo + ': ' + reason);
+    if (done) {
+      setUnban(g.id, uid, ms);
+      await modlog(g, { caseNo, title: what, color: R.COLORS.ban, user: uid, by: m.author.id, reason });
+    }
+    await confirm(m.channel_id, done ? '<@' + uid + '> is banned ' + (ms ? 'for ' + R.duration(ms) : 'permanently') + '.'
+                                     : 'I could not ban them: my role must be above theirs and have Ban Members.');
     return true;
   }
   if (cmd === 'unmute') {
@@ -858,6 +926,82 @@ function updatesModalClassic(g) {
     row('channels', 'Channel names, separated by commas', 1, { max_length: 400, value: mine.join(', '),
                                                               placeholder: 'updates, news' })
   ] };
+}
+
+/* Правила сервера (команда rules): канал, заголовок, правила по-английски
+   (их видно в посте) и по-русски (по кнопке под постом, видит только
+   нажавший), свои запрещённые слова. Сразу вписаны стандартные правила
+   и лестница наказаний — бот следит именно за ними. */
+const RULES_TITLE = 'AIBROFIST Server Rules';
+function rulesNow(g) {
+  const st = gstate(g.id), r = st.rules || {};
+  return { channel: r.channel || '', title: r.title || RULES_TITLE, en: r.en || R.rulesText('en'),
+           ru: r.ru === undefined ? R.rulesText('ru') : r.ru, words: (st.words || []).join(', ') };
+}
+function rulesModal(g, p) {
+  const r = rulesNow(g), channel = r.channel && g.channels.has(r.channel) ? r.channel : p.channel;
+  return { custom_id: 'rules:' + p.channel, title: 'Server rules', components: [
+    field('Channel', null, { type: 8, custom_id: 'channel', channel_types: [0, 5], min_values: 1, max_values: 1,
+                             default_values: [{ id: channel, type: 'channel' }] }),
+    field('Title', null, { type: 4, custom_id: 'title', style: 1, required: true, max_length: 100, value: r.title }),
+    field('Rules in English', 'Shown in the post. Keep the rule numbers: the bot names them.',
+          { type: 4, custom_id: 'en', style: 2, required: true, max_length: 3700, value: r.en.slice(0, 3700) }),
+    field('Rules in Russian', 'Shown by the button under the post. Leave empty for no button.',
+          { type: 4, custom_id: 'ru', style: 2, required: false, max_length: 3700, value: r.ru.slice(0, 3700) }),
+    field('Extra banned words', 'Comma or new line between them. A message with one is removed and gets a strike.',
+          Object.assign({ type: 4, custom_id: 'words', style: 2, required: false, max_length: 2000 }, r.words ? { value: r.words } : {}))
+  ] };
+}
+function rulesModalClassic(g, p) {
+  const r = rulesNow(g), c = g.channels.get(r.channel && g.channels.has(r.channel) ? r.channel : p.channel);
+  return { custom_id: 'rules:' + p.channel, title: 'Server rules', components: [
+    row('channel', 'Channel', 1, { required: true, max_length: 100, value: c ? c.name : '' }),
+    row('title', 'Title', 1, { required: true, max_length: 100, value: r.title }),
+    row('en', 'Rules in English', 2, { required: true, max_length: 3700, value: r.en.slice(0, 3700) }),
+    row('ru', 'Rules in Russian (button under the post)', 2, { max_length: 3700, value: r.ru.slice(0, 3700) }),
+    row('words', 'Extra banned words (comma between them)', 2, Object.assign({ max_length: 2000 }, r.words ? { value: r.words } : {}))
+  ] };
+}
+const rulesPost = (title, en, ru) => frame({ color: R.COLORS.neutral, title, text: en,
+  footer: 'AIBROFIST  ·  Updated <t:' + Math.floor(Date.now() / 1000) + ':D>',
+  button: ru ? { label: 'Русский', id: 'rules:ru' } : null });
+
+async function onRulesSubmit(i, g) {
+  await defer(i);
+  const v = modalValues(i);
+  const chosen = Array.isArray(v.channel) ? g.channels.get(v.channel[0]) : channelByName(g, v.channel);
+  if (!chosen || (chosen.type !== 0 && chosen.type !== 5)) return finish(i, card('I cannot find that channel.'));
+  const title = String(v.title || '').trim() || RULES_TITLE;
+  const en = String(v.en || '').trim(), ru = String(v.ru || '').trim();
+  if (!en) return finish(i, card('The rules are empty.'));
+  // слова: через запятую или с новой строки, без повторов, не короче двух букв
+  const words = [...new Set(String(v.words || '').split(/[,\n;]+/).map(w => w.trim().toLowerCase().replace(/\s+/g, ' '))
+                       .filter(w => w.length >= 2 && w.length <= 60))].slice(0, 200);
+  const st = gstate(g.id), old = st.rules || {};
+  const msg = rulesPost(title, linkify(g, en), ru);
+  // тот же канал — правим прежний пост (он остаётся на месте), иначе — новый, а старый убираем
+  let r = null;
+  if (old.message && old.channel === chosen.id) r = await api('PATCH', '/channels/' + chosen.id + '/messages/' + old.message, msg);
+  if (!r || !ok(r)) {
+    r = await api('POST', '/channels/' + chosen.id + '/messages', msg);
+    if (ok(r) && old.message && !(old.channel === chosen.id && old.message === r.body.id))
+      api('DELETE', '/channels/' + old.channel + '/messages/' + old.message).catch(() => {});
+  }
+  if (!ok(r) || !r.body) return finish(i, card('Could not post in <#' + chosen.id + '> (error ' + r.status + '). Check that I can send messages there.'));
+  st.rules = { channel: chosen.id, message: r.body.id, title, en, ru };
+  st.words = words;
+  save();
+  return finish(i, card('Rules are in <#' + chosen.id + '>: https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.body.id +
+    '\n' + (ru ? 'The Russian version opens with the button under the post.' : 'No Russian version, so there is no button.') +
+    '\n' + (words.length ? 'Extra banned words: ' + words.length + '. Messages with them are removed and get a strike.' : 'No extra banned words.')));
+}
+
+// кнопка «Русский» под правилами — нажать может любой, ответ видит только он
+function rulesInRussian(i, g) {
+  const r = gstate(g.id).rules;
+  if (!r || !r.ru) return reply(i, card('Русской версии правил пока нет.'));
+  const box = frame({ color: R.COLORS.neutral, title: 'Правила сервера', text: linkify(g, r.ru) });
+  return respond(i, { type: 4, data: Object.assign(box, { flags: box.flags | 64 }) });
 }
 
 async function showModal(i, modern, classic) {
@@ -966,6 +1110,7 @@ async function onInteraction(i) {
   const uid = i.member && i.member.user && i.member.user.id;
   const cid = String((i.data && i.data.custom_id) || '');
   if (i.type !== 3 && i.type !== 5) return;
+  if (i.type === 3 && cid === 'rules:ru') return rulesInRussian(i, g);
   if (uid !== g.owner) return reply(i, card('Only the server owner can use this.'));
   if (i.type === 3 && cid.indexOf('panel:') === 0) {
     const id = cid.slice(6), p = panels.get(id);
@@ -973,12 +1118,14 @@ async function onInteraction(i) {
     closePanel(id);
     if (p.kind === 'news') return showModal(i, newsModal(g, p), newsModalClassic(g, p));
     if (p.kind === 'updates') return showModal(i, updatesModal(g), updatesModalClassic(g));
+    if (p.kind === 'rules') return showModal(i, rulesModal(g, p), rulesModalClassic(g, p));
     if (p.kind === 'help') return reply(i, card(HELP));
     if (p.kind === 'strikes') return reply(i, card(strikesText(g, p.data.user)));
     return;
   }
   if (i.type === 5 && cid.indexOf('news:') === 0) return onNewsSubmit(i, g);
   if (i.type === 5 && cid.indexOf('updates:') === 0) return onUpdatesSubmit(i, g);
+  if (i.type === 5 && cid.indexOf('rules:') === 0) return onRulesSubmit(i, g);
 }
 
 /* Слэш-команд у бота больше нет — все команды секретные, с «!». Если
@@ -1276,6 +1423,7 @@ function start() {
     flood.sweep();
     const now = Date.now();
     for (const [k, v] of lastHit) if (now - v.t > COOLDOWN) lastHit.delete(k);
+    releaseBans().catch(e => log('unban failed:', e.message));
   }, 60000);
   if (t1.unref) t1.unref();
   timers.push(t1);
@@ -1343,4 +1491,4 @@ function feedChannels() {
   return state.feed.slice();
 }
 
-module.exports = { start, stop, feedChannels, register, status, startRest, _test: { state: () => state, guilds, punish, reload: () => { loaded = false; loadState(); } } };
+module.exports = { start, stop, feedChannels, register, status, startRest, _test: { state: () => state, guilds, punish, releaseBans, reload: () => { loaded = false; loadState(); } } };

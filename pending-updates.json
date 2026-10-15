@@ -1,4 +1,9 @@
 {
   "base": "4bb6ece7bc222da8287ee9b5cb5460238c079dfb",
-  "updates": []
+  "updates": [
+    {
+      "title": "Server rules in Discord",
+      "text": "The Discord bot can post the server rules with a Russian version. After mutes, repeated rule breaking now leads to a 7-day ban, and only then to a permanent ban."
+    }
+  ]
 }

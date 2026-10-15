@@ -41,6 +41,8 @@ const KIND = {
   underage:    { rule: 12, weight: 0, note: 'Says they are under 13' },
   doxx:        { rule: 6, weight: 2, note: 'Posting an IP address' },
   badfile:     { rule: 5, weight: 2, note: 'Executable file' },
+  // свои запрещённые слова сервера (владелец задаёт их командой rules)
+  custom:      { rule: 0, weight: 1, note: 'Word banned on this server' },
   scam:        { rule: 5, weight: 3, note: 'Scam or phishing link' },
   grabber:     { rule: 5, weight: 3, note: 'IP grabber link' }
 };
@@ -445,7 +447,23 @@ class FloodWatch {
   }
 }
 
+/* Свои запрещённые слова сервера: слово или фраза целиком, с теми же
+   обходами, что у оскорблений («с л о в о», «сл0во», латиница вместо
+   кириллицы). Русские слова сравниваются в кириллице, остальные — в
+   латинице: иначе «лох» совпал бы с «ох». */
+function checkCustom(text, words) {
+  if (!words || !words.length || !text) return null;
+  const forms = { lat: [latinForm(text, false), latinForm(text, true)], cyr: [cyrForm(text, false), cyrForm(text, true)] };
+  for (const w of words) {
+    const cyr = /[а-яё]/i.test(w);
+    const want = (cyr ? cyrForm(w, false) : latinForm(w, false)).trim();
+    if (want.length < 2) continue;
+    if (forms[cyr ? 'cyr' : 'lat'].some(f => f.indexOf(' ' + want + ' ') !== -1)) return finding('custom', { detail: w });
+  }
+  return null;
+}
+
 module.exports = {
-  KIND, finding, inspect, checkLinks, checkSpam, checkWords, checkPrivacy, checkFiles, checkRules, checkName,
+  KIND, finding, inspect, checkCustom, checkLinks, checkSpam, checkWords, checkPrivacy, checkFiles, checkRules, checkName,
   inviteCodes, links, isPhish, latinForm, cyrForm, FloodWatch, dist
 };

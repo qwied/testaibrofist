@@ -111,19 +111,24 @@ const ok = r => r && r.status >= 200 && r.status < 300;
    У такого сообщения нет обычного текста и вставок (embeds), а упоминания
    в тексте карточки срабатывают — кого можно пинговать, решает mentions.
    o: { color, title, text, images: [url или attachment://имя], footer,
-        button: { label, url }, mentions } */
+        button: { label, url } (ссылка) или { label, id } (кнопка бота), mentions } */
 const COMPONENTS_V2 = 1 << 15;
 function frame(o) {
   const inner = [];
   const title = String(o.title || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   if (title) inner.push({ type: 10, content: '## ' + title });
   // у всех текстов карточки вместе предел 4000 знаков
-  const text = String(o.text || '').trim().slice(0, 3600);
+  const footer = o.footer ? String(o.footer).slice(0, 150) : '';
+  const text = String(o.text || '').trim().slice(0, 3950 - title.length - footer.length);
   if (text) inner.push({ type: 10, content: text });
   const images = (o.images || []).filter(Boolean).slice(0, 10);
   if (images.length) inner.push({ type: 12, items: images.map(url => ({ media: { url } })) });
-  if (o.footer) inner.push({ type: 14, divider: true, spacing: 1 }, { type: 10, content: '-# ' + String(o.footer).slice(0, 150) });
-  if (o.button) inner.push({ type: 1, components: [{ type: 2, style: 5, label: String(o.button.label).slice(0, 80), url: o.button.url }] });
+  if (footer) inner.push({ type: 14, divider: true, spacing: 1 }, { type: 10, content: '-# ' + footer });
+  if (o.button) {
+    const label = String(o.button.label).slice(0, 80);
+    inner.push({ type: 1, components: [o.button.id ? { type: 2, style: 2, label, custom_id: o.button.id }
+                                                   : { type: 2, style: 5, label, url: o.button.url }] });
+  }
   if (!inner.length) inner.push({ type: 10, content: '​' });
   return { flags: COMPONENTS_V2, allowed_mentions: o.mentions || { parse: [] },
            components: [{ type: 17, accent_color: o.color, components: inner }] };
