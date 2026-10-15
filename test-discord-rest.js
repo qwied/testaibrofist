@@ -157,13 +157,14 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   console.log('\nсекретная команда и кнопки по HTTP:');
   t = Date.now();
   const cmd = say(OWNER, '!qanews');
-  await waitFor(() => find(since(t), 'POST', /^\/channels\/300\/messages$/).length);
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/300\/messages$/).some(x => x.body && x.body.components));
   ok('«!qanews» удалено, вместо него панель с кнопкой', find(since(t), 'DELETE', new RegExp('/messages/' + cmd.id + '$')).length === 1);
   const st = await bot.status();
   ok('на странице состояния видно, что бот читает каналы и узнал команду', st.reading && st.reading.channels === 2 && st.reading.rounds > 0 &&
      /s ago$/.test(st.reading.lastRound) && /s ago$/.test(st.reading.lastCommand) && st.problems.join() === 'none', st.reading);
-  const panel = store[CH.general].filter(x => x.author.id === BOT).slice(-1)[0];
-  const panelCall = find(since(t), 'POST', /^\/channels\/300\/messages$/).slice(-1)[0];
+  // панель — сообщение с кнопкой (не предупреждение, которое могло прийти позже)
+  const panelCall = find(since(t), 'POST', /^\/channels\/300\/messages$/).find(x => x.body && x.body.components);
+  const panel = panelCall && store[CH.general].find(x => x.id === panelCall.resId);
   const customId = panelCall && panelCall.body.components[0].components[0].custom_id;
 
   let route = null;
