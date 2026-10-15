@@ -111,14 +111,44 @@ function nextId() {
   return id;
 }
 
+// ширина и высота из заголовка файла (PNG, GIF, JPEG); не узнали — 0
+function imageSize(buf, ext) {
+  try {
+    if (ext === 'png') return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+    if (ext === 'gif') return { w: buf.readUInt16LE(6), h: buf.readUInt16LE(8) };
+    if (ext === 'jpg') {
+      for (let i = 2; i + 9 < buf.length;) {
+        if (buf[i] !== 0xFF) break;
+        const m = buf[i + 1];
+        if (m >= 0xC0 && m <= 0xCF && m !== 0xC4 && m !== 0xC8 && m !== 0xCC)
+          return { w: buf.readUInt16BE(i + 7), h: buf.readUInt16BE(i + 5) };
+        i += 2 + buf.readUInt16BE(i + 2);
+      }
+    }
+  } catch (e) { /* битый заголовок — просто без размеров */ }
+  return { w: 0, h: 0 };
+}
+
 /* Новость из updates.json (см. updatesFeed.js): тот же вид, что у /addLog,
    только без перевода — записи там уже по-английски. src — метка
-   источника: по ней та же запись второй раз в ленту не попадёт. */
-function addAutoLog(src, title, text, date) {
+   источника: по ней та же запись второй раз в ленту не попадёт.
+   files — картинки новости (файлы сайта): копируем их в data/logimg, как
+   загруженные владельцем, — дальше лента работает с ними как обычно. */
+function addAutoLog(src, title, text, date, files) {
   if (logs.some(l => l.src === src)) return null;
+  const images = [];
+  (files || []).slice(0, IMG_PER_LOG).forEach(f => {
+    try {
+      const buf = fs.readFileSync(f);
+      const s = sniff(buf);
+      if (!s || s.ext === 'svg' || buf.length > IMG_MAX_BYTES) return;
+      const size = imageSize(buf, s.ext);
+      images.push({ u: saveImage(buf, s.ext), w: size.w, h: size.h });
+    } catch (e) { /* файла нет — новость выйдет без этой картинки */ }
+  });
   const entry = {
     id: nextId(), title: String(title || '').slice(0, 120),
-    text: String(text || '').slice(0, 4000), images: [], date: date || Date.now(), src
+    text: String(text || '').slice(0, 4000), images, date: date || Date.now(), src
   };
   logs.push(entry);
   save();

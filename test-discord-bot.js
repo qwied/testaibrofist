@@ -162,8 +162,11 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     DISCORD_BOT_TOKEN: 'test-token', DISCORD_API_BASE: 'http://127.0.0.1:' + port + '/api/v10',
     DISCORD_GATEWAY_URL: 'ws://127.0.0.1:' + port + '/gw', DISCORD_BOT_STATE: path.join(tmp, 'bot.json'),
     UPDATES_FEED_STATE: path.join(tmp, 'feed.json'), DISCORD_SCAN_IMAGES: '0', DISCORD_TEST_CDN: '127.0.0.1:' + port,
-    DISCORD_CMD_PREFIX: 'qa', UPDATES_FILE: path.join(tmp, 'updates.json'), DISCORD_RULES_CHANNEL_ID: CH.rules
+    DISCORD_CMD_PREFIX: 'qa', UPDATES_FILE: path.join(tmp, 'updates.json'), DISCORD_RULES_CHANNEL_ID: CH.rules,
+    NEWS_DIR: path.join(tmp, 'news')
   });
+  fs.mkdirSync(path.join(tmp, 'news'));
+  fs.writeFileSync(path.join(tmp, 'news', 'shot.png'), 'PNG');
   delete process.env.DISCORD_UPDATES_CHANNEL_ID; delete process.env.DISCORD_MODLOG_CHANNEL_ID;
   const { api } = require('./discordApi.js');
   const bot = require('./discordBot.js');
@@ -774,17 +777,23 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const today = new Date().toISOString().slice(0, 10);
   fs.writeFileSync(process.env.UPDATES_FILE, JSON.stringify([
     { id: '2026-10-13-1', date: '2026-10-13', title: 'Old news', text: 'old' },
-    { id: today + '-1', date: today, title: 'Discord bot 🎉', text: '- First line\n- Second line' }]));
-  const logged = [];
+    { id: today + '-1', date: today, title: 'Discord bot 🎉', text: '- First line\n- Second line',
+      images: ['/news/shot.png', '/news/missing.png', '/news/../server.js', 'https://evil.example/x.png'] }]));
+  const logged = [], loggedFiles = [];
   t = Date.now();
   denied.add(CH.updates);              // в #updates боту пока писать нельзя
-  feed.start({ onLogChange: fn => { hook = fn; }, removeAutoLogs: () => 0, addAutoLog: (src, title) => { logged.push(src + '|' + title); } });
+  feed.start({ onLogChange: fn => { hook = fn; }, removeAutoLogs: () => 0, addAutoLog: (src, title, text, date, files) => { logged.push(src + '|' + title); loggedFiles.push(files); } });
   await waitFor(() => logged.length);
   await sleep(200);
   const fresh = find(since(t), 'POST', /^\/channels\/(302|306)\/messages$/);
   ok('новость из updates.json — во все каналы новостей, потом в Logs', fresh.length === 2 && logged.length === 1 &&
      logged[0] === 'upd:' + today + '-1|Discord bot', logged.join());
   ok('и в Discord, и в Logs — без эмодзи', fresh[0] && partsOf(fresh[0].body, 10)[0].content === '## Discord bot');
+  const gal = fresh[0] && partsOf(fresh[0].body, 12)[0];
+  ok('картинки новости: в Discord — ссылкой на сайт, в Logs — файлом; чужие и несуществующие отброшены',
+     gal && gal.items.length === 1 && /\/news\/shot\.png$/.test(gal.items[0].media.url) &&
+     loggedFiles[0] && loggedFiles[0].length === 1 && loggedFiles[0][0] === path.join(tmp, 'news', 'shot.png'),
+     gal && JSON.stringify(gal.items));
   const when = fresh[0] && /<t:(\d+):f>/.exec(partsOf(fresh[0].body, 10).slice(-1)[0].content);
   ok('время на карточке — момент выхода, а не полночь даты', when && Math.abs(when[1] * 1000 - Date.now()) < 60000, when && when[0]);
   ok('новости, вышедшие до появления бота, не публикуются', !JSON.stringify(fresh).includes('Old news'));

@@ -1,4 +1,9 @@
 {
   "base": "58aa94f629ad3514a5a2b18d894cc153f506fc8a",
-  "updates": []
+  "updates": [
+    {
+      "title": "Pictures in news",
+      "text": "Game news in Logs and in Discord can now show pictures."
+    }
+  ]
 }

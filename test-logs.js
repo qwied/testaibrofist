@@ -181,6 +181,27 @@ const files = () => { try { return fs.readdirSync(IMG_DIR); } catch (e) { return
   ok('обновление не стирает черновик', /if \(!editing && !addBtn\.disabled\) load\(\)/.test(html));
   ok('цвета берутся из темы',     /var\(--ink/.test(html) && /var\(--line/.test(html));
 
+  console.log('\nкартинки новостей из updates.json:');
+  {
+    const dir = path.join(TMP, 'news');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, 'a.png'), Buffer.from(PNG.split(',')[1], 'base64'));
+    fs.writeFileSync(path.join(dir, 'b.gif'), Buffer.from(GIF.split(',')[1], 'base64'));
+    fs.writeFileSync(path.join(dir, 'note.png'), 'не картинка');
+    fs.writeFileSync(path.join(dir, 'x.svg'), Buffer.from(SVG.split(',')[1], 'base64'));
+    const before = files().length;
+    const e = extras.addAutoLog('upd:pics', 'Release', '- Line', Date.now(),
+      ['a.png', 'b.gif', 'missing.png', 'note.png', 'x.svg'].map(n => path.join(dir, n)));
+    ok('картинки скопированы в ленту: только настоящие, без SVG и битых', e && e.images.length === 2 &&
+       e.images.every(i => /^\/logimg\/[a-z0-9]+\.(png|gif)$/.test(i.u)) && files().length === before + 2, e && e.images);
+    ok('размеры взяты из файла', e && e.images[0].w === 1 && e.images[0].h === 1 && e.images[1].w === 1 && e.images[1].h === 1);
+    const d = await call('GET /getLogs');
+    const got = d.logs.find(l => l.src === 'upd:pics');
+    ok('игрок видит новость с картинками', got && got.images.length === 2);
+    ok('та же новость второй раз не добавляется', extras.addAutoLog('upd:pics', 'Release', '- Line', Date.now(), [path.join(dir, 'a.png')]) === null &&
+       files().length === before + 2);
+  }
+
   fs.rmSync(TMP, { recursive: true, force: true });
   console.log(fails ? '\n✗ ошибок: ' + fails : '\n✓ всё зелено');
   process.exit(fails ? 1 : 0);

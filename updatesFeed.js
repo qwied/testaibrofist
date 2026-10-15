@@ -20,6 +20,12 @@ const { atomicWriteFileSync } = require('./fsAtomic.js');
 const { api, ok, token, SITE, frame } = require('./discordApi.js');
 
 const SRC_FILE = process.env.UPDATES_FILE || path.join(__dirname, 'updates.json');
+/* Картинки новостей из updates.json — файлы сайта в папке news/:
+   "images": ["/news/release-race.png", ...]. В Logs они копируются как
+   загруженные владельцем, в Discord идут ссылкой на сайт. */
+const NEWS_DIR = process.env.NEWS_DIR || path.join(__dirname, 'news');
+const NEWS_IMG = /^\/news\/([\w.-]+\.(?:png|jpe?g|gif|webp))$/i;
+const MAX_IMAGES = 8;                // столько картинок у новости и в Logs, и в Discord
 const DATA_DIR = path.join(__dirname, 'data');
 const STATE_FILE = process.env.UPDATES_FEED_STATE || path.join(DATA_DIR, 'updatesFeed.json');
 /* Публикуются только свежие записи: если data/ вдруг потеряется или бот
@@ -58,6 +64,9 @@ function readUpdates() {
       id: u.id.trim(),
       title: clean(u.title).slice(0, 120),
       text: clean(u.text).slice(0, 4000),
+      images: (Array.isArray(u.images) ? u.images : []).map(s => String(s || '').trim())
+        .filter(s => { const m = NEWS_IMG.exec(s); return m && fs.existsSync(path.join(NEWS_DIR, m[1])); })
+        .slice(0, MAX_IMAGES),
       date: Date.parse(u.date) || Date.now()
     }));
 }
@@ -111,7 +120,9 @@ async function channels() {
 
 // карточка новости в рамке: заголовок, текст списком, картинки, дата и кнопка на Logs
 function card(u) {
-  const images = (u.images || []).map(i => String(i && i.u || '')).filter(s => s.charAt(0) === '/').slice(0, 4).map(s => SITE + s);
+  // у записи Logs картинка — { u: '/logimg/…' }, у новости из updates.json — '/news/…'
+  const images = (u.images || []).map(i => String(typeof i === 'string' ? i : (i && i.u) || ''))
+    .filter(s => s.charAt(0) === '/').slice(0, MAX_IMAGES).map(s => SITE + s);
   return frame({
     color: COLOR,
     title: clean(u.title) || 'Update',
@@ -157,7 +168,8 @@ async function publish() {
       // в updates.json только день, без часа: на карточке — время выхода, а не «3:00»
       if (!(await postEverywhere('upd:' + u.id, Object.assign({}, u, { date: Date.now() })))) break;
       // в Logs — только то, что бот уже выложил; +i держит порядок файла
-      extras.addAutoLog('upd:' + u.id, u.title, u.text, Date.now() + i++);
+      extras.addAutoLog('upd:' + u.id, u.title, u.text, Date.now() + i++,
+                        (u.images || []).map(s => path.join(NEWS_DIR, NEWS_IMG.exec(s)[1])));
       state.posted.push(u.id);
       if (state.logged.indexOf(u.id) === -1) state.logged.push(u.id);
       saveState();
