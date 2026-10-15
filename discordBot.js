@@ -25,7 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const crypto = require('crypto');
-const { api, ok, token } = require('./discordApi.js');
+const { api, ok, token, frame } = require('./discordApi.js');
 const { Gateway } = require('./discordGateway.js');
 const R = require('./discordRules.js');
 const A = require('./discordAutomod.js');
@@ -349,6 +349,16 @@ function download(url, limit) {
     req.on('timeout', () => req.destroy(new Error('timeout')));
     req.on('error', reject);
   });
+}
+
+// видит ли сайт CDN Discord (оттуда бот скачивает картинки) — для страницы состояния
+const cdn = { at: 0, ok: null, error: '' };
+function checkCdn() {
+  if (Date.now() - cdn.at < 10 * 60 * 1000) return;
+  if (process.env.DISCORD_API_BASE && !TEST_CDN) return;          // тесты без своего CDN
+  cdn.at = Date.now();
+  const url = TEST_CDN ? 'http://' + TEST_CDN + '/cdn/pic.png' : 'https://cdn.discordapp.com/embed/avatars/0.png';
+  download(url, 1024 * 1024).then(() => { cdn.ok = true; cdn.error = ''; }, e => { cdn.ok = false; cdn.error = e.message; });
 }
 
 function queueImages(g, m) {
@@ -692,11 +702,6 @@ function linkify(g, text) {
     });
 }
 
-// упоминания в карточке не срабатывают — их выносим строкой над ней
-function pings(text) {
-  const out = String(text || '').match(/@everyone|@here|<@&\d+>/g) || [];
-  return [...new Set(out)];
-}
 
 async function confirm(channel, text) {
   const r = await sendMessage(channel, { content: text, allowed_mentions: { parse: [] } });
@@ -895,44 +900,50 @@ async function onNewsSubmit(i, g) {
 
   // картинки: загруженные в окне — переносим в пост (их ссылки временные),
   // в простом окне — это просто ссылки https
-  const images = [], files = [], skipped = [];
-  if (Array.isArray(v.images)) {
+  const images = [], files = [], notes = [];
+  if (typeof v.images === 'string') {
+    v.images.split(/\s+/).filter(u => /^https:\/\/\S+$/i.test(u)).slice(0, 4).forEach(u => images.push(u));
+  } else {
     const res = (i.data.resolved && i.data.resolved.attachments) || {};
-    for (const id of v.images.slice(0, 4)) {
+    const ids = Array.isArray(v.images) && v.images.length ? v.images : Object.keys(res);
+    for (const id of ids.slice(0, 4)) {
       const a = res[id];
       if (!a) continue;
-      if (!/^image\//.test(a.content_type || '') || (a.size || 0) > 10 * 1024 * 1024) { skipped.push(a.filename); continue; }
-      try {
-        const f = await download(a.url, 10 * 1024 * 1024);
-        const ext = ((/\.(png|jpe?g|gif|webp)$/i.exec(a.filename || '') || [])[1] || 'png').toLowerCase();
-        const name = 'image' + (files.length + 1) + '.' + ext;
-        files.push({ name, data: f.buf, type: a.content_type });
+      const shown = String(a.filename || 'image').slice(0, 60);
+      // тип — по ответу Discord, а если его нет — по расширению имени
+      const ext = ((/\.(png|jpe?g|gif|webp)$/i.exec(a.filename || '') || [])[1] || '').toLowerCase().replace('jpeg', 'jpg');
+      const type = /^image\//.test(a.content_type || '') ? a.content_type : ext ? 'image/' + (ext === 'jpg' ? 'jpeg' : ext) : '';
+      if (!type) { notes.push(shown + ': not an image'); continue; }
+      if ((a.size || 0) > 10 * 1024 * 1024) { notes.push(shown + ': bigger than 10 MB'); continue; }
+      let got = null, why = '';
+      for (const u of [a.url, a.proxy_url]) {
+        if (!u || got) continue;
+        try { got = await download(u, 10 * 1024 * 1024); } catch (e) { why = e.message; }
+      }
+      if (got) {
+        const name = 'image' + (files.length + 1) + '.' + (ext || type.split('/')[1].replace('jpeg', 'jpg'));
+        files.push({ name, data: got.buf, type });
         images.push('attachment://' + name);
-      } catch (e) { skipped.push(a.filename); }
+      } else if (a.url) {
+        // скачать не вышло — показываем по ссылке Discord, она со временем может пропасть
+        images.push(a.url);
+        notes.push(shown + ': could not copy it (' + why + '), so it is shown by link and may disappear later');
+      }
     }
-  } else if (v.images) {
-    String(v.images).split(/\s+/).filter(u => /^https:\/\/\S+$/i.test(u)).slice(0, 4).forEach(u => images.push(u));
   }
   if (!title && !text && !images.length) return finish(i, card('The post is empty: add a title, text or an image.'));
 
-  // карточка; несколько картинок — сеткой (у карточек один адрес)
-  const body = linkify(g, text);
-  const embed = { color: R.COLORS.neutral };
-  if (title) embed.title = title.slice(0, 256);
-  if (body) embed.description = body.slice(0, 4000);
-  if (images.length) embed.image = { url: images[0] };
-  const gallery = link || require('./discordApi.js').SITE;
-  if (link || images.length > 1) embed.url = gallery;
-  const msg = { embeds: [embed].concat(images.slice(1).map(u => ({ url: gallery, image: { url: u } }))),
-                allowed_mentions: { parse: ['everyone', 'roles'] } };
-  const p = pings(body);
-  if (p.length) msg.content = p.join(' ');
-  if (link) msg.components = [{ type: 1, components: [{ type: 2, style: 5, label: host.slice(0, 80), url: link }] }];
-
+  // карточка в рамке; упоминания в ней срабатывают (@everyone, @Роль)
+  const msg = frame({
+    color: R.COLORS.neutral, title, text: linkify(g, text), images,
+    footer: 'AIBROFIST  ·  <t:' + Math.floor(Date.now() / 1000) + ':D>',
+    button: link ? { label: host, url: link } : null,
+    mentions: { parse: ['everyone', 'roles'] }
+  });
   const r = await api('POST', '/channels/' + chosen.id + '/messages', msg, files.length ? { files } : undefined);
   if (!ok(r) || !r.body) return finish(i, card('Could not post in <#' + chosen.id + '> (error ' + r.status + '). Check that I can send messages, embeds and files there.'));
   return finish(i, card('Posted in <#' + chosen.id + '>: https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.body.id +
-                        (skipped.length ? '\nNot attached (not an image, too big or unavailable): ' + skipped.join(', ') : '')));
+                        (notes.length ? '\n\nImages:\n' + notes.map(n => '- ' + n).join('\n') : '')));
 }
 
 async function onUpdatesSubmit(i, g) {
@@ -1305,6 +1316,12 @@ async function status() {
   const feed = require('./updatesFeed.js');
   out.updates = feed.status();
   if (out.token) out.updates.channels = await feed.channels().catch(() => []);
+  if (out.token) {
+    checkCdn();
+    out.cdn = cdn.ok === null ? 'not checked yet' : cdn.ok ? 'ok' : 'unreachable: ' + cdn.error;
+    if (cdn.ok === false) out.problems.push('The site cannot download images from Discord (' + cdn.error + '): pictures added ' +
+                                            'in the post editor are shown by link and may disappear later.');
+  }
   const e = out.updates.lastError;
   if (e && e.status === 403) out.problems.push('The bot cannot write in the updates channel ' + e.channel +
     ': allow it to send messages and embed links there (or give its role Administrator).');

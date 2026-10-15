@@ -30,6 +30,9 @@ const WebSocket = require('ws');
 
 let fails = 0;
 const ok = (n, c, x) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', n, x === undefined ? '' : x); };
+// пост-карточка в рамке: части внутри рамки и части нужного типа
+const parts = b => (b && b.components && b.components[0] && b.components[0].components) || [];
+const partsOf = (b, type) => parts(b).filter(x => x.type === type);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function waitFor(fn, ms) {
   const end = Date.now() + (ms || 3000);
@@ -192,6 +195,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await route.fn({}, { set() {}, json(o) { page = o; } });
   ok('/discord/status открывается без входа и без секретов', route.p === '/discord/status' && page && page.token === true &&
      page.gateway.state === 'ready' && !JSON.stringify(page).includes('test-token') && !JSON.stringify(page).includes('qa'));
+  await sleep(150);
+  ok('страница проверяет, может ли сайт скачивать картинки с CDN Discord', (await bot.status()).cdn === 'ok');
 
   console.log('\nавтомодерация:');
   t = Date.now();
@@ -405,27 +410,38 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     { type: 18, id: 1, component: { type: 8, custom_id: 'channel', values: [CH.news2] } },
     { type: 18, id: 2, component: { type: 4, custom_id: 'title', value: 'Tournament on Friday' } },
     { type: 18, id: 3, component: { type: 4, custom_id: 'text', value: 'Join us @everyone, ask @Moderator in #general.\nhttps://aibrofist.online/race' } },
-    { type: 18, id: 4, component: { type: 19, custom_id: 'images', values: ['att1', 'att2'] } },
+    { type: 18, id: 4, component: { type: 19, custom_id: 'images', values: ['att1', 'att2', 'att3', 'att4'] } },
     { type: 18, id: 5, component: { type: 4, custom_id: 'link', value: 'aibrofist.online/race' } }
   ], { attachments: {
     att1: { id: 'att1', filename: 'one.png', content_type: 'image/png', size: 7, url: 'http://127.0.0.1:' + port + '/cdn/pic.png' },
-    att2: { id: 'att2', filename: 'two.png', content_type: 'image/png', size: 7, url: 'http://127.0.0.1:' + port + '/cdn/pic.png' } } });
+    att2: { id: 'att2', filename: 'two.png', content_type: 'image/png', size: 7, url: 'http://127.0.0.1:' + port + '/cdn/pic.png' },
+    // без типа от Discord — узнаём картинку по имени файла
+    att3: { id: 'att3', filename: 'three.JPG', size: 7, url: 'http://127.0.0.1:' + port + '/cdn/pic.png' },
+    // скачать не выйдет — покажем по ссылке и скажем владельцу
+    att4: { id: 'att4', filename: 'four.png', content_type: 'image/png', size: 7, url: 'http://127.0.0.1:' + port + '/cdn/missing.png' } } });
   await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + sid + '/messages/@original$')).length);
   c = since(t);
   ok('окно отправлено — сначала «думаю» (только владельцу)', cb(c, sid)[0] && cb(c, sid)[0].body.type === 5 && cb(c, sid)[0].body.data.flags === 64);
   const post = find(c, 'POST', /^\/channels\/306\/messages$/)[0];
   const payload = post && JSON.parse((/name="payload_json"\r\nContent-Type: application\/json\r\n\r\n(.*)\r\n/.exec(post.raw) || [])[1] || 'null');
-  ok('пост ушёл в выбранный канал с двумя картинками (загружены заново)', post && /multipart/.test(post.ct) &&
-     /filename="image1\.png"/.test(post.raw) && /filename="image2\.png"/.test(post.raw));
-  ok('карточка: заголовок, текст, картинки сеткой', payload && payload.embeds[0].title === 'Tournament on Friday' &&
-     payload.embeds[0].image.url === 'attachment://image1.png' && payload.embeds[1].image.url === 'attachment://image2.png' &&
-     payload.embeds[0].url === payload.embeds[1].url);
-  ok('@Роль и #канал в тексте стали упоминанием и ссылкой', payload && /<@&200>/.test(payload.embeds[0].description) && /<#300>/.test(payload.embeds[0].description));
-  ok('@everyone и роль пингуют (вынесены над карточкой)', payload && payload.content === '@everyone <@&200>' &&
-     payload.allowed_mentions.parse.indexOf('everyone') !== -1);
-  ok('кнопка-ссылка под постом', payload && payload.components[0].components[0].style === 5 &&
-     payload.components[0].components[0].url === 'https://aibrofist.online/race' && payload.components[0].components[0].label === 'aibrofist.online');
-  ok('владельцу — «опубликовано» со ссылкой на пост', /Posted in <#306>: https:\/\/discord\.com\/channels\/100\/306\/\d+/.test(JSON.stringify(find(c, 'PATCH', new RegExp('tk' + sid + '/messages/@original$'))[0].body)));
+  ok('пост ушёл в выбранный канал, картинки загружены заново', post && /multipart/.test(post.ct) &&
+     /filename="image1\.png"/.test(post.raw) && /filename="image2\.png"/.test(post.raw) && /filename="image3\.jpg"/.test(post.raw));
+  const texts = partsOf(payload, 10).map(x => x.content), gallery = (partsOf(payload, 12)[0] || { items: [] }).items.map(x => x.media.url);
+  ok('пост — карточка в рамке, без обычного текста и вставок', payload && payload.flags === 32768 && payload.components.length === 1 &&
+     payload.components[0].type === 17 && payload.components[0].accent_color > 0 && !payload.embeds && !payload.content);
+  ok('в рамке: заголовок крупно, текст, картинки сеткой', texts[0] === '## Tournament on Friday' && /^Join us/.test(texts[1]) &&
+     gallery.slice(0, 3).join() === 'attachment://image1.png,attachment://image2.png,attachment://image3.jpg', gallery);
+  ok('внизу — линия и мелкая подпись с датой', partsOf(payload, 14).length === 1 && /^-# AIBROFIST .*<t:\d+:D>$/.test(texts[texts.length - 1]));
+  ok('@Роль и #канал в тексте стали упоминанием и ссылкой', /<@&200>/.test(texts[1]) && /<#300>/.test(texts[1]));
+  ok('@everyone и роль пингуют прямо из карточки', /@everyone/.test(texts[1]) &&
+     payload.allowed_mentions.parse.indexOf('everyone') !== -1 && payload.allowed_mentions.parse.indexOf('roles') !== -1);
+  const btn = (partsOf(payload, 1)[0] || { components: [] }).components[0];
+  ok('кнопка-ссылка внизу карточки', btn && btn.style === 5 && btn.url === 'https://aibrofist.online/race' && btn.label === 'aibrofist.online' &&
+     parts(payload).slice(-1)[0].type === 1);
+  const reply = JSON.stringify(find(c, 'PATCH', new RegExp('tk' + sid + '/messages/@original$'))[0].body);
+  ok('владельцу — «опубликовано» со ссылкой на пост', /Posted in <#306>: https:\/\/discord\.com\/channels\/100\/306\/\d+/.test(reply));
+  ok('картинку, которую не скачать, показывает по ссылке и говорит об этом владельцу', gallery[3] === 'http://127.0.0.1:' + port + '/cdn/missing.png' &&
+     /four\.png: could not copy it/.test(reply), reply);
 
   console.log('\nзапасное окно (если Discord не покажет новое):');
   rejectNewModal = true;
@@ -449,8 +465,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     { type: 1, components: [{ type: 4, custom_id: 'link', value: '' }] }]);
   await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + sid2 + '/messages/@original$')).length);
   const post2 = find(since(t), 'POST', /^\/channels\/306\/messages$/)[0];
-  ok('пост из простого окна: канал по имени, картинка по ссылке', post2 && post2.body.embeds[0].description === 'Short note' &&
-     post2.body.embeds[0].image.url === 'https://aibrofist.online/a.png' && !post2.body.content && !post2.body.components);
+  ok('пост из простого окна: канал по имени, картинка по ссылке, без кнопки', post2 && post2.body.flags === 32768 &&
+     partsOf(post2.body, 10)[0].content === 'Short note' && partsOf(post2.body, 12)[0].items[0].media.url === 'https://aibrofist.online/a.png' &&
+     partsOf(post2.body, 1).length === 0);
 
   console.log('\nостальные команды:');
   t = Date.now();
@@ -537,9 +554,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const fresh = find(since(t), 'POST', /^\/channels\/(302|306)\/messages$/);
   ok('новость из updates.json — во все каналы новостей, потом в Logs', fresh.length === 2 && logged.length === 1 &&
      logged[0] === 'upd:' + today + '-1|Discord bot', logged.join());
-  ok('и в Discord, и в Logs — без эмодзи', fresh[0] && fresh[0].body.embeds[0].title === 'Discord bot');
-  ok('время на карточке — момент выхода, а не полночь даты', fresh[0] && Math.abs(Date.parse(fresh[0].body.embeds[0].timestamp) - Date.now()) < 60000,
-     fresh[0] && fresh[0].body.embeds[0].timestamp);
+  ok('и в Discord, и в Logs — без эмодзи', fresh[0] && partsOf(fresh[0].body, 10)[0].content === '## Discord bot');
+  const when = fresh[0] && /<t:(\d+):f>/.exec(partsOf(fresh[0].body, 10).slice(-1)[0].content);
+  ok('время на карточке — момент выхода, а не полночь даты', when && Math.abs(when[1] * 1000 - Date.now()) < 60000, when && when[0]);
   ok('новости, вышедшие до появления бота, не публикуются', !JSON.stringify(fresh).includes('Old news'));
   const err = feed.status().lastError;
   ok('нет прав в #updates — это видно на странице состояния', err && err.channel === CH.updates && err.status === 403, err);
@@ -550,9 +567,11 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const sent = find(since(t), 'POST', /^\/channels\/(302|306)\/messages$/);
   ok('запись Logs ушла во все каналы новостей (#updates и выбранный командой)', sent.length === 2);
   ok('права выдали — старая ошибка со страницы состояния ушла', feed.status().lastError === null, feed.status().lastError);
-  const e = sent[0] && sent[0].body.embeds[0];
-  ok('карточка: заголовок, список, ссылка на Logs, картинка, дата', e && e.title === 'New maps' && /^- Two/.test(e.description) &&
-     /\/logs$/.test(e.url) && /\/logimg\/a\.png$/.test(e.image.url) && e.timestamp && e.footer.text === 'AIBROFIST');
+  const e = sent[0] && sent[0].body, et = partsOf(e, 10).map(x => x.content);
+  const ebtn = (partsOf(e, 1)[0] || { components: [] }).components[0];
+  ok('карточка в рамке: заголовок, список, картинка, дата и кнопка на Logs', e && e.flags === 32768 && et[0] === '## New maps' &&
+     /^- Two/.test(et[1]) && /\/logimg\/a\.png$/.test(partsOf(e, 12)[0].items[0].media.url) && /^-# AIBROFIST .*<t:\d+:f>$/.test(et[2]) &&
+     ebtn && ebtn.style === 5 && /\/logs$/.test(ebtn.url) && e.allowed_mentions.parse.length === 0);
   t = Date.now();
   hook('edit', { id: 77, title: 'New maps!', text: 'fixed', date: Date.now() });
   await waitFor(() => find(since(t), 'PATCH', /^\/channels\/(302|306)\/messages\/\d+$/).length >= 2);

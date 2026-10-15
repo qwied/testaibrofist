@@ -106,4 +106,27 @@ async function api(method, p, body, opts) {
 
 const ok = r => r && r.status >= 200 && r.status < 300;
 
-module.exports = { api, ok, token, SITE, routeKey };
+/* Пост-карточка в рамке (новые компоненты Discord): заголовок, текст,
+   картинки сеткой, тонкая линия, мелкая подпись и кнопка-ссылка внизу.
+   У такого сообщения нет обычного текста и вставок (embeds), а упоминания
+   в тексте карточки срабатывают — кого можно пинговать, решает mentions.
+   o: { color, title, text, images: [url или attachment://имя], footer,
+        button: { label, url }, mentions } */
+const COMPONENTS_V2 = 1 << 15;
+function frame(o) {
+  const inner = [];
+  const title = String(o.title || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (title) inner.push({ type: 10, content: '## ' + title });
+  // у всех текстов карточки вместе предел 4000 знаков
+  const text = String(o.text || '').trim().slice(0, 3600);
+  if (text) inner.push({ type: 10, content: text });
+  const images = (o.images || []).filter(Boolean).slice(0, 10);
+  if (images.length) inner.push({ type: 12, items: images.map(url => ({ media: { url } })) });
+  if (o.footer) inner.push({ type: 14, divider: true, spacing: 1 }, { type: 10, content: '-# ' + String(o.footer).slice(0, 150) });
+  if (o.button) inner.push({ type: 1, components: [{ type: 2, style: 5, label: String(o.button.label).slice(0, 80), url: o.button.url }] });
+  if (!inner.length) inner.push({ type: 10, content: '​' });
+  return { flags: COMPONENTS_V2, allowed_mentions: o.mentions || { parse: [] },
+           components: [{ type: 17, accent_color: o.color, components: inner }] };
+}
+
+module.exports = { api, ok, token, SITE, routeKey, frame, COMPONENTS_V2 };

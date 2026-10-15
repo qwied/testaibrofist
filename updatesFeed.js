@@ -17,7 +17,7 @@
 const fs = require('fs');
 const path = require('path');
 const { atomicWriteFileSync } = require('./fsAtomic.js');
-const { api, ok, token, SITE } = require('./discordApi.js');
+const { api, ok, token, SITE, frame } = require('./discordApi.js');
 
 const SRC_FILE = process.env.UPDATES_FILE || path.join(__dirname, 'updates.json');
 const DATA_DIR = path.join(__dirname, 'data');
@@ -109,19 +109,17 @@ async function channels() {
   return c ? [c] : [];
 }
 
-// карточка новости: заголовок, текст списком, ссылка на Logs, дата
+// карточка новости в рамке: заголовок, текст списком, картинки, дата и кнопка на Logs
 function card(u) {
-  const e = {
+  const images = (u.images || []).map(i => String(i && i.u || '')).filter(s => s.charAt(0) === '/').slice(0, 4).map(s => SITE + s);
+  return frame({
     color: COLOR,
-    title: (clean(u.title) || 'Update').slice(0, 256),
-    url: SITE + '/logs',
-    description: clean(u.text).slice(0, 4000) || undefined,
-    footer: { text: 'AIBROFIST' },
-    timestamp: new Date(u.date || Date.now()).toISOString()
-  };
-  const img = (u.images || []).map(i => String(i && i.u || '')).find(s => s.charAt(0) === '/');
-  if (img) e.image = { url: SITE + img };
-  return { allowed_mentions: { parse: [] }, embeds: [e] };   // никаких @everyone из текста новости
+    title: clean(u.title) || 'Update',
+    text: clean(u.text),
+    images,
+    footer: 'AIBROFIST  ·  <t:' + Math.floor((u.date || Date.now()) / 1000) + ':f>',
+    button: { label: 'Open Logs', url: SITE + '/logs' }
+  });                                  // mentions не заданы — никаких @everyone из текста новости
 }
 
 // во все каналы новостей; true — если хоть в один вышло

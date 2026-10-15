@@ -1,4 +1,9 @@
 {
   "base": "af83672b0dc9ded351fb80014cda56d856cc524b",
-  "updates": []
+  "updates": [
+    {
+      "title": "Nicer Discord posts",
+      "text": "News posts in our Discord now come in a neat frame, and pictures added to a post are no longer lost."
+    }
+  ]
 }
