@@ -1,4 +1,9 @@
 {
   "base": "6f4ce93d87aec4d67240ace9fbf869c78a214750",
-  "updates": []
+  "updates": [
+    {
+      "title": "Clearing messages",
+      "text": "The Discord server owner can now delete many messages in a channel at once, all of them, or only the messages of one member."
+    }
+  ]
 }

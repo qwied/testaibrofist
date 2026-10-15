@@ -15,7 +15,8 @@
 //     DISCORD_CMD_PREFIX на хостинге): news (пост в любой канал с
 //     картинками и кнопкой-ссылкой — в окне, которое видит только он),
 //     updates (в какие каналы идут новости), warn, mute, unmute, strikes,
-//     pardon, modlog, help. Остальным они не видны и не работают.
+//     pardon, modlog, clear (удалить сообщения в канале), help. Остальным
+//     они не видны и не работают.
 // Правила сервера владелец пишет в #rules сам; номера правил в
 // уведомлениях бота — из discordRules.js.
 // Новости в #updates публикует updatesFeed.js — каналы для них берёт отсюда.
@@ -761,7 +762,7 @@ async function ensureNativeAutomod(g) {
    видит только владелец. В закрытом канале не видно даже панели. */
 const PANEL_MS = 60 * 1000;
 const CONFIRM_MS = 5 * 1000;
-const COMMANDS = ['news', 'updates', 'rules', 'warn', 'mute', 'unmute', 'ban', 'unban', 'strikes', 'pardon', 'modlog', 'help'];
+const COMMANDS = ['news', 'updates', 'rules', 'warn', 'mute', 'unmute', 'ban', 'unban', 'strikes', 'pardon', 'modlog', 'clear', 'purge', 'help'];
 /* Начало команд задаётся на хостинге (DISCORD_CMD_PREFIX, например «!ab3»
    -> «!ab3news»). В открытом коде его нет — по исходникам не узнать, что
    набирать. Без настройки команды начинаются просто с «!». */
@@ -787,6 +788,8 @@ const HELP = [
   '**' + PREFIX + 'strikes @user** - show active strikes',
   '**' + PREFIX + 'pardon @user** - remove all strikes',
   '**' + PREFIX + 'modlog** - send moderation logs to this channel, **' + PREFIX + 'modlog off** to stop',
+  '**' + PREFIX + 'clear 50** - delete the last 50 messages in this channel, **' + PREFIX + 'clear all** - all of them ' +
+    '(asks first), add @user to delete only theirs, **' + PREFIX + 'clear stop** to stop. Pinned messages and the rules post stay',
   '',
   'Only you can use these commands. The message with a command is removed at once.'
 ].join('\n');
@@ -833,9 +836,10 @@ async function confirm(channel, text) {
 async function openPanel(g, m, kind, data) {
   const id = crypto.randomBytes(9).toString('hex');
   const label = { news: 'Open the post editor', updates: 'Choose update channels', help: 'Show commands',
-                  strikes: 'Show strikes', rules: 'Open the rules editor' }[kind];
+                  strikes: 'Show strikes', rules: 'Open the rules editor',
+                  clear: 'Delete all messages' + (data && data.user ? ' of this member' : '') + ' here' }[kind];
   const r = await sendMessage(m.channel_id, { allowed_mentions: { parse: [] },
-    components: [{ type: 1, components: [{ type: 2, style: 2, label, custom_id: 'panel:' + id }] }] });
+    components: [{ type: 1, components: [{ type: 2, style: kind === 'clear' ? 4 : 2, label, custom_id: 'panel:' + id }] }] });
   if (!ok(r) || !r.body) return;
   panels.set(id, { kind, guild: g.id, channel: m.channel_id, message: r.body.id, data: data || {} });
   const t = setTimeout(() => closePanel(id), PANEL_MS);
@@ -869,6 +873,7 @@ async function onOwnerCommand(g, m) {
   api('DELETE', '/channels/' + m.channel_id + '/messages/' + m.id).catch(() => {});
 
   if (cmd === 'news' || cmd === 'updates' || cmd === 'help' || cmd === 'rules') { await openPanel(g, m, cmd); return true; }
+  if (cmd === 'clear' || cmd === 'purge') return clearCommand(g, m, args);
   if (cmd === 'modlog') {
     const off = /^off$/i.test(args);
     gstate(g.id).modlog = off ? '' : m.channel_id;
@@ -963,6 +968,87 @@ async function onOwnerCommand(g, m) {
     return true;
   }
   return true;
+}
+
+/* ---------- чистка канала: «!clear 50», «!clear all», «!clear 20 @игрок» ----------
+   Сообщения моложе 14 дней Discord даёт удалять пачками по 100, старые —
+   только по одному (и медленно), поэтому «all» в старом канале может идти
+   долго: идёт в фоне, «!clear stop» останавливает. Закреплённые сообщения
+   и пост с правилами не трогаем. Канал не пересоздаём — у него остаётся
+   тот же id (на него завязаны правила, новости и журнал). */
+const clearing = new Map();        // канал -> { guild, stop }
+const msgTime = id => Number((BigInt(id) >> 22n) + DISCORD_EPOCH);
+
+async function clearCommand(g, m, args) {
+  const a = String(args || '').toLowerCase();
+  if (/^stop\b/.test(a)) {
+    let n = 0;
+    for (const job of clearing.values()) if (job.guild === g.id) { job.stop = true; n++; }
+    await confirm(m.channel_id, n ? 'Stopped.' : 'Nothing is being deleted now.');
+    return true;
+  }
+  // строго: число или all и, по желанию, один игрок. Что-то непонятное (роль,
+  // опечатка в упоминании) — не «все подряд», а подсказка
+  let count = null, user = null, bad = false;
+  for (const w of a.split(/\s+/).filter(Boolean)) {
+    const u = /^(?:<@!?(\d+)>|(\d{15,}))$/.exec(w);
+    if (u && !user) user = u[1] || u[2];
+    else if (/^(?:all|все|всё|[1-9]\d{0,5})$/.test(w) && count === null) count = w;
+    else bad = true;
+  }
+  if (bad || count === null) {
+    await confirm(m.channel_id, 'How many? ' + PREFIX + 'clear 50, ' + PREFIX + 'clear all, or ' + PREFIX + 'clear 20 @user.');
+    return true;
+  }
+  if (clearing.has(m.channel_id)) { await confirm(m.channel_id, 'Already deleting here. ' + PREFIX + 'clear stop to stop.'); return true; }
+  if (!/^\d+$/.test(count)) { await openPanel(g, m, 'clear', { user }); return true; }      // «all» — сначала спросить
+  startClear(g, m.channel_id, Number(count), user, m.author.id, [m.id]);
+  return true;
+}
+
+function startClear(g, channel, limit, user, by, skip) {
+  if (clearing.has(channel)) return;
+  const job = { guild: g.id, stop: false };
+  clearing.set(channel, job);
+  clearChannel(g, channel, limit, user, skip, job)
+    .then(async n => {
+      await confirm(channel, (job.stop ? 'Stopped. ' : '') + 'Deleted ' + n + (n === 1 ? ' message.' : ' messages.'));
+      if (n) await modlog(g, { caseNo: ++state.cases, title: 'Deleted ' + n + (n === 1 ? ' message' : ' messages'), color: R.COLORS.neutral,
+                               user: user || by, by, channel, reason: user ? 'Only messages of this member' : undefined });
+      save();
+    })
+    .catch(e => log('clear failed:', e.message))
+    .finally(() => clearing.delete(channel));
+}
+
+async function clearChannel(g, channel, limit, user, skip, job) {
+  const keep = new Set(skip || []);
+  const rules = gstate(g.id).rules;
+  if (rules && rules.message) keep.add(rules.message);
+  let before = '', done = 0;
+  while (!job.stop && done < limit) {
+    const r = await api('GET', '/channels/' + channel + '/messages?limit=100' + (before ? '&before=' + before : ''));
+    if (r.status === 403) { once('noread:' + channel, 'cannot read messages in ' + channel + ': give the bot Read Message History'); break; }
+    if (!ok(r) || !Array.isArray(r.body) || !r.body.length) break;
+    before = r.body[r.body.length - 1].id;
+    const pick = r.body.filter(x => x && x.id && !x.pinned && !keep.has(x.id) && (!user || (x.author && x.author.id === user)))
+                       .slice(0, limit - done).map(x => x.id);
+    // запас в час: на границе 14 дней Discord отказывает всей пачке
+    const edge = Date.now() - 14 * R.DAY + R.HOUR;
+    const fresh = pick.filter(id => msgTime(id) > edge), old = pick.filter(id => msgTime(id) <= edge);
+    if (fresh.length >= 2) {
+      const b = await api('POST', '/channels/' + channel + '/messages/bulk-delete', { messages: fresh }, { reason: 'Cleared by the owner' });
+      if (ok(b)) done += fresh.length; else old.unshift(...fresh);
+    } else old.unshift(...fresh);
+    for (const id of old) {
+      if (job.stop) break;
+      const d = await api('DELETE', '/channels/' + channel + '/messages/' + id, null, { reason: 'Cleared by the owner' });
+      if (ok(d)) done++;
+      else if (d.status === 403) { once('nodel:' + channel, 'cannot delete messages in ' + channel + ': give the bot Manage Messages'); return done; }
+    }
+    if (r.body.length < 100) break;
+  }
+  return done;
 }
 
 /* ---------- окна: редактор поста и каналы новостей ----------
@@ -1232,6 +1318,12 @@ async function onInteraction(i) {
     if (p.kind === 'rules') return showModal(i, rulesModal(g, p), rulesModalClassic(g, p));
     if (p.kind === 'help') return reply(i, card(HELP));
     if (p.kind === 'strikes') return reply(i, card(strikesText(g, p.data.user)));
+    if (p.kind === 'clear') {
+      await reply(i, card('Deleting all messages' + (p.data.user ? ' of <@' + p.data.user + '>' : '') + ' in <#' + p.channel + '>. ' +
+                          'Type ' + PREFIX + 'clear stop to stop.'));
+      startClear(g, p.channel, Infinity, p.data.user, uid, [p.message]);
+      return;
+    }
     return;
   }
   if (i.type === 5 && cid.indexOf('news:') === 0) return onNewsSubmit(i, g);

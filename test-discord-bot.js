@@ -12,7 +12,7 @@
      бан; совсем новый аккаунт не может сразу слать ссылки; политика,
      продажа аккаунтов, «мне 11 лет» (только сообщение владельцу);
    - секретные команды владельца (начало задаётся на хостинге, здесь «!qa»):
-     news, updates, warn, mute, strikes, help — сообщение с командой исчезает,
+     news, updates, warn, mute, strikes, clear, help — сообщение с командой исчезает,
      без секретного начала не срабатывают, окно видит только
      владелец, у остальных команды не срабатывают; пост с картинками,
      упоминаниями и кнопкой-ссылкой; запасное окно, если новое Discord
@@ -49,6 +49,7 @@ const MOD_ROLE = '200';
 const calls = [];
 let msgId = 5000, rateLimitedOnce = false, rejectNewModal = false;
 const known = new Set();
+const history = new Map();           // канал -> сообщения (новые первыми) для «!clear»
 const denied = new Set();            // каналы, куда боту писать нельзя (403)
 const server = http.createServer((req, res) => {
   let body = '';
@@ -73,7 +74,13 @@ const server = http.createServer((req, res) => {
       return send(200, { id, channel_id: m[1] });
     }
     if (req.method === 'PATCH' && (m = /^\/channels\/\w+\/messages\/(\w+)$/.exec(p))) return known.has(m[1]) ? send(200, { id: m[1] }) : send(404, { code: 10008 });
+    if (req.method === 'DELETE' && /^\/channels\/312\/messages\/\w+$/.test(p)) return setTimeout(() => send(204), 20);   // медленный канал
     if (req.method === 'DELETE' && /^\/channels\/\w+\/messages\/\w+$/.test(p)) return send(204);
+    if (req.method === 'GET' && (m = /^\/channels\/(\w+)\/messages\?(.*)$/.exec(p)) && history.has(m[1])) {
+      const q = new URLSearchParams(m[2]), before = q.get('before'), list = history.get(m[1]);
+      const from = before ? list.findIndex(x => x.id === before) + 1 : 0;
+      return send(200, list.slice(from, from + Number(q.get('limit') || 50)));
+    }
     if (/bulk-delete$/.test(p)) return send(204);
     if (/^\/applications\/\w+\/guilds\/\w+\/commands$/.test(p)) return send(200, []);
     if (req.method === 'GET' && /auto-moderation\/rules$/.test(p)) return send(200, []);
@@ -700,6 +707,90 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   say(OWNER, '!qaunban <@U22>', { mentions: [{ id: 'U22' }] });
   await waitFor(() => find(since(t), 'DELETE', /bans\/U22$/).length);
   ok('«!unban» снимает бан', find(since(t), 'DELETE', /bans\/U22$/).length === 1);
+
+  console.log('\nчистка канала:');
+  {
+    const H = '310', H2 = '311';
+    const at = (ms, uid, pinned) => ({ id: snow(Date.now() - ms), author: { id: uid }, pinned: !!pinned });
+    const y1 = at(3600000, '3030'), y2 = at(7200000, '3031'), pin = at(3 * 3600000, '3031', true),
+          o1 = at(20 * 86400000, '3030'), o2 = at(30 * 86400000, '3031');
+    history.set(H, [y1, y2, pin, o1, o2]);
+    const panelIn = (list, ch) => { const pm = find(list, 'POST', new RegExp('^/channels/' + ch + '/messages$')).find(x => x.body && x.body.components);
+      return pm && { msg: pm, id: pm.body.components[0].components[0].custom_id }; };
+    const said = (list, ch, re) => find(list, 'POST', new RegExp('^/channels/' + ch + '/messages$')).some(x => re.test(x.body.content || ''));
+
+    t = Date.now();
+    const c3 = say(OWNER, '!qaclear 3', { channel_id: H });
+    await waitFor(() => said(since(t), H, /Deleted/));
+    c = since(t);
+    const bulk = find(c, 'POST', new RegExp('^/channels/' + H + '/messages/bulk-delete$'));
+    const dels = find(c, 'DELETE', new RegExp('^/channels/' + H + '/messages/')).map(x => x.path.split('/').pop());
+    ok('«!clear 3» — три последних: свежие пачкой, старое по одному, команда удалена', bulk.length === 1 &&
+       JSON.stringify(bulk[0].body.messages) === JSON.stringify([y1.id, y2.id]) && dels.indexOf(o1.id) !== -1 &&
+       dels.indexOf(c3.id) !== -1 && dels.indexOf(o2.id) === -1 && said(c, H, /Deleted 3 messages/), dels.join());
+    ok('закреплённое не тронуто, в журнале запись', dels.indexOf(pin.id) === -1 && !JSON.stringify(bulk[0].body).includes(pin.id) &&
+       /Deleted 3 messages/.test(JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/))));
+
+    t = Date.now();
+    say(OWNER, '!qaclear all <@3031>', { channel_id: H, mentions: [{ id: '3031' }] });
+    await waitFor(() => panelIn(since(t), H));
+    const cp = panelIn(since(t), H);
+    ok('«!clear all» сначала спрашивает: красная кнопка', cp && cp.msg.body.components[0].components[0].style === 4 &&
+       find(since(t), 'GET', new RegExp('^/channels/' + H + '/messages')).length === 0);
+    t = Date.now();
+    bid = press('U0', cp.id);
+    await waitFor(() => cb(since(t), bid).length);
+    await sleep(150);
+    ok('чужой нажать не может', find(since(t), 'GET', new RegExp('^/channels/' + H + '/messages')).length === 0);
+    t = Date.now();
+    bid = press(OWNER, cp.id);
+    await waitFor(() => said(since(t), H, /Deleted/));
+    c = since(t);
+    const d2 = find(c, 'DELETE', new RegExp('^/channels/' + H + '/messages/')).map(x => x.path.split('/').pop());
+    ok('«!clear all @игрок» — только его сообщения, все', d2.indexOf(y2.id) !== -1 && d2.indexOf(o2.id) !== -1 &&
+       d2.indexOf(y1.id) === -1 && d2.indexOf(o1.id) === -1 && d2.indexOf(pin.id) === -1 && said(c, H, /Deleted 2 messages/), d2.join());
+
+    const many = [];
+    for (let i = 0; i < 150; i++) many.push(at(60000 + i * 1000, 'U32'));
+    history.set(H2, many);
+    t = Date.now();
+    say(OWNER, '!qaclear all', { channel_id: H2 });
+    await waitFor(() => panelIn(since(t), H2));
+    t = Date.now();
+    press(OWNER, panelIn(since(t - 5000), H2).id);
+    await waitFor(() => said(since(t), H2, /Deleted/));
+    c = since(t);
+    const b2 = find(c, 'POST', new RegExp('^/channels/' + H2 + '/messages/bulk-delete$'));
+    ok('«!clear all» в большом канале — по 100 за раз, пока не кончатся', b2.length === 2 && b2[0].body.messages.length === 100 &&
+       b2[1].body.messages.length === 50 && said(c, H2, /Deleted 150 messages/));
+
+    const slow = [];
+    for (let i = 0; i < 300; i++) slow.push(at(20 * 86400000 + i * 1000, '3033'));
+    history.set('312', slow);
+    t = Date.now();
+    say(OWNER, '!qaclear 300', { channel_id: '312' });
+    await waitFor(() => find(since(t), 'DELETE', /^\/channels\/312\/messages\/\d{15,}$/).length >= 3);
+    say(OWNER, '!qaclear stop', { channel_id: H });
+    await waitFor(() => said(since(t), '312', /Stopped/), 5000);
+    const gone = find(since(t), 'DELETE', /^\/channels\/312\/messages\/\d{15,}$/).length;
+    ok('«!clear stop» останавливает долгую чистку', said(since(t), '312', /Stopped\. Deleted \d+ messages/) && gone < 300, gone);
+
+    t = Date.now();
+    say(OWNER, '!qaclear all <@&200>', { channel_id: H });
+    say(OWNER, '!qaclear all @3031', { channel_id: H });
+    await waitFor(() => find(since(t), 'POST', new RegExp('^/channels/' + H + '/messages$')).filter(x => /How many/.test(x.body.content || '')).length === 2);
+    ok('непонятное вместо игрока (роль, опечатка) — подсказка, а не «удалить у всех»', !panelIn(since(t), H) &&
+       find(since(t), 'GET', new RegExp('^/channels/' + H + '/messages')).length === 0);
+    t = Date.now();
+    say(OWNER, '!qaclear', { channel_id: H });
+    say(OWNER, '!qaclear stop', { channel_id: H });
+    say('U0', '!qaclear 5', { channel_id: H });
+    await waitFor(() => said(since(t), H, /How many/) && said(since(t), H, /Nothing is being deleted/));
+    await sleep(150);
+    ok('без числа — подсказка; stop без чистки — так и пишет; у других не работает',
+       said(since(t), H, /How many/) && said(since(t), H, /Nothing is being deleted/) &&
+       find(since(t), 'GET', new RegExp('^/channels/' + H + '/messages')).length === 0);
+  }
 
   console.log('\nновости и Logs в Discord:');
   process.env.DISCORD_UPDATES_CHANNEL_ID = CH.updates;
