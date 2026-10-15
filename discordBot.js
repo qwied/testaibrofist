@@ -990,7 +990,7 @@ async function onRulesSubmit(i, g) {
       api('DELETE', '/channels/' + old.channel + '/messages/' + old.message).catch(() => {});
   }
   if (!ok(r) || !r.body) return finish(i, card('Could not post in <#' + chosen.id + '> (error ' + r.status + '). Check that I can send messages there.'));
-  st.rules = { channel: chosen.id, message: r.body.id, title, en, ru };
+  st.rules = { channel: chosen.id, message: r.body.id, title, en, ru, custom: true };   // свой текст — сам бот его больше не меняет
   st.words = words;
   save();
   return finish(i, card('Rules are in <#' + chosen.id + '>: https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.body.id +
@@ -999,12 +999,23 @@ async function onRulesSubmit(i, g) {
 }
 
 /* Правила ещё не выкладывались — бот сам кладёт стандартные в #rules,
-   один раз. Дальше их правит владелец командой rules; удалил пост —
-   бот его не возвращает. */
+   один раз. Поменялся стандартный текст (новая версия бота), а владелец
+   свой не писал — бот правит тот же пост. Написал свой командой rules
+   (custom) — не трогаем; удалил пост — бот его не возвращает. */
 async function postDefaultRules(g) {
   const st = gstate(g.id);
+  const old = st.rules;
+  if (old && old.message) {
+    const en = R.rulesText('en'), ru = R.rulesText('ru');
+    if (old.custom || old.removed || (old.en === en && old.ru === ru)) return;
+    const r = await api('PATCH', '/channels/' + old.channel + '/messages/' + old.message, rulesPost(old.title || RULES_TITLE, linkify(g, en), ru));
+    if (ok(r)) Object.assign(old, { en, ru });
+    else if (r.status === 404) old.removed = true;
+    save();
+    return;
+  }
   const c = g.channels.get(RULES_CHANNEL);
-  if ((st.rules && st.rules.message) || !c) return;
+  if (!c) return;
   const r0 = rulesNow(g);
   const r = await api('POST', '/channels/' + c.id + '/messages', rulesPost(r0.title, linkify(g, r0.en), r0.ru));
   if (!ok(r) || !r.body) { log('could not post the rules in #' + c.name + ':', r.status); return; }

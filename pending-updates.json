@@ -1,4 +1,9 @@
 {
   "base": "4a05b438de1c9a7d12838b590f3d1e1698422cf8",
-  "updates": []
+  "updates": [
+    {
+      "title": "Clearer server rules",
+      "text": "The Discord server rules now show which rules the bot checks by itself and which ones the moderators check."
+    }
+  ]
 }

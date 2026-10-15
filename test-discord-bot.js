@@ -603,6 +603,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      find(since(t), 'PATCH', new RegExp('^/channels/301/messages/' + rpost.resId + '$')).length === 1 &&
      find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0);
   ok('слова можно убрать', bot._test.state().guilds[G].words.length === 0);
+  ok('свой текст правил бот потом сам не меняет', bot._test.state().guilds[G].rules.custom === true);
 
   console.log('\nбан и разбан:');
   t = Date.now();
@@ -683,6 +684,10 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   bot.stop();
   await sleep(200);
+  // правила в #rules — стандартные, но старой версии (владелец свои не писал)
+  const sf = JSON.parse(fs.readFileSync(process.env.DISCORD_BOT_STATE, 'utf8'));
+  Object.assign(sf.guilds[G].rules, { custom: false, en: 'old default rules', ru: 'старые правила' });
+  fs.writeFileSync(process.env.DISCORD_BOT_STATE, JSON.stringify(sf));
   const before = gwLog.length;
   closeNextIdentify = 4014;
   bot._test.reload();
@@ -691,6 +696,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('без привилегированных intents переподключается без них', ident2 && ident2.d.intents === (1 | 4 | 512 | 2097152), ident2 && ident2.d.intents);
   await sleep(800);
   c = since(t);
+  const rfix = find(c, 'PATCH', new RegExp('^/channels/301/messages/' + (rpost && rpost.resId) + '$'))[0];
+  ok('стандартные правила обновились — бот исправил тот же пост в #rules', rfix &&
+     /\(Checked by moderators\.\)/.test(JSON.stringify(rfix.body)) && bot._test.state().guilds[G].rules.ru !== 'старые правила');
   ok('после перезапуска ничего не постит заново (команды, AutoMod)',
      find(c, 'PUT', /commands$/).length === 0 && find(c, 'POST', /auto-moderation/).length === 0 &&
      find(c, 'POST', /^\/channels\/301\/messages$/).length === 0);

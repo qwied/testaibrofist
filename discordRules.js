@@ -114,30 +114,30 @@ const strikes = n => n + (n === 1 ? ' strike' : ' strikes');
 const SHORT_EN = [
   'No harassment, insults, threats or hate speech. No slurs about race, nationality, religion, gender, sexuality or disability. Never tell anyone to hurt themselves, even as a joke.',
   'No flooding, copy-paste, walls of text, all caps, emoji spam or mass mentions.',
-  'No invites to other servers and no self-promotion without staff permission, in chat or in DMs.',
-  'No sexual, gory or shocking content in messages, images, links, names or avatars.',
+  'No invites to other servers and no self-promotion without staff permission, in chat or in DMs. (Invites are removed by the bot, other ads are checked by moderators.)',
+  'No sexual, gory or shocking content in messages, images, links, names or avatars. (Pictures and avatars are checked by moderators.)',
   'No phishing, fake giveaways, "free Nitro", IP grabbers, malware or suspicious files. Never ask for anyone\'s password or account.',
-  'Do not share anyone\'s personal information: real names, addresses, phone numbers, IP addresses or photos.',
+  'Do not share anyone\'s personal information: real names, addresses, phone numbers, IP addresses or photos. (Checked by moderators.)',
   'No cheats, hacks or exploits. No buying or selling accounts or coins for real money. Found a bug? Report it to the staff.',
-  'Keep each topic in its channel and read the pinned messages.',
-  'Usernames, nicknames, avatars and statuses must be appropriate. Do not impersonate the staff or other players.',
+  'Keep each topic in its channel and read the pinned messages. (Checked by moderators.)',
+  'Usernames, nicknames, avatars and statuses must be appropriate. Do not impersonate the staff or other players. (Avatars and statuses are checked by moderators.)',
   'No politics or religion debates. If a talk gets heated, drop it.',
-  'Follow moderator instructions. Do not argue about punishments in chat, message a moderator instead. Using another account to avoid a mute or ban leads to a ban.',
-  'Follow the Discord Terms of Service and Community Guidelines. You must be at least 13 years old.'
+  'Follow moderator instructions. Do not argue about punishments in chat, message a moderator instead. Using another account to avoid a mute or ban leads to a ban. (Checked by moderators.)',
+  'Follow the Discord Terms of Service and Community Guidelines. You must be at least 13 years old. (Checked by moderators.)'
 ];
 const RULES_RU = [
   ['Уважайте друг друга', 'Без травли, оскорблений, угроз и ненависти, в том числе по расе, национальности, религии, полу, ориентации или инвалидности. Никогда не желайте никому навредить себе, даже в шутку.'],
   ['Без спама', 'Без флуда, копипасты, простыней текста, капса, спама эмодзи и массовых упоминаний.'],
-  ['Без рекламы', 'Без приглашений на другие серверы и самопиара без разрешения администрации, ни в чате, ни в личке.'],
-  ['Без контента 18+', 'Без сексуального, жестокого или шокирующего контента в сообщениях, картинках, ссылках, никах и аватарках.'],
+  ['Без рекламы', 'Без приглашений на другие серверы и самопиара без разрешения администрации, ни в чате, ни в личке. (Приглашения удаляет бот, остальную рекламу проверяют модераторы.)'],
+  ['Без контента 18+', 'Без сексуального, жестокого или шокирующего контента в сообщениях, картинках, ссылках, никах и аватарках. (Картинки и аватарки проверяют модераторы.)'],
   ['Без мошенничества и опасных ссылок', 'Без фишинга, фейковых розыгрышей, «бесплатного Nitro», IP-логгеров, вирусов и подозрительных файлов. Не просите чужие пароли и аккаунты.'],
-  ['Уважайте личные данные', 'Не публикуйте чужую личную информацию: настоящие имена, адреса, номера телефонов, IP-адреса и фото.'],
+  ['Уважайте личные данные', 'Не публикуйте чужую личную информацию: настоящие имена, адреса, номера телефонов, IP-адреса и фото. (Проверяют модераторы.)'],
   ['Играйте честно', 'Без читов, взломов и эксплойтов. Никакой покупки и продажи аккаунтов или монет за реальные деньги. Нашли баг? Сообщите администрации.'],
-  ['Пишите в нужные каналы', 'Каждая тема — в своём канале, читайте закреплённые сообщения.'],
-  ['Приличные ники и профили', 'Имена, ники, аватарки и статусы должны быть приличными. Не выдавайте себя за администрацию или других игроков.'],
+  ['Пишите в нужные каналы', 'Каждая тема — в своём канале, читайте закреплённые сообщения. (Проверяют модераторы.)'],
+  ['Приличные ники и профили', 'Имена, ники, аватарки и статусы должны быть приличными. Не выдавайте себя за администрацию или других игроков. (Аватарки и статусы проверяют модераторы.)'],
   ['Без острых тем', 'Без споров о политике и религии. Если разговор накаляется, закончите его.'],
-  ['Слушайте администрацию', 'Выполняйте указания модераторов. Не спорьте о наказаниях в чате, напишите модератору. Обход мьюта или бана с другого аккаунта ведёт к бану.'],
-  ['Соблюдайте правила Discord', 'Соблюдайте условия использования и правила сообщества Discord. Вам должно быть не меньше 13 лет.']
+  ['Слушайте администрацию', 'Выполняйте указания модераторов. Не спорьте о наказаниях в чате, напишите модератору. Обход мьюта или бана с другого аккаунта ведёт к бану. (Проверяют модераторы.)'],
+  ['Соблюдайте правила Discord', 'Соблюдайте условия использования и правила сообщества Discord. Вам должно быть не меньше 13 лет. (Проверяют модераторы.)']
 ];
 
 // «1 strike: Warning», «7-8 strikes: Ban for 7 days», «9+ strikes: Permanent ban»
@@ -154,11 +154,13 @@ const ruWord = (n, more) => { const k = n % 10 === 1 && n % 100 !== 11 && !more 
 function rulesText(lang) {
   if (lang === 'ru') {
     return RULES_RU.map((r, i) => '**' + (i + 1) + '. ' + r[0] + '.** ' + r[1]).join('\n') +
+      '\n\nПравила без пометки бот проверяет сам, круглосуточно.' +
       '\n\n**Наказания**\nЗа нарушение даются штрафные баллы, они сгорают через 30 дней. Мошенничество и опасные ' +
       'ссылки дают сразу 3 балла; оскорбления по признаку, 18+ и чужие личные данные — 2.\n' +
       ladderLines(ruWord, describeRu).join('\n') + '\nВременный бан бот снимает сам, когда срок выйдет.';
   }
   return RULES.map((r, i) => '**' + r.id + '. ' + r.title + '.** ' + SHORT_EN[i]).join('\n') +
+    '\n\nRules without a note are checked by the bot automatically, around the clock.' +
     '\n\n**Punishments**\nBreaking a rule gives strikes, which expire after 30 days. Scams and harmful links give ' +
     '3 strikes at once; slurs, adult content and personal information give 2.\n' +
     ladderLines((n, more) => n === 1 && !more ? 'strike' : 'strikes', describe).join('\n') +
