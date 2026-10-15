@@ -1,9 +1,4 @@
 {
-  "base": "668f57a4c40358050e40c0fee4788edac4838049",
-  "updates": [
-    {
-      "title": "Same rules for everyone",
-      "text": "Discord server rules now apply to everyone, including moderators and the owner."
-    }
-  ]
+  "base": "2f233228abdbf5cb9d2cc61e96eb1c01f13b66fb",
+  "updates": []
 }
