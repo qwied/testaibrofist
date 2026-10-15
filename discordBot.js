@@ -1076,8 +1076,9 @@ async function onNewsSubmit(i, g) {
       const type = /^image\//.test(a.content_type || '') ? a.content_type : ext ? 'image/' + (ext === 'jpg' ? 'jpeg' : ext) : '';
       if (!type) { notes.push(shown + ': not an image'); continue; }
       if ((a.size || 0) > 10 * 1024 * 1024) { notes.push(shown + ': bigger than 10 MB'); continue; }
-      let got = null, why = '';
-      for (const u of [a.url, a.proxy_url]) {
+      // CDN Discord сайту недоступен (так бывает у хостинга) — не ждём таймаута на каждой картинке
+      let got = null, why = cdn.ok === false ? 'the site cannot reach the Discord CDN' : '';
+      for (const u of cdn.ok === false ? [] : [a.url, a.proxy_url]) {
         if (!u || got) continue;
         try { got = await download(u, 10 * 1024 * 1024); } catch (e) { why = e.message; }
       }
@@ -1469,6 +1470,7 @@ function start() {
   if (!token() || gw) return;
   log('starting the bot');
   loadState();
+  checkCdn();                        // заранее знать, можно ли скачивать картинки с CDN Discord
   connect(ALL_INTENTS);
   // живое подключение не открылось — работаем запросами (см. выше)
   const t0 = setTimeout(() => { if (gw && gw.state !== 'ready') startRest().catch(e => log('requests mode failed:', e.message)); }, REST_AFTER_MS);
