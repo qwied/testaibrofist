@@ -1,9 +1,4 @@
 {
-  "base": "dde33ab2c38356c08db5e08bfeff12bebbebd5e3",
-  "updates": [
-    {
-      "title": "Discord bot fixes",
-      "text": "Posting news with pictures in Discord is faster."
-    }
-  ]
+  "base": "4a05b438de1c9a7d12838b590f3d1e1698422cf8",
+  "updates": []
 }
