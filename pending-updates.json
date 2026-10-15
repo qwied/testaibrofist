@@ -1,9 +1,4 @@
 {
-  "base": "42c9774d7f4d4e7da784fffed47f8a7c5bab3dd3",
-  "updates": [
-    {
-      "title": "Discord bot",
-      "text": "Preparation for checking pictures in Discord."
-    }
-  ]
+  "base": "5b535b28355b9eff3b2fb437e00a86d66ada5b2a",
+  "updates": []
 }
