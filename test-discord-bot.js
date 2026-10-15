@@ -405,18 +405,22 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('уверенное 18+ (95%+) — удалить', bot._test.imageVerdict({ Porn: 0.97 }) === 'remove' && bot._test.imageVerdict({ Hentai: 0.96 }) === 'remove');
   ok('сомнительное (как та аватарка) — только показать модераторам', bot._test.imageVerdict(ownerAvatar) === 'review');
   ok('обычная картинка — ничего', bot._test.imageVerdict({ Neutral: 0.9, Porn: 0.05 }) === null);
+  // в журнал в это время могут дописываться записи прошлых шагов (рейд) — считаем только про аватарки
+  const avatarAlerts = (list, uid) => find(list, 'POST', /^\/channels\/303\/messages$/)
+    .filter(x => /Avatar may be 18\+/.test(JSON.stringify(x.body)) && JSON.stringify(x.body).includes('<@' + uid + '>'));
   t = Date.now();
   await bot._test.onAvatarScores(bot._test.guilds.get(G), { id: 'AV1' }, ownerAvatar);
-  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
+  await waitFor(() => avatarAlerts(since(t), 'AV1').length);
   c = since(t);
   ok('аватарка: без балла и без наказания — уведомление модераторам', !(bot._test.state().strikes[G + ':AV1'] || []).length &&
-     find(c, 'PATCH', /members\/AV1$/).length === 0 && /Avatar may be 18\+/.test(JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/)[0].body)));
+     find(c, 'PATCH', /members\/AV1$/).length === 0 && avatarAlerts(c, 'AV1').length === 1);
   t = Date.now();
   await bot._test.onAvatarScores(bot._test.guilds.get(G), { id: 'AV3' }, ownerAvatar, 'h1');
   await bot._test.onAvatarScores(bot._test.guilds.get(G), { id: 'AV3' }, ownerAvatar, 'h1');
   await bot._test.onAvatarScores(bot._test.guilds.get(G), { id: OWNER }, ownerAvatar, 'h2');
   await sleep(200);
-  ok('об одной аватарке — одно уведомление, о своей владельцу не пишет', find(since(t), 'POST', /^\/channels\/303\/messages$/).length === 1);
+  ok('об одной аватарке — одно уведомление, о своей владельцу не пишет', avatarAlerts(since(t), 'AV3').length === 1 &&
+     avatarAlerts(since(t), OWNER).length === 0);
   t = Date.now();
   const avMsg = say('AV1', 'hello, is anyone here?');
   await sleep(300);
