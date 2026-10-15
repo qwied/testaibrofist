@@ -1,4 +1,9 @@
 {
   "base": "bf26079523956446c6d25fd60b5e6ffb02b175f4",
-  "updates": []
+  "updates": [
+    {
+      "title": "Simpler member checks",
+      "text": "The Discord bot no longer checks avatars or how old an account is, and new members can post links right away. Raid protection now starts only when more than 100 people join within a minute."
+    }
+  ]
 }

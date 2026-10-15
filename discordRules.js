@@ -21,8 +21,8 @@ const RULES = [
     text: 'Do not post invites to other Discord servers or promote your channel, stream, social ' +
           'media or shop without permission from the staff. Sending ads to members in DMs counts too.' },
   { id: 4, title: 'Keep it safe for work',
-    text: 'No sexual, pornographic, gory or shocking content in messages, images, links, names or ' +
-          'avatars. Players from 13 years old are welcome here, so keep everything suitable for them.' },
+    text: 'No sexual, pornographic, gory or shocking content in messages, images, links or names. ' +
+          'Players from 13 years old are welcome here, so keep everything suitable for them.' },
   { id: 5, title: 'No scams or harmful links',
     text: 'No phishing, fake giveaways, "free Nitro" offers, IP grabbers, malware or suspicious files. ' +
           'Never ask anyone for their password or account. If your account was hacked and posted links, ' +
@@ -38,7 +38,7 @@ const RULES = [
     text: 'Keep each conversation in the channel it belongs to. Read the channel descriptions and pinned ' +
           'messages before posting.' },
   { id: 9, title: 'Keep names and profiles clean',
-    text: 'Usernames, nicknames, avatars and statuses must be readable and appropriate. Do not ' +
+    text: 'Usernames, nicknames and statuses must be readable and appropriate. Do not ' +
           'impersonate the staff, other players or the bot.' },
   { id: 10, title: 'Avoid heated topics',
     text: 'Stay away from politics, religion and other topics that usually turn into fights. If a ' +
@@ -115,12 +115,12 @@ const SHORT_EN = [
   'No harassment, insults, threats or hate speech. No slurs about race, nationality, religion, gender, sexuality or disability. Never tell anyone to hurt themselves, even as a joke.',
   'No flooding, copy-paste, walls of text, all caps, emoji spam or mass mentions.',
   'No invites to other servers and no self-promotion without staff permission, in chat or in DMs. (Invites are removed by the bot, other ads are checked by moderators.)',
-  'No sexual, gory or shocking content in messages, images, links, names or avatars. (Avatars are checked by moderators.)',
+  'No sexual, gory or shocking content in messages, images, links or names.',
   'No phishing, fake giveaways, "free Nitro", IP grabbers, malware or suspicious files. Never ask for anyone\'s password or account.',
   'Do not share anyone\'s personal information: real names, addresses, phone numbers, IP addresses or photos. (Checked by moderators.)',
   'No cheats, hacks or exploits. No buying or selling accounts or coins for real money. Found a bug? Report it to the staff. (Cheats are checked by moderators.)',
   'Keep each topic in its channel and read the pinned messages. (Checked by moderators.)',
-  'Usernames, nicknames, avatars and statuses must be appropriate. Do not impersonate the staff or other players. (Avatars and statuses are checked by moderators.)',
+  'Usernames, nicknames and statuses must be appropriate. Do not impersonate the staff or other players. (Statuses are checked by moderators.)',
   'No politics or religion debates. If a talk gets heated, drop it.',
   'Follow moderator instructions. Do not argue about punishments in chat, message a moderator instead. Using another account to avoid a mute or ban leads to a ban. (Checked by moderators.)',
   'Follow the Discord Terms of Service and Community Guidelines. You must be at least 13 years old. (Checked by moderators.)'
@@ -129,12 +129,12 @@ const RULES_RU = [
   ['Уважайте друг друга', 'Без травли, оскорблений, угроз и ненависти, в том числе по расе, национальности, религии, полу, ориентации или инвалидности. Никогда не желайте никому навредить себе, даже в шутку.'],
   ['Без спама', 'Без флуда, копипасты, простыней текста, капса, спама эмодзи и массовых упоминаний.'],
   ['Без рекламы', 'Без приглашений на другие серверы и самопиара без разрешения администрации, ни в чате, ни в личке. (Приглашения удаляет бот, остальную рекламу проверяют модераторы.)'],
-  ['Без контента 18+', 'Без сексуального, жестокого или шокирующего контента в сообщениях, картинках, ссылках, никах и аватарках. (Аватарки проверяют модераторы.)'],
+  ['Без контента 18+', 'Без сексуального, жестокого или шокирующего контента в сообщениях, картинках, ссылках и никах.'],
   ['Без мошенничества и опасных ссылок', 'Без фишинга, фейковых розыгрышей, «бесплатного Nitro», IP-логгеров, вирусов и подозрительных файлов. Не просите чужие пароли и аккаунты.'],
   ['Уважайте личные данные', 'Не публикуйте чужую личную информацию: настоящие имена, адреса, номера телефонов, IP-адреса и фото. (Проверяют модераторы.)'],
   ['Играйте честно', 'Без читов, взломов и эксплойтов. Никакой покупки и продажи аккаунтов или монет за реальные деньги. Нашли баг? Сообщите администрации. (Читы проверяют модераторы.)'],
   ['Пишите в нужные каналы', 'Каждая тема — в своём канале, читайте закреплённые сообщения. (Проверяют модераторы.)'],
-  ['Приличные ники и профили', 'Имена, ники, аватарки и статусы должны быть приличными. Не выдавайте себя за администрацию или других игроков. (Аватарки и статусы проверяют модераторы.)'],
+  ['Приличные ники и профили', 'Имена, ники и статусы должны быть приличными. Не выдавайте себя за администрацию или других игроков. (Статусы проверяют модераторы.)'],
   ['Без острых тем', 'Без споров о политике и религии. Если разговор накаляется, закончите его.'],
   ['Слушайте администрацию', 'Выполняйте указания модераторов. Не спорьте о наказаниях в чате, напишите модератору. Обход мьюта или бана с другого аккаунта ведёт к бану. (Проверяют модераторы.)'],
   ['Соблюдайте правила Discord', 'Соблюдайте условия использования и правила сообщества Discord. Вам должно быть не меньше 13 лет. (Проверяют модераторы.)']

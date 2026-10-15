@@ -4,9 +4,8 @@
 //   - автомодерация: проверяет каждое сообщение (discordAutomod.js),
 //     удаляет нарушения, даёт штрафные баллы и наказывает по лестнице из
 //     discordRules.js — предупреждение, мьюты, бан только в крайнем случае;
-//     следит и за участниками: ники, аватарки 18+, рейды (много входов
-//     сразу), обход бана с другого аккаунта, ссылки от только что
-//     зашедших новых аккаунтов;
+//     следит и за участниками: ники, рейды (больше 100 входов за минуту),
+//     имя как у забаненного;
 //     дополнительно включает встроенную AutoMod Discord, которая не даёт
 //     отправить оскорбления и спам упоминаниями вовсе;
 //   - пишет игроку в личку, за что и как он наказан, а модераторам — в
@@ -48,10 +47,8 @@ const ALL_PERMS = (1n << 64n) - 1n;
 const STAFF = PERM.ADMIN | PERM.MANAGE_GUILD | PERM.MANAGE_MESSAGES | PERM.MODERATE | PERM.KICK | PERM.BAN;
 
 const COOLDOWN = 30 * 1000;      // за одну волну спама — одно наказание, а не восемь
-const NEWBIE_MS = 10 * 60 * 1000; // новые аккаунты первые 10 минут на сервере не шлют ссылки
-const RAID_JOINS = 10;            // столько входов за минуту — рейд
+const RAID_JOINS = 100;           // больше стольких входов за минуту — рейд
 const RAID_MS = 10 * 60 * 1000;
-const WEEK = 7 * 24 * 60 * 60 * 1000;
 const NOTICE_MS = 10 * 1000;     // короткое предупреждение в канале исчезает само
 
 // banned — приметы забаненных (аватарка, имя): по ним ловим обход бана
@@ -64,7 +61,6 @@ const inviteCache = new Map();   // код приглашения -> { guild, t 
 const dmChannels = new Map();
 const said = new Set();          // какие подсказки владельцу уже были в журнале
 const flood = new A.FloodWatch();
-const avatarSeen = new Map();     // guild:user -> какую аватарку уже проверили
 const nameSeen = new Map();       // guild:user -> какой ник уже разобрали
 const joins = new Map();          // guild -> времена входов за последнюю минуту
 const raidUntil = new Map();
@@ -447,7 +443,6 @@ async function pumpImages() {
   try {
     while (imgQueue.length) {
       const job = imgQueue.shift();
-      if (job.avatar) { await checkAvatar(job).catch(e => once('img:' + e.message, 'avatar check skipped:', e.message)); continue; }
       for (const a of job.pics) {
         try {
           // уменьшенная копия с медиа-прокси Discord: нейросети хватает 512 px
@@ -486,13 +481,6 @@ async function onMessage(m, edited) {
   // правила — для всех: и для модераторов, и для владельца (см. punish — что Discord не даёт)
   const ch = channelInfo(g, m.channel_id);
   const allowAds = /promo|advert|реклам|самопиар/i.test(ch.name);
-
-  queueAvatar(g, { user: m.author, avatar: m.member && m.member.avatar });   // кто пишет — проверим и аватарку
-  // совсем новый аккаунт только что зашёл и сразу шлёт ссылку — так пишут спам-боты
-  const joined = Date.parse(m.member && m.member.joined_at) || 0;
-  if (!edited && joined && Date.now() - joined < NEWBIE_MS && accountAge(m.author.id) < WEEK &&
-      A.links(m.content).some(l => l.explicit))
-    return softRemove(m, 'new members can post links 10 minutes after joining.');
 
   const found = A.inspect(m, { nsfw: ch.nsfw });
   const custom = A.checkCustom(m.content, gstate(g.id).words);
@@ -561,8 +549,6 @@ async function onAutomodExecution(d) {
 
 /* ---------- участники: ники, аватарки, рейды, обход бана ---------- */
 const DISCORD_EPOCH = 1420070400000n;
-// возраст аккаунта по его id (в id зашито время создания)
-const accountAge = id => /^\d{15,}$/.test(String(id)) ? Date.now() - Number((BigInt(id) >> 22n) + DISCORD_EPOCH) : Infinity;
 
 // удалить сообщение и коротко объяснить почему — без баллов (раз в 30 секунд)
 async function softRemove(m, text) {
@@ -621,59 +607,25 @@ async function checkName(g, d) {
   }
 }
 
-function queueAvatar(g, d) {
-  const key = g.id + ':' + d.user.id, hash = d.avatar || d.user.avatar;
-  if (!hash) return;
-  if (avatarSeen.get(key) === hash) return;
-  if (SCAN_IMAGES && imgQueue.length > 20) return;     // очередь полна — проверим в другой раз
-  avatarSeen.set(key, hash);
-  if (!SCAN_IMAGES) return;
-  const url = d.avatar ? 'https://cdn.discordapp.com/guilds/' + g.id + '/users/' + d.user.id + '/avatars/' + hash + '.png?size=256'
-                       : 'https://cdn.discordapp.com/avatars/' + d.user.id + '/' + hash + '.png?size=256';
-  imgQueue.push({ avatar: true, g, user: d.user, hash, url });
-  pumpImages();
-}
-
-async function checkAvatar(job) {
-  const { buf, type } = await download(job.url, 4 * 1024 * 1024);
-  if (type !== 'image/png') return;
-  const img = require('./imgModeration.js');
-  const decoded = img.decodeImage(buf, 'png');
-  if (!decoded || !decoded.frames) return;
-  await onAvatarScores(job.g, job.user, await img.nsfwScores(decoded), job.hash);
-}
-
-// аватарку бот только показывает модераторам: из-за ошибки нейросети
-// человек не смог бы писать вообще, поэтому решают люди
-async function onAvatarScores(g, user, scores, hash) {
-  if (!imageVerdict(scores) || user.id === g.owner) return;          // свою аватарку владелец видит сам
-  const st = gstate(g.id);
-  st.avatarAlerts = st.avatarAlerts || {};
-  if (hash && st.avatarAlerts[user.id] === hash) return;             // об этой аватарке уже сообщали
-  if (hash) { st.avatarAlerts[user.id] = hash; save(); }
-  await alert(g, 'Avatar may be 18+', '<@' + user.id + '> (' + user.id + ')\nThe bot can mistake ordinary photos for 18+, so nothing ' +
-    'was done. If the avatar really breaks rule 4, give a strike for rule 4.');
-}
-
-// много входов за минуту — рейд: новые аккаунты на 10 минут получают мьют на час
+// больше 100 входов за минуту — рейд: следующие 10 минут каждый, кто заходит, получает мьют на час
 async function trackJoin(g, d) {
   const now = Date.now();
   const list = (joins.get(g.id) || []).filter(t => now - t < 60000);
   list.push(now);
   joins.set(g.id, list);
-  if (list.length >= RAID_JOINS && !((raidUntil.get(g.id) || 0) > now)) {
+  if (list.length > RAID_JOINS && !((raidUntil.get(g.id) || 0) > now)) {
     raidUntil.set(g.id, now + RAID_MS);
-    alert(g, 'Raid', list.length + ' members joined within a minute. For the next 10 minutes accounts younger ' +
-                     'than a week are muted for an hour when they join.').catch(() => {});
+    alert(g, 'Raid', list.length + ' members joined within a minute. For the next 10 minutes everyone who joins ' +
+                     'is muted for an hour.').catch(() => {});
   }
-  if ((raidUntil.get(g.id) || 0) > now && accountAge(d.user.id) < WEEK) await timeout(g, d.user.id, R.HOUR, 'Raid protection');
+  if ((raidUntil.get(g.id) || 0) > now) await timeout(g, d.user.id, R.HOUR, 'Raid protection');
 }
 
-// приметы забаненного: аватарка и имя — по ним узнаём его второй аккаунт
+// имя забаненного: зайдёт с другого аккаунта под тем же именем — скажем модераторам
 function rememberBan(gid, user) {
-  if (!user || (!user.avatar && !user.username)) return;
+  if (!user || !user.username) return;
   const list = (state.banned[gid] || []).filter(b => b.id !== user.id);
-  list.push({ id: user.id, a: user.avatar || null, n: String(user.global_name || user.username || '').toLowerCase(), t: Date.now() });
+  list.push({ id: user.id, n: String(user.global_name || user.username || '').toLowerCase(), t: Date.now() });
   state.banned[gid] = list.slice(-500);
   save();
 }
@@ -681,31 +633,15 @@ function rememberBan(gid, user) {
 async function checkEvasion(g, d) {
   const list = state.banned[g.id] || [];
   const u = d.user, name = String(u.global_name || u.username || '').toLowerCase();
-  const same = u.avatar && list.find(b => b.a && b.a === u.avatar && b.id !== u.id);
-  if (same && accountAge(u.id) >= 30 * R.DAY) {
-    alert(g, 'Possible second account', '<@' + u.id + '> has the same avatar as banned member <@' + same.id + '>. ' +
-          'The account is not new, so the bot did not ban it. Please check.').catch(() => {});
-    return false;
-  }
-  if (same) {
-    // та же картинка аватарки, что у забаненного, — это он
-    const caseNo = ++state.cases;
-    save();
-    const done = await ban(g, u.id, 'Case ' + caseNo + ': rule 11, ban evasion');
-    await modlog(g, { caseNo, title: 'Ban (ban evasion)' + (done ? '' : ' (failed: no permission)'), color: R.COLORS.ban,
-                      user: u.id, rule: 11, reason: 'Same avatar as banned member <@' + same.id + '>' });
-    return true;
-  }
   const alike = name.length >= 4 && list.find(b => b.n === name && b.id !== u.id);
   if (alike) alert(g, 'Possible second account', '<@' + u.id + '> has the same name as banned member <@' + alike.id + '>.').catch(() => {});
-  return false;
 }
 
 async function onMemberAdd(d) {
   const g = guilds.get(d.guild_id);
   if (!g || !d.user || d.user.bot) return;
   await trackJoin(g, d);
-  if (await checkEvasion(g, d)) return;
+  await checkEvasion(g, d);
   await onMemberUpdate(d);
 }
 
@@ -713,7 +649,6 @@ async function onMemberUpdate(d) {
   const g = guilds.get(d.guild_id);
   if (!g || !d.user || d.user.bot) return;
   await checkName(g, d);
-  queueAvatar(g, d);
 }
 
 /* ---------- встроенная AutoMod Discord ----------
@@ -1735,4 +1670,4 @@ function feedChannels() {
   return state.feed.slice();
 }
 
-module.exports = { start, stop, feedChannels, register, status, startRest, _test: { state: () => state, guilds, punish, releaseBans, imageVerdict, onAvatarScores, reload: () => { loaded = false; loadState(); } } };
+module.exports = { start, stop, feedChannels, register, status, startRest, _test: { state: () => state, guilds, punish, releaseBans, imageVerdict, reload: () => { loaded = false; loadState(); } } };

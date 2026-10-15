@@ -8,8 +8,8 @@
    - за волну флуда — одно наказание, а не по штрафу за каждое сообщение;
    - участники: плохой ник меняется (и балл), значки в начале убираются,
      ники всех, кто уже на сервере, тоже проверяются; рейд (много входов
-     сразу) — новые аккаунты в мьют; та же аватарка, что у забаненного, —
-     бан; совсем новый аккаунт не может сразу слать ссылки; политика,
+     больше 100 за минуту) — входящие в мьют; аватарки и дату создания
+     аккаунта бот не смотрит; политика,
      продажа аккаунтов, «мне 11 лет» (только сообщение владельцу);
    - секретные команды владельца (начало задаётся на хостинге, здесь «!qa»):
      news, updates, warn, mute, strikes, clear, help — сообщение с командой исчезает,
@@ -353,17 +353,10 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(since(t), 'PATCH', /members\/V4$/).length);
   ok('@everyone со ссылкой — 2 балла, мьют на 10 минут', points(bot._test.state().strikes[G + ':V4']) === 2);
   const snow = ms => String((BigInt(ms) - 1420070400000n) << 22n);
-  const newbie = snow(Date.now() - 3600000);
   t = Date.now();
-  const nl = say(newbie, 'check this https://example.com/cool', { member: Object.assign(member(), { joined_at: new Date().toISOString() }) });
-  await waitFor(() => find(since(t), 'POST', /^\/channels\/300\/messages$/).length);
-  c = since(t);
-  ok('новый аккаунт сразу после входа шлёт ссылку — удалено, без баллов, с объяснением', find(c, 'DELETE', new RegExp(nl.id + '$')).length === 1 &&
-     !(bot._test.state().strikes[G + ':' + newbie] || []).length && /10 minutes after joining/.test(find(c, 'POST', /^\/channels\/300\/messages$/)[0].body.content));
-  t = Date.now();
-  say(snow(Date.now() - 30 * 86400000), 'check this https://example.com/cool', { member: Object.assign(member(), { joined_at: new Date().toISOString() }) });
+  const nl = say(snow(Date.now() - 3600000), 'check this https://example.com/cool', { member: Object.assign(member(), { joined_at: new Date().toISOString() }) });
   await sleep(250);
-  ok('старому аккаунту, только что зашедшему, ссылки можно', find(since(t), 'DELETE', /messages/).length === 0);
+  ok('новый аккаунт сразу после входа может слать ссылки (дату создания бот не смотрит)', find(since(t), 'DELETE', new RegExp(nl.id + '$')).length === 0);
 
   console.log('\nучастники:');
   t = Date.now();
@@ -385,53 +378,34 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   dispatch('GUILD_BAN_ADD', { guild_id: G, user: { id: 'B1', username: 'badguy', avatar: 'cafe1234' } });
   const B2 = snow(Date.now() - 86400000);
   dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: B2, username: 'newguy', avatar: 'cafe1234' }, roles: [] });
-  await waitFor(() => find(since(t), 'PUT', new RegExp('bans/' + B2 + '$')).length);
-  ok('новый аккаунт с той же аватаркой, что у забаненного, — бан за обход (правило 11)', find(since(t), 'PUT', new RegExp('bans/' + B2 + '$')).length === 1 &&
-     /ban evasion/.test(decodeURIComponent(find(since(t), 'PUT', new RegExp('bans/' + B2 + '$'))[0].reason || '')));
-  t = Date.now();
-  const B4 = snow(Date.now() - 400 * 86400000);
-  dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: B4, username: 'someone', avatar: 'cafe1234' }, roles: [] });
-  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
-  ok('старый аккаунт с той же картинкой — не бан, только сообщение модераторам', find(since(t), 'PUT', new RegExp('bans/' + B4 + '$')).length === 0 &&
-     /same avatar/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/)[0].body)));
+  await sleep(250);
+  ok('та же аватарка, что у забаненного, — ничего (аватарки бот не смотрит)', find(since(t), 'PUT', new RegExp('bans/' + B2 + '$')).length === 0 &&
+     !/avatar/i.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/))));
   t = Date.now();
   dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: 'B3', username: 'badguy' }, roles: [] });
   await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
   ok('то же имя, что у забаненного, — только сообщение владельцу', find(since(t), 'PUT', /bans\/B3$/).length === 0 &&
      /second account/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/)[0].body)));
   t = Date.now();
-  for (let i = 0; i < 10; i++) dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: snow(Date.now() - 3600000 - i), username: 'raider' + i }, roles: [] });
+  // до этого за минуту зашли ещё 4 человека: 90 + 4 — меньше 100, ещё не рейд
+  for (let i = 0; i < 90; i++) dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: snow(Date.now() - 400 * 86400000 - i), username: 'guest' + i }, roles: [] });
+  await sleep(600);
+  ok('94 входа за минуту — ещё не рейд: никого не мьютит', !/Raid/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/))) &&
+     find(since(t), 'PATCH', /members\/\d+$/).filter(x => x.body.communication_disabled_until).length === 0);
+  t = Date.now();
+  for (let i = 0; i < 15; i++) dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: snow(Date.now() - 400 * 86400000 - 100 - i), username: 'raider' + i }, roles: [] });
   await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length && find(since(t), 'PATCH', /members\/\d+$/).length);
   await sleep(300);
-  ok('рейд: 10 входов за минуту — сообщение владельцу и мьют новых аккаунтов', /Raid/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/))) &&
-     find(since(t), 'PATCH', /members\/\d+$/).filter(x => x.body.communication_disabled_until).length >= 1);
+  ok('больше 100 входов за минуту — рейд: сообщение владельцу и мьют всех входящих, даже старых аккаунтов',
+     /Raid/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/))) &&
+     find(since(t), 'PATCH', /members\/\d+$/).filter(x => x.body.communication_disabled_until).length >= 4);
 
-  console.log('\nкартинки и аватарки (нейросеть может ошибаться):');
-  // настоящие цифры: аватарка владельца (одетый человек в коридоре) — «порно» 87%
-  const ownerAvatar = { Porn: 0.87, Neutral: 0.12, Sexy: 0.007, Hentai: 0.003 };
+  console.log('\nкартинки в сообщениях (нейросеть может ошибаться):');
+  // настоящие цифры: обычное фото (одетый человек в коридоре) — «порно» 87%
+  const doubtful = { Porn: 0.87, Neutral: 0.12, Sexy: 0.007, Hentai: 0.003 };
   ok('уверенное 18+ (95%+) — удалить', bot._test.imageVerdict({ Porn: 0.97 }) === 'remove' && bot._test.imageVerdict({ Hentai: 0.96 }) === 'remove');
-  ok('сомнительное (как та аватарка) — только показать модераторам', bot._test.imageVerdict(ownerAvatar) === 'review');
+  ok('сомнительное (как то фото) — только показать модераторам', bot._test.imageVerdict(doubtful) === 'review');
   ok('обычная картинка — ничего', bot._test.imageVerdict({ Neutral: 0.9, Porn: 0.05 }) === null);
-  // в журнал в это время могут дописываться записи прошлых шагов (рейд) — считаем только про аватарки
-  const avatarAlerts = (list, uid) => find(list, 'POST', /^\/channels\/303\/messages$/)
-    .filter(x => /Avatar may be 18\+/.test(JSON.stringify(x.body)) && JSON.stringify(x.body).includes('<@' + uid + '>'));
-  t = Date.now();
-  await bot._test.onAvatarScores(bot._test.guilds.get(G), { id: 'AV1' }, ownerAvatar);
-  await waitFor(() => avatarAlerts(since(t), 'AV1').length);
-  c = since(t);
-  ok('аватарка: без балла и без наказания — уведомление модераторам', !(bot._test.state().strikes[G + ':AV1'] || []).length &&
-     find(c, 'PATCH', /members\/AV1$/).length === 0 && avatarAlerts(c, 'AV1').length === 1);
-  t = Date.now();
-  await bot._test.onAvatarScores(bot._test.guilds.get(G), { id: 'AV3' }, ownerAvatar, 'h1');
-  await bot._test.onAvatarScores(bot._test.guilds.get(G), { id: 'AV3' }, ownerAvatar, 'h1');
-  await bot._test.onAvatarScores(bot._test.guilds.get(G), { id: OWNER }, ownerAvatar, 'h2');
-  await sleep(200);
-  ok('об одной аватарке — одно уведомление, о своей владельцу не пишет', avatarAlerts(since(t), 'AV3').length === 1 &&
-     avatarAlerts(since(t), OWNER).length === 0);
-  t = Date.now();
-  const avMsg = say('AV1', 'hello, is anyone here?');
-  await sleep(300);
-  ok('и писать человек может как обычно', find(since(t), 'DELETE', new RegExp('/messages/' + avMsg.id + '$')).length === 0);
 
   console.log('\nлестница до бана:');
   const g = bot._test.guilds.get(G);
