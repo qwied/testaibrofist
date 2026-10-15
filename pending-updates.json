@@ -1,9 +1,4 @@
 {
-  "base": "cd87b3f530354508a7861dad4175a24a49b175cc",
-  "updates": [
-    {
-      "title": "Fewer mistaken punishments",
-      "text": "The Discord bot no longer punishes ordinary phrases it used to misread, like a missing space after a period, game talk or warnings about scams. When it is not sure, it tells the moderators instead of giving a strike."
-    }
-  ]
+  "base": "6f4ce93d87aec4d67240ace9fbf869c78a214750",
+  "updates": []
 }
