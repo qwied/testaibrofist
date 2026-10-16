@@ -19,6 +19,8 @@
      не покажет;
    - новости и записи Logs уходят во все выбранные каналы, правка и удаление
      повторяются в Discord;
+   - /servers и /account ник — картинкой, с кнопками темы, листания и
+     ссылкой; команды и нажатия идут по живому подключению, не через сайт;
    - после обрыва продолжает сессию (resume), после перезапуска ничего не
      постит заново, без Message Content Intent переподключается без него.
    Запуск: node test-discord-bot.js */
@@ -34,6 +36,14 @@ const ok = (n, c, x) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', 
 // пост-карточка в рамке: части внутри рамки и части нужного типа
 const parts = b => (b && b.components && b.components[0] && b.components[0].components) || [];
 const partsOf = (b, type) => parts(b).filter(x => x.type === type);
+// ответ с файлом приходит multipart: JSON — в поле payload_json, дальше файлы
+function multipartOf(c) {
+  if (!c || !/multipart\/form-data/.test(c.ct)) return null;
+  const m = /name="payload_json"\r\nContent-Type: application\/json\r\n\r\n([\s\S]*?)\r\n--aibrofist/.exec(c.raw);
+  const files = [];
+  c.raw.replace(/name="files\[\d+\]"; filename="([^"]+)"\r\nContent-Type: ([^\r]+)/g, (all, name, type) => { files.push(name + ' ' + type); });
+  return { body: m ? JSON.parse(m[1]) : null, files, png: /PNG\r\n\x1a\n/.test(c.raw) };
+}
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function waitFor(fn, ms) {
   const end = Date.now() + (ms || 3000);
@@ -48,6 +58,7 @@ const MOD_ROLE = '200';
 /* ---------- поддельный Discord ---------- */
 const calls = [];
 let msgId = 5000, rateLimitedOnce = false, rejectNewModal = false;
+let appUrl = 'https://aibrofist.online/discord/interactions';   // как было у настоящего бота: команды шли через сайт
 const known = new Set();
 const history = new Map();           // канал -> сообщения (новые первыми) для «!clear»
 const denied = new Set();            // каналы, куда боту писать нельзя (403)
@@ -82,6 +93,10 @@ const server = http.createServer((req, res) => {
       return send(200, list.slice(from, from + Number(q.get('limit') || 50)));
     }
     if (/bulk-delete$/.test(p)) return send(204);
+    if (p === '/applications/@me') {
+      if (req.method === 'PATCH' && json && 'interactions_endpoint_url' in json) appUrl = json.interactions_endpoint_url;
+      return send(200, { id: APP, interactions_endpoint_url: appUrl });
+    }
     if (/^\/applications\/\w+\/guilds\/\w+\/commands$/.test(p)) return send(200, []);
     if (/^\/applications\/\w+\/commands$/.test(p)) return send(200, json || []);
     if (req.method === 'GET' && /auto-moderation\/rules$/.test(p)) return send(200, []);
@@ -195,9 +210,14 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('слэш-команд на сервере нет (старые, если были, убраны)', cmds.length === 1 && Array.isArray(cmds[0].body) && cmds[0].body.length === 0);
   await waitFor(() => find(calls, 'PUT', /^\/applications\/700\/commands$/).length);
   const gcmds = find(calls, 'PUT', /^\/applications\/700\/commands$/);
-  ok('у приложения одна команда для всех — /servers (старая /say убрана: список заменяется целиком)', gcmds.length === 1 &&
-     gcmds[0].body.length === 1 && gcmds[0].body[0].name === 'servers' && !gcmds[0].body[0].default_member_permissions,
+  const nick = gcmds[0] && gcmds[0].body[1] && (gcmds[0].body[1].options || [])[0];
+  ok('у приложения две команды для всех — /servers и /account (старая /say убрана: список заменяется целиком)', gcmds.length === 1 &&
+     gcmds[0].body.map(c => c.name).join() === 'servers,account' && gcmds[0].body.every(c => !c.default_member_permissions),
      gcmds[0] && JSON.stringify(gcmds[0].body.map(c => c.name)));
+  ok('/account: обязательный ник с подсказками по мере ввода', nick && nick.name === 'nick' && nick.type === 3 && nick.required && nick.autocomplete);
+  await waitFor(() => find(calls, 'PATCH', /^\/applications\/@me$/).length);
+  ok('команды и нажатия — по живому подключению: адрес на сайте убран (через сайт бывало по 20+ секунд)',
+     appUrl === null && find(calls, 'PATCH', /^\/applications\/@me$/)[0].body.interactions_endpoint_url === null);
   await waitFor(() => find(calls, 'POST', /^\/channels\/301\/messages$/).length);
   const rauto = find(calls, 'POST', /^\/channels\/301\/messages$/);
   const rpost = rauto[0], rbtn = rpost && (partsOf(rpost.body, 1)[0] || { components: [] }).components[0];
@@ -603,16 +623,93 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bid = press(OWNER, panel.id);
   await waitFor(() => cb(since(t), bid).length);
   ok('нажатая панель больше не работает', /expired/.test(JSON.stringify(cb(since(t), bid)[0].body)));
-  console.log('\n/servers и секретная статистика:');
+  console.log('\n/servers и /account — картинкой:');
+  const cards = require('./discordCards.js');
+  await cards.warm();                  // поток рисования уже поднят — как после первой команды
+  const ix = (id, type, data, uid) => dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type, guild_id: G, channel_id: CH.general,
+    member: { user: { id: uid || 'U0' }, permissions: '1024' }, message: type === 3 ? { id: '1' } : undefined, data });
   t = Date.now();
-  dispatch('INTERACTION_CREATE', { id: 'sv1', token: 'tksv1', type: 2, guild_id: G, channel_id: CH.general,
-    member: { user: { id: 'U0' }, permissions: '1024' }, data: { name: 'servers', type: 1 } });
-  await waitFor(() => cb(since(t), 'sv1').length);
-  const sv = cb(since(t), 'sv1')[0];
-  ok('/servers может любой: ответ виден всем, карточкой в рамке', sv && sv.body.type === 4 && sv.body.data.flags === 32768 &&
-     partsOf(sv.body.data, 10)[0].content === '## AIBROFIST servers' && /Race/.test(partsOf(sv.body.data, 10)[1].content) &&
-     /Hide and Seek/.test(partsOf(sv.body.data, 10)[1].content), sv && JSON.stringify(sv.body.data).slice(0, 160));
-  ok('в ответе /servers никого не пингует', sv && sv.body.data.allowed_mentions && sv.body.data.allowed_mentions.parse.length === 0);
+  ix('sv1', 2, { name: 'servers', type: 1 });
+  await waitFor(() => cb(since(t), 'sv1').length, 5000);
+  const sv = multipartOf(cb(since(t), 'sv1')[0]);
+  ok('/servers может любой: ответ виден всем и сразу картинкой', sv && sv.body.type === 4 && !(sv.body.data.flags & 64) && sv.png &&
+     sv.files[0] === 'aibrofist-servers.png image/png' && sv.body.data.attachments[0].filename === 'aibrofist-servers.png',
+     sv ? JSON.stringify(sv.body).slice(0, 120) : 'нет ответа');
+  ok('и быстро: ' + (cb(since(t), 'sv1')[0] ? cb(since(t), 'sv1')[0].t - t : '?') + ' мс', cb(since(t), 'sv1')[0] && cb(since(t), 'sv1')[0].t - t < 1500);
+  const svb = sv && sv.body.data.components[0].components;
+  ok('под картинкой: светлая тема, «Refresh», ссылка «Play now»', svb && svb[0].label === 'Light theme' && svb[0].custom_id === 'sv:light' &&
+     svb[1].label === 'Refresh' && svb[1].custom_id === 'sv:dark' && svb[2].style === 5 && /^https:\/\/aibrofist\.online/.test(svb[2].url));
+  ok('в ответе /servers никого не пингует', sv && sv.body.data.allowed_mentions.parse.length === 0);
+  t = Date.now();
+  ix('sv2', 3, { custom_id: 'sv:light', component_type: 2 }, 'U5');
+  await waitFor(() => cb(since(t), 'sv2').length, 5000);
+  const sv2 = multipartOf(cb(since(t), 'sv2')[0]);
+  ok('кнопка темы — та же картинка в светлой теме, в том же сообщении', sv2 && sv2.body.type === 7 && sv2.png &&
+     sv2.body.data.attachments.length === 1 && sv2.body.data.components[0].components[0].custom_id === 'sv:dark' &&
+     sv2.body.data.components[0].components[0].label === 'Dark theme');
+  t = Date.now();
+  ix('sv3', 3, { custom_id: 'sv:dark', component_type: 2 }, 'U5');
+  await waitFor(() => cb(since(t), 'sv3').length);
+  ok('чаще раза в секунду от одного человека — не перерисовывает', cb(since(t), 'sv3')[0] && cb(since(t), 'sv3')[0].body.type === 6);
+
+  const realDraw = cards.draw;
+  cards.draw = (...a) => sleep(1700).then(() => realDraw(...a));
+  t = Date.now();
+  ix('sv4', 2, { name: 'servers', type: 1 }, 'U6');
+  await waitFor(() => find(since(t), 'PATCH', /^\/webhooks\/700\/tksv4\/messages\/@original$/).length, 8000);
+  const slow = cb(since(t), 'sv4')[0], slowEdit = multipartOf(find(since(t), 'PATCH', /^\/webhooks\/700\/tksv4\/messages\/@original$/)[0]);
+  ok('рисуется дольше обычного — сначала «думаю…», потом картинка на его месте', slow && slow.body.type === 5 && slow.t - t < 2000 &&
+     slowEdit && slowEdit.png && slowEdit.body.components.length === 1);
+  cards.draw = () => Promise.reject(new Error('no renderer'));
+  t = Date.now();
+  ix('sv5', 2, { name: 'servers', type: 1 }, 'U6');
+  await waitFor(() => cb(since(t), 'sv5').length);
+  const fb = cb(since(t), 'sv5')[0];
+  ok('картинка не получилась — /servers всё равно отвечает: прежней карточкой-текстом', fb && fb.body.type === 4 && fb.body.data.flags === 32768 &&
+     partsOf(fb.body.data, 10)[0].content === '## AIBROFIST servers' && /Race/.test(partsOf(fb.body.data, 10)[1].content));
+  cards.draw = realDraw;
+
+  const day = 24 * 3600 * 1000;
+  cards.setSource({
+    profile: n => String(n).toLowerCase() !== 'qwied' ? null : { at: Date.now(), name: 'qwied', joined: Date.now() - 30 * day, about: 'Hi',
+      coins: 5, coinsDay: 1, coinsWeek: 2, score: 3, scoreDay: 0, scoreWeek: 0, hsScore: 0, hsScoreDay: 0, hsScoreWeek: 0,
+      rank: { race: { rank: 'S' }, hs: null }, mapsCount: 1, friendsCount: 1, friends: [{ name: 'Ann', lastSeen: Date.now() }],
+      maps: [{ mapName: 'Forest', mapType: 'race', rating: 2, likes: 3, dislikes: 1, date: Date.now(), inGame: true }] },
+    search: (q, n) => ['qwied', 'qwerty', 'Ann'].filter(x => x.toLowerCase().indexOf(String(q).toLowerCase()) !== -1).slice(0, n)
+  });
+  t = Date.now();
+  ix('ac1', 2, { name: 'account', type: 1, options: [{ name: 'nick', type: 3, value: 'QWIED' }] }, 'U7');
+  await waitFor(() => cb(since(t), 'ac1').length, 5000);
+  const ac = multipartOf(cb(since(t), 'ac1')[0]);
+  const acr = ac && ac.body.data.components;
+  ok('/account ник — профиль игрока картинкой, видят все', ac && ac.body.type === 4 && ac.png && !(ac.body.data.flags & 64) &&
+     ac.files[0] === 'aibrofist-profile.png image/png');
+  ok('листание: «Previous» (на первой странице нельзя), номер страницы, «Next»', acr && acr[0].components[0].disabled === true &&
+     acr[0].components[1].label === '1 / 3' && acr[0].components[1].disabled === true &&
+     acr[0].components[2].custom_id === 'ac:dark:1:qwied' && !acr[0].components[2].disabled);
+  ok('тема, «Refresh» и ссылка на профиль игрока на сайте', acr && acr[1].components[0].custom_id === 'ac:light:0:qwied' &&
+     acr[1].components[1].custom_id === 'ac:dark:0:qwied' && acr[1].components[2].style === 5 &&
+     /^https:\/\/aibrofist\.online\/users\?name=qwied$/.test(acr[1].components[2].url), acr && acr[1].components[2].url);
+  t = Date.now();
+  ix('ac2', 3, { custom_id: 'ac:dark:1:qwied', component_type: 2 }, 'U7');
+  await waitFor(() => cb(since(t), 'ac2').length, 5000);
+  const ac2 = multipartOf(cb(since(t), 'ac2')[0]);
+  ok('«Next» — следующая страница (карты) в том же сообщении', ac2 && ac2.body.type === 7 && ac2.png &&
+     ac2.body.data.components[0].components[1].label === '2 / 3' && !ac2.body.data.components[0].components[0].disabled);
+  t = Date.now();
+  ix('ac3', 2, { name: 'account', type: 1, options: [{ name: 'nick', type: 3, value: 'qw' }] }, 'U8');
+  await waitFor(() => cb(since(t), 'ac3').length);
+  const ac3 = cb(since(t), 'ac3')[0], ac3t = ac3 && ac3.body.data && ac3.body.data.content;
+  ok('нет такого игрока — видит только спросивший, с похожими никами', ac3 && ac3.body.type === 4 && (ac3.body.data.flags & 64) &&
+     /No player named \*\*qw\*\*/.test(ac3t) && /\*\*qwied\*\*, \*\*qwerty\*\*/.test(ac3t), ac3t);
+  t = Date.now();
+  ix('ac4', 4, { name: 'account', type: 1, options: [{ name: 'nick', type: 3, value: 'qw', focused: true }] }, 'U8');
+  await waitFor(() => cb(since(t), 'ac4').length);
+  const ac4 = cb(since(t), 'ac4')[0];
+  ok('пока печатает ник — подсказки', ac4 && ac4.body.type === 8 && ac4.body.data.choices.map(c => c.value).join() === 'qwied,qwerty');
+  cards.setSource(null);
+
+  console.log('\nсекретная статистика:');
   t = Date.now();
   say(OWNER, '!qastats');
   await waitFor(() => panelOf(since(t)));

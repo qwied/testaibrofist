@@ -727,7 +727,7 @@ const HELP = [
     '(asks first), add @user to delete only theirs, **' + PREFIX + 'clear stop** to stop. Pinned messages and the rules post stay',
   '**' + PREFIX + 'stats** - your secret link to live server stats, **' + PREFIX + 'stats new** - make a new link (the old one stops working)',
   '',
-  'For everyone: **/servers** - game rooms and players online right now.',
+  'For everyone: **/servers** - game rooms and players online right now, **/account nick** - a player profile.',
   'Only you can use these commands. The message with a command is removed at once.'
 ].join('\n');
 
@@ -1246,7 +1246,10 @@ async function onInteraction(i) {
   if (!i) return;
   const cid = String((i.data && i.data.custom_id) || '');
   if (i.type === 3 && cid === 'rules:ru') return rulesInRussian(i, i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value);
-  if (i.type === 2 && i.data && i.data.name === 'servers') return respond(i, { type: 4, data: serversCard() });
+  if (i.type === 2 && i.data && i.data.name === 'servers') return onServers(i);
+  if (i.type === 2 && i.data && i.data.name === 'account') return onAccount(i);
+  if (i.type === 4 && i.data && i.data.name === 'account') return onAccountHint(i);
+  if (i.type === 3 && /^(sv|ac):/.test(cid)) return onCardButton(i, cid);
   if (!i.guild_id) return;
   const g = guilds.get(i.guild_id);
   if (!g) return;
@@ -1277,10 +1280,11 @@ async function onInteraction(i) {
   if (i.type === 5 && cid.indexOf('rules:') === 0) return onRulesSubmit(i, g);
 }
 
-/* ---------- /servers: комнаты игры для всех ----------
-   Единственная слэш-команда бота (остальные — секретные, с «!»). Ответ
-   виден всем в канале. Имена комнат и карт пишут игроки — экранируем,
-   чтобы из них не получились ссылки и разметка. */
+/* ---------- /servers текстом: запасной ответ ----------
+   Обычно /servers отвечает картинкой (ниже, serversView); эта карточка
+   текстом — если картинку нарисовать не вышло. Ответ виден всем в
+   канале. Имена комнат и карт пишут игроки — экранируем, чтобы из них
+   не получились ссылки и разметка. */
 const md = s => String(s || '').replace(/[\\*_`~|>#\[\]()<@:-]/g, c => '\\' + c).slice(0, 60);
 const PHASE_NAME = { lobby: 'hiding', round: 'hunt', storyEnd: 'story ended' };
 const STATUS_NAME = { open: 'open', freeing: 'a spot is freeing up', full: 'full' };
@@ -1306,18 +1310,129 @@ function serversCard() {
                  button: { label: 'Play now', url: require('./discordApi.js').SITE } });
 }
 
+/* ---------- /servers и /account: живая картинка ----------
+   Вместо текста — картинка-«снимок» (discordCards.js), каждый раз со
+   свежими данными. Под ней кнопки: другая тема (тёмная/светлая),
+   «Refresh», у профиля — листание страниц (главная, карты, друзья) и
+   ссылка на профиль на сайте. Кнопки работают у всех, кто видит
+   сообщение: картинка в нём просто перерисовывается.
+   Discord ждёт ответа 3 секунды. Картинка обычно готова за 0.2-0.7 с —
+   тогда она сразу и уходит; если рисуется дольше QUICK_MS, сначала
+   отвечаем «думаю…» и подменяем ответ картинкой, когда она готова. */
+const cards = require('./discordCards.js');
+const QUICK_MS = 1500;
+const PRESS_GAP_MS = 800;            // чаще одного нажатия от одного человека — не перерисовываем
+const THEME_NAME = { dark: 'Dark theme', light: 'Light theme' };
+const otherTheme = th => th === 'light' ? 'dark' : 'light';
+const button = (label, custom_id, disabled) => ({ type: 2, style: 2, label, custom_id, disabled: !!disabled });
+const linkButton = (label, url) => ({ type: 2, style: 5, label, url });
+const SITE_URL = require('./discordApi.js').SITE;
+const presses = new Map();           // кто -> когда нажимал в последний раз
+const userOf = i => ((i.member && i.member.user) || i.user || {}).id || '';
+const sleep = ms => new Promise(done => setTimeout(done, ms));
+
+function serversView(th) {
+  return { kind: 'servers', data: cards.serversData(), theme: th, page: 0, file: 'aibrofist-servers.png',
+           rows: [{ type: 1, components: [button(THEME_NAME[otherTheme(th)], 'sv:' + otherTheme(th)), button('Refresh', 'sv:' + th),
+                                          linkButton('Play now', SITE_URL)] }] };
+}
+function accountView(name, th, page) {
+  const d = cards.profileData(name);
+  if (!d) return null;
+  const of = cards.pageCount(d), n = Math.max(0, Math.min(of - 1, Number(page) || 0));
+  const id = (t, p) => 'ac:' + t + ':' + p + ':' + d.name;
+  return { kind: 'account', data: d, theme: th, page: n, file: 'aibrofist-profile.png',
+           rows: [{ type: 1, components: [button('Previous', id(th, n - 1), n === 0), button((n + 1) + ' / ' + of, 'ac-page', true),
+                                          button('Next', id(th, n + 1), n >= of - 1)] },
+                  { type: 1, components: [button(THEME_NAME[otherTheme(th)], id(otherTheme(th), n)), button('Refresh', id(th, n)),
+                                          linkButton('Open profile', SITE_URL + '/users?name=' + encodeURIComponent(d.name))] }] };
+}
+
+/* Отправить картинку: новым ответом на команду (update=false) или вместо
+   картинки в том же сообщении (нажатие кнопки, update=true). */
+async function sendCard(i, view, update) {
+  const job = cards.draw(view.kind, view.data, view.theme, view.page);
+  const body = { attachments: [{ id: 0, filename: view.file }], components: view.rows, allowed_mentions: { parse: [] } };
+  const files = png => [{ name: view.file, data: png, type: 'image/png' }];
+  // ответ по HTTP (режим запросов) файл не унесёт — тогда только через «думаю…»
+  let png = null, failed = false;
+  if (!i._http) png = await Promise.race([job, sleep(QUICK_MS).then(() => null)]).catch(() => { failed = true; return null; });
+  if (png) {
+    const r = await api('POST', '/interactions/' + i.id + '/' + i.token + '/callback', { type: update ? 7 : 4, data: body }, { files: files(png) });
+    if (ok(r)) return r;
+    log('Discord did not take the picture:', r.status, JSON.stringify(r.body).slice(0, 200));
+    return cardFailed(i, view, update, false);
+  }
+  if (failed) return cardFailed(i, view, update, false);
+  await respond(i, { type: update ? 6 : 5 });
+  try { png = await job; } catch (e) { return cardFailed(i, view, update, true); }
+  const r = await api('PATCH', '/webhooks/' + (i.application_id || appId) + '/' + i.token + '/messages/@original', body, { files: files(png) });
+  if (ok(r)) return r;
+  log('Discord did not take the picture:', r.status, JSON.stringify(r.body).slice(0, 200));
+  return cardFailed(i, view, update, true);
+}
+// картинка не нарисовалась: /servers отвечает прежней карточкой-текстом
+async function cardFailed(i, view, update, deferred) {
+  log('could not draw the ' + view.kind + ' picture');
+  const sorry = { content: 'Could not draw the picture right now. Please try again in a moment.', flags: 64, allowed_mentions: { parse: [] } };
+  if (!deferred) return respond(i, view.kind === 'servers' && !update ? { type: 4, data: serversCard() } : { type: 4, data: sorry });
+  const hook = '/webhooks/' + (i.application_id || appId) + '/' + i.token;
+  if (update) return api('POST', hook, sorry);
+  return api('PATCH', hook + '/messages/@original', { content: sorry.content, allowed_mentions: { parse: [] } });
+}
+const pressedTooFast = i => {
+  const u = userOf(i), now = Date.now(), last = presses.get(u) || 0;
+  presses.set(u, now);
+  if (presses.size > 5000) presses.clear();
+  return now - last < PRESS_GAP_MS;
+};
+
+function onServers(i) {
+  return sendCard(i, serversView('dark'), false);
+}
+function onAccount(i) {
+  const opt = ((i.data && i.data.options) || []).find(o => o.name === 'nick');
+  const nick = String((opt && opt.value) || '').trim().slice(0, 40);
+  const view = nick && accountView(nick, 'dark', 0);
+  if (view) return sendCard(i, view, false);
+  const like = nick ? cards.searchNames(nick, 5) : [];
+  return reply(i, { content: 'No player named **' + md(nick || '?') + '** on aibrofist.online.' +
+                             (like.length ? ' Maybe: ' + like.map(n => '**' + md(n) + '**').join(', ') + '?' : '') });
+}
+// подсказки ников, пока игрок печатает /account
+function onAccountHint(i) {
+  const opt = ((i.data && i.data.options) || []).find(o => o.focused) || {};
+  const names = cards.searchNames(String(opt.value || ''), 25);
+  return respond(i, { type: 8, data: { choices: names.map(n => ({ name: n, value: n })) } });
+}
+function onCardButton(i, cid) {
+  if (pressedTooFast(i)) return respond(i, { type: 6 });
+  if (cid.indexOf('sv:') === 0) return sendCard(i, serversView(cid.slice(3) === 'light' ? 'light' : 'dark'), true);
+  const m = /^ac:(dark|light):(-?\d+):(.+)$/.exec(cid);
+  if (!m) return respond(i, { type: 6 });
+  const view = accountView(m[3], m[1], Number(m[2]));
+  if (!view) return reply(i, { content: 'This player is no longer on aibrofist.online.' });
+  return sendCard(i, view, true);
+}
+
 /* Глобальные слэш-команды приложения: ровно этот список. Запись целиком
    заменяет прежний — так ушла и старая /say. Шлём один раз на версию. */
-const GLOBAL_COMMANDS = [{ name: 'servers', type: 1, description: 'AIBROFIST game rooms and players online right now',
-                           contexts: [0, 1], integration_types: [0] }];
-const GLOBAL_VER = 'servers-1';
+const GLOBAL_COMMANDS = [
+  { name: 'servers', type: 1, description: 'AIBROFIST game rooms and players online right now',
+    contexts: [0, 1], integration_types: [0] },
+  { name: 'account', type: 1, description: 'Show an AIBROFIST player profile',
+    contexts: [0, 1], integration_types: [0],
+    options: [{ type: 3, name: 'nick', description: 'Player nickname on aibrofist.online', required: true, autocomplete: true,
+                min_length: 1, max_length: 20 }] }
+];
+const GLOBAL_VER = 'servers-account-1';
 async function syncGlobalCommands() {
   if (state.fixes.globalCommands === GLOBAL_VER) return;
   if (!appId) await loadApp().catch(() => null);
   if (!appId) return;
   const r = await api('PUT', '/applications/' + appId + '/commands', GLOBAL_COMMANDS);
   if (ok(r)) { state.fixes.globalCommands = GLOBAL_VER; save(); }
-  else log('could not set the /servers command:', r.status);
+  else log('could not set the /servers and /account commands:', r.status);
 }
 
 /* Слэш-команд на сервере у бота нет — все команды секретные, с «!». Если
@@ -1372,7 +1487,21 @@ async function loadApp() {
   return r.body;
 }
 
-// адрес, куда Discord присылает нажатия кнопок и окна
+/* Куда Discord присылает команды и нажатия. Пока есть живое подключение,
+   пусть шлёт по нему: оно уже открыто, ответ уходит за доли секунды. Путь
+   через сайт (Cloudflare -> хостинг) бывает медленным — Discord ждёт
+   3 секунды, и команда «не отвечала». Адрес на сайте нужен только в
+   режиме запросов, без живого подключения (ensureInteractionsUrl). */
+async function useLiveInteractions() {
+  const app = await loadApp();
+  if (!app || !app.interactions_endpoint_url) return;
+  let r = await api('PATCH', '/applications/@me', { interactions_endpoint_url: null });
+  if (!ok(r)) r = await api('PATCH', '/applications/@me', { interactions_endpoint_url: '' });
+  if (ok(r)) log('commands now come over the live connection');
+  else log('could not switch commands to the live connection:', r.status, JSON.stringify(r.body).slice(0, 200));
+}
+
+// адрес, куда Discord присылает нажатия кнопок и окна (режим запросов)
 async function ensureInteractionsUrl() {
   const app = await loadApp();
   if (!app) return;
@@ -1587,6 +1716,7 @@ function onDispatch(t, d) {
       me = d.user;
       appId = d.application && d.application.id;
       log('connected as ' + (me && me.username));
+      useLiveInteractions().catch(e => log('could not switch commands to the live connection:', e.message));
       break;
     case 'GUILD_CREATE': if (!d.unavailable) setupGuild(cacheGuild(d)); break;
     case 'GUILD_UPDATE': { const g = guilds.get(d.id); if (g) { g.name = d.name; g.owner = d.owner_id; } break; }
@@ -1664,6 +1794,7 @@ function stop() {
   if (gw) { gw.removeAllListeners(); gw.destroy(); gw = null; }
   timers.forEach(t => { clearInterval(t); clearTimeout(t); }); timers = [];
   stopRest();
+  cards.stop();
   saveNow();
   guilds.clear(); setupDone.clear(); lastHit.clear();
 }

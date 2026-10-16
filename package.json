@@ -10,12 +10,14 @@
     "test:offline": "node test-offline.js"
   },
   "dependencies": {
+    "@resvg/resvg-wasm": "2.6.2",
     "@tensorflow/tfjs": "^4.22.0",
     "express": "^4.22.2",
     "gifuct-js": "^2.1.2",
     "jpeg-js": "^0.4.4",
     "nsfwjs": "^4.3.0",
     "pngjs": "^7.0.0",
+    "satori": "0.10.14",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "ws": "^8.21.3"
