@@ -1,9 +1,4 @@
 {
-  "base": "6c386a2097700bb51444bcf09f4ed2c8aaa6f8a2",
-  "updates": [
-    {
-      "title": "Servers page",
-      "text": "New Servers page on the site shows all rooms of both modes, updated every second. /servers in our Discord now sends a screenshot of it, and /account sends just the player profile, without the side menu."
-    }
-  ]
+  "base": "0ce3cf6d666d1cc6c14605831741322682e07ba0",
+  "updates": []
 }
