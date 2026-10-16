@@ -1,9 +1,4 @@
 {
-  "base": "eb83dec462df9133de7bc11d96390770630285f1",
-  "updates": [
-    {
-      "title": "Discord bot pictures",
-      "text": "/servers in our Discord now shows a picture of the game rooms with Dark and Light theme buttons. New /account command shows a player profile as pictures you can page through (stats, maps, friends) with a link to the profile. The bot now answers commands much faster."
-    }
-  ]
+  "base": "f63c6a4ff14021e981fafa3096fad4934311e78f",
+  "updates": []
 }
