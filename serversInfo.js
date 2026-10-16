@@ -153,15 +153,15 @@ async function loadBrofist() {
   if (relay && rkey) tries.push({ via: 'relay', url: relay + '/brofist', headers: { 'x-relay-key': rkey, accept: 'application/json' } });
   // сначала тот путь, что сработал в прошлый раз
   if (bf.via === 'relay' && tries.length > 1) tries.reverse();
-  let last = null;
+  const errors = [];                                   // все причины — на странице видно, что именно мешает
   for (const t of tries) {
     try {
       const n = await fetchVia(t.url, t.headers);
       bf = { ok: true, online: n.online, servers: n.servers, at: Date.now(), error: null, via: t.via };
       return;
-    } catch (e) { last = t.via + ': ' + e.message; }
+    } catch (e) { errors.push(t.via + ': ' + e.message); }
   }
-  bf = Object.assign({}, bf, { ok: bf.ok && Date.now() - bf.at < 60000, error: last });
+  bf = Object.assign({}, bf, { ok: bf.ok && Date.now() - bf.at < 60000, error: errors.join('; ') });
   bfTryAt = Date.now() + BF_RETRY_MS;
 }
 
