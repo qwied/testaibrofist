@@ -76,6 +76,16 @@ const live = require('./liveText.js');
      /<script src="liveText\.js\?v=\d+"><\/script>/.test(fs.readFileSync(path.join(__dirname, 'game.html'), 'utf8')) &&
      /BFLive\.fill\(o\.text/.test(fs.readFileSync(path.join(__dirname, 'game.html'), 'utf8')));
 
+  console.log('\nстраница Servers (её снимает бот по /servers):');
+  const sp = fs.readFileSync(path.join(__dirname, 'servers.html'), 'utf8');
+  ok('открывается по адресу /servers, как остальные страницы', /PAGE_FILES = \[[^\]]*'servers'/.test(srv));
+  ok('данные — каждую секунду, без кэша', /setInterval\(function \(\) \{ if \(!document\.hidden\) tick\(\); \}, 1000\)/.test(sp) && /cache: 'no-store'/.test(sp) &&
+     /\/api\/servers/.test(sp) && /\/getRoomList\?mode=race/.test(sp) && /\/getRoomList\?mode=hideAndSeek/.test(sp));
+  ok('в стиле игры: тот же список комнат, что на страницах режимов (rlBox/rlRow), общая обвязка сайта',
+     /class="rlBox"/.test(sp) && /\.rlRow\{/.test(sp) && /ui\.css\?v=\d+/.test(sp) && /shell\.js\?v=\d+/.test(sp));
+  ok('ники игроков выводятся как текст, не как разметка', /textContent/.test(sp) && !/innerHTML/.test(sp));
+  ok('блок для снимка и отметка «данные загружены»', /id="svShot"/.test(sp) && /setAttribute\('data-ready', '1'\)/.test(sp));
+
   console.log('\nкарта ServersInfo от qwied:');
   process.env.OWNER_ALIASES = 'qwied';     // как на живом сайте: карты qwied — карты владельца, идут в игру
   const M = path.join(TMP, 'maps');

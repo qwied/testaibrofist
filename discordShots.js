@@ -134,9 +134,17 @@ function release() {
   if (next) next(); else busy--;
 }
 
-/* Снимок страницы сайта. where — путь ('/race', '/users?name=…'),
-   theme — 'dark' | 'light', tab — селектор вкладки, на которую нажать. */
-async function shoot(where, theme, tab) {
+const CROP_PAD = 16;                                  // поле вокруг вырезанного блока
+const boxOf = async (page, sel) => { const el = await page.$(sel); return el ? el.boundingBox() : null; };
+
+/* Снимок страницы сайта. where — путь ('/servers', '/users?name=…'),
+   theme — 'dark' | 'light'. opts (необязательно):
+     tab   — селектор вкладки, на которую нажать перед снимком;
+     crop  — селектор блока: снимок только его (с небольшим полем вокруг),
+             без бокового меню и шапки сайта;
+     ready — селектор, который появляется, когда страница загрузила данные. */
+async function shoot(where, theme, opts) {
+  opts = typeof opts === 'string' ? { tab: opts } : (opts || {});
   if (off()) throw new Error('screenshots are off (DISCORD_SHOTS=off)');
   await slot();
   const t0 = Date.now();
@@ -144,6 +152,7 @@ async function shoot(where, theme, tab) {
   try {
     const b = await getBrowser();
     page = await b.newPage();
+    await page.setCacheEnabled(false);                // каждый снимок — свежие данные, без кэша браузера
     const mode = theme === 'light' ? 'light' : 'dark';
     await page.setRequestInterception(true);
     page.on('request', r => {
@@ -163,9 +172,24 @@ async function shoot(where, theme, tab) {
     if (!res || res.status() >= 400) throw new Error('page ' + where.split('?')[0] + ' answered ' + (res ? res.status() : 'nothing'));
     // данные страница догружает сама (комнаты, профиль) — ждём, пока запросы утихнут
     await page.waitForNetworkIdle({ idleTime: 150, timeout: PAGE_MS }).catch(() => {});
-    if (tab) {
-      await page.click(tab).catch(() => {});
+    if (opts.ready) await page.waitForSelector(opts.ready, { timeout: 4000 }).catch(() => {});
+    if (opts.tab) {
+      await page.click(opts.tab).catch(() => {});
       await page.waitForNetworkIdle({ idleTime: 150, timeout: 4000 }).catch(() => {});
+    }
+    // только нужный блок: окно браузера вытягиваем под него, снимаем рамку вокруг блока;
+    // край бокового меню и его кнопка сворачивания в рамку не попадают
+    if (opts.crop) await page.addStyleTag({ content: '#bfSideToggle,.bfHead{visibility:hidden!important}' }).catch(() => {});
+    let box = opts.crop ? await boxOf(page, opts.crop) : null;
+    if (box && box.width > 0 && box.height > 0) {
+      const need = Math.min(Math.ceil(box.y) + MAX_H, Math.ceil(box.y + box.height + CROP_PAD));
+      if (need > VIEW.height) { await page.setViewport({ width: VIEW.width, height: need }); box = (await boxOf(page, opts.crop)) || box; }
+      const x = Math.max(0, Math.floor(box.x - CROP_PAD)), y = Math.max(0, Math.floor(box.y - CROP_PAD));
+      const clip = { x, y, width: Math.min(VIEW.width - x, Math.ceil(box.width + CROP_PAD * 2)),
+                     height: Math.min(MAX_H, Math.ceil(box.height + CROP_PAD * 2)) };
+      const cut = Buffer.from(await page.screenshot({ type: 'png', clip }));
+      status.ms = Date.now() - t0;
+      return cut;
     }
     // длинная страница — снимаем целиком, но не выше MAX_H
     const h = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)).catch(() => VIEW.height);

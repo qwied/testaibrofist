@@ -250,7 +250,7 @@ app.get('/favicon.ico', (req, res) => {
    раньше express.static (см. ниже) — иначе static успеет отдать файл
    первым, до того как маршрут до него доберётся. */
 const PAGE_FILES = ['avatar', 'daily', 'editor', 'game', 'hide-and-seek',
-  'leaderboard', 'logs', 'mapsBrowser', 'messages', 'quests', 'race', 'story', 'users'];
+  'leaderboard', 'logs', 'mapsBrowser', 'messages', 'quests', 'race', 'servers', 'story', 'users'];
 app.get(PAGE_FILES.map(p => '/' + p + '.html'), (req, res) => {
   const qs = req.originalUrl.split('?')[1];
   res.redirect(301, req.path.slice(0, -5) + (qs ? '?' + qs : ''));

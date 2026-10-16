@@ -631,7 +631,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const fakePng = (() => { const im = new PNG({ width: 4, height: 4 }); return PNG.sync.write(im); })();
   const realShoot = shots.shoot, shotLog = [];
   // «снимок» сайта: настоящий браузер проверяет test-shots.js, здесь — что и когда бот просит снять
-  shots.shoot = (where, theme, tab) => { shotLog.push([where, theme, tab || ''].join(' ')); return Promise.resolve(fakePng); };
+  const fakeShoot = (where, theme, o) => { o = o || {}; shotLog.push([where, theme, o.tab || '', o.crop || ''].join(' ')); return Promise.resolve(fakePng); };
+  shots.shoot = fakeShoot;
   const ix = (id, type, data, uid) => dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type, guild_id: G, channel_id: CH.general,
     member: { user: { id: uid || 'U0' }, permissions: '1024' }, message: type === 3 ? { id: '1' } : undefined, data });
   const labels = b => b && b.data.components.map(r => r.components.map(c => c.label + (c.disabled ? '(off)' : '') + (c.custom_id ? '=' + c.custom_id : '')).join(' | '));
@@ -639,45 +640,46 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ix('sv1', 2, { name: 'servers', type: 1 });
   await waitFor(() => cb(since(t), 'sv1').length, 5000);
   const sv = multipartOf(cb(since(t), 'sv1')[0]);
-  ok('/servers может любой: ответ виден всем и сразу снимком страницы Race', sv && sv.body.type === 4 && !(sv.body.data.flags & 64) && sv.png &&
-     sv.files[0] === 'aibrofist-servers.png image/png' && shotLog[0] === '/race dark ', shotLog.join());
+  ok('/servers может любой: ответ виден всем и сразу снимком страницы Servers (только её блок, без меню сайта)', sv && sv.body.type === 4 &&
+     !(sv.body.data.flags & 64) && sv.png && sv.files[0] === 'aibrofist-servers.png image/png' && shotLog[0] === '/servers dark  #svShot', shotLog.join());
   ok('и быстро: ' + (cb(since(t), 'sv1')[0] ? cb(since(t), 'sv1')[0].t - t : '?') + ' мс', cb(since(t), 'sv1')[0] && cb(since(t), 'sv1')[0].t - t < 1500);
   const svl = labels(sv && sv.body);
-  ok('кнопки: листание (Race 1/2), светлая тема, «Refresh», ссылка «Play now»', svl &&
-     svl[0] === 'Previous(off)=sv:dark:-1 | Race · 1 / 2(off)=sv-page | Next=sv:dark:1' &&
-     svl[1] === 'Light theme=sv:light:0 | Refresh=sv:dark:0 | Play now' &&
-     /^https:\/\/aibrofist\.online/.test(sv.body.data.components[1].components[2].url), svl && svl.join(' || '));
+  ok('кнопки: светлая тема, «Refresh», ссылка «Play now» (страница одна — листать нечего)', svl && svl.length === 1 &&
+     svl[0] === 'Light theme=sv:light:0 | Refresh=sv:dark:0 | Play now' &&
+     /^https:\/\/aibrofist\.online/.test(sv.body.data.components[0].components[2].url), svl && svl.join(' || '));
   ok('в ответе /servers никого не пингует', sv && sv.body.data.allowed_mentions.parse.length === 0);
   t = Date.now();
-  ix('sv2', 3, { custom_id: 'sv:dark:1', component_type: 2 }, 'U5');
+  ix('sv2', 3, { custom_id: 'sv:light:0', component_type: 2 }, 'U5');
   await waitFor(() => cb(since(t), 'sv2').length, 5000);
-  const sv2 = multipartOf(cb(since(t), 'sv2')[0]), sv2l = labels(sv2 && sv2.body);
-  ok('«Next» — страница Hide and Seek в том же сообщении', sv2 && sv2.body.type === 7 && sv2.png && sv2.body.data.attachments.length === 1 &&
-     shotLog.slice(-1)[0] === '/hide-and-seek dark ' && sv2l[0] === 'Previous=sv:dark:0 | Hide and Seek · 2 / 2(off)=sv-page | Next(off)=sv:dark:2',
-     sv2l && sv2l[0]);
+  const sv2 = multipartOf(cb(since(t), 'sv2')[0]);
+  ok('кнопка темы — та же страница в светлой теме, в том же сообщении', sv2 && sv2.body.type === 7 && sv2.png &&
+     sv2.body.data.attachments.length === 1 && shotLog.slice(-1)[0] === '/servers light  #svShot' &&
+     labels(sv2.body)[0] === 'Dark theme=sv:dark:0 | Refresh=sv:light:0 | Play now', sv2 && labels(sv2.body)[0]);
   t = Date.now();
-  ix('sv3', 3, { custom_id: 'sv:light:1', component_type: 2 }, 'U5');
+  ix('sv3', 3, { custom_id: 'sv:dark:0', component_type: 2 }, 'U5');
   await waitFor(() => cb(since(t), 'sv3').length);
   ok('чаще раза в секунду от одного человека — не перерисовывает', cb(since(t), 'sv3')[0] && cb(since(t), 'sv3')[0].body.type === 6);
   t = Date.now();
-  ix('sv3b', 3, { custom_id: 'sv:light:1', component_type: 2 }, 'U9');
+  ix('sv3b', 3, { custom_id: 'sv:dark:0', component_type: 2 }, 'U9');
   await waitFor(() => cb(since(t), 'sv3b').length, 5000);
-  const sv3 = multipartOf(cb(since(t), 'sv3b')[0]);
-  ok('кнопка темы — та же страница в светлой теме', sv3 && sv3.body.type === 7 && shotLog.slice(-1)[0] === '/hide-and-seek light ' &&
-     labels(sv3.body)[1] === 'Dark theme=sv:dark:1 | Refresh=sv:light:1 | Play now');
+  ok('«Refresh» — новый снимок той же страницы', multipartOf(cb(since(t), 'sv3b')[0]) && shotLog.slice(-1)[0] === '/servers dark  #svShot');
   t = Date.now();
   ix('sv3c', 3, { custom_id: 'sv:light', component_type: 2 }, 'U10');
   await waitFor(() => cb(since(t), 'sv3c').length, 5000);
-  ok('кнопки сообщений, отправленных раньше (без номера страницы), тоже работают', multipartOf(cb(since(t), 'sv3c')[0]) &&
-     shotLog.slice(-1)[0] === '/race light ');
+  ok('кнопки сообщений, отправленных раньше (старые номера страниц), тоже работают', multipartOf(cb(since(t), 'sv3c')[0]) &&
+     shotLog.slice(-1)[0] === '/servers light  #svShot');
+  t = Date.now();
+  ix('sv3d', 3, { custom_id: 'sv:dark:1', component_type: 2 }, 'U13');
+  await waitFor(() => cb(since(t), 'sv3d').length, 5000);
+  ok('…в том числе со страницей, которой больше нет', multipartOf(cb(since(t), 'sv3d')[0]) && shotLog.slice(-1)[0] === '/servers dark  #svShot');
 
-  shots.shoot = (where, theme, tab) => { shotLog.push(where); return sleep(1700).then(() => fakePng); };
+  shots.shoot = (where) => { shotLog.push(where); return sleep(1700).then(() => fakePng); };
   t = Date.now();
   ix('sv4', 2, { name: 'servers', type: 1 }, 'U6');
   await waitFor(() => find(since(t), 'PATCH', /^\/webhooks\/700\/tksv4\/messages\/@original$/).length, 8000);
   const slow = cb(since(t), 'sv4')[0], slowEdit = multipartOf(find(since(t), 'PATCH', /^\/webhooks\/700\/tksv4\/messages\/@original$/)[0]);
   ok('снимок дольше обычного — сначала «думаю…», потом снимок на его месте', slow && slow.body.type === 5 && slow.t - t < 2000 &&
-     slowEdit && slowEdit.png && slowEdit.body.components.length === 2);
+     slowEdit && slowEdit.png && slowEdit.body.components.length === 1);
   shots.shoot = realShoot;             // DISCORD_SHOTS=off: браузера нет
   await cards.warm();
   t = Date.now();
@@ -685,7 +687,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => cb(since(t), 'sv5').length, 5000);
   const drawn = multipartOf(cb(since(t), 'sv5')[0]);
   ok('браузера нет (мало памяти и т.п.) — нарисованная картинка с теми же данными', drawn && drawn.body.type === 4 && drawn.png &&
-     labels(drawn.body)[0].indexOf('Race · 1 / 2') !== -1);
+     labels(drawn.body)[0] === 'Light theme=sv:light:0 | Refresh=sv:dark:0 | Play now');
   const realDraw = cards.draw;
   cards.draw = () => Promise.reject(new Error('no renderer'));
   t = Date.now();
@@ -695,7 +697,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('ни снимка, ни картинки — /servers всё равно отвечает: карточкой-текстом', fb && fb.body.type === 4 && fb.body.data.flags === 32768 &&
      partsOf(fb.body.data, 10)[0].content === '## AIBROFIST servers' && /Race/.test(partsOf(fb.body.data, 10)[1].content));
   cards.draw = realDraw;
-  shots.shoot = (where, theme, tab) => { shotLog.push([where, theme, tab || ''].join(' ')); return Promise.resolve(fakePng); };
+  shots.shoot = fakeShoot;
 
   const day = 24 * 3600 * 1000;
   cards.setSource({
@@ -709,8 +711,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ix('ac1', 2, { name: 'account', type: 1, options: [{ name: 'nick', type: 3, value: 'QWIED' }] }, 'U7');
   await waitFor(() => cb(since(t), 'ac1').length, 5000);
   const ac = multipartOf(cb(since(t), 'ac1')[0]), acl = labels(ac && ac.body);
-  ok('/account ник — снимок страницы игрока на сайте (ник как в аккаунте), видят все', ac && ac.body.type === 4 && ac.png &&
-     !(ac.body.data.flags & 64) && ac.files[0] === 'aibrofist-profile.png image/png' && shotLog.slice(-1)[0] === '/users?name=qwied dark ',
+  ok('/account ник — снимок профиля игрока с сайта (только профиль, без меню; ник как в аккаунте), видят все', ac && ac.body.type === 4 && ac.png &&
+     !(ac.body.data.flags & 64) && ac.files[0] === 'aibrofist-profile.png image/png' && shotLog.slice(-1)[0] === '/users?name=qwied dark  #upBody',
      shotLog.slice(-1)[0]);
   ok('листание (профиль, потом карты), тема, «Refresh» и ссылка на профиль', acl &&
      acl[0] === 'Previous(off)=ac:dark:-1:qwied | Profile · 1 / 2(off)=ac-page | Next=ac:dark:1:qwied' &&
@@ -721,7 +723,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => cb(since(t), 'ac2').length, 5000);
   const ac2 = multipartOf(cb(since(t), 'ac2')[0]);
   ok('«Next» — та же страница игрока на вкладке Maps', ac2 && ac2.body.type === 7 && ac2.png &&
-     shotLog.slice(-1)[0] === '/users?name=qwied dark #upTabs .bfTab[data-tab="maps"]' &&
+     shotLog.slice(-1)[0] === '/users?name=qwied dark #upTabs .bfTab[data-tab="maps"] #upBody' &&
      labels(ac2.body)[0] === 'Previous=ac:dark:0:qwied | Maps · 2 / 2(off)=ac-page | Next(off)=ac:dark:2:qwied', shotLog.slice(-1)[0]);
   t = Date.now();
   ix('ac3', 2, { name: 'account', type: 1, options: [{ name: 'nick', type: 3, value: 'qw' }] }, 'U8');

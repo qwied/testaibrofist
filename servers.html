@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIBrofist — Servers</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="AIBrofist servers: rooms and players online right now.">
+<link rel="stylesheet" href="ui.css?v=170">
+<script src="offline.js?v=2"></script>
+<script src="theme.js?v=170"></script>
+<script src="device.js?v=170"></script>
+<script src="sound.js?v=170"></script>
+        <link rel="icon" href="favicon.ico" sizes="any">
+        <link rel="icon" type="image/svg+xml" href="favicon.svg">
+        <link rel="apple-touch-icon" href="apple-touch-icon.png">
+        <link rel="manifest" href="site.webmanifest">
+        <meta name="theme-color" content="#111827">
+<style>
+/* Серверы игры — комнаты обоих режимов на одной странице, в том же виде,
+   что список комнат на страницах Race и Hide and Seek (см. race.html):
+   светофор, имя комнаты, игроки, кто внутри. Данные — раз в секунду.
+   Эту же страницу (#svShot) снимает бот Discord по команде /servers. */
+#svShot{padding:4px 0 8px}
+.svHead{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:18px 0 16px}
+.svTitle{font-size:34px;font-weight:800;line-height:1.1}
+.svLive{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:14px}
+.svLive i{width:9px;height:9px;border-radius:50%;background:#16a34a;display:inline-block}
+.svLive.off i{background:#dc2626}
+.svKpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:6px}
+.svKpi{border:1px solid var(--line);border-radius:12px;background:var(--soft);padding:12px 16px}
+.svKpiL{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.svKpiV{font-size:30px;font-weight:800;line-height:1.2;margin-top:2px}
+.svKpiS{font-size:12.5px;color:var(--muted)}
+.svCols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.rlTitle{font-size:13px;color:var(--muted);margin:14px 0 6px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.4px;display:flex;justify-content:space-between}
+.rlBox{margin-bottom:6px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+.rlRow{display:flex;flex-direction:column;gap:3px;padding:9px 14px;cursor:pointer;
+  border-bottom:1px solid var(--line);font-size:14px}
+.rlRow:last-child{border-bottom:none}
+.rlRow:hover{background:rgba(0,0,0,.04)}
+.rlHead{display:flex;align-items:center;gap:10px}
+.rlDot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+.rlName{font-weight:600;flex:1}
+.rlCount{color:var(--muted);font-size:13px}
+.rlMeta,.rlWho{padding-left:20px;font-size:12px;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rlEmpty{padding:12px 14px;color:var(--muted);font-size:14px}
+.svFoot{margin-top:14px;font-size:13px;color:var(--muted)}
+.svFoot a{color:var(--ink);font-weight:600;text-decoration:none}
+@media (max-width:900px){
+  .svKpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .svCols{grid-template-columns:1fr}
+}
+</style>
+        <link rel="canonical" href="https://aibrofist.online/servers">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Servers">
+        <meta property="og:description" content="Rooms and players online right now.">
+        <meta property="og:url" content="https://aibrofist.online/servers">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<div class="bfWrap">
+  <div id="svShot">
+    <div class="svHead">
+      <div class="svTitle">Servers</div>
+      <div class="svLive" id="svLive"><i></i><span id="svClock">connecting…</span></div>
+    </div>
+    <div class="svKpis">
+      <div class="svKpi"><div class="svKpiL">Online now</div><div class="svKpiV" id="kOnline">–</div><div class="svKpiS">players in the game</div></div>
+      <div class="svKpi"><div class="svKpiL">Rooms</div><div class="svKpiV" id="kRooms">–</div><div class="svKpiS">up to 40 players each</div></div>
+      <div class="svKpi"><div class="svKpiL">Race</div><div class="svKpiV" id="kRace">–</div><div class="svKpiS" id="kRaceS">&nbsp;</div></div>
+      <div class="svKpi"><div class="svKpiL">Hide and Seek</div><div class="svKpiV" id="kHide">–</div><div class="svKpiS" id="kHideS">&nbsp;</div></div>
+    </div>
+    <div class="svCols">
+      <div><div class="rlTitle"><span>Race</span><span id="tRace"></span></div><div class="rlBox" id="svRace"></div></div>
+      <div><div class="rlTitle"><span>Hide and Seek</span><span id="tHide"></span></div><div class="rlBox" id="svHide"></div></div>
+    </div>
+    <div class="svFoot">Click a room to join it · <a href="/">aibrofist.online</a></div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="mobile.css?v=170">
+<script src="i18n.js?v=170"></script>
+<script src="coin.js?v=170"></script>
+<script src="skinRender.js?v=170"></script>
+<script src="skinAvatar.js?v=170" defer></script>
+<script src="shell.js?v=170"></script>
+<script src="abuseShow.js?v=170" defer></script>
+<script src="account.js?v=170" defer></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var COLOR = { full: '#dc2626', freeing: '#f59e0b', open: '#16a34a' };
+  var PHASE = { lobby: 'Hiding', round: 'Hunt', storyEnd: 'Story ended' };
+  var NAMES_SHOWN = 10;
+  function two(n) { return (n < 10 ? '0' : '') + n; }
+  function mmss(s) { return Math.floor(s / 60) + ':' + two(s % 60); }
+  function get(url) { return fetch(url, { credentials: 'same-origin', cache: 'no-store' }).then(function (r) { return r.json(); }); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+  // комнаты одного режима — как список комнат на странице режима, плюс карта и фаза
+  function rooms(box, mode, list, names) {
+    box.textContent = '';
+    if (!list.length) { box.appendChild(el('div', 'rlEmpty', 'No rooms right now. Press Play and a new room opens.')); return; }
+    list.forEach(function (r) {
+      var row = el('div', 'rlRow'), head = el('div', 'rlHead'), dot = el('span', 'rlDot');
+      dot.style.background = COLOR[r.status] || COLOR.open;
+      head.appendChild(dot);
+      head.appendChild(el('span', 'rlName', r.room));
+      head.appendChild(el('span', 'rlCount', r.players + ' / ' + (r.limit || 40)));
+      row.appendChild(head);
+      var meta = [];
+      if (r.map) meta.push('Map: ' + r.map);
+      if (r.phase) meta.push((PHASE[r.phase] || r.phase) + (r.secondsLeft !== null && r.secondsLeft !== undefined ? ' · ' + mmss(r.secondsLeft) + ' left' : ''));
+      if (meta.length) row.appendChild(el('div', 'rlMeta', meta.join('  ·  ')));
+      var who = names[r.room] || [];
+      if (who.length) {
+        var extra = who.length - NAMES_SHOWN;
+        row.appendChild(el('div', 'rlWho', who.slice(0, NAMES_SHOWN).join(', ') + (extra > 0 ? ' + ' + extra + ' more' : '')));
+      }
+      row.onclick = function () { location.href = 'game?mode=' + encodeURIComponent(mode) + '&room=' + encodeURIComponent(r.room); };
+      box.appendChild(row);
+    });
+  }
+  function namesOf(d) {
+    var out = {};
+    ((d && d.rooms) || []).forEach(function (r) { out[r.room] = r.names || []; });
+    return out;
+  }
+
+  function tick() {
+    Promise.all([get('/api/servers'), get('/getRoomList?mode=race'), get('/getRoomList?mode=hideAndSeek')]).then(function (res) {
+      var a = res[0].aibrofist, race = a.list.filter(function (r) { return r.mode === 'race'; }),
+          hide = a.list.filter(function (r) { return r.mode === 'hideAndSeek'; });
+      $('kOnline').textContent = a.online;
+      $('kRooms').textContent = a.rooms;
+      $('kRace').textContent = a.modes.race.players;
+      $('kHide').textContent = a.modes.hideAndSeek.players;
+      $('kRaceS').textContent = plural(race.length, 'room', 'rooms');
+      $('kHideS').textContent = plural(hide.length, 'room', 'rooms');
+      $('tRace').textContent = plural(a.modes.race.players, 'player', 'players');
+      $('tHide').textContent = plural(a.modes.hideAndSeek.players, 'player', 'players');
+      rooms($('svRace'), 'race', race, namesOf(res[1]));
+      rooms($('svHide'), 'hideAndSeek', hide, namesOf(res[2]));
+      var t = new Date(res[0].at || Date.now());
+      $('svClock').textContent = 'Live · ' + two(t.getUTCHours()) + ':' + two(t.getUTCMinutes()) + ':' + two(t.getUTCSeconds()) + ' UTC';
+      $('svLive').className = 'svLive';
+      document.body.setAttribute('data-ready', '1');
+    }).catch(function () {
+      $('svClock').textContent = 'No connection, retrying…';
+      $('svLive').className = 'svLive off';
+    });
+  }
+  tick();
+  setInterval(function () { if (!document.hidden) tick(); }, 1000);
+})();
+</script>
+</body>
+</html>

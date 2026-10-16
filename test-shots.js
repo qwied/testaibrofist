@@ -37,6 +37,13 @@ const PAGE = outsidePort => `<!doctype html><html><head><style>
 const TAB = `<!doctype html><body style="margin:0;background:#fff">
 <button id="t" style="width:200px;height:60px" onclick="document.body.style.background='#000'">Maps</button></body>`;
 const TALL = `<!doctype html><body style="margin:0"><div style="height:3000px;background:#888"></div></body>`;
+// блок для обрезки: 400x300 на позиции (300, 120); слева «боковое меню» сайта (.bfHead) красным;
+// данные приходят с задержкой — до них блок серый, после — зелёный и с отметкой data-ready
+const CROP = `<!doctype html><body style="margin:0;background:#fff">
+<div class="bfHead" style="position:fixed;left:0;top:0;bottom:0;width:290px;background:#f00"></div>
+<div id="blk" style="position:absolute;left:300px;top:120px;width:400px;height:300px;background:#888"></div>
+<script>setTimeout(function () { document.getElementById('blk').style.background = '#0a0'; document.body.setAttribute('data-ready', '1'); }, 400);</script>
+</body>`;
 
 (async () => {
   const outsidePort = await listen(outside);
@@ -45,6 +52,7 @@ const TALL = `<!doctype html><body style="margin:0"><div style="height:3000px;ba
     if (req.url === '/page') return res.end(PAGE(outsidePort));
     if (req.url === '/tab') return res.end(TAB);
     if (req.url === '/tall') return res.end(TALL);
+    if (req.url === '/crop') return res.end(CROP);
     res.statusCode = 404; res.end('not found');
   });
   const port = await listen(site);
@@ -66,12 +74,20 @@ const TALL = `<!doctype html><body style="margin:0"><div style="height:3000px;ba
   const light = PNG.sync.read(await S.shoot('/page', 'light'));
   ok('светлая тема', bright(light, 600, 600) > 225, (Date.now() - t) + ' мс');
   ok('запрос на чужой сервер со страницы до него не дошёл', outsideHits === 0, outsideHits);
-  const tab = PNG.sync.read(await S.shoot('/tab', 'light', '#t'));
+  const tab = PNG.sync.read(await S.shoot('/tab', 'light', { tab: '#t' }));
   ok('вкладка нажимается перед снимком', bright(tab, 600, 600) < 30);
   const tall = PNG.sync.read(await S.shoot('/tall', 'light'));
   ok('длинная страница — целиком, но не выше ' + S.MAX_H, tall.height === S.MAX_H, tall.height);
   const green = (img, x, y) => { const i = (img.width * y + x) * 4; return img.data[i] < 60 && img.data[i + 1] > 200 && img.data[i + 2] < 60; };
   ok('окно соглашения «уже принято», выбранная тема записана — в обеих темах', green(dark, 50, 50) && green(light, 50, 50));
+  const cut = PNG.sync.read(await S.shoot('/crop', 'light', { crop: '#blk', ready: 'body[data-ready]' }));
+  const px = (img, x, y) => { const i = (img.width * y + x) * 4; return [img.data[i], img.data[i + 1], img.data[i + 2]]; };
+  let red = 0;
+  for (let y = 0; y < cut.height; y += 4) for (let x = 0; x < cut.width; x += 4) { const c = px(cut, x, y); if (c[0] > 200 && c[1] < 60 && c[2] < 60) red++; }
+  ok('обрезка: только нужный блок с полем 16 пикселей вокруг', cut.width === 400 + 32 && cut.height === 300 + 32, cut.width + 'x' + cut.height);
+  ok('боковое меню сайта в рамку не попадает', red === 0, red);
+  const mid = px(cut, 216, 166);
+  ok('снимок — после того, как страница загрузила данные', mid[1] > 120 && mid[0] < 60, mid.join());
   t = Date.now();
   const many = await Promise.all([S.shoot('/page', 'dark'), S.shoot('/tab', 'dark'), S.shoot('/tall', 'dark')]);
   ok('несколько снимков сразу — все готовы', many.every(b => b.length > 500), (Date.now() - t) + ' мс');

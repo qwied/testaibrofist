@@ -1312,9 +1312,9 @@ function serversCard() {
 
 /* ---------- /servers и /account: настоящий снимок сайта ----------
    Бот присылает снимок экрана самого сайта (discordShots.js) — каждый раз
-   свежий: /servers — страницы режимов Race и Hide and Seek со списком
-   комнат, /account — страница игрока (друзья, потом вкладка Maps). Под
-   снимком кнопки: листание страниц, другая тема (тёмная/светлая),
+   свежий: /servers — страница Servers (комнаты обоих режимов, servers.html),
+   /account — страница игрока (друзья, потом вкладка Maps), без бокового
+   меню сайта. Под снимком кнопки: листание страниц, другая тема,
    «Refresh» и ссылка на сайт. Кнопки работают у всех, кто видит
    сообщение: снимок в нём просто заменяется.
    Если браузер на хостинге не запустился (мало памяти и т.п.), вместо
@@ -1334,20 +1334,23 @@ const presses = new Map();           // кто -> когда нажимал в �
 const userOf = i => ((i.member && i.member.user) || i.user || {}).id || '';
 const sleep = ms => new Promise(done => setTimeout(done, ms));
 const MAPS_TAB = '#upTabs .bfTab[data-tab="maps"]';
-const SERVER_PAGES = [{ title: 'Race', where: '/race' }, { title: 'Hide and Seek', where: '/hide-and-seek' }];
-const ACCOUNT_PAGES = [{ title: 'Profile' }, { title: 'Maps', tab: MAPS_TAB }];
+const SERVER_PAGES = [{ title: 'Servers', where: '/servers', crop: '#svShot', ready: 'body[data-ready]' }];
+const ACCOUNT_PAGES = [{ title: 'Profile', crop: '#upBody' }, { title: 'Maps', tab: MAPS_TAB, crop: '#upBody' }];
 const pageOf = (n, of) => Math.max(0, Math.min(of - 1, Number(n) || 0));
 
 // листание, тема, «Refresh» и ссылка; id(тема, страница) — custom_id кнопки
 function controls(id, pageId, th, n, of, title, link) {
-  return [{ type: 1, components: [button('Previous', id(th, n - 1), n === 0), button(title + ' · ' + (n + 1) + ' / ' + of, pageId, true),
-                                  button('Next', id(th, n + 1), n >= of - 1)] },
-          { type: 1, components: [button(THEME_NAME[otherTheme(th)], id(otherTheme(th), n)), button('Refresh', id(th, n)),
-                                  linkButton(link.label, link.url)] }];
+  const rows = [{ type: 1, components: [button(THEME_NAME[otherTheme(th)], id(otherTheme(th), n)), button('Refresh', id(th, n)),
+                                        linkButton(link.label, link.url)] }];
+  if (of > 1) rows.unshift({ type: 1, components: [button('Previous', id(th, n - 1), n === 0),
+                                                   button(title + ' · ' + (n + 1) + ' / ' + of, pageId, true),
+                                                   button('Next', id(th, n + 1), n >= of - 1)] });
+  return rows;
 }
 function serversView(th, page) {
   const n = pageOf(page, SERVER_PAGES.length), p = SERVER_PAGES[n];
-  return { kind: 'servers', theme: th, where: p.where, file: 'aibrofist-servers.png', backup: () => [cards.serversData(), 0],
+  return { kind: 'servers', theme: th, where: p.where, crop: p.crop, ready: p.ready, file: 'aibrofist-servers.png',
+           backup: () => [cards.serversData(), 0],
            rows: controls((t, k) => 'sv:' + t + ':' + k, 'sv-page', th, n, SERVER_PAGES.length, p.title,
                           { label: 'Play now', url: SITE_URL }) };
 }
@@ -1356,14 +1359,15 @@ function accountView(name, th, page) {
   if (!d) return null;
   const n = pageOf(page, ACCOUNT_PAGES.length), p = ACCOUNT_PAGES[n];
   const url = SITE_URL + '/users?name=' + encodeURIComponent(d.name);
-  return { kind: 'account', theme: th, where: '/users?name=' + encodeURIComponent(d.name), tab: p.tab, file: 'aibrofist-profile.png',
+  return { kind: 'account', theme: th, where: '/users?name=' + encodeURIComponent(d.name), tab: p.tab, crop: p.crop,
+           file: 'aibrofist-profile.png',
            backup: () => [d, n],
            rows: controls((t, k) => 'ac:' + t + ':' + k + ':' + d.name, 'ac-page', th, n, ACCOUNT_PAGES.length, p.title,
                           { label: 'Open profile', url }) };
 }
 // снимок сайта, а не вышел — нарисованная картинка с теми же данными
 function picture(view) {
-  return shots.shoot(view.where, view.theme, view.tab).catch(e => {
+  return shots.shoot(view.where, view.theme, { tab: view.tab, crop: view.crop, ready: view.ready }).catch(e => {
     once('shot:' + e.message, 'real screenshot failed, sending a drawn picture instead:', e.message);
     const [data, page] = view.backup();
     return cards.draw(view.kind, data, view.theme, page);
