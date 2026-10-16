@@ -1,9 +1,4 @@
 {
-  "base": "0ce3cf6d666d1cc6c14605831741322682e07ba0",
-  "updates": [
-    {
-      "title": "Account periods",
-      "text": "/account in our Discord now has Today, This Week and All Time buttons for coins and scores. The Servers page is cleaner: only online players and rooms on top, each mode below."
-    }
-  ]
+  "base": "c1fa05f72c2e92ddf2a9029e3f268eeff7d1d078",
+  "updates": []
 }
