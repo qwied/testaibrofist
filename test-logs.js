@@ -200,6 +200,15 @@ const files = () => { try { return fs.readdirSync(IMG_DIR); } catch (e) { return
     ok('игрок видит новость с картинками', got && got.images.length === 2);
     ok('та же новость второй раз не добавляется', extras.addAutoLog('upd:pics', 'Release', '- Line', Date.now(), [path.join(dir, 'a.png')]) === null &&
        files().length === before + 2);
+    const seen = [];
+    extras.onLogChange((type, l) => seen.push(type + ':' + l.src));
+    ok('правка без изменений и чужая новость — ничего не трогает', extras.editAutoLog('upd:pics', 'Release', '- Line') === null &&
+       extras.editAutoLog('upd:nope', 'X', 'Y') === null && !seen.length);
+    const ed = extras.editAutoLog('upd:pics', 'Release', '- Line, fixed');
+    const d2 = await call('GET /getLogs');
+    const got2 = d2.logs.find(l => l.src === 'upd:pics');
+    ok('поправленная новость: новый текст в ленте, картинки на месте, Discord узнаёт о правке',
+       ed && got2 && got2.text === '- Line, fixed' && got2.images.length === 2 && seen.join() === 'edit:upd:pics', seen.join());
   }
 
   fs.rmSync(TMP, { recursive: true, force: true });

@@ -158,6 +158,11 @@ async function postEverywhere(key, u) {
 
 async function publish() {
   if (!token() || busy) return;
+  // новость поправили в updates.json уже после выхода — та же правка в Logs
+  // и в сообщениях бота в Discord (их правит onLogChange по событию 'edit')
+  if (typeof extras.editAutoLog === 'function') {
+    for (const u of list) if (state.posted.indexOf(u.id) !== -1) extras.editAutoLog('upd:' + u.id, u.title, u.text);
+  }
   const now = Date.now();
   const fresh = list.filter(u => state.posted.indexOf(u.id) === -1 && u.date >= FEED_SINCE && now - u.date < DISCORD_MAX_AGE);
   if (!fresh.length) return;

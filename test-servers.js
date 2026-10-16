@@ -1,8 +1,7 @@
 /* Серверы игры: открытая сводка /api/servers, секретная страница
-   владельца, разбор списка серверов brofist.io, «живой» текст на картах
-   и встроенная карта ServersInfo от qwied.
-   Сеть не нужна: brofist.io выключен (BROFIST_OFF), карты — на копии
-   maps.js во временной папке, настоящий data/ тест не трогает.
+   владельца, «живой» текст на картах и встроенная карта ServersInfo от
+   qwied. Карты — на копии maps.js во временной папке, настоящий data/
+   тест не трогает.
    Запуск: node test-servers.js */
 'use strict';
 const fs = require('fs'), os = require('os'), path = require('path');
@@ -12,41 +11,24 @@ const ok = (n, c, x) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', 
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-servers-'));
 process.env.SERVERS_DATA_DIR = path.join(TMP, 'data');
-process.env.BROFIST_OFF = '1';
 delete process.env.STATS_KEY;
 const S = require('./serversInfo.js');
 const live = require('./liveText.js');
 
 (async () => {
-  console.log('разбор списка серверов brofist.io (формат нигде не описан):');
-  let n = S.normalize([{ name: 'EU #1', players: 12, maxPlayers: 50, mode: 'Sandbox' }, { name: 'US #1', online: 3 }]);
-  ok('массив серверов', n && n.online === 15 && n.servers[0].name === 'EU #1' && n.servers[0].max === 50 &&
-     n.servers[0].mode === 'Sandbox' && n.servers[1].players === 3, JSON.stringify(n));
-  n = S.normalize({ total: 40, servers: [{ title: 'Asia', playerCount: '7' }, { title: 'EU', playerCount: 20 }] });
-  ok('объект со списком и общим числом', n && n.online === 40 && n.servers.length === 2 && n.servers[0].players === 7);
-  n = S.normalize({ 'EU #1': 5, 'US #2': 9 });
-  ok('объект «имя: число»', n && n.online === 14 && n.servers[1].name === 'US #2');
-  n = S.normalize({ eu: { region: 'Europe', players: ['a', 'b', 'c'] }, us: { region: 'America', players: [] } });
-  ok('игроки списком — считаем длину', n && n.online === 3 && n.servers[0].name === 'Europe');
-  ok('мусор — нет данных', S.normalize('<html>') === null && S.normalize({ a: 'x' }) === null && S.normalize(null) === null);
-
-  console.log('\nживой текст на картах:');
+  console.log('живой текст на картах:');
   const d = {
     aibrofist: { online: 7, rooms: 2, modes: { race: { players: 3 }, hideAndSeek: { players: 4 } },
                  list: [{ mode: 'hideAndSeek', room: 'room1', players: 4, limit: 40, phase: 'round', secondsLeft: 75, map: 'Forest by qwied' },
-                        { mode: 'race', room: 'room2', players: 3, limit: 40, phase: null, secondsLeft: null, map: null }] },
-    brofist: { ok: true, online: 55, count: 1, servers: [{ name: 'EU #1', players: 55, max: 100, mode: 'Parkour', region: null }] }
+                        { mode: 'race', room: 'room2', players: 3, limit: 40, phase: null, secondsLeft: null, map: null }] }
   };
   const t = s => live.render(s, d, new Date(2026, 0, 1, 9, 5, 7));
   ok('числа', t('{online} online, race {race}, hide {hide}, rooms {rooms}') === '7 online, race 3, hide 4, rooms 2');
   ok('строки комнат — самые людные первыми', t('{room1}') === 'Hide and Seek · room1 · 4/40 · hunt 1:15 · Forest by qwied' &&
      t('{room2}') === 'Race · room2 · 3/40' && t('{room3}') === '', t('{room1}'));
-  ok('brofist.io', t('{bfonline} / {bfservers} / {bfstatus}') === '55 / 1 / live data' && t('{bf1}') === 'EU #1 · 55/100 online · Parkour');
   ok('время у игрока', t('{time}') === '09:05:07');
-  ok('незнакомые метки и обычный текст — как есть', t('{hello} {room99} a{b') === '{hello} {room99} a{b' && t('Plain') === 'Plain');
-  ok('пока данных нет — понятные заглушки', live.render('{online} {room1} {bfstatus} {bf1}', null) === '… loading… loading… loading…');
-  ok('brofist.io не отвечает — так и пишет', live.render('{bfonline} {bfstatus} {bf1}', { aibrofist: d.aibrofist, brofist: { ok: false, servers: [] } }) ===
-     '– no data right now brofist.io is not answering right now');
+  ok('незнакомые метки и обычный текст — как есть', t('{hello} {room99} {bf1} a{b') === '{hello} {room99} {bf1} a{b' && t('Plain') === 'Plain');
+  ok('пока данных нет — понятные заглушки', live.render('{online} {room1} {room2}', null) === '… loading… ');
 
   console.log('\nсводка и секретная страница:');
   const routes = {};
@@ -103,9 +85,10 @@ const live = require('./liveText.js');
   const maps = require(path.join(M, 'maps.js'));
   const m = maps.find('qwied', 'ServersInfo');
   const data = m && JSON.parse(m.mapData);
-  ok('появилась в каталоге от qwied, режим Race, витрина', m && m.author === 'qwied' && m.mapType === 'race' && m.showcase === true);
+  ok('появилась в каталоге от qwied, режим Race, витрина', m && m.author === 'qwied' && m.mapType === 'race' && m.showcase === true && m.builtinVer >= 2);
   ok('на карте старт, финиш и метки живых данных', data && data.objects.some(o => o.type === 'spawn') && data.objects.some(o => o.type === 'finishline') &&
-     ['{online}', '{room1}', '{bfonline}', '{bf1}', '{time}'].every(k => data.objects.some(o => o.type === 'text' && o.text.indexOf(k) !== -1)));
+     ['{online}', '{race}', '{hide}', '{rooms}', '{room1}', '{time}'].every(k => data.objects.some(o => o.type === 'text' && o.text.indexOf(k) !== -1)));
+  ok('только данные AIBROFIST, без чужих сайтов', !/brofist\.io|\{bf/i.test(m.mapData));
   ok('табло не прозрачные и висят над головой игрока', data.objects.filter(o => o.type === 'rect' && o.w === 780).every(o => !o.ghost && o.y + o.h <= 760 - 100 - 10));
   let hit = false;
   for (let i = 0; i < 200; i++) { const r = maps.randomFor('race'); if (r && r.mapName === 'ServersInfo') hit = true; }

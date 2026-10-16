@@ -188,7 +188,7 @@ function load() {
    в случайный подбор комнат такая карта не попадает (см. randomFor), её
    открывают из Maps Browser. ver поднимаем, когда меняем саму карту, —
    тогда она обновится; свою карту с тем же именем автор не потеряет. */
-const BUILTIN = [{ file: 'serversinfo.json', mapName: 'ServersInfo', author: 'qwied', mapType: 'race', ver: 1 }];
+const BUILTIN = [{ file: 'serversinfo.json', mapName: 'ServersInfo', author: 'qwied', mapType: 'race', ver: 2 }];
 function seedBuiltin() {
   let changed = false;
   for (const b of BUILTIN) {

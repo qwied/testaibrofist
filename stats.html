@@ -10,12 +10,12 @@
 <style>
   :root {
     --bg: #f4f5f8; --card: #ffffff; --ink: #111827; --muted: #6b7280; --line: #e5e7eb;
-    --soft: #f1f3f7; --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --accent: #4f46e5; --bf: #ea580c;
+    --soft: #f1f3f7; --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --accent: #4f46e5;
     --shadow: 0 1px 2px rgba(17,24,39,.05), 0 8px 24px rgba(17,24,39,.06);
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #0b0f17; --card: #121826; --ink: #e5e7eb; --muted: #94a3b8; --line: #1f2937;
-            --soft: #182032; --accent: #818cf8; --bf: #fb923c; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35); }
+            --soft: #182032; --accent: #818cf8; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35); }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
@@ -55,22 +55,14 @@
   .rcount { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; }
   .bar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 8px 0 6px; }
   .bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s ease; }
-  .bf .bar i { background: var(--bf); }
   .meta { color: var(--muted); font-size: 12px; display: flex; gap: 12px; flex-wrap: wrap; }
   .names { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .chip { font-size: 12px; padding: 2px 8px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); }
   .chip.seek { border-color: rgba(79,70,229,.45); color: var(--accent); font-weight: 700; }
   .empty { color: var(--muted); padding: 14px; text-align: center; border: 1px dashed var(--line); border-radius: 12px; }
-  .rows { display: grid; gap: 8px; }
-  .row { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
-  .row .n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .row .c { font-variant-numeric: tabular-nums; font-weight: 700; }
-  .row .bar { grid-column: 1 / -1; margin: 0; }
-  .row .m { grid-column: 1 / -1; color: var(--muted); font-size: 12px; margin-top: -2px; }
   .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13px; }
   .kv dt { color: var(--muted); }
   .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-  .err { color: var(--bad); font-size: 12px; margin-top: 8px; }
   footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 18px; }
 </style>
 </head>
@@ -87,7 +79,7 @@
     <div class="card kpi"><div class="l">Race</div><div class="v" id="kRace">–</div><div class="s" id="kRaceS">&nbsp;</div></div>
     <div class="card kpi"><div class="l">Hide and Seek</div><div class="v" id="kHide">–</div><div class="s" id="kHideS">&nbsp;</div></div>
     <div class="card kpi"><div class="l">Peak since restart</div><div class="v" id="kPeak">–</div><div class="s" id="kPeakS">&nbsp;</div></div>
-    <div class="card kpi"><div class="l">brofist.io</div><div class="v" id="kBf">–</div><div class="s" id="kBfS">&nbsp;</div></div>
+    <div class="card kpi"><div class="l">Uptime</div><div class="v" id="kUp">–</div><div class="s" id="kUpS">&nbsp;</div></div>
   </div>
 
   <div class="grid cols">
@@ -99,11 +91,6 @@
       <div class="card sec">
         <h2>Server</h2>
         <dl class="kv" id="server"></dl>
-      </div>
-      <div class="card sec bf">
-        <h2>brofist.io servers <small id="bfNote"></small></h2>
-        <div class="rows" id="bf"></div>
-        <div class="err" id="bfErr"></div>
       </div>
     </div>
   </div>
@@ -176,23 +163,6 @@
     rows.forEach(function (r) { dl.appendChild(el('dt', null, r[0])); dl.appendChild(el('dd', null, r[1])); });
   }
 
-  function renderBrofist(b) {
-    var box = $('bf'); box.textContent = '';
-    $('bfErr').textContent = b.ok ? '' : 'No data: ' + (b.error || 'unknown');
-    $('bfNote').textContent = b.at ? ago(b.at) : '';
-    if (!b.servers.length) { box.appendChild(el('div', 'empty', b.ok ? 'No servers listed.' : 'brofist.io did not answer yet.')); return; }
-    var most = b.servers.reduce(function (m, s) { return Math.max(m, s.max || s.players); }, 1);
-    b.servers.forEach(function (s) {
-      var row = el('div', 'row');
-      row.appendChild(el('span', 'n', s.name));
-      row.appendChild(el('span', 'c', s.players + (s.max ? ' / ' + s.max : '')));
-      row.appendChild(bar(s.players, s.max || most));
-      var m = [s.mode, s.region].filter(Boolean).join(' · ');
-      if (m) row.appendChild(el('span', 'm', m));
-      box.appendChild(row);
-    });
-  }
-
   var fails = 0;
   function tick() {
     if (document.hidden) return;
@@ -208,10 +178,10 @@
       $('kHideS').textContent = a.modes.hideAndSeek.rooms + (a.modes.hideAndSeek.rooms === 1 ? ' room' : ' rooms');
       $('kPeak').textContent = fmtNum(d.server.peak.n);
       $('kPeakS').textContent = ago(d.server.peak.at);
-      $('kBf').textContent = d.brofist.ok ? fmtNum(d.brofist.online) : '–';
-      $('kBfS').textContent = d.brofist.ok ? d.brofist.count + ' servers' : 'no data';
+      $('kUp').textContent = dur(d.server.uptimeSec);
+      $('kUpS').textContent = 'since ' + new Date(d.server.startedAt).toLocaleString();
       $('roomsNote').textContent = a.rooms ? a.online + ' in ' + a.rooms + (a.rooms === 1 ? ' room' : ' rooms') : '';
-      renderRooms(a); renderServer(d); renderBrofist(d.brofist);
+      renderRooms(a); renderServer(d);
       $('dot').className = 'dot'; $('liveTxt').textContent = 'live · ' + new Date(d.at).toLocaleTimeString();
     }).catch(function () {
       if (++fails > 2) { $('dot').className = 'dot off'; $('liveTxt').textContent = 'connection lost, retrying…'; }

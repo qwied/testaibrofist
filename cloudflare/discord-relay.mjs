@@ -5,8 +5,6 @@
 //   GET /health                      — проверка: ответ «ok»
 //   GET /cdn?url=<адрес на CDN>       — картинка с CDN Discord
 //   /gateway?host=<хост>&v=10&...     — WebSocket живого подключения
-//   GET /brofist                      — список серверов brofist.io (для карты
-//                                       ServersInfo и статистики, serversInfo.js)
 // Пускает только с ключом (заголовок x-relay-key = секрет RELAY_KEY) и
 // только к адресам Discord — чужим он бесполезен.
 // Ставится вручную: Cloudflare -> Workers -> вставить этот код, секрет
@@ -14,7 +12,6 @@
 // DISCORD_RELAY_URL и DISCORD_RELAY_KEY (см. discordBot.js).
 const CDN = /^(?:cdn\.discordapp\.com|media\.discordapp\.net)$/;
 const GATEWAY = /^(?:[a-z0-9-]+\.)*discord\.gg$/;
-const BROFIST = 'https://brofist.io/getGamingServersInfo';   // только этот адрес, не открытый прокси
 
 export default {
   async fetch(request, env) {
@@ -31,13 +28,6 @@ export default {
       const r = await fetch(target.toString(), { headers: { 'user-agent': 'aibrofist-relay' } });
       return new Response(r.body, { status: r.status,
         headers: { 'content-type': r.headers.get('content-type') || 'application/octet-stream' } });
-    }
-
-    if (url.pathname === '/brofist') {
-      const r = await fetch(BROFIST, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; AIBROFIST-servers/1.0)',
-                                                    accept: 'application/json' }, cf: { cacheTtl: 1 } });
-      return new Response(r.body, { status: r.status,
-        headers: { 'content-type': r.headers.get('content-type') || 'application/json' } });
     }
 
     if (url.pathname === '/gateway') {

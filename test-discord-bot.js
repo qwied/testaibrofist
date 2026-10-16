@@ -164,7 +164,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     DISCORD_GATEWAY_URL: 'ws://127.0.0.1:' + port + '/gw', DISCORD_BOT_STATE: path.join(tmp, 'bot.json'),
     UPDATES_FEED_STATE: path.join(tmp, 'feed.json'), DISCORD_SCAN_IMAGES: '0', DISCORD_TEST_CDN: '127.0.0.1:' + port,
     DISCORD_CMD_PREFIX: 'qa', UPDATES_FILE: path.join(tmp, 'updates.json'), DISCORD_RULES_CHANNEL_ID: CH.rules,
-    NEWS_DIR: path.join(tmp, 'news'), SERVERS_DATA_DIR: path.join(tmp, 'srv'), BROFIST_OFF: '1'
+    NEWS_DIR: path.join(tmp, 'news'), SERVERS_DATA_DIR: path.join(tmp, 'srv')
   });
   fs.mkdirSync(path.join(tmp, 'news'));
   fs.writeFileSync(path.join(tmp, 'news', 'shot.png'), 'PNG');
@@ -855,6 +855,21 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   hook('delete', { id: 77 });
   await waitFor(() => find(since(t), 'DELETE', /^\/channels\/(302|306)\/messages\/\d+$/).length >= 2);
   ok('удаление записи убирает и сообщения в Discord', find(since(t), 'DELETE', /^\/channels\/(302|306)\/messages\/\d+$/).length === 2);
+  // вышедшую новость поправили в updates.json — правка доходит до Logs и до сообщений бота
+  fs.writeFileSync(process.env.UPDATES_FILE, JSON.stringify([
+    { id: today + '-1', date: today, title: 'Discord bot', text: '- First line, fixed' }]));
+  const edits = [];
+  t = Date.now();
+  feed.start({ onLogChange: fn => { hook = fn; }, removeAutoLogs: () => 0, addAutoLog: () => null,
+               editAutoLog: (src, title, text) => { edits.push(src + '|' + text); hook('edit', { src, title, text, date: Date.now(), images: [] }); } });
+  await waitFor(() => find(since(t), 'PATCH', /^\/channels\/(302|306)\/messages\/\d+$/).length >= 1);
+  await sleep(200);
+  const fixed = find(since(t), 'PATCH', /^\/channels\/(302|306)\/messages\/\d+$/);
+  // в #updates тогда прав не было — сообщение одно, в канале, выбранном командой
+  ok('поправленная новость: правка в Logs и в сообщение бота в Discord, заново не публикуется',
+     edits.join() === 'upd:' + today + '-1|- First line, fixed' && fixed.length === 1 && /^\/channels\/306\//.test(fixed[0].path) &&
+     partsOf(fixed[0].body, 10).some(x => x.content === '- First line, fixed') &&
+     find(since(t), 'POST', /^\/channels\/(302|306)\/messages$/).length === 0, edits.join());
 
   console.log('\nподключение:');
   t = Date.now();

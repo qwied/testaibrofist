@@ -155,6 +155,21 @@ function addAutoLog(src, title, text, date, files) {
   return entry;
 }
 
+/* Новость из updates.json поправили уже после выхода (см. updatesFeed.js) —
+   та же правка в ленте; logChanged('edit') повторит её и в Discord.
+   Текст не менялся или новости в ленте нет — ничего не делаем (null). */
+function editAutoLog(src, title, text) {
+  const l = logs.find(x => x.src === src);
+  const t = String(title || '').slice(0, 120), x = String(text || '').slice(0, 4000);
+  if (!l || (l.title === t && l.text === x)) return null;
+  l.title = t;
+  l.text = x;
+  delete l.i18n;                                      // старый перевод к новому тексту не подходит
+  save();
+  logChanged('edit', l);
+  return l;
+}
+
 /* Подписка на изменения ленты, которые владелец делает в игре (добавил,
    исправил, удалил запись), — по ней бот повторяет их в Discord
    (см. updatesFeed.js). Добавление и правку сообщаем уже после перевода на
@@ -756,4 +771,4 @@ function register(app, acc) {
   });
 }
 
-module.exports = { register, reload: load, IMG_DIR, recordGeoHit, addAutoLog, removeAutoLogs, onLogChange };
+module.exports = { register, reload: load, IMG_DIR, recordGeoHit, addAutoLog, removeAutoLogs, onLogChange, editAutoLog };

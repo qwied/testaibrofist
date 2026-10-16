@@ -254,16 +254,16 @@ body.mob #msg h1{font-size:38px}
 body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="offline.js?v=2"></script>
-<script src="device.js?v=169"></script>
-        <script src="sound.js?v=169"></script>
-        <script src="skinRender.js?v=169"></script>
-        <script src="skinCanvas.js?v=169"></script>
-        <script src="gifuct.bundle.js?v=169"></script>
-        <script src="gifPlayer.js?v=169"></script>
-        <script src="coin.js?v=169"></script>
-        <script src="liveText.js?v=169"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=169">
-        <script src="theme.js?v=169"></script>
+<script src="device.js?v=170"></script>
+        <script src="sound.js?v=170"></script>
+        <script src="skinRender.js?v=170"></script>
+        <script src="skinCanvas.js?v=170"></script>
+        <script src="gifuct.bundle.js?v=170"></script>
+        <script src="gifPlayer.js?v=170"></script>
+        <script src="coin.js?v=170"></script>
+        <script src="liveText.js?v=170"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=170">
+        <script src="theme.js?v=170"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -569,7 +569,7 @@ var PAINT = {
     ctx.fillStyle = o.fill || C.ink;
     ctx.font = "800 " + Math.max(9,o.h) + "px " + ((FONTS[o.font] || FONTS.sans).css);
     ctx.textBaseline = "top";
-    // {online}, {room1}, {bf1}… — живые данные о серверах, см. liveText.js
+    // {online}, {rooms}, {room1}… — живые данные о серверах, см. liveText.js
     ctx.fillText(window.BFLive ? BFLive.fill(o.text || "Text") : (o.text || "Text"), 0, 0);
   },
   spawn: function(o){ figure(o.w,o.h, o.fill || C.ink, true, (BRIDGE && BRIDGE.mySkin) || null); },
@@ -3994,8 +3994,8 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=169"></script>
-        <script src="i18n.js?v=169"></script>
-        <script src="skinAvatar.js?v=169" defer></script>
+<script src="game.js?v=170"></script>
+        <script src="i18n.js?v=170"></script>
+        <script src="skinAvatar.js?v=170" defer></script>
 </body>
 </html>
