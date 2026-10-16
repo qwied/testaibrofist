@@ -35,7 +35,8 @@ const PAGE = outsidePort => `<!doctype html><html><head><style>
   });
 </script></body></html>`;
 const TAB = `<!doctype html><body style="margin:0;background:#fff">
-<button id="t" style="width:200px;height:60px" onclick="document.body.style.background='#000'">Maps</button></body>`;
+<button id="t" style="width:200px;height:60px" onclick="document.body.style.background='#000';window.first=1">Maps</button>
+<button id="u" style="width:200px;height:60px" onclick="if(window.first)document.body.style.background='#00f'">Week</button></body>`;
 const TALL = `<!doctype html><body style="margin:0"><div style="height:3000px;background:#888"></div></body>`;
 // блок для обрезки: 400x300 на позиции (300, 120); слева «боковое меню» сайта (.bfHead) красным;
 // данные приходят с задержкой — до них блок серый, после — зелёный и с отметкой data-ready
@@ -76,6 +77,9 @@ const CROP = `<!doctype html><body style="margin:0;background:#fff">
   ok('запрос на чужой сервер со страницы до него не дошёл', outsideHits === 0, outsideHits);
   const tab = PNG.sync.read(await S.shoot('/tab', 'light', { tab: '#t' }));
   ok('вкладка нажимается перед снимком', bright(tab, 600, 600) < 30);
+  const two = PNG.sync.read(await S.shoot('/tab', 'light', { tab: ['#t', '#u'] }));
+  const bi = (two.width * 600 + 600) * 4;
+  ok('несколько вкладок — по очереди (период, потом Maps)', two.data[bi + 2] > 200 && two.data[bi] < 40, [two.data[bi], two.data[bi + 1], two.data[bi + 2]].join());
   const tall = PNG.sync.read(await S.shoot('/tall', 'light'));
   ok('длинная страница — целиком, но не выше ' + S.MAX_H, tall.height === S.MAX_H, tall.height);
   const green = (img, x, y) => { const i = (img.width * y + x) * 4; return img.data[i] < 60 && img.data[i + 1] > 200 && img.data[i + 2] < 60; };

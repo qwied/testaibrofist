@@ -1336,6 +1336,10 @@ const sleep = ms => new Promise(done => setTimeout(done, ms));
 const MAPS_TAB = '#upTabs .bfTab[data-tab="maps"]';
 const SERVER_PAGES = [{ title: 'Servers', where: '/servers', crop: '#svShot', ready: 'body[data-ready]' }];
 const ACCOUNT_PAGES = [{ title: 'Profile', crop: '#upBody' }, { title: 'Maps', tab: MAPS_TAB, crop: '#upBody' }];
+// монеты и очки на странице игрока — за сегодня, неделю или всё время (вкладки над ними)
+const PERIODS = [{ key: 'day', label: 'Today' }, { key: 'week', label: 'This Week' }, { key: 'all', label: 'All Time' }];
+const periodOf = p => PERIODS.some(x => x.key === p) ? p : 'all';
+const PERIOD_TAB = p => '#upStatTabs .upStatTab[data-period="' + p + '"]';
 const pageOf = (n, of) => Math.max(0, Math.min(of - 1, Number(n) || 0));
 
 // листание, тема, «Refresh» и ссылка; id(тема, страница) — custom_id кнопки
@@ -1354,16 +1358,20 @@ function serversView(th, page) {
            rows: controls((t, k) => 'sv:' + t + ':' + k, 'sv-page', th, n, SERVER_PAGES.length, p.title,
                           { label: 'Play now', url: SITE_URL }) };
 }
-function accountView(name, th, page) {
+function accountView(name, th, page, period) {
   const d = cards.profileData(name);
   if (!d) return null;
-  const n = pageOf(page, ACCOUNT_PAGES.length), p = ACCOUNT_PAGES[n];
+  const n = pageOf(page, ACCOUNT_PAGES.length), p = ACCOUNT_PAGES[n], per = periodOf(period);
   const url = SITE_URL + '/users?name=' + encodeURIComponent(d.name);
-  return { kind: 'account', theme: th, where: '/users?name=' + encodeURIComponent(d.name), tab: p.tab, crop: p.crop,
-           file: 'aibrofist-profile.png',
-           backup: () => [d, n],
-           rows: controls((t, k) => 'ac:' + t + ':' + k + ':' + d.name, 'ac-page', th, n, ACCOUNT_PAGES.length, p.title,
-                          { label: 'Open profile', url }) };
+  const id = (t, k, q) => 'ac:' + t + ':' + k + ':' + (q || per) + ':' + d.name;
+  const rows = controls((t, k) => id(t, k), 'ac-page', th, n, ACCOUNT_PAGES.length, p.title, { label: 'Open profile', url });
+  // выбранный период подсвечен (и нажимать его незачем), остальные — переключают
+  rows.splice(rows.length - 1, 0, { type: 1, components: PERIODS.map(x => x.key === per
+    ? Object.assign(button(x.label, 'ac-per', true), { style: 1 })
+    : button(x.label, id(th, n, x.key))) });
+  return { kind: 'account', theme: th, where: '/users?name=' + encodeURIComponent(d.name), crop: p.crop,
+           tab: [per !== 'all' ? PERIOD_TAB(per) : null, p.tab].filter(Boolean),
+           file: 'aibrofist-profile.png', backup: () => [d, n], rows };
 }
 // снимок сайта, а не вышел — нарисованная картинка с теми же данными
 function picture(view) {
@@ -1436,9 +1444,10 @@ function onCardButton(i, cid) {
   // «sv:тема» без страницы — кнопки сообщений, отправленных до листания
   const sv = /^sv:(dark|light)(?::(-?\d+))?$/.exec(cid);
   if (sv) return sendCard(i, serversView(sv[1], sv[2]), true);
-  const m = /^ac:(dark|light):(-?\d+):(.+)$/.exec(cid);
+  // ac:тема:страница:период:ник; у сообщений, отправленных раньше, периода нет
+  const m = /^ac:(dark|light):(-?\d+):(?:(day|week|all):)?([^:]+)$/.exec(cid);
   if (!m) return respond(i, { type: 6 });
-  const view = accountView(m[3], m[1], m[2]);
+  const view = accountView(m[4], m[1], m[2], m[3]);
   if (!view) return reply(i, { content: 'This player is no longer on aibrofist.online.' });
   return sendCard(i, view, true);
 }

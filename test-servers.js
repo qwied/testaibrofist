@@ -85,6 +85,8 @@ const live = require('./liveText.js');
      /class="rlBox"/.test(sp) && /\.rlRow\{/.test(sp) && /ui\.css\?v=\d+/.test(sp) && /shell\.js\?v=\d+/.test(sp));
   ok('ники игроков выводятся как текст, не как разметка', /textContent/.test(sp) && !/innerHTML/.test(sp));
   ok('блок для снимка и отметка «данные загружены»', /id="svShot"/.test(sp) && /setAttribute\('data-ready', '1'\)/.test(sp));
+  ok('наверху только «Online now» и «Rooms» — режимы со своими игроками ниже, в списках', /id="kOnline"/.test(sp) && /id="kRooms"/.test(sp) &&
+     !/id="kRace"|id="kHide"/.test(sp) && /\.svKpis\{[^}]*repeat\(2,/.test(sp));
 
   console.log('\nкарта ServersInfo от qwied:');
   process.env.OWNER_ALIASES = 'qwied';     // как на живом сайте: карты qwied — карты владельца, идут в игру

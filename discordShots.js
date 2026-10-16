@@ -139,7 +139,8 @@ const boxOf = async (page, sel) => { const el = await page.$(sel); return el ? e
 
 /* Снимок страницы сайта. where — путь ('/servers', '/users?name=…'),
    theme — 'dark' | 'light'. opts (необязательно):
-     tab   — селектор вкладки, на которую нажать перед снимком;
+     tab   — селектор вкладки, на которую нажать перед снимком (или список —
+             нажимаются по очереди: период Today/This Week, потом Maps);
      crop  — селектор блока: снимок только его (с небольшим полем вокруг),
              без бокового меню и шапки сайта;
      ready — селектор, который появляется, когда страница загрузила данные. */
@@ -173,8 +174,8 @@ async function shoot(where, theme, opts) {
     // данные страница догружает сама (комнаты, профиль) — ждём, пока запросы утихнут
     await page.waitForNetworkIdle({ idleTime: 150, timeout: PAGE_MS }).catch(() => {});
     if (opts.ready) await page.waitForSelector(opts.ready, { timeout: 4000 }).catch(() => {});
-    if (opts.tab) {
-      await page.click(opts.tab).catch(() => {});
+    for (const tab of [].concat(opts.tab || [])) {
+      await page.click(tab).catch(() => {});
       await page.waitForNetworkIdle({ idleTime: 150, timeout: 4000 }).catch(() => {});
     }
     // только нужный блок: окно браузера вытягиваем под него, снимаем рамку вокруг блока;

@@ -631,7 +631,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const fakePng = (() => { const im = new PNG({ width: 4, height: 4 }); return PNG.sync.write(im); })();
   const realShoot = shots.shoot, shotLog = [];
   // «снимок» сайта: настоящий браузер проверяет test-shots.js, здесь — что и когда бот просит снять
-  const fakeShoot = (where, theme, o) => { o = o || {}; shotLog.push([where, theme, o.tab || '', o.crop || ''].join(' ')); return Promise.resolve(fakePng); };
+  const fakeShoot = (where, theme, o) => { o = o || {}; shotLog.push([where, theme, [].concat(o.tab || []).join('+'), o.crop || ''].join(' ')); return Promise.resolve(fakePng); };
   shots.shoot = fakeShoot;
   const ix = (id, type, data, uid) => dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type, guild_id: G, channel_id: CH.general,
     member: { user: { id: uid || 'U0' }, permissions: '1024' }, message: type === 3 ? { id: '1' } : undefined, data });
@@ -714,17 +714,34 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('/account ник — снимок профиля игрока с сайта (только профиль, без меню; ник как в аккаунте), видят все', ac && ac.body.type === 4 && ac.png &&
      !(ac.body.data.flags & 64) && ac.files[0] === 'aibrofist-profile.png image/png' && shotLog.slice(-1)[0] === '/users?name=qwied dark  #upBody',
      shotLog.slice(-1)[0]);
-  ok('листание (профиль, потом карты), тема, «Refresh» и ссылка на профиль', acl &&
-     acl[0] === 'Previous(off)=ac:dark:-1:qwied | Profile · 1 / 2(off)=ac-page | Next=ac:dark:1:qwied' &&
-     acl[1] === 'Light theme=ac:light:0:qwied | Refresh=ac:dark:0:qwied | Open profile' &&
-     /^https:\/\/aibrofist\.online\/users\?name=qwied$/.test(ac.body.data.components[1].components[2].url), acl && acl.join(' || '));
+  ok('листание (профиль, потом карты), период монет и очков, тема, «Refresh» и ссылка на профиль', acl &&
+     acl[0] === 'Previous(off)=ac:dark:-1:all:qwied | Profile · 1 / 2(off)=ac-page | Next=ac:dark:1:all:qwied' &&
+     acl[1] === 'Today=ac:dark:0:day:qwied | This Week=ac:dark:0:week:qwied | All Time(off)=ac-per' &&
+     ac.body.data.components[1].components[2].style === 1 &&
+     acl[2] === 'Light theme=ac:light:0:all:qwied | Refresh=ac:dark:0:all:qwied | Open profile' &&
+     /^https:\/\/aibrofist\.online\/users\?name=qwied$/.test(ac.body.data.components[2].components[2].url), acl && acl.join(' || '));
+  const ids = ac && ac.body.data.components.flatMap(r => r.components.map(c => c.custom_id).filter(Boolean));
+  ok('у всех кнопок разные id (иначе Discord не примет сообщение)', ids && new Set(ids).size === ids.length, ids && ids.join());
   t = Date.now();
-  ix('ac2', 3, { custom_id: 'ac:dark:1:qwied', component_type: 2 }, 'U7');
+  ix('ac2', 3, { custom_id: 'ac:dark:1:all:qwied', component_type: 2 }, 'U7');
   await waitFor(() => cb(since(t), 'ac2').length, 5000);
   const ac2 = multipartOf(cb(since(t), 'ac2')[0]);
   ok('«Next» — та же страница игрока на вкладке Maps', ac2 && ac2.body.type === 7 && ac2.png &&
      shotLog.slice(-1)[0] === '/users?name=qwied dark #upTabs .bfTab[data-tab="maps"] #upBody' &&
-     labels(ac2.body)[0] === 'Previous=ac:dark:0:qwied | Maps · 2 / 2(off)=ac-page | Next(off)=ac:dark:2:qwied', shotLog.slice(-1)[0]);
+     labels(ac2.body)[0] === 'Previous=ac:dark:0:all:qwied | Maps · 2 / 2(off)=ac-page | Next(off)=ac:dark:2:all:qwied', shotLog.slice(-1)[0]);
+  t = Date.now();
+  ix('ac2b', 3, { custom_id: 'ac:dark:1:week:qwied', component_type: 2 }, 'U14');
+  await waitFor(() => cb(since(t), 'ac2b').length, 5000);
+  const ac2b = multipartOf(cb(since(t), 'ac2b')[0]);
+  ok('«This Week» — монеты и очки за неделю: бот нажимает вкладку периода, потом Maps', ac2b && ac2b.body.type === 7 &&
+     shotLog.slice(-1)[0] === '/users?name=qwied dark #upStatTabs .upStatTab[data-period="week"]+#upTabs .bfTab[data-tab="maps"] #upBody' &&
+     labels(ac2b.body)[1] === 'Today=ac:dark:1:day:qwied | This Week(off)=ac-per | All Time=ac:dark:1:all:qwied' &&
+     labels(ac2b.body)[2] === 'Light theme=ac:light:1:week:qwied | Refresh=ac:dark:1:week:qwied | Open profile', shotLog.slice(-1)[0]);
+  t = Date.now();
+  ix('ac2c', 3, { custom_id: 'ac:light:0:qwied', component_type: 2 }, 'U15');
+  await waitFor(() => cb(since(t), 'ac2c').length, 5000);
+  ok('кнопки сообщений, отправленных до выбора периода, тоже работают (All Time)', multipartOf(cb(since(t), 'ac2c')[0]) &&
+     shotLog.slice(-1)[0] === '/users?name=qwied light  #upBody');
   t = Date.now();
   ix('ac3', 2, { name: 'account', type: 1, options: [{ name: 'nick', type: 3, value: 'qw' }] }, 'U8');
   await waitFor(() => cb(since(t), 'ac3').length);

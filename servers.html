@@ -26,7 +26,7 @@
 .svLive{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:14px}
 .svLive i{width:9px;height:9px;border-radius:50%;background:#16a34a;display:inline-block}
 .svLive.off i{background:#dc2626}
-.svKpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:6px}
+.svKpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:6px}
 .svKpi{border:1px solid var(--line);border-radius:12px;background:var(--soft);padding:12px 16px}
 .svKpiL{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
 .svKpiV{font-size:30px;font-weight:800;line-height:1.2;margin-top:2px}
@@ -49,7 +49,6 @@
 .svFoot{margin-top:14px;font-size:13px;color:var(--muted)}
 .svFoot a{color:var(--ink);font-weight:600;text-decoration:none}
 @media (max-width:900px){
-  .svKpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .svCols{grid-template-columns:1fr}
 }
 </style>
@@ -74,8 +73,6 @@
     <div class="svKpis">
       <div class="svKpi"><div class="svKpiL">Online now</div><div class="svKpiV" id="kOnline">–</div><div class="svKpiS">players in the game</div></div>
       <div class="svKpi"><div class="svKpiL">Rooms</div><div class="svKpiV" id="kRooms">–</div><div class="svKpiS">up to 40 players each</div></div>
-      <div class="svKpi"><div class="svKpiL">Race</div><div class="svKpiV" id="kRace">–</div><div class="svKpiS" id="kRaceS">&nbsp;</div></div>
-      <div class="svKpi"><div class="svKpiL">Hide and Seek</div><div class="svKpiV" id="kHide">–</div><div class="svKpiS" id="kHideS">&nbsp;</div></div>
     </div>
     <div class="svCols">
       <div><div class="rlTitle"><span>Race</span><span id="tRace"></span></div><div class="rlBox" id="svRace"></div></div>
@@ -142,12 +139,9 @@
           hide = a.list.filter(function (r) { return r.mode === 'hideAndSeek'; });
       $('kOnline').textContent = a.online;
       $('kRooms').textContent = a.rooms;
-      $('kRace').textContent = a.modes.race.players;
-      $('kHide').textContent = a.modes.hideAndSeek.players;
-      $('kRaceS').textContent = plural(race.length, 'room', 'rooms');
-      $('kHideS').textContent = plural(hide.length, 'room', 'rooms');
-      $('tRace').textContent = plural(a.modes.race.players, 'player', 'players');
-      $('tHide').textContent = plural(a.modes.hideAndSeek.players, 'player', 'players');
+      // игроки и комнаты режима — в заголовке его списка
+      $('tRace').textContent = plural(a.modes.race.players, 'player', 'players') + ' · ' + plural(race.length, 'room', 'rooms');
+      $('tHide').textContent = plural(a.modes.hideAndSeek.players, 'player', 'players') + ' · ' + plural(hide.length, 'room', 'rooms');
       rooms($('svRace'), 'race', race, namesOf(res[1]));
       rooms($('svHide'), 'hideAndSeek', hide, namesOf(res[2]));
       var t = new Date(res[0].at || Date.now());
