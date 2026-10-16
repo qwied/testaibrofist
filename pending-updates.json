@@ -1,9 +1,4 @@
 {
-  "base": "f63c6a4ff14021e981fafa3096fad4934311e78f",
-  "updates": [
-    {
-      "title": "Real screenshots in Discord",
-      "text": "/servers and /account in our Discord now send real screenshots of the site: the Race and Hide and Seek room lists, and the player page with friends and maps. Page through them, switch Dark and Light theme, or press Refresh."
-    }
-  ]
+  "base": "6c386a2097700bb51444bcf09f4ed2c8aaa6f8a2",
+  "updates": []
 }
