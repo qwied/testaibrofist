@@ -912,7 +912,6 @@ function register(app) {
   });
   app.post('/buyStoreItem', (req, res) => res.json({ code: 1 }));
   app.get('/getAllSupporters', (req, res) => res.json([]));
-  app.get('/getGamingServersInfo', (req, res) => res.json([]));
   app.post('/reportUser', (req, res) => res.json({ code: 2 }));
   app.get('/captcha/getCaptcha', (req, res) => res.json({}));
 }

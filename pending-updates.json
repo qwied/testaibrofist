@@ -1,4 +1,9 @@
 {
   "base": "d5de7492013800b24fccf540c4c70ffdd5b8315d",
-  "updates": []
+  "updates": [
+    {
+      "title": "Stability and security improvements",
+      "text": "Stability and security improvements."
+    }
+  ]
 }
