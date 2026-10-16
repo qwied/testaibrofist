@@ -1310,16 +1310,19 @@ function serversCard() {
                  button: { label: 'Play now', url: require('./discordApi.js').SITE } });
 }
 
-/* ---------- /servers и /account: живая картинка ----------
-   Вместо текста — картинка-«снимок» (discordCards.js), каждый раз со
-   свежими данными. Под ней кнопки: другая тема (тёмная/светлая),
-   «Refresh», у профиля — листание страниц (главная, карты, друзья) и
-   ссылка на профиль на сайте. Кнопки работают у всех, кто видит
-   сообщение: картинка в нём просто перерисовывается.
-   Discord ждёт ответа 3 секунды. Картинка обычно готова за 0.2-0.7 с —
-   тогда она сразу и уходит; если рисуется дольше QUICK_MS, сначала
-   отвечаем «думаю…» и подменяем ответ картинкой, когда она готова. */
+/* ---------- /servers и /account: настоящий снимок сайта ----------
+   Бот присылает снимок экрана самого сайта (discordShots.js) — каждый раз
+   свежий: /servers — страницы режимов Race и Hide and Seek со списком
+   комнат, /account — страница игрока (друзья, потом вкладка Maps). Под
+   снимком кнопки: листание страниц, другая тема (тёмная/светлая),
+   «Refresh» и ссылка на сайт. Кнопки работают у всех, кто видит
+   сообщение: снимок в нём просто заменяется.
+   Если браузер на хостинге не запустился (мало памяти и т.п.), вместо
+   снимка — нарисованная картинка с теми же данными (discordCards.js).
+   Discord ждёт ответа 3 секунды: снимок готов за QUICK_MS — уходит сразу,
+   иначе сначала «думаю…», а снимок подменяет его, когда готов. */
 const cards = require('./discordCards.js');
+const shots = require('./discordShots.js');
 const QUICK_MS = 1500;
 const PRESS_GAP_MS = 800;            // чаще одного нажатия от одного человека — не перерисовываем
 const THEME_NAME = { dark: 'Dark theme', light: 'Light theme' };
@@ -1330,28 +1333,47 @@ const SITE_URL = require('./discordApi.js').SITE;
 const presses = new Map();           // кто -> когда нажимал в последний раз
 const userOf = i => ((i.member && i.member.user) || i.user || {}).id || '';
 const sleep = ms => new Promise(done => setTimeout(done, ms));
+const MAPS_TAB = '#upTabs .bfTab[data-tab="maps"]';
+const SERVER_PAGES = [{ title: 'Race', where: '/race' }, { title: 'Hide and Seek', where: '/hide-and-seek' }];
+const ACCOUNT_PAGES = [{ title: 'Profile' }, { title: 'Maps', tab: MAPS_TAB }];
+const pageOf = (n, of) => Math.max(0, Math.min(of - 1, Number(n) || 0));
 
-function serversView(th) {
-  return { kind: 'servers', data: cards.serversData(), theme: th, page: 0, file: 'aibrofist-servers.png',
-           rows: [{ type: 1, components: [button(THEME_NAME[otherTheme(th)], 'sv:' + otherTheme(th)), button('Refresh', 'sv:' + th),
-                                          linkButton('Play now', SITE_URL)] }] };
+// листание, тема, «Refresh» и ссылка; id(тема, страница) — custom_id кнопки
+function controls(id, pageId, th, n, of, title, link) {
+  return [{ type: 1, components: [button('Previous', id(th, n - 1), n === 0), button(title + ' · ' + (n + 1) + ' / ' + of, pageId, true),
+                                  button('Next', id(th, n + 1), n >= of - 1)] },
+          { type: 1, components: [button(THEME_NAME[otherTheme(th)], id(otherTheme(th), n)), button('Refresh', id(th, n)),
+                                  linkButton(link.label, link.url)] }];
+}
+function serversView(th, page) {
+  const n = pageOf(page, SERVER_PAGES.length), p = SERVER_PAGES[n];
+  return { kind: 'servers', theme: th, where: p.where, file: 'aibrofist-servers.png', backup: () => [cards.serversData(), 0],
+           rows: controls((t, k) => 'sv:' + t + ':' + k, 'sv-page', th, n, SERVER_PAGES.length, p.title,
+                          { label: 'Play now', url: SITE_URL }) };
 }
 function accountView(name, th, page) {
   const d = cards.profileData(name);
   if (!d) return null;
-  const of = cards.pageCount(d), n = Math.max(0, Math.min(of - 1, Number(page) || 0));
-  const id = (t, p) => 'ac:' + t + ':' + p + ':' + d.name;
-  return { kind: 'account', data: d, theme: th, page: n, file: 'aibrofist-profile.png',
-           rows: [{ type: 1, components: [button('Previous', id(th, n - 1), n === 0), button((n + 1) + ' / ' + of, 'ac-page', true),
-                                          button('Next', id(th, n + 1), n >= of - 1)] },
-                  { type: 1, components: [button(THEME_NAME[otherTheme(th)], id(otherTheme(th), n)), button('Refresh', id(th, n)),
-                                          linkButton('Open profile', SITE_URL + '/users?name=' + encodeURIComponent(d.name))] }] };
+  const n = pageOf(page, ACCOUNT_PAGES.length), p = ACCOUNT_PAGES[n];
+  const url = SITE_URL + '/users?name=' + encodeURIComponent(d.name);
+  return { kind: 'account', theme: th, where: '/users?name=' + encodeURIComponent(d.name), tab: p.tab, file: 'aibrofist-profile.png',
+           backup: () => [d, n],
+           rows: controls((t, k) => 'ac:' + t + ':' + k + ':' + d.name, 'ac-page', th, n, ACCOUNT_PAGES.length, p.title,
+                          { label: 'Open profile', url }) };
+}
+// снимок сайта, а не вышел — нарисованная картинка с теми же данными
+function picture(view) {
+  return shots.shoot(view.where, view.theme, view.tab).catch(e => {
+    once('shot:' + e.message, 'real screenshot failed, sending a drawn picture instead:', e.message);
+    const [data, page] = view.backup();
+    return cards.draw(view.kind, data, view.theme, page);
+  });
 }
 
-/* Отправить картинку: новым ответом на команду (update=false) или вместо
-   картинки в том же сообщении (нажатие кнопки, update=true). */
+/* Отправить снимок: новым ответом на команду (update=false) или вместо
+   снимка в том же сообщении (нажатие кнопки, update=true). */
 async function sendCard(i, view, update) {
-  const job = cards.draw(view.kind, view.data, view.theme, view.page);
+  const job = picture(view);
   const body = { attachments: [{ id: 0, filename: view.file }], components: view.rows, allowed_mentions: { parse: [] } };
   const files = png => [{ name: view.file, data: png, type: 'image/png' }];
   // ответ по HTTP (режим запросов) файл не унесёт — тогда только через «думаю…»
@@ -1371,10 +1393,10 @@ async function sendCard(i, view, update) {
   log('Discord did not take the picture:', r.status, JSON.stringify(r.body).slice(0, 200));
   return cardFailed(i, view, update, true);
 }
-// картинка не нарисовалась: /servers отвечает прежней карточкой-текстом
+// ни снимка, ни картинки: /servers отвечает прежней карточкой-текстом
 async function cardFailed(i, view, update, deferred) {
-  log('could not draw the ' + view.kind + ' picture');
-  const sorry = { content: 'Could not draw the picture right now. Please try again in a moment.', flags: 64, allowed_mentions: { parse: [] } };
+  log('could not make the ' + view.kind + ' picture');
+  const sorry = { content: 'Could not make the picture right now. Please try again in a moment.', flags: 64, allowed_mentions: { parse: [] } };
   if (!deferred) return respond(i, view.kind === 'servers' && !update ? { type: 4, data: serversCard() } : { type: 4, data: sorry });
   const hook = '/webhooks/' + (i.application_id || appId) + '/' + i.token;
   if (update) return api('POST', hook, sorry);
@@ -1388,7 +1410,7 @@ const pressedTooFast = i => {
 };
 
 function onServers(i) {
-  return sendCard(i, serversView('dark'), false);
+  return sendCard(i, serversView('dark', 0), false);
 }
 function onAccount(i) {
   const opt = ((i.data && i.data.options) || []).find(o => o.name === 'nick');
@@ -1407,10 +1429,12 @@ function onAccountHint(i) {
 }
 function onCardButton(i, cid) {
   if (pressedTooFast(i)) return respond(i, { type: 6 });
-  if (cid.indexOf('sv:') === 0) return sendCard(i, serversView(cid.slice(3) === 'light' ? 'light' : 'dark'), true);
+  // «sv:тема» без страницы — кнопки сообщений, отправленных до листания
+  const sv = /^sv:(dark|light)(?::(-?\d+))?$/.exec(cid);
+  if (sv) return sendCard(i, serversView(sv[1], sv[2]), true);
   const m = /^ac:(dark|light):(-?\d+):(.+)$/.exec(cid);
   if (!m) return respond(i, { type: 6 });
-  const view = accountView(m[3], m[1], Number(m[2]));
+  const view = accountView(m[3], m[1], m[2]);
   if (!view) return reply(i, { content: 'This player is no longer on aibrofist.online.' });
   return sendCard(i, view, true);
 }
@@ -1788,6 +1812,12 @@ function start() {
   }, 60000);
   if (t1.unref) t1.unref();
   timers.push(t1);
+  // браузер для снимков: заранее распаковать и проверить (видно на /discord/status)
+  const t2 = setTimeout(() => {
+    shots.selfTest().then(good => log(good ? 'screenshots: the browser works' : 'screenshots are off, drawn pictures instead: ' + shots.info().reason));
+  }, 20000);
+  if (t2.unref) t2.unref();
+  timers.push(t2);
 }
 
 function stop() {
@@ -1795,6 +1825,7 @@ function stop() {
   timers.forEach(t => { clearInterval(t); clearTimeout(t); }); timers = [];
   stopRest();
   cards.stop();
+  shots.close();
   saveNow();
   guilds.clear(); setupDone.clear(); lastHit.clear();
 }
@@ -1827,6 +1858,7 @@ async function status() {
     if ((gw.intents & PRIVILEGED) !== PRIVILEGED) out.problems.push('Message Content or Server Members Intent is off in the Developer Portal.');
   }
   out.bot = me ? me.username : null;
+  out.screenshots = shots.info();
   out.guilds = [...guilds.values()].map(g => ({ id: g.id, name: g.name }));
   const feed = require('./updatesFeed.js');
   out.updates = feed.status();
