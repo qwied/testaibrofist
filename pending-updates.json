@@ -1,9 +1,4 @@
 {
-  "base": "0e5447bc6326807bce738b2ed4bbb8cd7ace4044",
-  "updates": [
-    {
-      "title": "Live server info",
-      "text": "New /servers command in our Discord shows game rooms and players online. New map ServersInfo by qwied in Maps Browser shows live online numbers of AIBROFIST and the original brofist.io, updated every second. Text on maps can now show live data like players online."
-    }
-  ]
+  "base": "abd8c7e9de1745aa7fc1358639b7d69ac0fe6c66",
+  "updates": []
 }
