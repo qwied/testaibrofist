@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>AIBROFIST · Servers</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  :root {
+    --bg: #f4f5f8; --card: #ffffff; --ink: #111827; --muted: #6b7280; --line: #e5e7eb;
+    --soft: #f1f3f7; --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --accent: #4f46e5; --bf: #ea580c;
+    --shadow: 0 1px 2px rgba(17,24,39,.05), 0 8px 24px rgba(17,24,39,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0f17; --card: #121826; --ink: #e5e7eb; --muted: #94a3b8; --line: #1f2937;
+            --soft: #182032; --accent: #818cf8; --bf: #fb923c; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  h1 { margin: 0; font-size: 22px; letter-spacing: .2px; display: flex; align-items: center; gap: 10px; }
+  h1 .logo { width: 26px; height: 26px; }
+  .live { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 rgba(22,163,74,.5); animation: pulse 1.6s infinite; }
+  .dot.off { background: var(--bad); animation: none; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(22,163,74,.5); } 70% { box-shadow: 0 0 0 8px rgba(22,163,74,0); } 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); } }
+  .grid { display: grid; gap: 12px; }
+  .kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); margin-bottom: 12px; }
+  @media (max-width: 980px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+  .kpi { padding: 14px 16px; }
+  .kpi .v { font-size: 26px; font-weight: 800; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+  .kpi .l { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+  .kpi .s { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .cols { grid-template-columns: 1.6fr 1fr; align-items: start; }
+  @media (max-width: 980px) { .cols { grid-template-columns: 1fr; } }
+  .sec { padding: 16px; }
+  .sec h2 { margin: 0 0 12px; font-size: 15px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .sec h2 small { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .mode { margin-top: 14px; }
+  .mode:first-of-type { margin-top: 0; }
+  .mode h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; display: flex; gap: 8px; align-items: center; }
+  .room { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 8px; background: var(--soft); }
+  .rtop { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .rname { font-weight: 700; }
+  .pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
+  .pill.open { color: var(--ok); border-color: rgba(22,163,74,.35); }
+  .pill.freeing { color: var(--warn); border-color: rgba(217,119,6,.35); }
+  .pill.full { color: var(--bad); border-color: rgba(220,38,38,.35); }
+  .rcount { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .bar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 8px 0 6px; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s ease; }
+  .bf .bar i { background: var(--bf); }
+  .meta { color: var(--muted); font-size: 12px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .names { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); }
+  .chip.seek { border-color: rgba(79,70,229,.45); color: var(--accent); font-weight: 700; }
+  .empty { color: var(--muted); padding: 14px; text-align: center; border: 1px dashed var(--line); border-radius: 12px; }
+  .rows { display: grid; gap: 8px; }
+  .row { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+  .row .n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .c { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .row .bar { grid-column: 1 / -1; margin: 0; }
+  .row .m { grid-column: 1 / -1; color: var(--muted); font-size: 12px; margin-top: -2px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .err { color: var(--bad); font-size: 12px; margin-top: 8px; }
+  footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6" r="5" fill="currentColor"/><rect x="7" y="12.5" width="10" height="11" rx="3" fill="currentColor"/></svg>AIBROFIST servers</h1>
+    <span class="live"><span class="dot" id="dot"></span><span id="liveTxt">connecting…</span></span>
+  </header>
+
+  <div class="grid kpis">
+    <div class="card kpi"><div class="l">Online now</div><div class="v" id="kOnline">–</div><div class="s" id="kOnlineS">&nbsp;</div></div>
+    <div class="card kpi"><div class="l">Rooms</div><div class="v" id="kRooms">–</div><div class="s">40 players per room</div></div>
+    <div class="card kpi"><div class="l">Race</div><div class="v" id="kRace">–</div><div class="s" id="kRaceS">&nbsp;</div></div>
+    <div class="card kpi"><div class="l">Hide and Seek</div><div class="v" id="kHide">–</div><div class="s" id="kHideS">&nbsp;</div></div>
+    <div class="card kpi"><div class="l">Peak since restart</div><div class="v" id="kPeak">–</div><div class="s" id="kPeakS">&nbsp;</div></div>
+    <div class="card kpi"><div class="l">brofist.io</div><div class="v" id="kBf">–</div><div class="s" id="kBfS">&nbsp;</div></div>
+  </div>
+
+  <div class="grid cols">
+    <div class="card sec">
+      <h2>Rooms <small id="roomsNote"></small></h2>
+      <div id="rooms"></div>
+    </div>
+    <div class="grid">
+      <div class="card sec">
+        <h2>Server</h2>
+        <dl class="kv" id="server"></dl>
+      </div>
+      <div class="card sec bf">
+        <h2>brofist.io servers <small id="bfNote"></small></h2>
+        <div class="rows" id="bf"></div>
+        <div class="err" id="bfErr"></div>
+      </div>
+    </div>
+  </div>
+  <footer>Updates every second · keep this link private</footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var url = location.pathname.replace(/\/+$/, '') + '/data';
+  var $ = function (id) { return document.getElementById(id); };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function fmtNum(n) { return n === null || n === undefined ? '–' : String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  function dur(sec) {
+    sec = Math.max(0, Math.round(sec || 0));
+    var d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    if (d) return d + 'd ' + h + 'h';
+    if (h) return h + 'h ' + m + 'm';
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  function ago(ms) { var s = Math.round((Date.now() - ms) / 1000); return s < 2 ? 'just now' : s < 60 ? s + 's ago' : dur(s) + ' ago'; }
+  function bar(part, whole) { var b = el('div', 'bar'), i = el('i'); i.style.width = Math.min(100, whole ? part / whole * 100 : 0) + '%'; b.appendChild(i); return b; }
+  var PHASE = { lobby: 'Hiding', round: 'Hunt', storyEnd: 'Story ended' };
+  var STATUS = { open: 'Open', freeing: 'Spot freeing up', full: 'Full' };
+
+  function renderRooms(a) {
+    var box = $('rooms'); box.textContent = '';
+    if (!a.list.length) { box.appendChild(el('div', 'empty', 'Nobody is playing right now.')); return; }
+    ['race', 'hideAndSeek'].forEach(function (mode) {
+      var list = a.list.filter(function (r) { return r.mode === mode; });
+      if (!list.length) return;
+      var sec = el('div', 'mode'), h = el('h3', null, a.modes[mode].name + ' · ' + a.modes[mode].players + ' players');
+      sec.appendChild(h);
+      list.forEach(function (r) {
+        var card = el('div', 'room'), top = el('div', 'rtop');
+        top.appendChild(el('span', 'rname', r.room));
+        top.appendChild(el('span', 'pill ' + r.status, STATUS[r.status] || r.status));
+        if (r.story) top.appendChild(el('span', 'pill', 'Story'));
+        top.appendChild(el('span', 'rcount', r.players + ' / ' + r.limit));
+        card.appendChild(top);
+        card.appendChild(bar(r.players, r.limit));
+        var meta = el('div', 'meta');
+        if (r.map) meta.appendChild(el('span', null, 'Map: ' + r.map));
+        if (r.phase) meta.appendChild(el('span', null, (PHASE[r.phase] || r.phase) + (r.secondsLeft !== null ? ' · ' + dur(r.secondsLeft) + ' left' : '')));
+        if (r.phase === 'round' && r.caught) meta.appendChild(el('span', null, 'Caught: ' + r.caught));
+        if (meta.childNodes.length) card.appendChild(meta);
+        if (r.names && r.names.length) {
+          var names = el('div', 'names');
+          r.names.forEach(function (n) { names.appendChild(el('span', 'chip' + (n === r.seeker ? ' seek' : ''), n === r.seeker ? n + ' · seeker' : n)); });
+          card.appendChild(names);
+        }
+        sec.appendChild(card);
+      });
+      box.appendChild(sec);
+    });
+  }
+
+  function renderServer(d) {
+    var s = d.server, x = d.extra || {}, dl = $('server'); dl.textContent = '';
+    var rows = [
+      ['Uptime', dur(s.uptimeSec)],
+      ['Connections', fmtNum(s.sockets)],
+      ['Memory', s.memoryMb.rss + ' MB (heap ' + s.memoryMb.heap + ' MB)'],
+      ['Load (1/5/15 min)', s.load.join(' / ') + ' on ' + s.cpus + ' CPU'],
+      ['Accounts', fmtNum(x.accounts)],
+      ['Published maps', fmtNum(x.maps)],
+      ['Discord bot', x.discord ? x.discord.mode + (x.discord.problems ? ' · ' + x.discord.problems : '') : '–'],
+      ['Node.js', s.node]
+    ];
+    rows.forEach(function (r) { dl.appendChild(el('dt', null, r[0])); dl.appendChild(el('dd', null, r[1])); });
+  }
+
+  function renderBrofist(b) {
+    var box = $('bf'); box.textContent = '';
+    $('bfErr').textContent = b.ok ? '' : 'No data: ' + (b.error || 'unknown');
+    $('bfNote').textContent = b.at ? ago(b.at) : '';
+    if (!b.servers.length) { box.appendChild(el('div', 'empty', b.ok ? 'No servers listed.' : 'brofist.io did not answer yet.')); return; }
+    var most = b.servers.reduce(function (m, s) { return Math.max(m, s.max || s.players); }, 1);
+    b.servers.forEach(function (s) {
+      var row = el('div', 'row');
+      row.appendChild(el('span', 'n', s.name));
+      row.appendChild(el('span', 'c', s.players + (s.max ? ' / ' + s.max : '')));
+      row.appendChild(bar(s.players, s.max || most));
+      var m = [s.mode, s.region].filter(Boolean).join(' · ');
+      if (m) row.appendChild(el('span', 'm', m));
+      box.appendChild(row);
+    });
+  }
+
+  var fails = 0;
+  function tick() {
+    if (document.hidden) return;
+    fetch(url, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (d) {
+      fails = 0;
+      var a = d.aibrofist;
+      $('kOnline').textContent = fmtNum(a.online);
+      $('kOnlineS').textContent = a.online === 1 ? '1 player' : a.online + ' players';
+      $('kRooms').textContent = fmtNum(a.rooms);
+      $('kRace').textContent = fmtNum(a.modes.race.players);
+      $('kRaceS').textContent = a.modes.race.rooms + (a.modes.race.rooms === 1 ? ' room' : ' rooms');
+      $('kHide').textContent = fmtNum(a.modes.hideAndSeek.players);
+      $('kHideS').textContent = a.modes.hideAndSeek.rooms + (a.modes.hideAndSeek.rooms === 1 ? ' room' : ' rooms');
+      $('kPeak').textContent = fmtNum(d.server.peak.n);
+      $('kPeakS').textContent = ago(d.server.peak.at);
+      $('kBf').textContent = d.brofist.ok ? fmtNum(d.brofist.online) : '–';
+      $('kBfS').textContent = d.brofist.ok ? d.brofist.count + ' servers' : 'no data';
+      $('roomsNote').textContent = a.rooms ? a.online + ' in ' + a.rooms + (a.rooms === 1 ? ' room' : ' rooms') : '';
+      renderRooms(a); renderServer(d); renderBrofist(d.brofist);
+      $('dot').className = 'dot'; $('liveTxt').textContent = 'live · ' + new Date(d.at).toLocaleTimeString();
+    }).catch(function () {
+      if (++fails > 2) { $('dot').className = 'dot off'; $('liveTxt').textContent = 'connection lost, retrying…'; }
+    });
+  }
+  tick();
+  setInterval(tick, 1000);
+  document.addEventListener('visibilitychange', tick);
+})();
+</script>
+</body>
+</html>

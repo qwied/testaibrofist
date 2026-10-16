@@ -180,6 +180,35 @@ function load() {
     if (fs.existsSync(MAPS_FILE)) maps = JSON.parse(fs.readFileSync(MAPS_FILE, 'utf8'));
   } catch (e) { console.log('maps.json не прочитан, начинаю с нуля'); }
   if (!Array.isArray(maps)) maps = [];
+  seedBuiltin();
+}
+
+/* Встроенные карты: лежат в репозитории (builtinMaps/) и при запуске сами
+   появляются в каталоге от имени автора. showcase — витрина, а не уровень:
+   в случайный подбор комнат такая карта не попадает (см. randomFor), её
+   открывают из Maps Browser. ver поднимаем, когда меняем саму карту, —
+   тогда она обновится; свою карту с тем же именем автор не потеряет. */
+const BUILTIN = [{ file: 'serversinfo.json', mapName: 'ServersInfo', author: 'qwied', mapType: 'race', ver: 1 }];
+function seedBuiltin() {
+  let changed = false;
+  for (const b of BUILTIN) {
+    let data;
+    try { data = fs.readFileSync(path.join(__dirname, 'builtinMaps', b.file), 'utf8'); JSON.parse(data); }
+    catch (e) { continue; }                              // файла нет (копия для тестов) — пропускаем
+    // low() объявлена ниже, а load() зовётся раньше — сравниваем здесь же
+    const lc = v => String(v || '').toLowerCase();
+    const m = maps.find(x => lc(x.author) === lc(b.author) && lc(x.mapName) === lc(b.mapName));
+    if (!m) {
+      maps.push({ mapName: b.mapName, mapType: b.mapType, mapData: data, author: b.author,
+                  date: Date.now(), created: Date.now(), rating: 0, votes: {}, boostLikes: 0, boostDislikes: 0,
+                  inGameModes: [], showcase: true, builtinVer: b.ver });
+      changed = true;
+    } else if (m.showcase && (m.builtinVer || 0) < b.ver) {
+      Object.assign(m, { mapData: data, mapType: b.mapType, builtinVer: b.ver });
+      changed = true;
+    }
+  }
+  if (changed) save();
 }
 let timer = null;
 function save() {
@@ -206,11 +235,11 @@ function randomFor(mapType, not) {
   // без указания режима берём любую карту, иначе — карты владельца
   // плюс те, что он добавил кнопкой «Добавить в игру» в Maps Browser
   const pool = !t
-    ? maps.slice()
+    ? maps.filter(m => !m.showcase)
     : maps.filter(m => {
-        if (isOwnerName(m.author) && m.mapType === t) return true;
-        // владелец мог вручную добавить чужую карту в конкретный режим
-        return Array.isArray(m.inGameModes) && m.inGameModes.indexOf(t) !== -1;
+        // владелец мог вручную добавить карту в конкретный режим — даже витрину
+        if (Array.isArray(m.inGameModes) && m.inGameModes.indexOf(t) !== -1) return true;
+        return !m.showcase && isOwnerName(m.author) && m.mapType === t;
       });
   if (!pool.length) return null;
   let m = pool[Math.floor(Math.random() * pool.length)];

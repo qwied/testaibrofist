@@ -83,6 +83,7 @@ const server = http.createServer((req, res) => {
     }
     if (/bulk-delete$/.test(p)) return send(204);
     if (/^\/applications\/\w+\/guilds\/\w+\/commands$/.test(p)) return send(200, []);
+    if (/^\/applications\/\w+\/commands$/.test(p)) return send(200, json || []);
     if (req.method === 'GET' && /auto-moderation\/rules$/.test(p)) return send(200, []);
     if (req.method === 'POST' && /auto-moderation\/rules$/.test(p)) return send(200, { id: 'am' + (++msgId) });
     if (req.method === 'GET' && p === '/guilds/' + G + '/members/' + OWNER) return send(200, { user: { id: OWNER, username: 'qwied' } });
@@ -163,7 +164,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     DISCORD_GATEWAY_URL: 'ws://127.0.0.1:' + port + '/gw', DISCORD_BOT_STATE: path.join(tmp, 'bot.json'),
     UPDATES_FEED_STATE: path.join(tmp, 'feed.json'), DISCORD_SCAN_IMAGES: '0', DISCORD_TEST_CDN: '127.0.0.1:' + port,
     DISCORD_CMD_PREFIX: 'qa', UPDATES_FILE: path.join(tmp, 'updates.json'), DISCORD_RULES_CHANNEL_ID: CH.rules,
-    NEWS_DIR: path.join(tmp, 'news')
+    NEWS_DIR: path.join(tmp, 'news'), SERVERS_DATA_DIR: path.join(tmp, 'srv'), BROFIST_OFF: '1'
   });
   fs.mkdirSync(path.join(tmp, 'news'));
   fs.writeFileSync(path.join(tmp, 'news', 'shot.png'), 'PNG');
@@ -191,7 +192,12 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('токен — из DISCORD_BOT_TOKEN', ident && ident.d.token === 'test-token');
   await waitFor(() => find(calls, 'POST', /auto-moderation\/rules$/).length >= 3);
   const cmds = find(calls, 'PUT', /^\/applications\/700\/guilds\/100\/commands$/);
-  ok('слэш-команд нет (старые, если были, убраны)', cmds.length === 1 && Array.isArray(cmds[0].body) && cmds[0].body.length === 0);
+  ok('слэш-команд на сервере нет (старые, если были, убраны)', cmds.length === 1 && Array.isArray(cmds[0].body) && cmds[0].body.length === 0);
+  await waitFor(() => find(calls, 'PUT', /^\/applications\/700\/commands$/).length);
+  const gcmds = find(calls, 'PUT', /^\/applications\/700\/commands$/);
+  ok('у приложения одна команда для всех — /servers (старая /say убрана: список заменяется целиком)', gcmds.length === 1 &&
+     gcmds[0].body.length === 1 && gcmds[0].body[0].name === 'servers' && !gcmds[0].body[0].default_member_permissions,
+     gcmds[0] && JSON.stringify(gcmds[0].body.map(c => c.name)));
   await waitFor(() => find(calls, 'POST', /^\/channels\/301\/messages$/).length);
   const rauto = find(calls, 'POST', /^\/channels\/301\/messages$/);
   const rpost = rauto[0], rbtn = rpost && (partsOf(rpost.body, 1)[0] || { components: [] }).components[0];
@@ -597,6 +603,36 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bid = press(OWNER, panel.id);
   await waitFor(() => cb(since(t), bid).length);
   ok('нажатая панель больше не работает', /expired/.test(JSON.stringify(cb(since(t), bid)[0].body)));
+  console.log('\n/servers и секретная статистика:');
+  t = Date.now();
+  dispatch('INTERACTION_CREATE', { id: 'sv1', token: 'tksv1', type: 2, guild_id: G, channel_id: CH.general,
+    member: { user: { id: 'U0' }, permissions: '1024' }, data: { name: 'servers', type: 1 } });
+  await waitFor(() => cb(since(t), 'sv1').length);
+  const sv = cb(since(t), 'sv1')[0];
+  ok('/servers может любой: ответ виден всем, карточкой в рамке', sv && sv.body.type === 4 && sv.body.data.flags === 32768 &&
+     partsOf(sv.body.data, 10)[0].content === '## AIBROFIST servers' && /Race/.test(partsOf(sv.body.data, 10)[1].content) &&
+     /Hide and Seek/.test(partsOf(sv.body.data, 10)[1].content), sv && JSON.stringify(sv.body.data).slice(0, 160));
+  ok('в ответе /servers никого не пингует', sv && sv.body.data.allowed_mentions && sv.body.data.allowed_mentions.parse.length === 0);
+  t = Date.now();
+  say(OWNER, '!qastats');
+  await waitFor(() => panelOf(since(t)));
+  panel = panelOf(since(t));
+  t = Date.now();
+  bid = press(OWNER, panel.id);
+  await waitFor(() => cb(since(t), bid).length);
+  const st1 = cb(since(t), bid)[0];
+  const link1 = st1 && (/https:\/\/\S+\/stats\/[\w-]+/.exec(JSON.stringify(st1.body)) || [])[0];
+  ok('«!stats» — секретная ссылка на статистику, видит только владелец', st1 && st1.body.data.flags === 64 && link1, link1 && link1.replace(/[\w-]+$/, '<key>'));
+  t = Date.now();
+  say(OWNER, '!qastats new');
+  await waitFor(() => panelOf(since(t)));
+  panel = panelOf(since(t));
+  t = Date.now();
+  bid = press(OWNER, panel.id);
+  await waitFor(() => cb(since(t), bid).length);
+  const link2 = (/https:\/\/\S+\/stats\/[\w-]+/.exec(JSON.stringify(cb(since(t), bid)[0].body)) || [])[0];
+  ok('«!stats new» — новая ссылка', link2 && link1 && link2 !== link1);
+
   t = Date.now();
   say(OWNER, '!hello there');
   say(OWNER, '!news');
@@ -834,7 +870,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   Object.assign(sf.guilds[G].rules, { custom: false, en: 'old default rules', ru: 'старые правила' });
   // баллы за аватарку от прежней (ошибавшейся) проверки
   sf.strikes[G + ':AV2'] = [{ t: Date.now(), p: 2, r: 4, k: 'nsfw-avatar', by: 'auto' }, { t: Date.now(), p: 1, r: 2, k: 'caps', by: 'auto' }];
-  sf.fixes = {};
+  delete sf.fixes.avatarStrikes;        // только эта разовая правка — пусть пройдёт ещё раз
   fs.writeFileSync(process.env.DISCORD_BOT_STATE, JSON.stringify(sf));
   const before = gwLog.length;
   closeNextIdentify = 4014;

@@ -49,6 +49,11 @@ const KEY = 'relay-test-key';
   ok('подключение — к названному хосту Discord, с параметрами', up && up.url === 'https://gateway-us-east1-b.discord.gg/?v=10&encoding=json', up && up.url);
   ok('заголовки WebSocket передаёт, а ключ — нет', up && up.headers.get('upgrade') === 'websocket' &&
      up.headers.get('sec-websocket-key') === 'abc' && !up.headers.get('x-relay-key'));
+  const nb = fetched.length;
+  ok('серверы brofist.io без ключа — отказ', (await call('/brofist')).status === 403 && fetched.length === nb);
+  const bfr = await call('/brofist?url=' + encodeURIComponent('https://example.com/'), { 'x-relay-key': KEY });
+  ok('серверы brofist.io с ключом — только их адрес, чужой не подставить', bfr.status === 200 &&
+     fetched.slice(-1)[0].url === 'https://brofist.io/getGamingServersInfo', fetched.slice(-1)[0].url);
   delete global.fetch;
 
   console.log('\nбот через посредника:');

@@ -697,7 +697,7 @@ async function ensureNativeAutomod(g) {
    видит только владелец. В закрытом канале не видно даже панели. */
 const PANEL_MS = 60 * 1000;
 const CONFIRM_MS = 5 * 1000;
-const COMMANDS = ['news', 'updates', 'rules', 'warn', 'mute', 'unmute', 'ban', 'unban', 'strikes', 'pardon', 'modlog', 'clear', 'purge', 'help'];
+const COMMANDS = ['news', 'updates', 'rules', 'warn', 'mute', 'unmute', 'ban', 'unban', 'strikes', 'pardon', 'modlog', 'clear', 'purge', 'stats', 'help'];
 /* Начало команд задаётся на хостинге (DISCORD_CMD_PREFIX, например «!ab3»
    -> «!ab3news»). В открытом коде его нет — по исходникам не узнать, что
    набирать. Без настройки команды начинаются просто с «!». */
@@ -725,7 +725,9 @@ const HELP = [
   '**' + PREFIX + 'modlog** - send moderation logs to this channel, **' + PREFIX + 'modlog off** to stop',
   '**' + PREFIX + 'clear 50** - delete the last 50 messages in this channel, **' + PREFIX + 'clear all** - all of them ' +
     '(asks first), add @user to delete only theirs, **' + PREFIX + 'clear stop** to stop. Pinned messages and the rules post stay',
+  '**' + PREFIX + 'stats** - your secret link to live server stats, **' + PREFIX + 'stats new** - make a new link (the old one stops working)',
   '',
+  'For everyone: **/servers** - game rooms and players online right now.',
   'Only you can use these commands. The message with a command is removed at once.'
 ].join('\n');
 
@@ -772,7 +774,8 @@ async function openPanel(g, m, kind, data) {
   const id = crypto.randomBytes(9).toString('hex');
   const label = { news: 'Open the post editor', updates: 'Choose update channels', help: 'Show commands',
                   strikes: 'Show strikes', rules: 'Open the rules editor',
-                  clear: 'Delete all messages' + (data && data.user ? ' of this member' : '') + ' here' }[kind];
+                  clear: 'Delete all messages' + (data && data.user ? ' of this member' : '') + ' here',
+                  stats: 'Show the stats link' }[kind];
   const r = await sendMessage(m.channel_id, { allowed_mentions: { parse: [] },
     components: [{ type: 1, components: [{ type: 2, style: kind === 'clear' ? 4 : 2, label, custom_id: 'panel:' + id }] }] });
   if (!ok(r) || !r.body) return;
@@ -809,6 +812,11 @@ async function onOwnerCommand(g, m) {
 
   if (cmd === 'news' || cmd === 'updates' || cmd === 'help' || cmd === 'rules') { await openPanel(g, m, cmd); return true; }
   if (cmd === 'clear' || cmd === 'purge') return clearCommand(g, m, args);
+  if (cmd === 'stats') {
+    if (/^new$/i.test(args)) require('./serversInfo.js').rotate();   // старая ссылка сразу перестаёт работать
+    await openPanel(g, m, 'stats');
+    return true;
+  }
   if (cmd === 'modlog') {
     const off = /^off$/i.test(args);
     gstate(g.id).modlog = off ? '' : m.channel_id;
@@ -1238,6 +1246,7 @@ async function onInteraction(i) {
   if (!i) return;
   const cid = String((i.data && i.data.custom_id) || '');
   if (i.type === 3 && cid === 'rules:ru') return rulesInRussian(i, i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value);
+  if (i.type === 2 && i.data && i.data.name === 'servers') return respond(i, { type: 4, data: serversCard() });
   if (!i.guild_id) return;
   const g = guilds.get(i.guild_id);
   if (!g) return;
@@ -1253,6 +1262,8 @@ async function onInteraction(i) {
     if (p.kind === 'rules') return showModal(i, rulesModal(g, p), rulesModalClassic(g, p));
     if (p.kind === 'help') return reply(i, card(HELP));
     if (p.kind === 'strikes') return reply(i, card(strikesText(g, p.data.user)));
+    if (p.kind === 'stats') return reply(i, card('**Live server stats** (updates every second):\n' + require('./serversInfo.js').link() +
+      '\n\nKeep this link private. **' + PREFIX + 'stats new** makes a new one and the old one stops working.'));
     if (p.kind === 'clear') {
       await reply(i, card('Deleting all messages' + (p.data.user ? ' of <@' + p.data.user + '>' : '') + ' in <#' + p.channel + '>. ' +
                           'Type ' + PREFIX + 'clear stop to stop.'));
@@ -1266,7 +1277,50 @@ async function onInteraction(i) {
   if (i.type === 5 && cid.indexOf('rules:') === 0) return onRulesSubmit(i, g);
 }
 
-/* Слэш-команд у бота больше нет — все команды секретные, с «!». Если
+/* ---------- /servers: комнаты игры для всех ----------
+   Единственная слэш-команда бота (остальные — секретные, с «!»). Ответ
+   виден всем в канале. Имена комнат и карт пишут игроки — экранируем,
+   чтобы из них не получились ссылки и разметка. */
+const md = s => String(s || '').replace(/[\\*_`~|>#\[\]()<@:-]/g, c => '\\' + c).slice(0, 60);
+const PHASE_NAME = { lobby: 'hiding', round: 'hunt', storyEnd: 'story ended' };
+const STATUS_NAME = { open: 'open', freeing: 'a spot is freeing up', full: 'full' };
+const mmss = n => Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0');
+function serversCard() {
+  const a = require('./serversInfo.js').summary().aibrofist;
+  const lines = ['**' + a.online + '** ' + (a.online === 1 ? 'player' : 'players') + ' online in **' + a.rooms + '** ' +
+                 (a.rooms === 1 ? 'room' : 'rooms') + '. Every room holds up to 40 players.'];
+  ['race', 'hideAndSeek'].forEach(mode => {
+    const info = a.modes[mode], rooms = a.list.filter(r => r.mode === mode);
+    lines.push('', '### ' + info.name + ' · ' + info.players + (info.players === 1 ? ' player' : ' players'));
+    if (!rooms.length) { lines.push('-# No rooms right now: press Play and start one.'); return; }
+    rooms.slice(0, 10).forEach(r => {
+      const bits = ['**' + md(r.room) + '**', r.players + '/' + r.limit, STATUS_NAME[r.status] || r.status];
+      if (r.phase) bits.push(PHASE_NAME[r.phase] + (r.secondsLeft !== null ? ' ' + mmss(r.secondsLeft) + ' left' : ''));
+      if (r.map) bits.push('map ' + md(r.map));
+      lines.push('- ' + bits.join(' · '));
+    });
+    if (rooms.length > 10) lines.push('-# and ' + (rooms.length - 10) + ' more rooms');
+  });
+  return frame({ color: 0x99A1AE, title: 'AIBROFIST servers', text: lines.join('\n'),
+                 footer: 'Live data · <t:' + Math.floor(Date.now() / 1000) + ':T>',
+                 button: { label: 'Play now', url: require('./discordApi.js').SITE } });
+}
+
+/* Глобальные слэш-команды приложения: ровно этот список. Запись целиком
+   заменяет прежний — так ушла и старая /say. Шлём один раз на версию. */
+const GLOBAL_COMMANDS = [{ name: 'servers', type: 1, description: 'AIBROFIST game rooms and players online right now',
+                           contexts: [0, 1], integration_types: [0] }];
+const GLOBAL_VER = 'servers-1';
+async function syncGlobalCommands() {
+  if (state.fixes.globalCommands === GLOBAL_VER) return;
+  if (!appId) await loadApp().catch(() => null);
+  if (!appId) return;
+  const r = await api('PUT', '/applications/' + appId + '/commands', GLOBAL_COMMANDS);
+  if (ok(r)) { state.fixes.globalCommands = GLOBAL_VER; save(); }
+  else log('could not set the /servers command:', r.status);
+}
+
+/* Слэш-команд на сервере у бота нет — все команды секретные, с «!». Если
    прежняя версия успела их зарегистрировать, один раз убираем. */
 async function clearSlashCommands(g) {
   const st = gstate(g.id);
@@ -1517,6 +1571,7 @@ async function setupGuild(g) {
   setupDone.add(g.id);
   try {
     await clearSlashCommands(g);
+    await syncGlobalCommands();
     await ensureNativeAutomod(g);
     await postDefaultRules(g);
     const o = await api('GET', '/guilds/' + g.id + '/members/' + g.owner);
@@ -1617,6 +1672,11 @@ function stop() {
    нет секретов — ни токена, ни начала команд, ни штрафов игроков; только
    задан ли токен, подключён ли бот и что ему мешает (почему «не в сети»
    или не пишет в канал). */
+// коротко для страницы статистики серверов (serversInfo.js)
+function statusBrief() {
+  return { mode: gw && gw.state === 'ready' ? 'live' : rest ? 'requests' : token() ? 'starting' : 'off', guilds: guilds.size };
+}
+
 async function status() {
   const out = { token: !!token(), prefix: !!String(process.env.DISCORD_CMD_PREFIX || '').trim(), problems: [] };
   if (!out.token) out.problems.push('DISCORD_BOT_TOKEN is not set on the hosting (or the site was not restarted after setting it).');
@@ -1670,4 +1730,4 @@ function feedChannels() {
   return state.feed.slice();
 }
 
-module.exports = { start, stop, feedChannels, register, status, startRest, _test: { state: () => state, guilds, punish, releaseBans, imageVerdict, reload: () => { loaded = false; loadState(); } } };
+module.exports = { start, stop, feedChannels, register, status, statusBrief, startRest, _test: { state: () => state, guilds, punish, releaseBans, imageVerdict, reload: () => { loaded = false; loadState(); } } };

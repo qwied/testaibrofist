@@ -9,7 +9,9 @@ const fs = require('fs');
 let fails = 0;
 const ok = (n, c) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', n); };
 
-const pages = fs.readdirSync(__dirname).filter(f => f.endsWith('.html'));
+// stats.html — секретная страница владельца со статистикой серверов (см.
+// serversInfo.js), а не страница сайта для игроков: звуков там нет
+const pages = fs.readdirSync(__dirname).filter(f => f.endsWith('.html') && f !== 'stats.html');
 console.log('страниц найдено: ' + pages.length);
 pages.forEach(f => {
   const src = fs.readFileSync(__dirname + '/' + f, 'utf8');

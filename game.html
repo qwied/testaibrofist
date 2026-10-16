@@ -261,6 +261,7 @@ body{background:#eef2f8;overflow:hidden}
         <script src="gifuct.bundle.js?v=169"></script>
         <script src="gifPlayer.js?v=169"></script>
         <script src="coin.js?v=169"></script>
+        <script src="liveText.js?v=169"></script>
         <link rel="stylesheet" type="text/css" href="mobile.css?v=169">
         <script src="theme.js?v=169"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
@@ -568,7 +569,8 @@ var PAINT = {
     ctx.fillStyle = o.fill || C.ink;
     ctx.font = "800 " + Math.max(9,o.h) + "px " + ((FONTS[o.font] || FONTS.sans).css);
     ctx.textBaseline = "top";
-    ctx.fillText(o.text || "Text", 0, 0);
+    // {online}, {room1}, {bf1}… — живые данные о серверах, см. liveText.js
+    ctx.fillText(window.BFLive ? BFLive.fill(o.text || "Text") : (o.text || "Text"), 0, 0);
   },
   spawn: function(o){ figure(o.w,o.h, o.fill || C.ink, true, (BRIDGE && BRIDGE.mySkin) || null); },
   seeker: function(o){

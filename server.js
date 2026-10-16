@@ -76,7 +76,7 @@ const PUBLIC_JS = new Set([
   'dailyreward.js', 'device.js', 'editorai.js', 'editorhelp.js', 'game.js',
   'gifplayer.js', 'gifuct.bundle.js', 'i18n.js', 'nav.js', 'owner.js',
   'roomlist.js', 'shell.js', 'skinavatar.js', 'skincanvas.js', 'skinrender.js',
-  'sound.js', 'theme.js'
+  'sound.js', 'theme.js', 'livetext.js'
 ]);
 // owner.js и adminAbuse.js разрешены здесь только затем, чтобы запрос дошёл
 // до своих маршрутов выше — там они проверяют права владельца отдельно.
@@ -84,7 +84,7 @@ const PUBLIC_JS = new Set([
 // исходники и конфиги: в вебе им делать нечего ни под каким именем
 const PRIVATE_EXT = /\.(md|py|json|lock|ya?ml|sh|bat|ps1|ini|conf|log|db|sqlite3?|pem|key|crt|env)$/;
 // /skinparts сюда НЕ ходит — оттуда клиент грузит детали скинов (skinRender.js)
-const PRIVATE_PREFIX = ['/data', '/node_modules'];
+const PRIVATE_PREFIX = ['/data', '/node_modules', '/stats.html'];   // stats.html — только по секретной ссылке
 app.use((req, res, next) => {
   /* Проверяем РАСКОДИРОВАННЫЙ путь — тот же, что потом откроет
      express.static. Иначе %2e вместо точки проходил мимо всех проверок
@@ -420,6 +420,46 @@ app.get('/api/online', (req, res) => {
     total += names.length;
   });
   res.json({ modes, total });
+});
+
+/* Снимок комнат для serversInfo.js: открытая сводка (живой текст на
+   картах, /servers в Discord) и секретная страница владельца. Пустых
+   комнат в gameState.rooms нет — см. /getRoomList выше. */
+function serversSnapshot() {
+  const now = Date.now(), rooms = [];
+  gameState.rooms.forEach((set, key) => {
+    const i = key.indexOf(':');
+    if (i === -1) return;
+    const mode = key.slice(0, i);
+    if (PUBLIC_MODES.indexOf(mode) === -1) return;
+    const players = Array.from(set).map(id => gameState.players.get(id)).filter(Boolean);
+    if (!players.length) return;
+    const st = mode === 'hideAndSeek' ? hsRooms.get(key) : null;
+    let map = st && st.map ? st.map.mapName + ' by ' + st.map.author : null;
+    if (!map && mode === 'race') {
+      // в гонке карту знает каждый игрок сам — берём ту, что бежит больше всего народу
+      const count = {};
+      players.forEach(p => { if (p.raceStart && p.raceStart.key) count[p.raceStart.key] = (count[p.raceStart.key] || 0) + 1; });
+      const top = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+      if (top) { const j = top.indexOf('|'); map = top.slice(j + 1) + ' by ' + top.slice(0, j); }
+    }
+    const live = st && (st.phase === 'lobby' || st.phase === 'round');
+    rooms.push({
+      mode, room: key.slice(i + 1), players: players.length, limit: ROOM_FULL,
+      status: players.length >= ROOM_FULL ? 'full' : now - (roomLeftAt.get(key) || 0) < ROOM_RECENT_LEFT_MS ? 'freeing' : 'open',
+      names: players.map(p => p.name), map,
+      phase: st ? st.phase : null, endsAt: live ? st.endsAt : null,
+      seeker: st && st.phase === 'round' ? st.seekerName || null : null,
+      caught: st && st.caughtSet ? st.caughtSet.size : 0, story: !!(st && st.storyMap)
+    });
+  });
+  return { rooms, sockets: gameState.players.size };
+}
+require('./serversInfo.js').register(app, {
+  snapshot: serversSnapshot,
+  extra: () => ({ maps: require('./maps.js').allMaps().length,
+                  accounts: Object.keys(accounts.getDb().users || {}).length,
+                  discord: require('./discordBot.js').statusBrief ? require('./discordBot.js').statusBrief() : null })
 });
 
 app.get('/editor/index.html', (req, res) => res.redirect('/editor'));
