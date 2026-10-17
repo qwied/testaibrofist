@@ -1,9 +1,4 @@
 {
-  "base": "0612378f1cc9feaeecb860a2a5ed5978563f58e1",
-  "updates": [
-    {
-      "title": "Editor resize handles",
-      "text": "In the map editor, the resize handles of a rotated object now sit on its corners and resize it along its own sides."
-    }
-  ]
+  "base": "2993aa026624f9acf52a3fb967fc28f2dc8d31bf",
+  "updates": []
 }
