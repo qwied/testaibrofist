@@ -209,6 +209,14 @@ const files = () => { try { return fs.readdirSync(IMG_DIR); } catch (e) { return
     const got2 = d2.logs.find(l => l.src === 'upd:pics');
     ok('поправленная новость: новый текст в ленте, картинки на месте, Discord узнаёт о правке',
        ed && got2 && got2.text === '- Line, fixed' && got2.images.length === 2 && seen.join() === 'edit:upd:pics', seen.join());
+    extras.addAutoLog('upd:other', 'Other', '- Kept', Date.now(), [path.join(dir, 'a.png')]);
+    const n0 = files().length;
+    ok('метки новостей из updates.json в ленте', extras.autoLogSources().sort().join() === 'upd:other,upd:pics');
+    const rm = extras.removeAutoLog('upd:pics');
+    const d3 = await call('GET /getLogs');
+    ok('новость убрали из updates.json — из ленты тоже, и её картинки удалены', rm === true && !d3.logs.some(l => l.src === 'upd:pics') &&
+       d3.logs.some(l => l.src === 'upd:other') && files().length === n0 - 2, n0 + ' -> ' + files().length);
+    ok('нет такой новости — ничего не трогает', extras.removeAutoLog('upd:nope') === false && extras.autoLogSources().join() === 'upd:other');
   }
 
   fs.rmSync(TMP, { recursive: true, force: true });

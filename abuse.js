@@ -111,6 +111,7 @@ function register(app, acc) {
     grabbed[key]++;
     u.coins = (u.coins || 0) + 1;
     if (typeof acc.save === 'function') acc.save();
+    if (typeof acc.logCoins === 'function') acc.logCoins(u.name, 1);
     res.json({ status: 'success', coins: u.coins, left: cap - grabbed[key] });
   });
 

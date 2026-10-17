@@ -1017,6 +1017,31 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      edits.join() === 'upd:' + today + '-1|- First line, fixed' && fixed.length === 1 && /^\/channels\/306\//.test(fixed[0].path) &&
      partsOf(fixed[0].body, 10).some(x => x.content === '- First line, fixed') &&
      find(since(t), 'POST', /^\/channels\/(302|306)\/messages$/).length === 0, edits.join());
+  // новость убрали из updates.json (остался только «Release») — она уходит из Logs и из Discord
+  const keepId = '2026-10-13-1';
+  fs.writeFileSync(process.env.UPDATES_FILE, JSON.stringify([{ id: keepId, date: '2026-10-13', title: 'Release', text: 'old' }]));
+  const removed = [], deletedBefore = find(calls, 'DELETE', /^\/channels\/(302|306)\/messages\/\d+$/).length;
+  const posted = fixed[0] && fixed[0].path.split('/').pop();
+  t = Date.now();
+  feed.start({ onLogChange: fn => { hook = fn; }, removeAutoLogs: () => 0, addAutoLog: () => null, editAutoLog: () => null,
+               autoLogSources: () => ['upd:' + today + '-1', 'upd:2026-10-10-9', 'upd:' + keepId],
+               removeAutoLog: src => { removed.push(src); return true; } });
+  await waitFor(() => find(since(t), 'DELETE', /^\/channels\/306\/messages\/\d+$/).length, 4000);
+  await sleep(150);
+  const gone = find(since(t), 'DELETE', /^\/channels\/(302|306)\/messages\/\d+$/);
+  ok('новость убрали из updates.json — убрана из Logs и её сообщение в Discord удалено; оставшаяся не тронута',
+     removed.sort().join() === ['upd:2026-10-10-9', 'upd:' + today + '-1'].sort().join() && gone.length === 1 &&
+     gone[0].path === '/channels/306/messages/' + posted && removed.indexOf('upd:' + keepId) === -1, removed.join() + ' / ' + gone.map(g => g.path).join());
+  const st0 = JSON.parse(fs.readFileSync(process.env.UPDATES_FEED_STATE, 'utf8'));
+  ok('и больше о ней не помнит (не правит, не удаляет второй раз)', st0.posted.indexOf(today + '-1') === -1 && !st0.msgs['upd:' + today + '-1']);
+  fs.writeFileSync(process.env.UPDATES_FILE, '[ broken');
+  const removed2 = [];
+  t = Date.now();
+  feed.start({ onLogChange: fn => { hook = fn; }, removeAutoLogs: () => 0, addAutoLog: () => null, editAutoLog: () => null,
+               autoLogSources: () => ['upd:' + keepId], removeAutoLog: src => { removed2.push(src); return true; } });
+  await sleep(400);
+  ok('битый updates.json — ничего не удаляется', !removed2.length && !find(since(t), 'DELETE', /^\/channels\/(302|306)\/messages\/\d+$/).length &&
+     find(calls, 'DELETE', /^\/channels\/(302|306)\/messages\/\d+$/).length === deletedBefore + 1);
 
   console.log('\nподключение:');
   t = Date.now();

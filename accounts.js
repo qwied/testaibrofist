@@ -271,13 +271,22 @@ function creditCoins(name, amount) {
   u.coinSum = (u.coinSum || 0) + n;
   u.coins = (u.coins || 0) + n;
   save();
+  logCoins(u.name, n);
+  return n;
+}
 
+/* Любые полученные монеты — в журнал: за финиш (выше), ежедневная
+   награда, задания, новая карта, «дождь монет», выдача владельцем. Иначе
+   «Today» и «This Week» в профиле и в таблице лидеров видели только
+   монеты за финиш. Траты (ник, тема, цвет чата) сюда не пишут. */
+function logCoins(name, amount) {
+  const n = Math.floor(Number(amount) || 0);
+  if (!(n > 0) || !name) return;
   const now = Date.now();
-  coinLog.push({ name: u.name, amount: n, at: now });
+  coinLog.push({ name: String(name), amount: n, at: now });
   // старое обрезаем не каждый раз — только когда список ощутимо разросся
   if (coinLog.length % 200 === 0) coinLog = coinLog.filter(e => now - e.at < COINLOG_KEEP);
   saveCoinLog();
-  return n;
 }
 
 // суммы по журналу (coinLog/scoreLog) за окно времени — общий счётчик для
@@ -916,4 +925,4 @@ function register(app) {
   app.get('/captcha/getCaptcha', (req, res) => res.json({}));
 }
 
-module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, creditCoins, creditScore, creditHsScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, getHsLog: () => hsLog, paginate, NICK_CHANGE_PRICE };
+module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, creditCoins, logCoins, creditScore, creditHsScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, getHsLog: () => hsLog, paginate, NICK_CHANGE_PRICE };

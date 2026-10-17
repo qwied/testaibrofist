@@ -433,6 +433,7 @@ function register(app, getUser, acc, cleanText) {
       u.coins = balance = balance + REWARD;
       countPublish(u);
       acc.save();
+      if (typeof acc.logCoins === 'function') acc.logCoins(u.name, REWARD);
     }
 
     const left = DAILY_LIMIT - publishedToday(u);

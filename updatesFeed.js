@@ -156,6 +156,36 @@ async function postEverywhere(key, u) {
   return sent.length > 0;
 }
 
+/* Новость убрали из updates.json — убираем её из Logs и сообщения бота о
+   ней из Discord. Пустой или битый updates.json (list пуст) — не трогаем
+   ничего: иначе ошибка в файле стёрла бы все новости. Сообщение, которое
+   Discord не дал удалить из-за сбоя сети, удаляем в следующий раз. */
+async function unpublishGone() {
+  if (!list.length) return;
+  const have = new Set(list.map(u => u.id));
+  const ids = new Set(state.posted.concat(state.logged));
+  Object.keys(state.msgs).forEach(k => { if (k.indexOf('upd:') === 0) ids.add(k.slice(4)); });
+  if (typeof extras.autoLogSources === 'function') extras.autoLogSources().forEach(src => ids.add(src.slice(4)));
+  for (const id of ids) {
+    if (have.has(id)) continue;
+    const key = 'upd:' + id;
+    if (typeof extras.removeAutoLog === 'function') extras.removeAutoLog(key);
+    const left = [];
+    for (const s of state.msgs[key] || []) {
+      let r = null;
+      try { r = await api('DELETE', '/channels/' + s.c + '/messages/' + s.m); } catch (e) { r = null; }
+      // нет сети или Discord ответил сбоем — попробуем ещё раз; удалено, сообщения или канала
+      // уже нет, или прав нет — больше не пытаемся
+      if (!r || (r.status >= 500 || r.status === 429)) left.push(s);
+    }
+    if (left.length) state.msgs[key] = left; else delete state.msgs[key];
+    state.posted = state.posted.filter(x => x !== id);
+    state.logged = state.logged.filter(x => x !== id);
+    saveState();
+    console.log('[updates] новость убрана из updates.json — убрана и из Logs и Discord:', id);
+  }
+}
+
 async function publish() {
   if (!token() || busy) return;
   // новость поправили в updates.json уже после выхода — та же правка в Logs
@@ -163,6 +193,7 @@ async function publish() {
   if (typeof extras.editAutoLog === 'function') {
     for (const u of list) if (state.posted.indexOf(u.id) !== -1) extras.editAutoLog('upd:' + u.id, u.title, u.text);
   }
+  await unpublishGone();
   const now = Date.now();
   const fresh = list.filter(u => state.posted.indexOf(u.id) === -1 && u.date >= FEED_SINCE && now - u.date < DISCORD_MAX_AGE);
   if (!fresh.length) return;

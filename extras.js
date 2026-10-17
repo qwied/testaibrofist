@@ -190,6 +190,19 @@ function removeAutoLogs() {
   return before - logs.length;
 }
 
+/* Новость убрали из updates.json — убираем её и из ленты, вместе с её
+   картинками (если их не держит другая запись). См. updatesFeed.js. */
+function removeAutoLog(src) {
+  const i = logs.findIndex(l => l.src === src);
+  if (i === -1) return false;
+  const gone = logs.splice(i, 1)[0];
+  save();
+  dropImages(gone.images);
+  return true;
+}
+// метки новостей из updates.json, которые сейчас лежат в ленте
+const autoLogSources = () => logs.filter(l => typeof l.src === 'string' && l.src.indexOf('upd:') === 0).map(l => l.src);
+
 function dropImages(list) {
   const used = usedImages();
   (list || []).forEach(i => {
@@ -608,10 +621,13 @@ function register(app, acc) {
       return res.json({ status: 'error', message: 'Enter a number' });
 
     const mode = String(req.body.mode || 'add');   // add | set
+    const before = target.coins || 0;
     if (mode === 'set') target.coins = Math.max(0, n);
     else target.coins = Math.max(0, (target.coins || 0) + n);
 
     saveUsers();
+    // выданное владельцем — тоже заработок за сегодня/неделю (списание — нет)
+    if (typeof acc.logCoins === 'function') acc.logCoins(target.name, target.coins - before);
     res.json({
       status: 'success',
       coins: target.coins,
@@ -771,4 +787,4 @@ function register(app, acc) {
   });
 }
 
-module.exports = { register, reload: load, IMG_DIR, recordGeoHit, addAutoLog, removeAutoLogs, onLogChange, editAutoLog };
+module.exports = { register, reload: load, IMG_DIR, recordGeoHit, addAutoLog, removeAutoLogs, onLogChange, editAutoLog, removeAutoLog, autoLogSources };

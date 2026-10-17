@@ -54,6 +54,7 @@ function register(app, acc) {
     u.coins = (u.coins || 0) + amount;
     u.rewardDay = Date.now();
     save();
+    if (acc.logCoins) acc.logCoins(u.name, amount);      // «за сегодня/неделю» в профиле и таблице лидеров
     res.json({ status: 'success', index, amount, coins: u.coins });
   });
 }

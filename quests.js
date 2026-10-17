@@ -145,6 +145,7 @@ function register(app, acc) {
       u.questBonusClaimed = true;
       u.coins = (u.coins || 0) + BONUS_REWARD;
       save();
+      if (acc.logCoins) acc.logCoins(u.name, BONUS_REWARD);
       return res.json({ status: 'success', amount: BONUS_REWARD, coins: u.coins });
     }
 
@@ -155,6 +156,7 @@ function register(app, acc) {
     u.questClaimed[id] = true;
     u.coins = (u.coins || 0) + q.reward;
     save();
+    if (acc.logCoins) acc.logCoins(u.name, q.reward);
     res.json({ status: 'success', amount: q.reward, coins: u.coins });
   });
 }
