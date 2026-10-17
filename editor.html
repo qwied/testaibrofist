@@ -3260,19 +3260,33 @@ function at(x,y){
    не меняются — меняется только то, в какой ТОЧКЕ ручка нарисована и
    ловится кликом (см. gripAt ниже). */
 function grips(o){
+  var g;
   if(o.type === "circle"){
     var cx = o.x+o.w/2, cy = o.y+o.h/2, rx = o.w/2*0.7071, ry = o.h/2*0.7071;
-    return [{n:"nw",x:cx-rx,y:cy-ry},{n:"ne",x:cx+rx,y:cy-ry},
-            {n:"sw",x:cx-rx,y:cy+ry},{n:"se",x:cx+rx,y:cy+ry}];
-  }
-  if(o.type === "triangle"){
+    g = [{n:"nw",x:cx-rx,y:cy-ry},{n:"ne",x:cx+rx,y:cy-ry},
+         {n:"sw",x:cx-rx,y:cy+ry},{n:"se",x:cx+rx,y:cy+ry}];
+  } else if(o.type === "triangle"){
     // вершина треугольника одна — nw/ne встречаются в ней же, чуть раздвинуты,
     // чтобы обе остались доступны кликом (см. gripAt)
     var apexGap = Math.min(6, o.w/6);
-    return [{n:"nw",x:o.x+o.w/2-apexGap,y:o.y},{n:"ne",x:o.x+o.w/2+apexGap,y:o.y},
-            {n:"sw",x:o.x,y:o.y+o.h},{n:"se",x:o.x+o.w,y:o.y+o.h}];
+    g = [{n:"nw",x:o.x+o.w/2-apexGap,y:o.y},{n:"ne",x:o.x+o.w/2+apexGap,y:o.y},
+         {n:"sw",x:o.x,y:o.y+o.h},{n:"se",x:o.x+o.w,y:o.y+o.h}];
+  } else {
+    g = [{n:"nw",x:o.x,y:o.y},{n:"ne",x:o.x+o.w,y:o.y},{n:"sw",x:o.x,y:o.y+o.h},{n:"se",x:o.x+o.w,y:o.y+o.h}];
   }
-  return [{n:"nw",x:o.x,y:o.y},{n:"ne",x:o.x+o.w,y:o.y},{n:"sw",x:o.x,y:o.y+o.h},{n:"se",x:o.x+o.w,y:o.y+o.h}];
+  /* Повёрнутый объект: ручки поворачиваются вместе с ним вокруг центра —
+     тем же углом, что фигура и рамка выделения в paint(). Раньше они
+     оставались в углах неповёрнутого прямоугольника и висели в пустоте
+     рядом с фигурой (при 90° — рамкой с переставленными шириной и высотой). */
+  var a = (o.rot||0)*Math.PI/180;
+  if(a){
+    var c = Math.cos(a), s = Math.sin(a), ox = o.x+o.w/2, oy = o.y+o.h/2;
+    g.forEach(function(h){
+      var dx = h.x-ox, dy = h.y-oy;
+      h.x = ox + dx*c - dy*s; h.y = oy + dx*s + dy*c;
+    });
+  }
+  return g;
 }
 function gripAt(x,y){
   // у точки старта, зомби, портала и места искателя ручек нет: их размер
@@ -3591,6 +3605,19 @@ function move(x,y){
     }
   } else if(drag.m === "move"){
     sel.x = snapN(drag.o.x + (x-drag.ox)); sel.y = snapN(drag.o.y + (y-drag.oy));
+  } else if(drag.m === "size" && (drag.o.rot||0) % 360){
+    /* Повёрнутый объект тянем в его собственных осях: сдвиг мыши
+       переводим в систему фигуры, ширина/высота меняются вдоль её сторон,
+       а противоположный ручке угол остаётся на месте — как у ровного. */
+    var s0 = drag.o, a = (s0.rot||0)*Math.PI/180, c = Math.cos(a), sn = Math.sin(a);
+    var mx = x-drag.ox, my = y-drag.oy, ldx = mx*c + my*sn, ldy = -mx*sn + my*c;
+    var sx = drag.g === "ne" || drag.g === "se" ? 1 : -1, sy = drag.g === "sw" || drag.g === "se" ? 1 : -1;
+    var nw = Math.max(4, snapN(s0.w + sx*ldx)), nh = Math.max(4, snapN(s0.h + sy*ldy));
+    // неподвижный угол (напротив ручки) в мировых координатах
+    var ax = s0.x+s0.w/2 + (-sx*s0.w/2)*c - (-sy*s0.h/2)*sn,
+        ay = s0.y+s0.h/2 + (-sx*s0.w/2)*sn + (-sy*s0.h/2)*c;
+    var ncx = ax + (sx*nw/2)*c - (sy*nh/2)*sn, ncy = ay + (sx*nw/2)*sn + (sy*nh/2)*c;
+    sel.w = nw; sel.h = nh; sel.x = ncx - nw/2; sel.y = ncy - nh/2;
   } else if(drag.m === "size"){
     var s = drag.o, dx = x-drag.ox, dy = y-drag.oy;
     if(drag.g === "se"){ sel.w = Math.max(4,snapN(s.w+dx)); sel.h = Math.max(4,snapN(s.h+dy)); }
