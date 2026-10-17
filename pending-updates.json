@@ -1,4 +1,9 @@
 {
   "base": "63c07097e71057c8c70f590872585b0e57a1b69b",
-  "updates": []
+  "updates": [
+    {
+      "title": "Coins today and this week",
+      "text": "Coins for maps published before the fix now count in Today and This Week."
+    }
+  ]
 }

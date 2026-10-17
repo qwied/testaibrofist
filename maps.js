@@ -306,6 +306,15 @@ function renameAuthor(oldName, newName) {
 
 function register(app, getUser, acc, cleanText) {
   accRef = acc;
+  /* Награды за карты, опубликованные до того, как журнал монет стал их
+     записывать, — в «Today/This Week» задним числом (см. backfillCoins).
+     Витрины (builtinMaps) не публиковались и награды не давали. */
+  if (acc && typeof acc.backfillCoins === 'function') {
+    acc.backfillCoins(maps.filter(m => !m.showcase && m.created).map(m => {
+      const u = acc.getDb().users[acc.key(m.author)];
+      return u ? { name: u.name, amount: REWARD, at: m.created } : null;
+    }).filter(Boolean));
+  }
   // ---------- публикация карты из редактора ----------
   app.post('/uploadMap', (req, res) => {
     const u = getUser(req);

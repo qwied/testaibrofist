@@ -289,6 +289,26 @@ function logCoins(name, amount) {
   saveCoinLog();
 }
 
+/* Монеты, полученные, пока журнал их ещё не записывал, — задним числом и
+   по настоящему времени (сейчас: награды за новые карты, у карты время
+   публикации хранится). Уже записанное не дублируем: запись того же
+   игрока на ту же сумму в пределах минуты — это она и есть (каждая
+   покрывает одно начисление), поэтому повторный запуск ничего не меняет. */
+function backfillCoins(entries) {
+  const now = Date.now(), used = new Set();
+  let added = 0;
+  entries.forEach(e => {
+    const n = Math.floor(Number(e.amount) || 0), at = Number(e.at), k = key(e.name);
+    if (!(n > 0) || !k || !(at > now - COINLOG_KEEP) || at > now) return;
+    const i = coinLog.findIndex((x, j) => !used.has(j) && x.amount === n && Math.abs(x.at - at) < 60000 && key(x.name) === k);
+    if (i !== -1) { used.add(i); return; }
+    used.add(coinLog.push({ name: String(e.name), amount: n, at }) - 1);
+    added++;
+  });
+  if (added) saveCoinLog();
+  return added;
+}
+
 // суммы по журналу (coinLog/scoreLog) за окно времени — общий счётчик для
 // «лучшие сегодня/за неделю» и для таблицы лидеров, sinceMs=0 — весь журнал
 function sumLog(log, sinceMs) {
@@ -925,4 +945,4 @@ function register(app) {
   app.get('/captcha/getCaptcha', (req, res) => res.json({}));
 }
 
-module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, creditCoins, logCoins, creditScore, creditHsScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, getHsLog: () => hsLog, paginate, NICK_CHANGE_PRICE };
+module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, creditCoins, logCoins, backfillCoins, creditScore, creditHsScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, getHsLog: () => hsLog, paginate, NICK_CHANGE_PRICE };

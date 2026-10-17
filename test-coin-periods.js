@@ -68,6 +68,37 @@ fs.writeFileSync(path.join(TMP, 'data', 'users.json'), JSON.stringify({ sessions
     .filter(f => (src(f).match(/u\.coins = [^;]*\+/g) || []).length > (src(f).match(/logCoins\(/g) || []).length);
   ok('в модулях игры нет начислений мимо журнала', !leftovers.length, leftovers.join());
 
+  console.log('\nнаграды за карты, опубликованные до журнала:');
+  const now = Date.now(), HOUR = 3600 * 1000;
+  acc.getDb().users.bob = { name: 'Bob', joined: now, coins: 0, friends: [], incoming: [], outgoing: [] };
+  acc.logCoins('Bob', 10);                             // карта Bob «после исправления» — уже в журнале
+  const bobAt = acc.getCoinLog()[acc.getCoinLog().length - 1].at;
+  const map = (author, mapName, created, extra) => Object.assign({ author, mapName, mapType: 'race', mapData: '{}',
+    date: created || now, created, votes: {} }, extra);
+  fs.writeFileSync(path.join(TMP, 'data', 'maps.json'), JSON.stringify([
+    map('tester', 'Early', now - 2 * HOUR),            // до журнала, ник в другом регистре
+    map('Tester', 'Twin', now - 2 * HOUR + 1000),      // вторая карта в ту же минуту — своя награда
+    map('Tester', 'Older', now - 3 * DAY),
+    map('Bob', 'Logged', bobAt - 5),                   // награда уже записана — не дублировать
+    map('Tester', 'Ancient', now - 9 * DAY),           // старше журнала — не нужно
+    map('Tester', 'NoTime', undefined),                // старая карта без времени публикации
+    map('Tester', 'Showcase', now - HOUR, { showcase: true }),
+    map('Ghost', 'Gone', now - HOUR)]));               // аккаунта больше нет
+  const dayBefore = mine(DAY), weekBefore = mine(7 * DAY), size = acc.getCoinLog().length;
+  const M = require(path.join(TMP, 'maps.js'));
+  M.register(app, () => null, acc, s => s);
+  ok('за сегодня: +10 за каждую из двух карт этого дня', mine(DAY) === dayBefore + 20, mine(DAY) - dayBefore);
+  ok('за неделю: ещё +10 за карту трёхдневной давности', mine(7 * DAY) === weekBefore + 30, mine(7 * DAY) - weekBefore);
+  ok('время записи — время публикации карты, ник — как у аккаунта',
+     acc.getCoinLog().slice(size).every(e => e.name === 'Tester') &&
+     acc.getCoinLog().some(e => e.at === now - 2 * HOUR && e.amount === 10));
+  ok('уже записанная награда, витрина, старые карты и удалённый аккаунт — не добавлены', acc.getCoinLog().length === size + 3 &&
+     acc.sumLog(acc.getCoinLog(), 7 * DAY).every(e => e.name !== 'Ghost') &&
+     (acc.sumLog(acc.getCoinLog(), DAY).find(e => e.name === 'Bob') || {}).amount === 10);
+  M.register(app, () => null, acc, s => s);
+  ok('повторный запуск (перезапуск сервера) ничего не дублирует', acc.getCoinLog().length === size + 3);
+  ok('баланс игрока не меняется — только журнал', user.coins === dayBefore);
+
   await new Promise(r => setTimeout(r, 500));          // сохранение журнала — с задержкой
   fs.rmSync(TMP, { recursive: true, force: true });
   console.log(fails ? '\nПРОВАЛЕНО проверок: ' + fails : '\nвсе проверки пройдены ✓');
