@@ -16,6 +16,8 @@
      подключение не принесло; то, что пришло по обоим путям, разбирается
      один раз; ветки читаются; после перезапуска доразбирается то, что пришло
      за время простоя; потеря сообщений подключением — повод его переоткрыть;
+   - бот никого не пингует: предупреждения в канале и ответы на команды — обычным
+     текстом с именем, без упоминаний; цель команды — имя (без @), id или упоминание;
    - секретные команды владельца (начало задаётся на хостинге, здесь «!qa»):
      news, updates, warn, mute, clear, help — сообщение с командой исчезает,
      без секретного начала не срабатывают, окно видит только
@@ -68,6 +70,8 @@ let threadsActive = [];              // открытые ветки сервер
 let appUrl = 'https://aibrofist.online/discord/interactions';   // как было у настоящего бота: команды шли через сайт
 const known = new Set();
 let pollCount = 0;
+const directory = [];                // участники сервера для поиска по имени: { user: { id, username, global_name }, nick, roles }
+const banList = [];                  // список банов сервера: { user }
 const history = new Map();           // канал -> сообщения (новые первыми) для «!clear»
 const denied = new Set();            // каналы, куда боту писать нельзя (403)
 const server = http.createServer((req, res) => {
@@ -120,6 +124,12 @@ const server = http.createServer((req, res) => {
     if (req.method === 'GET' && /auto-moderation\/rules$/.test(p)) return send(200, amRules);
     if (req.method === 'DELETE' && /auto-moderation\/rules\/\w+$/.test(p)) return send(204);
     if (req.method === 'POST' && /auto-moderation\/rules$/.test(p)) return send(200, { id: 'am' + (++msgId) });
+    if (req.method === 'GET' && (m = /^\/guilds\/\w+\/members\/search\?(.*)$/.exec(p))) {
+      const q = (new URLSearchParams(m[1]).get('query') || '').toLowerCase();
+      return send(200, directory.filter(x => [x.nick, x.user.username, x.user.global_name].filter(Boolean).some(n => n.toLowerCase().indexOf(q) === 0)).slice(0, 10));
+    }
+    if (req.method === 'GET' && /^\/guilds\/\w+\/bans\?/.test(p)) return send(200, banList);
+    if (req.method === 'GET' && (m = /^\/guilds\/\w+\/members\/(\w+)$/.exec(p)) && directory.some(x => x.user.id === m[1])) return send(200, directory.find(x => x.user.id === m[1]));
     if (req.method === 'GET' && p === '/guilds/' + G + '/members/' + OWNER) return send(200, { user: { id: OWNER, username: 'qwied' } });
     if (/^\/guilds\/\w+\/members\/\w+$/.test(p)) return send(200, {});
     if (/^\/guilds\/\w+\/bans\/\w+$/.test(p)) return send(204);
@@ -282,7 +292,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      !/strike/i.test(JSON.stringify(dmMsg.body)) && /message the owner/.test(JSON.stringify(dmMsg.body)));
   ok('и без эмодзи', dmMsg && !/\p{Extended_Pictographic}/u.test(JSON.stringify(dmMsg.body)));
   const note = find(c, 'POST', /^\/channels\/300\/messages$/)[0];
-  ok('короткое предупреждение в канале с упоминанием игрока', note && /^<@U1>, your message was removed: rule 4/.test(note.body.content) && /Mute for 1 hour\.$/.test(note.body.content), note && note.body.content);
+  ok('короткое предупреждение в канале — с именем, но без упоминания и без пинга', note && /^\*\*playerU1\*\*, your message was removed: rule 4/.test(note.body.content) &&
+     /Mute for 1 hour\.$/.test(note.body.content) && !/<@/.test(note.body.content) && note.body.allowed_mentions.parse.length === 0 &&
+     !note.body.allowed_mentions.users, note && note.body.content);
   const log1 = find(c, 'POST', /^\/channels\/303\/messages$/)[0];
   ok('запись в mod-log: номер случая, наказание, никого не пингует', log1 && /Case 1 \| Mute for 1 hour/.test(log1.body.embeds[0].title) && log1.body.allowed_mentions.parse.length === 0);
   await sleep(10600);
@@ -324,7 +336,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('4 сообщения за 2 секунды — спам: все 4 удалены', delCount(c, burst.map(m => m.id)) === 4, delCount(c, burst.map(m => m.id)));
   const slow1 = find(c, 'POST', /^\/channels\/300\/messages$/)[0];
   ok('в первый раз — только «помедленнее» (1 из 5), без мьюта, без записи в mod-log и без личного сообщения',
-     slow1 && /^<@U2>, slow down: more than 3 messages within 2 seconds is spam \(rule 1, 1 of 5\)/.test(slow1.body.content) &&
+     slow1 && /^\*\*playerU2\*\*, slow down: more than 3 messages within 2 seconds is spam \(rule 1, 1 of 5\)/.test(slow1.body.content) && !/<@/.test(slow1.body.content) &&
      find(c, 'PATCH', /members\/U2$/).length === 0 && find(c, 'POST', /^\/channels\/303\/messages$/).length === 0 &&
      find(c, 'POST', /^\/channels\/dmU2\/messages$/).length === 0, slow1 && slow1.body.content);
   // ещё 3 пачки по 4 сообщения: 2-е, 3-е и 4-е срабатывание — мьюта всё ещё нет
@@ -978,6 +990,89 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('слова можно убрать', bot._test.state().guilds[G].words.length === 0);
   ok('свой текст правил бот потом сам не меняет', bot._test.state().guilds[G].rules.custom === true);
 
+  console.log('\nкоманды по имени — без упоминаний и без пингов:');
+  directory.push(
+    { user: { id: '70001', username: 'alice_p', global_name: 'Alice' }, nick: null, roles: [] },
+    { user: { id: '70002', username: 'bigbob', global_name: 'Bob' }, nick: 'Big Bob', roles: [] },
+    { user: { id: '70003', username: 'sam', global_name: 'Sam' }, nick: null, roles: [] },
+    { user: { id: '70004', username: 'samantha', global_name: 'Samantha' }, nick: null, roles: [] },
+    { user: { id: '70005', username: 'quitter', global_name: null }, nick: null, roles: [] });
+  banList.push({ user: { id: '71000', username: 'banned_guy', global_name: 'Banned Guy' } });
+  const sayIn = (list, re) => find(list, 'POST', /^\/channels\/300\/messages$/).map(x => x.body && x.body.content || '').find(x => re.test(x));
+  t = Date.now();
+  const cmdName = say(OWNER, '!qamute alice_p 1h being loud');
+  await waitFor(() => find(since(t), 'PATCH', /members\/70001$/).length);
+  await sleep(250);
+  const confName = find(since(t), 'POST', /^\/channels\/300\/messages$/).find(x => /muted for 1 hour/.test(x.body.content || ''));
+  ok('«!mute alice_p 1h» — игрок найден по логину, без @: мьют на час, команда удалена', find(since(t), 'DELETE', new RegExp('/messages/' + cmdName.id + '$')).length === 1 &&
+     Math.abs(Date.parse(find(since(t), 'PATCH', /members\/70001$/)[0].body.communication_disabled_until) - Date.now() - 3600000) < 60000);
+  ok('подтверждение — с именем и без упоминания, никого не пингует', confName && confName.body.content === '**Alice** is muted for 1 hour.' &&
+     confName.body.allowed_mentions.parse.length === 0 && !/<@/.test(confName.body.content), confName && confName.body.content);
+  t = Date.now();
+  say(OWNER, '!qamute "Big Bob" 6h');
+  await waitFor(() => find(since(t), 'PATCH', /members\/70002$/).length);
+  await sleep(200);
+  ok('имя с пробелами — в кавычках, находится по нику на сервере', sayIn(since(t), /muted for 6 hours/) === '**Big Bob** is muted for 6 hours.');
+  t = Date.now();
+  say(OWNER, '!qawarn alice 2 invite');
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/dm70001\/messages$/).length);
+  ok('«!warn alice 2 invite» — регистр не важен, начало имени подходит, если оно одно: предупреждение с правилом 2', /2\. No invites to other Discord servers/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/dm70001\/messages$/)[0].body)) &&
+     find(since(t), 'PATCH', /members\/70001$/).length === 0);
+  t = Date.now();
+  say(OWNER, '!qawarn sa test');
+  await waitFor(() => sayIn(since(t), /Several/));
+  ok('несколько подходящих — бот не гадает, а перечисляет и просит точное имя или id', sayIn(since(t), /Several/) === 'Several members match: Sam, Samantha. Write the exact name or the user ID.' &&
+     find(since(t), 'POST', /^\/channels\/dm7000\d\/messages$/).length === 0);
+  t = Date.now();
+  say(OWNER, '!qawarn sam test');
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/dm70003\/messages$/).length);
+  ok('точное имя выбирает одного из похожих (sam, а не samantha)', find(since(t), 'POST', /^\/channels\/dm70004\/messages$/).length === 0);
+  t = Date.now();
+  say(OWNER, '!qamute nobody 1h');
+  await waitFor(() => sayIn(since(t), /cannot find/));
+  ok('нет такого — так и пишет, ничего не делает', sayIn(since(t), /cannot find/) === 'I cannot find **nobody** on the server. Write the exact name or the user ID.' &&
+     find(since(t), 'PATCH', /members\//).length === 0);
+  t = Date.now();
+  say(OWNER, '!qaunmute 70005');
+  await waitFor(() => find(since(t), 'PATCH', /members\/70005$/).length);
+  await sleep(200);
+  ok('по id тоже: имя берётся с сервера, подтверждение с ним', find(since(t), 'PATCH', /members\/70005$/)[0].body.communication_disabled_until === null &&
+     sayIn(since(t), /can talk again/) === '**quitter** can talk again.');
+  t = Date.now();
+  say(OWNER, '!qaban bigbob 7d spam');
+  await waitFor(() => find(since(t), 'PUT', /bans\/70002$/).length);
+  await sleep(200);
+  ok('«!ban bigbob 7d spam» — бан на неделю, подтверждение с ником', sayIn(since(t), /is banned/) === '**Big Bob** is banned for 7 days.');
+  t = Date.now();
+  say(OWNER, '!qaunban banned_guy');
+  await waitFor(() => find(since(t), 'DELETE', /bans\/71000$/).length);
+  await sleep(200);
+  ok('«!unban banned_guy» — находит в списке банов по имени, разбанивает', sayIn(since(t), /unbanned/) === '**Banned Guy** is unbanned.');
+  t = Date.now();
+  say(OWNER, '!qaunban ghost');
+  await waitFor(() => sayIn(since(t), /among the banned/));
+  ok('нет в списке банов — так и пишет', sayIn(since(t), /among the banned/) === 'I cannot find **ghost** among the banned. Write the exact name or the user ID.');
+  t = Date.now();
+  say(OWNER, '!qamute');
+  await waitFor(() => sayIn(since(t), /Who\?/));
+  ok('без цели — подсказка: имя, id или упоминание', /name, a user ID or a mention/.test(sayIn(since(t), /Who\?/)));
+  t = Date.now();
+  say(OWNER, '!qaclear all alice_p');
+  await waitFor(() => panelOf(since(t)));
+  const cpName = panelOf(since(t));
+  ok('«!clear all alice_p» — красная кнопка с именем (не с упоминанием)', cpName && cpName.msg.body.components[0].components[0].label === 'Delete all messages of Alice here' &&
+     !/<@/.test(JSON.stringify(cpName.msg.body)));
+  t = Date.now();
+  say(OWNER, '!qa help');
+  await waitFor(() => panelOf(since(t)));
+  panel = panelOf(since(t));
+  t = Date.now();
+  bid = press(OWNER, panel.id);
+  await waitFor(() => cb(since(t), bid).length);
+  const helpText = JSON.stringify(cb(since(t), bid)[0].body);
+  ok('справка: цель команды — имя без @, объяснено, почему не упоминание, и про кавычки', /mute name 1h/.test(helpText) && !/@user/.test(helpText) &&
+     /pings the person before the bot can delete/.test(helpText) && /in quotes/.test(helpText));
+
   console.log('\nбан и разбан:');
   t = Date.now();
   say(OWNER, '!qaban <@U21> 7d cheating', { mentions: [{ id: 'U21', member: { roles: [] } }] });
@@ -1073,8 +1168,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     t = Date.now();
     say(OWNER, '!qaclear all <@&200>', { channel_id: H });
     say(OWNER, '!qaclear all @3031', { channel_id: H });
-    await waitFor(() => find(since(t), 'POST', new RegExp('^/channels/' + H + '/messages$')).filter(x => /How many/.test(x.body.content || '')).length === 2);
-    ok('непонятное вместо игрока (роль, опечатка) — подсказка, а не «удалить у всех»', !panelIn(since(t), H) &&
+    await waitFor(() => find(since(t), 'POST', new RegExp('^/channels/' + H + '/messages$')).filter(x => /How many|I cannot find/.test(x.body.content || '')).length === 2);
+    ok('непонятное вместо игрока (роль, опечатка) — «не нашёл», а не «удалить у всех»', !panelIn(since(t), H) &&
        find(since(t), 'GET', new RegExp('^/channels/' + H + '/messages')).length === 0);
     t = Date.now();
     say(OWNER, '!qaclear', { channel_id: H });
@@ -1177,6 +1272,16 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await sleep(400);
   ok('битый updates.json — ничего не удаляется', !removed2.length && !find(since(t), 'DELETE', /^\/channels\/(302|306)\/messages\/\d+$/).length &&
      find(calls, 'DELETE', /^\/channels\/(302|306)\/messages\/\d+$/).length === deletedBefore + 1);
+
+  console.log('\nпроверка пингов за весь тест:');
+  {
+    const posts = calls.filter(c => c.method === 'POST' && /^\/channels\/[^/]+\/messages$/.test(c.path) && c.body && c.path !== '/channels/306/messages');
+    const pinging = posts.filter(c => { const a = c.body.allowed_mentions; return !a || (a.parse && a.parse.length) || (a.users && a.users.length) || (a.roles && a.roles.length) || a.replied_user; });
+    ok('ни одно сообщение бота за весь тест — в каналах и в личку — не пингует: упоминания везде отключены (кроме поста !news, где владелец сам написал @everyone)',
+       posts.length > 100 && pinging.length === 0, posts.length + ' сообщений, с пингом: ' + pinging.map(c => c.path + ' ' + JSON.stringify(c.body.allowed_mentions)).slice(0, 3).join(' | '));
+    const texts = posts.filter(c => /^\/channels\/(300|dm\w+)\/messages$/.test(c.path)).map(c => c.body.content || '');
+    ok('в коротких сообщениях бота в канале нет упоминаний людей вообще (<@...>)', !texts.some(x => /<@/.test(x)), texts.filter(x => /<@/.test(x)).slice(0, 2).join(' | '));
+  }
 
   console.log('\nподключение:');
   t = Date.now();

@@ -153,9 +153,20 @@ function modlogChannel(g) {
   return findChannel(g, /^(?:mod-?logs?|moderation-?logs?|модер[а-я-]*лог[а-я]*)$/i);
 }
 
-/* ---------- отправка ---------- */
+/* ---------- отправка ----------
+   Бот никого не пингует: если в сообщении явно не указано иначе
+   (allowed_mentions — так делает только пост !news с @everyone и @ролью, которые
+   владелец сам написал), упоминания в его сообщениях никого не уведомляют. */
+const noPing = body => body && body.allowed_mentions ? body : Object.assign({ allowed_mentions: { parse: [] } }, body);
+
+// как человека назвать в сообщении бота: ник на сервере, имя, логин — обычным текстом, без упоминания
+const nameOf = (user, member) => String((member && member.nick) || (user && (user.global_name || user.username)) || (user && user.id) || 'member');
+// автор сообщения для предупреждения владельцу: имя и id обычным текстом, без упоминания
+const authorText = m => plainName(nameOf(m.author, m.member)) + ' (' + (m.author && m.author.id) + ')';
+const plainName = s => String(s || '').replace(/[\\*_`~|>#\[\]()<@:-]/g, c => '\\' + c).slice(0, 60);
+
 async function sendMessage(channel, body, reason) {
-  const r = await api('POST', '/channels/' + channel + '/messages', body, { reason });
+  const r = await api('POST', '/channels/' + channel + '/messages', noPing(body), { reason });
   if (!ok(r) && r.status === 403) once('nowrite:' + channel, 'cannot write to channel ' + channel + ': allow View Channel, Send Messages and Embed Links for the bot there');
   return r;
 }
@@ -186,12 +197,12 @@ async function dm(uid, body) {
     ch = r.body.id;
     dmChannels.set(uid, ch);
   }
-  const r = await api('POST', '/channels/' + ch + '/messages', body);
+  const r = await api('POST', '/channels/' + ch + '/messages', noPing(body));
   return ok(r);          // 403 — у игрока закрыты личные сообщения
 }
 
-async function notice(channel, uid, text) {
-  const r = await sendMessage(channel, { content: '<@' + uid + '>, ' + text, allowed_mentions: { users: [uid] } });
+async function notice(channel, name, text) {
+  const r = await sendMessage(channel, { content: '**' + plainName(name) + '**, ' + text, allowed_mentions: { parse: [] } });
   if (ok(r) && r.body && r.body.id) {
     const t = setTimeout(() => api('DELETE', '/channels/' + channel + '/messages/' + r.body.id).catch(() => {}), NOTICE_MS);
     if (t.unref) t.unref();
@@ -206,8 +217,8 @@ async function modlog(g, entry) {
   const ch = modlogChannel(g);
   if (!ch) return;
   const fields = [
-    { name: 'User', value: '<@' + entry.user + '> (' + entry.user + ')', inline: true },
-    { name: 'By', value: entry.by ? '<@' + entry.by + '>' : 'Automod', inline: true }
+    { name: 'User', value: (entry.userName ? plainName(entry.userName) : '<@' + entry.user + '>') + ' (' + entry.user + ')', inline: true },
+    { name: 'By', value: entry.by ? (entry.byName ? plainName(entry.byName) : '<@' + entry.by + '>') : 'Automod', inline: true }
   ];
   if (entry.rule !== undefined) fields.push({ name: 'Rule', value: entry.ruleText || ruleLine(entry.rule), inline: true });
   if (entry.reason) fields.push({ name: 'Reason', value: String(entry.reason).slice(0, 1000) });
@@ -310,11 +321,12 @@ async function punish(g, user, f, ctx) {
 
   if (ctx.channel && !ctx.silent && (step.type !== 'ban' || blocked)) {
     const what = ctx.by ? 'you received a warning' : 'your message was removed';
-    await notice(ctx.channel, user.id, what + (rule ? ': rule ' + rule.id + ', ' + rule.title.toLowerCase() : '') +
+    await notice(ctx.channel, ctx.name || nameOf(user), what + (rule ? ': rule ' + rule.id + ', ' + rule.title.toLowerCase() : '') +
                  '. ' + action + '.').catch(() => {});
   }
   await modlog(g, { caseNo, title: action + (done ? '' : ' (failed: no permission)'), color: color(step),
-                    user: user.id, by: ctx.by, rule: f.rule || 0, ruleText, reason: why,
+                    user: user.id, userName: ctx.name || (user.username || user.global_name ? nameOf(user) : ''), by: ctx.by, byName: ctx.byName,
+                    rule: f.rule || 0, ruleText, reason: why,
                     channel: ctx.channel, excerpt: ctx.excerpt }).catch(() => {});
   return { step, caseNo, done };
 }
@@ -331,7 +343,7 @@ async function enforce(g, m, f) {
   if (f.kind === 'flood') return spam(g, m, f);
   if (repeat) return null;
   const until = Date.parse(m.member && m.member.communication_disabled_until) || 0;
-  return punish(g, m.author, f, { channel: m.channel_id, excerpt: m.content, until, roles: m.member && m.member.roles });
+  return punish(g, m.author, f, { channel: m.channel_id, excerpt: m.content, until, roles: m.member && m.member.roles, name: nameOf(m.author, m.member) });
 }
 
 /* Спам (правило 1): каждое срабатывание — сообщения уже удалены и игроку
@@ -347,13 +359,13 @@ async function spam(g, m, f) {
     // сообщение «помедленнее» — не чаще раза в несколько секунд: пачки идут одна за другой
     if (now - (softHit.get('spam:' + key) || 0) > 5000) {
       softHit.set('spam:' + key, now);
-      await notice(m.channel_id, m.author.id, 'slow down: more than 3 messages within 2 seconds is spam (rule 1, ' + h.n + ' of ' + R.SPAM.limit + ').').catch(() => {});
+      await notice(m.channel_id, nameOf(m.author, m.member), 'slow down: more than 3 messages within 2 seconds is spam (rule 1, ' + h.n + ' of ' + R.SPAM.limit + ').').catch(() => {});
     }
     return null;
   }
   spamHits.delete(key);
   const until = Date.parse(m.member && m.member.communication_disabled_until) || 0;
-  return punish(g, m.author, f, { channel: m.channel_id, excerpt: m.content, until, roles: m.member && m.member.roles });
+  return punish(g, m.author, f, { channel: m.channel_id, excerpt: m.content, until, roles: m.member && m.member.roles, name: nameOf(m.author, m.member) });
 }
 
 /* ---------- приглашения на чужие серверы ---------- */
@@ -459,7 +471,7 @@ async function pumpImages() {
           const verdict = imageVerdict(await img.nsfwScores(decoded));
           if (verdict === 'remove') { await enforce(job.g, job.m, A.finding('nsfw-image')); break; }
           if (verdict === 'review') {
-            await alert(job.g, 'Picture may be 18+', '<@' + job.m.author.id + '> in <#' + job.m.channel_id + '>: https://discord.com/channels/' +
+            await alert(job.g, 'Picture may be 18+', authorText(job.m) + ' in <#' + job.m.channel_id + '>: https://discord.com/channels/' +
               job.g.id + '/' + job.m.channel_id + '/' + job.m.id + '\nThe bot is not sure, so the message was not removed. Please check it.');
             break;
           }
@@ -496,7 +508,7 @@ async function onMessage(m, edited, via) {
   const young = found.findIndex(f => f.kind === 'underage');
   if (young !== -1) {
     found.splice(young, 1);
-    if (!edited) alert(g, 'Possibly under 13', '<@' + m.author.id + '> wrote in <#' + m.channel_id + '>:\n>>> ' + quote(m.content) +
+    if (!edited) alert(g, 'Possibly under 13', authorText(m) + ' wrote in <#' + m.channel_id + '>:\n>>> ' + quote(m.content) +
                        '\n\nDiscord does not allow accounts of people under 13.').catch(() => {});
   }
   if (!edited) {
@@ -562,7 +574,7 @@ async function softRemove(m, text) {
   const key = m.guild_id + ':' + m.author.id, now = Date.now();
   if (now - (softHit.get(key) || 0) < COOLDOWN) return;
   softHit.set(key, now);
-  await notice(m.channel_id, m.author.id, text).catch(() => {});
+  await notice(m.channel_id, nameOf(m.author, m.member), text).catch(() => {});
 }
 
 const jump = m => 'https://discord.com/channels/' + m.guild_id + '/' + m.channel_id + '/' + m.id;
@@ -576,7 +588,7 @@ async function gentle(g, m, f, edited) {
   if (now - (reviewHit.get(key) || 0) < 10 * 60 * 1000) return;       // не заваливать журнал
   reviewHit.set(key, now);
   for (const [k, t] of reviewHit) if (now - t > 10 * 60 * 1000) reviewHit.delete(k);
-  await alert(g, f.note + ' (rule ' + f.rule + ')', '<@' + m.author.id + '> in <#' + m.channel_id + '>' +
+  await alert(g, f.note + ' (rule ' + f.rule + ')', authorText(m) + ' in <#' + m.channel_id + '>' +
     (f.mode === 'hide' ? ' (message hidden)' : ': ' + jump(m)) + '\n>>> ' + quote(m.content) +
     '\n\nThe bot is not sure, so the author was not punished. If it breaks the rules, use the warn command.').catch(() => {});
 }
@@ -615,7 +627,7 @@ async function checkEvasion(g, d) {
   const list = state.banned[g.id] || [];
   const u = d.user, name = String(u.global_name || u.username || '').toLowerCase();
   const alike = name.length >= 4 && list.find(b => b.n === name && b.id !== u.id);
-  if (alike) alert(g, 'Possible second account', '<@' + u.id + '> has the same name as banned member <@' + alike.id + '>.').catch(() => {});
+  if (alike) alert(g, 'Possible second account', plainName(nameOf(u, d)) + ' (' + u.id + ') has the same name as banned member ' + plainName(alike.n) + ' (' + alike.id + ').').catch(() => {});
 }
 
 async function onMemberAdd(d) {
@@ -696,15 +708,19 @@ const HELP = [
   '**' + PREFIX + 'news** - write a post: channel, title, text, up to 4 images and a link button',
   '**' + PREFIX + 'updates** - choose the channels for automatic game updates',
   '**' + PREFIX + 'rules** - post the server rules (English and Russian) and set extra banned words',
-  '**' + PREFIX + 'warn @user reason** - send a warning (add a rule number to name the rule: ' + PREFIX + 'warn @user 2 invite)',
-  '**' + PREFIX + 'mute @user 1h reason** - mute for 10m, 1h, 6h, 1d, 3d or 7d',
-  '**' + PREFIX + 'unmute @user** - lift a mute',
-  '**' + PREFIX + 'ban @user 7d reason** - ban for 1d, 3d, 7d or 30d, without a duration - forever',
-  '**' + PREFIX + 'unban @user** - lift a ban (a user ID works too)',
+  '**' + PREFIX + 'warn name reason** - send a warning (add a rule number to name the rule: ' + PREFIX + 'warn name 2 invite)',
+  '**' + PREFIX + 'mute name 1h reason** - mute for 10m, 1h, 6h, 1d, 3d or 7d',
+  '**' + PREFIX + 'unmute name** - lift a mute',
+  '**' + PREFIX + 'ban name 7d reason** - ban for 1d, 3d, 7d or 30d, without a duration - forever',
+  '**' + PREFIX + 'unban name** - lift a ban',
   '**' + PREFIX + 'modlog** - send moderation logs to this channel, **' + PREFIX + 'modlog off** to stop',
   '**' + PREFIX + 'clear 50** - delete the last 50 messages in this channel, **' + PREFIX + 'clear all** - all of them ' +
-    '(asks first), add @user to delete only theirs, **' + PREFIX + 'clear stop** to stop. Pinned messages and the rules post stay',
+    '(asks first), add a name to delete only theirs, **' + PREFIX + 'clear stop** to stop. Pinned messages and the rules post stay',
   '**' + PREFIX + 'stats** - your secret link to live server stats, **' + PREFIX + 'stats new** - make a new link (the old one stops working)',
+  '',
+  '**name** is a server nickname, display name or username, written without @ - the bot never pings anyone, and neither do you: ' +
+    'an @mention in your command pings the person before the bot can delete the message. A user ID works too (a mention as well, but it pings). ' +
+    'A name with spaces goes in quotes: ' + PREFIX + 'mute "Big Bob" 1h.',
   '',
   'For everyone: **/servers** - game rooms and players online right now, **/account nick** - a player profile.',
   'Only you can use these commands. The message with a command is removed at once.'
@@ -753,7 +769,7 @@ async function openPanel(g, m, kind, data) {
   const id = crypto.randomBytes(9).toString('hex');
   const label = { news: 'Open the post editor', updates: 'Choose update channels', help: 'Show commands',
                   rules: 'Open the rules editor',
-                  clear: 'Delete all messages' + (data && data.user ? ' of this member' : '') + ' here',
+                  clear: 'Delete all messages' + (data && data.userName ? ' of ' + String(data.userName).slice(0, 30) : '') + ' here',
                   stats: 'Show the stats link' }[kind];
   const r = await sendMessage(m.channel_id, { allowed_mentions: { parse: [] },
     components: [{ type: 1, components: [{ type: 2, style: kind === 'clear' ? 4 : 2, label, custom_id: 'panel:' + id }] }] });
@@ -795,34 +811,38 @@ async function onOwnerCommand(g, m) {
     return true;
   }
 
-  // дальше — команды над игроком: @упоминание или id
-  const idm = /^(?:<@!?(\w+)>|(\d{5,}))\s*([\s\S]*)$/.exec(args);
-  if (!idm) { await confirm(m.channel_id, 'Mention the member: ' + PREFIX + cmd + ' @user'); return true; }
-  const uid = idm[1] || idm[2], rest = idm[3].trim();
-  const mention = (m.mentions || []).find(u => u && u.id === uid);
-  const target = mention || { id: uid };
+  // дальше — команды над игроком: имя, id или упоминание
+  const tg = targetOf(args);
+  if (!tg) { await confirm(m.channel_id, 'Who? ' + PREFIX + cmd + ' name (a name, a user ID or a mention).'); return true; }
+  const byName = nameOf(m.author, m.member);
   if (cmd === 'unban') {
+    const b = await findBanned(g, tg.ref, tg.id);
+    if (b.error) { await confirm(m.channel_id, whoText(b, 'among the banned')); return true; }
+    const uid = b.id, who = b.name;
     const r = await api('DELETE', '/guilds/' + g.id + '/bans/' + uid, null, { reason: 'Unbanned by the owner' });
     if (ok(r) || r.status === 404) forgetBan(g.id, uid);
-    if (ok(r)) await modlog(g, { caseNo: ++state.cases, title: 'Ban lifted', color: R.COLORS.ok, user: uid, by: m.author.id });
-    await confirm(m.channel_id, ok(r) ? '<@' + uid + '> is unbanned.' : r.status === 404 ? '<@' + uid + '> is not banned.' : 'I could not unban them.');
+    if (ok(r)) await modlog(g, { caseNo: ++state.cases, title: 'Ban lifted', color: R.COLORS.ok, user: uid, userName: who, by: m.author.id, byName });
+    await confirm(m.channel_id, ok(r) ? '**' + plainName(who) + '** is unbanned.' : r.status === 404 ? '**' + plainName(who) + '** is not banned.' : 'I could not unban them.');
     return true;
   }
+  const found = await findMember(g, tg.ref, m, tg.id);
+  if (found.error) { await confirm(m.channel_id, whoText(found, 'on the server')); return true; }
+  const uid = found.id, target = found.user, rest = tg.rest, who = nameOf(found.user, found.member), shown = plainName(who);
   // себя (владельца Discord наказать не даёт) и ботов — незачем; администраторов — можно, кроме мьюта
-  const roles = mention && mention.member && mention.member.roles;
+  const roles = found.member && found.member.roles;
   if (uid === g.owner || (me && uid === me.id) || target.bot) {
     await confirm(m.channel_id, 'The server owner and bots cannot be punished.');
     return true;
   }
   const admin = !!(memberPerms(g, uid, roles) & PERM.ADMIN);
-  const until = Date.parse(mention && mention.member && mention.member.communication_disabled_until) || 0;
+  const until = Date.parse(found.member && found.member.communication_disabled_until) || 0;
 
   if (cmd === 'warn') {
     const rm = /^(\d{1,2})\b\s*([\s\S]*)$/.exec(rest);
     const rule = rm && R.ruleById(Number(rm[1])) ? Number(rm[1]) : 0;
     const reason = (rule ? rm[2] : rest).trim().slice(0, 300);
     const f = { kind: 'manual', rule, weight: 1, note: reason || (rule ? R.ruleById(rule).title : 'Warned by the owner') };
-    await punish(g, target, f, { step: { type: 'warn' }, by: m.author.id, channel: m.channel_id, until, roles });
+    await punish(g, target, f, { step: { type: 'warn' }, by: m.author.id, byName, name: who, channel: m.channel_id, until, roles });
     return true;
   }
   if (cmd === 'mute') {
@@ -839,9 +859,9 @@ async function onOwnerCommand(g, m) {
         description: 'You were muted in **' + g.name + '** for ' + d[0] + '.',
         fields: [{ name: 'Reason', value: reason }],
         footer: { text: 'If you think this is a mistake, message the owner.' } }] }).catch(() => {});
-      await modlog(g, { caseNo, title: 'Mute for ' + d[0], color: R.COLORS.mute, user: uid, by: m.author.id, reason });
+      await modlog(g, { caseNo, title: 'Mute for ' + d[0], color: R.COLORS.mute, user: uid, userName: who, by: m.author.id, byName, reason });
     }
-    await confirm(m.channel_id, done ? '<@' + uid + '> is muted for ' + d[0] + '.' : 'I could not mute them: my role must be above theirs and have Timeout Members.');
+    await confirm(m.channel_id, done ? '**' + shown + '** is muted for ' + d[0] + '.' : 'I could not mute them: my role must be above theirs and have Timeout Members.');
     return true;
   }
   if (cmd === 'ban') {
@@ -859,20 +879,65 @@ async function onOwnerCommand(g, m) {
     const done = await ban(g, uid, 'Case ' + caseNo + ': ' + reason);
     if (done) {
       setUnban(g.id, uid, ms);
-      await modlog(g, { caseNo, title: what, color: R.COLORS.ban, user: uid, by: m.author.id, reason });
+      await modlog(g, { caseNo, title: what, color: R.COLORS.ban, user: uid, userName: who, by: m.author.id, byName, reason });
     }
-    await confirm(m.channel_id, done ? '<@' + uid + '> is banned ' + (ms ? 'for ' + R.duration(ms) : 'permanently') + '.'
+    await confirm(m.channel_id, done ? '**' + shown + '** is banned ' + (ms ? 'for ' + R.duration(ms) : 'permanently') + '.'
                                      : 'I could not ban them: my role must be above theirs and have Ban Members.');
     return true;
   }
   if (cmd === 'unmute') {
     const done = await timeout(g, uid, 0, 'Unmuted by the owner');
-    if (done) { await modlog(g, { caseNo: ++state.cases, title: 'Mute lifted', color: R.COLORS.ok, user: uid, by: m.author.id }); save(); }
-    await confirm(m.channel_id, done ? '<@' + uid + '> can talk again.' : 'I could not unmute them.');
+    if (done) { await modlog(g, { caseNo: ++state.cases, title: 'Mute lifted', color: R.COLORS.ok, user: uid, userName: who, by: m.author.id, byName }); save(); }
+    await confirm(m.channel_id, done ? '**' + shown + '** can talk again.' : 'I could not unmute them.');
     return true;
   }
   return true;
 }
+
+/* Кого касается команда: имя (ник на сервере, имя или логин — без «@»), id или упоминание. Лучше имя или id:
+   упоминание в тексте команды пингует человека сразу при отправке — раньше, чем бот успеет удалить сообщение.
+   Имя с пробелами пишут в кавычках. */
+const targetOf = text => {
+  const mm = /^\s*(?:"([^"]+)"|“([^”]+)”|<@!?(\w+)>|(\S+))\s*([\s\S]*)$/.exec(String(text || ''));
+  return mm ? { ref: mm[1] || mm[2] || mm[3] || mm[4], rest: mm[5].trim(), id: !!mm[3] } : null;
+};
+const memberNames = mb => [mb.nick, mb.user && mb.user.global_name, mb.user && mb.user.username].filter(Boolean).map(x => String(x).toLowerCase());
+
+// участник сервера по имени, id или упоминанию: { id, user, member } либо { error: 'none' | 'several', ref, names }
+async function findMember(g, ref, m, isId) {
+  ref = String(ref || '').trim().replace(/^@/, '');
+  if (!ref) return { error: 'none', ref };
+  if (isId || /^\d{5,}$/.test(ref)) {
+    const ment = (m.mentions || []).find(u => u && u.id === ref);
+    if (ment) return { id: ref, user: ment, member: ment.member || null };           // данные пришли вместе с упоминанием
+    const r = await api('GET', '/guilds/' + g.id + '/members/' + ref);
+    const mb = ok(r) && r.body && r.body.user ? r.body : null;
+    return { id: ref, user: mb ? mb.user : { id: ref }, member: mb };                // ушёл с сервера — всё равно можно по id
+  }
+  const r = await api('GET', '/guilds/' + g.id + '/members/search?query=' + encodeURIComponent(ref.slice(0, 32)) + '&limit=10');
+  const list = ok(r) && Array.isArray(r.body) ? r.body.filter(x => x && x.user) : [];
+  const exact = list.filter(mb => memberNames(mb).indexOf(ref.toLowerCase()) !== -1);
+  const pick = exact.length ? exact : list;
+  if (pick.length === 1) return { id: pick[0].user.id, user: pick[0].user, member: pick[0] };
+  return { error: pick.length ? 'several' : 'none', ref, names: pick.slice(0, 5).map(mb => nameOf(mb.user, mb)) };
+}
+
+// забаненный по имени или id: { id, name } либо { error }
+async function findBanned(g, ref, isId) {
+  ref = String(ref || '').trim().replace(/^@/, '');
+  if (isId || /^\d{5,}$/.test(ref)) return { id: ref, name: ref };
+  const r = await api('GET', '/guilds/' + g.id + '/bans?limit=1000');
+  const list = ok(r) && Array.isArray(r.body) ? r.body.filter(x => x && x.user) : [];
+  const low = ref.toLowerCase(), nm = b => [b.user.global_name, b.user.username].filter(Boolean).map(x => String(x).toLowerCase());
+  const exact = list.filter(b => nm(b).indexOf(low) !== -1), pre = list.filter(b => nm(b).some(n => n.indexOf(low) === 0));
+  const pick = exact.length ? exact : pre;
+  if (pick.length === 1) return { id: pick[0].user.id, name: nameOf(pick[0].user) };
+  return { error: pick.length ? 'several' : 'none', ref, names: pick.slice(0, 5).map(b => nameOf(b.user)) };
+}
+
+const whoText = (e, where) => e.error === 'several'
+  ? 'Several members match: ' + e.names.map(plainName).join(', ') + '. Write the exact name or the user ID.'
+  : 'I cannot find **' + plainName(e.ref) + '** ' + where + '. Write the exact name or the user ID.';
 
 /* ---------- чистка канала: «!clear 50», «!clear all», «!clear 20 @игрок» ----------
    Сообщения моложе 14 дней Discord даёт удалять пачками по 100, старые —
@@ -884,33 +949,38 @@ const clearing = new Map();        // канал -> { guild, stop }
 const msgTime = id => Number((BigInt(id) >> 22n) + DISCORD_EPOCH);
 
 async function clearCommand(g, m, args) {
-  const a = String(args || '').toLowerCase();
-  if (/^stop\b/.test(a)) {
+  const a = String(args || '').trim();
+  if (/^stop\b/i.test(a)) {
     let n = 0;
     for (const job of clearing.values()) if (job.guild === g.id) { job.stop = true; n++; }
     await confirm(m.channel_id, n ? 'Stopped.' : 'Nothing is being deleted now.');
     return true;
   }
-  // строго: число или all и, по желанию, один игрок. Что-то непонятное (роль,
-  // опечатка в упоминании) — не «все подряд», а подсказка
-  let count = null, user = null, bad = false;
-  for (const w of a.split(/\s+/).filter(Boolean)) {
-    const u = /^(?:<@!?(\d+)>|(\d{15,}))$/.exec(w);
-    if (u && !user) user = u[1] || u[2];
-    else if (/^(?:all|все|всё|[1-9]\d{0,5})$/.test(w) && count === null) count = w;
+  // строго: число или all и, по желанию, один игрок (имя, id или упоминание). Что-то непонятное — не «все подряд», а подсказка
+  let count = null, ref = '', refId = false, bad = false;
+  for (const mm of a.matchAll(/"([^"]+)"|“([^”]+)”|(\S+)/g)) {
+    const w = mm[1] || mm[2] || mm[3], quoted = !mm[3];
+    if (!quoted && /^(?:all|все|всё|[1-9]\d{0,5})$/i.test(w) && count === null) count = w.toLowerCase();
+    else if (!ref) { const id = /^<@!?(\w+)>$/.exec(w); ref = id ? id[1] : w; refId = !!id; }
     else bad = true;
   }
   if (bad || count === null) {
-    await confirm(m.channel_id, 'How many? ' + PREFIX + 'clear 50, ' + PREFIX + 'clear all, or ' + PREFIX + 'clear 20 @user.');
+    await confirm(m.channel_id, 'How many? ' + PREFIX + 'clear 50, ' + PREFIX + 'clear all, or ' + PREFIX + 'clear 20 name.');
     return true;
   }
+  let user = null, userName = '';
+  if (ref) {
+    const f = await findMember(g, ref, m, refId);
+    if (f.error) { await confirm(m.channel_id, whoText(f, 'on the server')); return true; }
+    user = f.id; userName = nameOf(f.user, f.member);
+  }
   if (clearing.has(m.channel_id)) { await confirm(m.channel_id, 'Already deleting here. ' + PREFIX + 'clear stop to stop.'); return true; }
-  if (!/^\d+$/.test(count)) { await openPanel(g, m, 'clear', { user }); return true; }      // «all» — сначала спросить
-  startClear(g, m.channel_id, Number(count), user, m.author.id, [m.id]);
+  if (!/^\d+$/.test(count)) { await openPanel(g, m, 'clear', { user, userName }); return true; }      // «all» — сначала спросить
+  startClear(g, m.channel_id, Number(count), user, m.author.id, [m.id], userName, nameOf(m.author, m.member));
   return true;
 }
 
-function startClear(g, channel, limit, user, by, skip) {
+function startClear(g, channel, limit, user, by, skip, userName, byName) {
   if (clearing.has(channel)) return;
   const job = { guild: g.id, stop: false };
   clearing.set(channel, job);
@@ -918,7 +988,7 @@ function startClear(g, channel, limit, user, by, skip) {
     .then(async n => {
       await confirm(channel, (job.stop ? 'Stopped. ' : '') + 'Deleted ' + n + (n === 1 ? ' message.' : ' messages.'));
       if (n) await modlog(g, { caseNo: ++state.cases, title: 'Deleted ' + n + (n === 1 ? ' message' : ' messages'), color: R.COLORS.neutral,
-                               user: user || by, by, channel, reason: user ? 'Only messages of this member' : undefined });
+                               user: user || by, userName: user ? userName : byName, by, byName, channel, reason: user ? 'Only messages of this member' : undefined });
       save();
     })
     .catch(e => log('clear failed:', e.message))
@@ -1252,9 +1322,9 @@ async function onInteraction(i) {
     if (p.kind === 'stats') return reply(i, card('**Live server stats** (updates every second):\n' + require('./serversInfo.js').link() +
       '\n\nKeep this link private. **' + PREFIX + 'stats new** makes a new one and the old one stops working.'));
     if (p.kind === 'clear') {
-      await reply(i, card('Deleting all messages' + (p.data.user ? ' of <@' + p.data.user + '>' : '') + ' in <#' + p.channel + '>. ' +
+      await reply(i, card('Deleting all messages' + (p.data.user ? ' of **' + plainName(p.data.userName || p.data.user) + '**' : '') + ' in <#' + p.channel + '>. ' +
                           'Type ' + PREFIX + 'clear stop to stop.'));
-      startClear(g, p.channel, Infinity, p.data.user, uid, [p.message]);
+      startClear(g, p.channel, Infinity, p.data.user, uid, [p.message], p.data.userName, '');
       return;
     }
     return;
