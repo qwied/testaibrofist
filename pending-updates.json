@@ -1,4 +1,9 @@
 {
   "base": "1d36cf7d472efee21b85d5cab98507e46e1a865a",
-  "updates": []
+  "updates": [
+    {
+      "title": "Discord warning form",
+      "text": "The warn command opens a form where the member, the rule and the reason are required."
+    }
+  ]
 }

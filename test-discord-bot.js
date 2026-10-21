@@ -18,6 +18,8 @@
      за время простоя; потеря сообщений подключением — повод его переоткрыть;
    - бот никого не пингует: предупреждения в канале и ответы на команды — обычным
      текстом с именем, без упоминаний; цель команды — имя (без @), id или упоминание;
+   - «!warn» — кнопка с формой, где обязательны игрок, правило и причина; в канале
+     предупреждение называет правило и причину;
    - секретные команды владельца (начало задаётся на хостинге, здесь «!qa»):
      news, updates, warn, mute, clear, help — сообщение с командой исчезает,
      без секретного начала не срабатывают, окно видит только
@@ -83,7 +85,8 @@ const server = http.createServer((req, res) => {
     try { json = body ? JSON.parse(body) : null; } catch (e) {}
     // запросы второго канала чтения (раз в секунду по каждому каналу) в журнал вызовов не пишем: он нужен для того, что бот сделал
     const polled = req.method === 'GET' && /^\/channels\/(\w+)\/messages\?(?:after=\w+&)?limit=(?:1|50)$/.test(p) && !history.has((/^\/channels\/(\w+)/.exec(p) || [])[1]);
-    if (polled) pollCount++;
+    const threadPoll = req.method === 'GET' && /^\/guilds\/\w+\/threads\/active$/.test(p);
+    if (polled || threadPoll) pollCount++;
     else calls.push({ method: req.method, path: p, body: json, raw: body, ct: req.headers['content-type'] || '',
                       reason: req.headers['x-audit-log-reason'], t: Date.now() });
     const send = (status, obj) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(obj === undefined ? '' : JSON.stringify(obj)); };
@@ -594,6 +597,23 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const panelOf = list => { const pm = find(list, 'POST', /^\/channels\/300\/messages$/).find(x => x.body && x.body.components);
     return pm && { msg: pm, id: pm.body.components[0].components[0].custom_id }; };
 
+  // «!warn»: бот ставит кнопку; нажатие открывает форму. Возвращает кнопку и окно
+  const openWarn = async (text, classic) => {
+    const t0 = Date.now();
+    say(OWNER, '!qawarn' + (text ? ' ' + text : ''));
+    await waitFor(() => panelOf(since(t0)));
+    const pn = panelOf(since(t0)), t1 = Date.now(), b = press(OWNER, pn.id);
+    await waitFor(() => cb(since(t1), b).length >= (classic ? 2 : 1));
+    return { panel: pn, modal: cb(since(t1), b)[classic ? 1 : 0].body };
+  };
+  // отправка формы: user — { id, username, global_name } или null; rule — число или null; reason — текст
+  const warnSend = (user, rule, reason) => submit('warn:' + CH.general, [
+    { type: 18, component: { type: 5, custom_id: 'user', values: user ? [user.id] : [] } },
+    { type: 18, component: { type: 3, custom_id: 'rule', values: rule === null ? [] : [String(rule)] } },
+    { type: 18, component: { type: 4, custom_id: 'reason', value: reason } }],
+    { users: user ? { [user.id]: user } : {}, members: user ? { [user.id]: { roles: user.roles || [], communication_disabled_until: user.until } } : {} });
+  const cardOf = (list, id) => { const x = find(list, 'PATCH', new RegExp('tk' + id + '/messages/@original$'))[0]; return x ? JSON.stringify(x.body) : ''; };
+
   t = Date.now();
   const cmd = say(OWNER, '!qanews');
   await waitFor(() => panelOf(since(t)));
@@ -701,19 +721,82 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + sid3 + '/messages/@original$')).length);
   ok('каналы новостей запомнены', bot.feedChannels().join() === CH.updates + ',' + CH.news2, bot.feedChannels().join());
 
+  // участники сервера для поиска по имени и список банов (дальше они же нужны командам по имени)
+  directory.push(
+    { user: { id: '70001', username: 'alice_p', global_name: 'Alice' }, nick: null, roles: [] },
+    { user: { id: '70002', username: 'bigbob', global_name: 'Bob' }, nick: 'Big Bob', roles: [] },
+    { user: { id: '70003', username: 'sam', global_name: 'Sam' }, nick: null, roles: [] },
+    { user: { id: '70004', username: 'samantha', global_name: 'Samantha' }, nick: null, roles: [] },
+    { user: { id: '70005', username: 'quitter', global_name: null }, nick: null, roles: [] });
+  banList.push({ user: { id: '71000', username: 'banned_guy', global_name: 'Banned Guy' } });
+  console.log('\n«!warn» — форма, где всё обязательное:');
   t = Date.now();
-  const w = say(OWNER, '!qawarn <@U2> 6 selling coins', { mentions: [{ id: 'U2', member: { roles: [] } }] });
+  const wf = await openWarn('');
+  const wcomps = wf.modal.data.components, wtypes = wcomps.map(x => x.type + ':' + x.component.type).join(',');
+  const wopts = wcomps[1].component.options.map(o => o.value + '=' + o.label);
+  ok('«!warn» — на месте команды кнопка «Open the warning form» (без текста и упоминаний)', wf.panel.msg.body.components[0].components[0].label === 'Open the warning form' &&
+     !wf.panel.msg.body.content && wf.panel.msg.body.allowed_mentions.parse.length === 0);
+  ok('по кнопке открывается форма: игрок (список участников), правило (список), причина (текст)', wf.modal.type === 9 && wf.modal.data.title === 'Warning' && wtypes === '18:5,18:3,18:4', wtypes);
+  ok('все три поля обязательные; выбрать нужно ровно одного игрока и одно правило', wcomps.every(x => x.component.required === true) &&
+     wcomps[0].component.min_values === 1 && wcomps[0].component.max_values === 1 && wcomps[1].component.min_values === 1 && wcomps[1].component.max_values === 1);
+  ok('в списке правил — все 7 по номерам и «0. Other»', wopts.length === 8 && wopts[0] === '1=1. No spam' && wopts[6] === '7=7. No other people\'s IP addresses' && wopts[7] === '0=0. Other (explain in the reason)', wopts.join(' | '));
+  ok('причина — не короче 3 знаков, не длиннее 300', wcomps[2].component.min_length === 3 && wcomps[2].component.max_length === 300 && wcomps[2].component.style === 2);
+  ok('игрок в форму не вписан, если его не называли', !wcomps[0].component.default_values);
+  t = Date.now();
+  const wsid = warnSend({ id: 'U2', username: 'playerU2' }, 6, 'продавал монеты в чате за деньги');
   await waitFor(() => find(since(t), 'POST', /^\/channels\/dmU2\/messages$/).length);
-  await sleep(150);
+  await sleep(250);
   c = since(t);
   const warnDm = JSON.stringify(find(c, 'POST', /^\/channels\/dmU2\/messages$/)[0].body);
-  ok('«!warn @игрок 6 причина» — только предупреждение с правилом и причиной от владельца, без мьюта и без баллов',
-     find(c, 'DELETE', new RegExp('/messages/' + w.id + '$')).length === 1 && find(c, 'PATCH', /members\/U2$/).length === 0 &&
-     /6\. No selling accounts or coins for real money/.test(warnDm) && /selling coins/.test(warnDm) && /gave you a warning/.test(warnDm) && !/strike/i.test(warnDm));
+  const warnNote = find(c, 'POST', /^\/channels\/300\/messages$/).find(x => /received a warning/.test(x.body.content || ''));
+  ok('форма отправлена — игроку в личку: правило, причина, что предупреждение от владельца; мьюта нет', /6\. No selling accounts or coins for real money/.test(warnDm) &&
+     /продавал монеты в чате за деньги/.test(warnDm) && /gave you a warning/.test(warnDm) && !/strike/i.test(warnDm) && find(c, 'PATCH', /members\/U2$/).length === 0);
+  ok('в канале предупреждение называет правило и причину, а не просто «Warning»; без упоминания', warnNote && warnNote.body.content ===
+     '**playerU2**, you received a warning for rule 6, no selling accounts or coins for real money: продавал монеты в чате за деньги.' &&
+     warnNote.body.allowed_mentions.parse.length === 0 && !/<@/.test(warnNote.body.content), warnNote && warnNote.body.content);
+  ok('владельцу в ответ (только ему): кого, какое правило, какая причина', /Warning sent to \*\*playerU2\*\*/.test(cardOf(c, wsid)) &&
+     /Rule 6: No selling accounts or coins for real money/.test(cardOf(c, wsid)) && /Reason: продавал монеты/.test(cardOf(c, wsid)), cardOf(c, wsid).slice(0, 160));
+  ok('в mod-log — случай с правилом и причиной', /Warning/.test(JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/)[0].body)) &&
+     /6\. No selling accounts/.test(JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/)[0].body)));
   t = Date.now();
-  say(OWNER, '!qawarn <@U3> again', { mentions: [{ id: 'U3', member: { roles: [], communication_disabled_until: new Date(Date.now() + 7 * 86400000).toISOString() } }] });
-  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
-  ok('предупреждение никого не мьютит и уже действующий мьют не трогает', find(since(t), 'PATCH', /members\/U3$/).length === 0);
+  const wsid2 = warnSend({ id: 'U3', username: 'playerU3', until: new Date(Date.now() + 7 * 86400000).toISOString() }, 0, 'грубил в чате');
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/dmU3\/messages$/).length);
+  await sleep(250);
+  const noteOther = find(since(t), 'POST', /^\/channels\/300\/messages$/).find(x => /received a warning/.test(x.body.content || ''));
+  ok('«0. Other» — предупреждение без номера правила, только причина; уже действующий мьют не трогает', noteOther && noteOther.body.content === '**playerU3**, you received a warning: грубил в чате.' &&
+     find(since(t), 'PATCH', /members\/U3$/).length === 0 && /Rule: other/.test(cardOf(since(t), wsid2)));
+  t = Date.now();
+  const wsid3 = warnSend(null, null, '');
+  await waitFor(() => cardOf(since(t), wsid3));
+  ok('пустая форма не уходит (Discord и так не даёт, бот проверяет ещё раз): назван каждый недостающий пункт', cardOf(since(t), wsid3).indexOf('Not sent: fill in the member, the rule, the reason.') !== -1 &&
+     find(since(t), 'POST', /^\/channels\/dm\w+\/messages$/).length === 0);
+  t = Date.now();
+  const wsid4 = warnSend({ id: 'U6', username: 'playerU6' }, null, 'ok');
+  await waitFor(() => cardOf(since(t), wsid4));
+  ok('нет правила и слишком короткая причина — тоже не уходит, названо что именно', cardOf(since(t), wsid4).indexOf('Not sent: fill in the rule, the reason.') !== -1 &&
+     find(since(t), 'POST', /^\/channels\/dmU6\/messages$/).length === 0);
+  t = Date.now();
+  const wsid5 = warnSend({ id: OWNER, username: 'qwied' }, 1, 'тест на себе');
+  await waitFor(() => cardOf(since(t), wsid5));
+  ok('себя (владельца) и ботов предупреждать нельзя', /cannot be punished/.test(cardOf(since(t), wsid5)) && find(since(t), 'POST', /^\/channels\/dm900\/messages$/).length === 0);
+  t = Date.now();
+  const wsid6 = warnSend({ id: 'U9', username: 'playerU9', roles: [MOD_ROLE] }, 2, 'ссылка на чужой сервер');
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/dmU9\/messages$/).length);
+  ok('модератора предупредить можно, как всех', find(since(t), 'POST', /^\/channels\/dmU9\/messages$/).length === 1 && /2\. No invites/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/dmU9\/messages$/)[0].body)));
+  t = Date.now();
+  rejectNewModal = true;
+  const wc = await openWarn('', true);
+  rejectNewModal = false;
+  const wcrow = wc.modal.data.components.map(x => x.type + ':' + x.components[0].custom_id + ':' + x.components[0].required).join(',');
+  ok('если Discord не покажет новую форму — простая: те же три поля текстом, все обязательные', wc.modal.type === 9 && wcrow === '1:user:true,1:rule:true,1:reason:true', wcrow);
+  t = Date.now();
+  const wsid7 = submit('warn:' + CH.general, [
+    { type: 1, components: [{ type: 4, custom_id: 'user', value: 'quitter' }] },
+    { type: 1, components: [{ type: 4, custom_id: 'rule', value: '3' }] },
+    { type: 1, components: [{ type: 4, custom_id: 'reason', value: 'картинка 18+ в чате' }] }]);
+  await waitFor(() => cardOf(since(t), wsid7));
+  ok('простая форма: игрок по имени из списка сервера, правило цифрой, причина текстом', /Warning sent to \*\*quitter\*\*/.test(cardOf(since(t), wsid7)) && /Rule 3: No adult content/.test(cardOf(since(t), wsid7)) &&
+     find(since(t), 'POST', /^\/channels\/dm70005\/messages$/).length === 1);
   t = Date.now();
   say(OWNER, '!qamute <@U5> 1h flooding', { mentions: [{ id: 'U5', member: { roles: [] } }] });
   await waitFor(() => find(since(t), 'PATCH', /members\/U5$/).length);
@@ -725,10 +808,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('подтверждение в канале без пинга, исчезает само', conf && conf.body.allowed_mentions.parse.length === 0);
   t = Date.now();
   say(OWNER, '!qamute <@' + OWNER + '> 1h');
-  say(OWNER, '!qawarn <@U9> x', { mentions: [{ id: 'U9', member: { roles: [MOD_ROLE] } }] });
   await sleep(300);
-  ok('себя наказать нельзя; модератора можно', find(since(t), 'PATCH', new RegExp('members/' + OWNER + '$')).length === 0 &&
-     find(since(t), 'POST', /^\/channels\/dmU9\/messages$/).length === 1);
+  ok('себя наказать нельзя', find(since(t), 'PATCH', new RegExp('members/' + OWNER + '$')).length === 0);
   t = Date.now();
   say(OWNER, '!qastrikes <@U1>', { mentions: [{ id: 'U1' }] });
   say(OWNER, '!qapardon <@U1>', { mentions: [{ id: 'U1' }] });
@@ -991,13 +1072,6 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('свой текст правил бот потом сам не меняет', bot._test.state().guilds[G].rules.custom === true);
 
   console.log('\nкоманды по имени — без упоминаний и без пингов:');
-  directory.push(
-    { user: { id: '70001', username: 'alice_p', global_name: 'Alice' }, nick: null, roles: [] },
-    { user: { id: '70002', username: 'bigbob', global_name: 'Bob' }, nick: 'Big Bob', roles: [] },
-    { user: { id: '70003', username: 'sam', global_name: 'Sam' }, nick: null, roles: [] },
-    { user: { id: '70004', username: 'samantha', global_name: 'Samantha' }, nick: null, roles: [] },
-    { user: { id: '70005', username: 'quitter', global_name: null }, nick: null, roles: [] });
-  banList.push({ user: { id: '71000', username: 'banned_guy', global_name: 'Banned Guy' } });
   const sayIn = (list, re) => find(list, 'POST', /^\/channels\/300\/messages$/).map(x => x.body && x.body.content || '').find(x => re.test(x));
   t = Date.now();
   const cmdName = say(OWNER, '!qamute alice_p 1h being loud');
@@ -1014,19 +1088,26 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await sleep(200);
   ok('имя с пробелами — в кавычках, находится по нику на сервере', sayIn(since(t), /muted for 6 hours/) === '**Big Bob** is muted for 6 hours.');
   t = Date.now();
-  say(OWNER, '!qawarn alice 2 invite');
-  await waitFor(() => find(since(t), 'POST', /^\/channels\/dm70001\/messages$/).length);
-  ok('«!warn alice 2 invite» — регистр не важен, начало имени подходит, если оно одно: предупреждение с правилом 2', /2\. No invites to other Discord servers/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/dm70001\/messages$/)[0].body)) &&
-     find(since(t), 'PATCH', /members\/70001$/).length === 0);
+  say(OWNER, '!qamute ALICE 1h');
+  await waitFor(() => find(since(t), 'PATCH', /members\/70001$/).length);
+  ok('«!mute ALICE 1h» — регистр не важен, начало имени подходит, если оно одно', find(since(t), 'PATCH', /members\/70001$/).length === 1);
   t = Date.now();
-  say(OWNER, '!qawarn sa test');
+  say(OWNER, '!qamute sa 1h');
   await waitFor(() => sayIn(since(t), /Several/));
   ok('несколько подходящих — бот не гадает, а перечисляет и просит точное имя или id', sayIn(since(t), /Several/) === 'Several members match: Sam, Samantha. Write the exact name or the user ID.' &&
-     find(since(t), 'POST', /^\/channels\/dm7000\d\/messages$/).length === 0);
+     find(since(t), 'PATCH', /members\/7000\d$/).length === 0);
   t = Date.now();
-  say(OWNER, '!qawarn sam test');
-  await waitFor(() => find(since(t), 'POST', /^\/channels\/dm70003\/messages$/).length);
-  ok('точное имя выбирает одного из похожих (sam, а не samantha)', find(since(t), 'POST', /^\/channels\/dm70004\/messages$/).length === 0);
+  say(OWNER, '!qamute sam 1h');
+  await waitFor(() => find(since(t), 'PATCH', /members\/70003$/).length);
+  await sleep(150);
+  ok('точное имя выбирает одного из похожих (sam, а не samantha)', find(since(t), 'PATCH', /members\/70004$/).length === 0);
+  t = Date.now();
+  const pf = await openWarn('alice');
+  const pf2 = await openWarn('sa');
+  const pf3 = await openWarn('sam');
+  const dv = x => x.modal.data.components[0].component.default_values;
+  ok('«!warn alice» — игрок сразу вписан в форму; «!warn sa» (их двое) — не угадывает, форма пустая; «!warn sam» — точное имя', dv(pf) && dv(pf)[0].id === '70001' && dv(pf)[0].type === 'user' &&
+     !dv(pf2) && dv(pf3) && dv(pf3)[0].id === '70003');
   t = Date.now();
   say(OWNER, '!qamute nobody 1h');
   await waitFor(() => sayIn(since(t), /cannot find/));
@@ -1070,7 +1151,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bid = press(OWNER, panel.id);
   await waitFor(() => cb(since(t), bid).length);
   const helpText = JSON.stringify(cb(since(t), bid)[0].body);
-  ok('справка: цель команды — имя без @, объяснено, почему не упоминание, и про кавычки', /mute name 1h/.test(helpText) && !/@user/.test(helpText) &&
+  ok('справка: «!warn» — форма с обязательными полями; цель команды — имя без @, объяснено, почему не упоминание, и про кавычки', /warn\*\* - open the warning form/.test(helpText) && /mute name 1h/.test(helpText) && !/@user/.test(helpText) &&
      /pings the person before the bot can delete/.test(helpText) && /in quotes/.test(helpText));
 
   console.log('\nбан и разбан:');

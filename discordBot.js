@@ -320,9 +320,11 @@ async function punish(g, user, f, ctx) {
   }
 
   if (ctx.channel && !ctx.silent && (step.type !== 'ban' || blocked)) {
-    const what = ctx.by ? 'you received a warning' : 'your message was removed';
-    await notice(ctx.channel, ctx.name || nameOf(user), what + (rule ? ': rule ' + rule.id + ', ' + rule.title.toLowerCase() : '') +
-                 '. ' + action + '.').catch(() => {});
+    // предупреждение владельца: за какое правило и почему; автоматическое: что сделано с сообщением
+    const line = ctx.by
+      ? 'you received a warning' + (rule ? ' for rule ' + rule.id + ', ' + rule.title.toLowerCase() : '') + ': ' + why.replace(/[.!?\s]+$/, '') + '.'
+      : 'your message was removed' + (rule ? ': rule ' + rule.id + ', ' + rule.title.toLowerCase() : '') + '. ' + action + '.';
+    await notice(ctx.channel, ctx.name || nameOf(user), line).catch(() => {});
   }
   await modlog(g, { caseNo, title: action + (done ? '' : ' (failed: no permission)'), color: color(step),
                     user: user.id, userName: ctx.name || (user.username || user.global_name ? nameOf(user) : ''), by: ctx.by, byName: ctx.byName,
@@ -708,7 +710,7 @@ const HELP = [
   '**' + PREFIX + 'news** - write a post: channel, title, text, up to 4 images and a link button',
   '**' + PREFIX + 'updates** - choose the channels for automatic game updates',
   '**' + PREFIX + 'rules** - post the server rules (English and Russian) and set extra banned words',
-  '**' + PREFIX + 'warn name reason** - send a warning (add a rule number to name the rule: ' + PREFIX + 'warn name 2 invite)',
+  '**' + PREFIX + 'warn** - open the warning form: the member, the rule and the reason are all required (' + PREFIX + 'warn name fills in the member)',
   '**' + PREFIX + 'mute name 1h reason** - mute for 10m, 1h, 6h, 1d, 3d or 7d',
   '**' + PREFIX + 'unmute name** - lift a mute',
   '**' + PREFIX + 'ban name 7d reason** - ban for 1d, 3d, 7d or 30d, without a duration - forever',
@@ -767,7 +769,7 @@ async function confirm(channel, text) {
 
 async function openPanel(g, m, kind, data) {
   const id = crypto.randomBytes(9).toString('hex');
-  const label = { news: 'Open the post editor', updates: 'Choose update channels', help: 'Show commands',
+  const label = { news: 'Open the post editor', updates: 'Choose update channels', help: 'Show commands', warn: 'Open the warning form',
                   rules: 'Open the rules editor',
                   clear: 'Delete all messages' + (data && data.userName ? ' of ' + String(data.userName).slice(0, 30) : '') + ' here',
                   stats: 'Show the stats link' }[kind];
@@ -797,6 +799,14 @@ async function onOwnerCommand(g, m) {
   api('DELETE', '/channels/' + m.channel_id + '/messages/' + m.id).catch(() => {});
 
   if (cmd === 'news' || cmd === 'updates' || cmd === 'help' || cmd === 'rules') { await openPanel(g, m, cmd); return true; }
+  if (cmd === 'warn') {
+    // «!warn» — кнопка с формой; «!warn имя» сразу вписывает игрока в форму, если он найден
+    let data = {};
+    const tg0 = targetOf(args);
+    if (tg0) { const f0 = await findMember(g, tg0.ref, m, tg0.id); if (!f0.error) data = { user: f0.id, userName: nameOf(f0.user, f0.member) }; }
+    await openPanel(g, m, 'warn', data);
+    return true;
+  }
   if (cmd === 'clear' || cmd === 'purge') return clearCommand(g, m, args);
   if (cmd === 'stats') {
     if (/^new$/i.test(args)) require('./serversInfo.js').rotate();   // старая ссылка сразу перестаёт работать
@@ -837,14 +847,6 @@ async function onOwnerCommand(g, m) {
   const admin = !!(memberPerms(g, uid, roles) & PERM.ADMIN);
   const until = Date.parse(found.member && found.member.communication_disabled_until) || 0;
 
-  if (cmd === 'warn') {
-    const rm = /^(\d{1,2})\b\s*([\s\S]*)$/.exec(rest);
-    const rule = rm && R.ruleById(Number(rm[1])) ? Number(rm[1]) : 0;
-    const reason = (rule ? rm[2] : rest).trim().slice(0, 300);
-    const f = { kind: 'manual', rule, weight: 1, note: reason || (rule ? R.ruleById(rule).title : 'Warned by the owner') };
-    await punish(g, target, f, { step: { type: 'warn' }, by: m.author.id, byName, name: who, channel: m.channel_id, until, roles });
-    return true;
-  }
   if (cmd === 'mute') {
     const dm2 = /^(\S+)\s*([\s\S]*)$/.exec(rest) || [];
     const d = DURATIONS[String(dm2[1] || '').toLowerCase()];
@@ -1067,6 +1069,60 @@ function updatesModalClassic(g) {
     row('channels', 'Channel names, separated by commas', 1, { max_length: 400, value: mine.join(', '),
                                                               placeholder: 'updates, news' })
   ] };
+}
+
+/* Предупреждение (команда warn): форма, где всё обязательно — кого, за какое
+   правило и что именно случилось. Игрок выбирается из списка сервера (или
+   вписан командой «!warn имя»), правило — из списка правил (или «0. Other»).
+   Простое окно (если Discord не покажет новое) — те же три поля текстом. */
+const warnRuleOptions = () => R.RULES.map(r => ({ label: (r.id + '. ' + r.title).slice(0, 100), value: String(r.id) }))
+  .concat([{ label: '0. Other (explain in the reason)', value: '0' }]);
+function warnModal(g, p) {
+  const user = { type: 5, custom_id: 'user', min_values: 1, max_values: 1, required: true, placeholder: 'Choose a member' };
+  if (p.data && p.data.user) user.default_values = [{ id: p.data.user, type: 'user' }];
+  return { custom_id: 'warn:' + p.channel, title: 'Warning', components: [
+    field('Member', 'Who gets the warning', user),
+    field('Rule', 'Which rule was broken', { type: 3, custom_id: 'rule', min_values: 1, max_values: 1, required: true,
+                                            placeholder: 'Choose a rule', options: warnRuleOptions() }),
+    field('Reason', 'What exactly happened: the member sees this', { type: 4, custom_id: 'reason', style: 2, required: true, min_length: 3, max_length: 300 })
+  ] };
+}
+function warnModalClassic(g, p) {
+  return { custom_id: 'warn:' + p.channel, title: 'Warning', components: [
+    row('user', 'Member (name or user ID)', 1, { required: true, max_length: 100, value: (p.data && p.data.userName) || '' }),
+    row('rule', 'Rule number (1-' + R.RULES.length + ', 0 - other)', 1, { required: true, min_length: 1, max_length: 1 }),
+    row('reason', 'Reason (the member sees this)', 2, { required: true, min_length: 3, max_length: 300 })
+  ] };
+}
+
+async function onWarnSubmit(i, g) {
+  await defer(i);
+  const v = modalValues(i), channel = String(i.data.custom_id).slice(5);
+  const reason = String(v.reason || '').trim().slice(0, 300);
+  const ruleRaw = String(Array.isArray(v.rule) ? v.rule[0] : v.rule || '').trim();
+  const rule = /^\d$/.test(ruleRaw) ? Number(ruleRaw) : -1;
+  let found = null;
+  if (Array.isArray(v.user)) {
+    const id = v.user[0], res = i.data.resolved || {};
+    if (id) found = { id, user: (res.users && res.users[id]) || { id }, member: (res.members && res.members[id]) || null };
+  } else if (String(v.user || '').trim()) {
+    found = await findMember(g, String(v.user).trim(), { mentions: [] });
+    if (found.error) return finish(i, card('Not sent. ' + whoText(found, 'on the server')));
+  }
+  // Discord сам не пускает пустое, но проверяем и здесь: без кого, правила и причины предупреждения нет
+  const missing = [];
+  if (!found) missing.push('the member');
+  if (rule < 0 || rule > R.RULES.length) missing.push('the rule');
+  if (reason.length < 3) missing.push('the reason');
+  if (missing.length) return finish(i, card('Not sent: fill in ' + missing.join(', ') + '.'));
+  const uid = found.id;
+  if (uid === g.owner || (me && uid === me.id) || found.user.bot) return finish(i, card('Not sent: the server owner and bots cannot be punished.'));
+  const who = nameOf(found.user, found.member), by = (i.member && i.member.user) || {};
+  const f = { kind: 'manual', rule, weight: 1, note: reason };
+  await punish(g, found.user, f, { step: { type: 'warn' }, by: by.id, byName: nameOf(by, i.member), name: who,
+                                   channel: g.channels.has(channel) ? channel : null, roles: found.member && found.member.roles });
+  const r = R.ruleById(rule);
+  return finish(i, card('Warning sent to **' + plainName(who) + '**.\n' + (r ? 'Rule ' + r.id + ': ' + r.title : 'Rule: other') + '\nReason: ' + reason));
 }
 
 /* Правила сервера (команда rules): канал, заголовок, правила по-английски
@@ -1318,6 +1374,7 @@ async function onInteraction(i) {
     if (p.kind === 'news') return showModal(i, newsModal(g, p), newsModalClassic(g, p));
     if (p.kind === 'updates') return showModal(i, updatesModal(g), updatesModalClassic(g));
     if (p.kind === 'rules') return showModal(i, rulesModal(g, p), rulesModalClassic(g, p));
+    if (p.kind === 'warn') return showModal(i, warnModal(g, p), warnModalClassic(g, p));
     if (p.kind === 'help') return reply(i, card(HELP));
     if (p.kind === 'stats') return reply(i, card('**Live server stats** (updates every second):\n' + require('./serversInfo.js').link() +
       '\n\nKeep this link private. **' + PREFIX + 'stats new** makes a new one and the old one stops working.'));
@@ -1332,6 +1389,7 @@ async function onInteraction(i) {
   if (i.type === 5 && cid.indexOf('news:') === 0) return onNewsSubmit(i, g);
   if (i.type === 5 && cid.indexOf('updates:') === 0) return onUpdatesSubmit(i, g);
   if (i.type === 5 && cid.indexOf('rules:') === 0) return onRulesSubmit(i, g);
+  if (i.type === 5 && cid.indexOf('warn:') === 0) return onWarnSubmit(i, g);
 }
 
 /* ---------- /servers текстом: запасной ответ ----------
