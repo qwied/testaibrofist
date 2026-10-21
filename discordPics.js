@@ -11,7 +11,13 @@ const R = require('./discordRules.js');
 
 const W = 1000;
 const STRIPE = ['#3b82f6', '#8b5cf6', '#10b981', '#ec4899'];      // полоса с превью сайта (preview.png)
-const ACCENT = { warn: '#eaa94a', mute: '#f0883e', ban: '#f26b6b', ok: '#3ccf7a', info: '#a3acba', none: '#a3acba' };
+// цвета наказаний: на светлом фоне темнее, чтобы читались
+const ACCENTS = {
+  dark: { warn: '#eaa94a', mute: '#f0883e', ban: '#f26b6b', ok: '#3ccf7a', info: '#a3acba', none: '#a3acba' },
+  light: { warn: '#b97706', mute: '#d9560b', ban: '#dc2626', ok: '#16a34a', info: '#6b7280', none: '#6b7280' }
+};
+// тема текущей карточки: tree() ставит её перед тем, как собрать разметку (сборка синхронная, до рисования)
+let ACCENT = ACCENTS.dark, THEME = 'dark';
 
 /* ---------- тексты ---------- */
 const S = {
@@ -137,7 +143,7 @@ const actColor = act => !act || act.type === 'none' ? ACCENT.none : ACCENT[act.t
 /* ---------- общие части ---------- */
 function kit(ui, lang) {
   const { el, txt, clean } = ui;
-  const t = ui.THEMES.dark;
+  const t = ui.THEMES[THEME] || ui.THEMES.dark;
   const L = (k, v) => say(lang, k, v);
   const stripe = () => el('div', { width: W, height: 8, flexShrink: 0 }, STRIPE.map(c => el('div', { flexGrow: 1, height: 8, backgroundColor: c })));
   const page = (...kids) => el('div', { width: W, flexDirection: 'column', fontFamily: ui.FONT_FAMILY, color: t.ink, backgroundColor: t.bg,
@@ -454,9 +460,11 @@ function alt(kind, d, lang) {
 
 const TREES = { action: actionTree, warns: warnsTree, warnsAll: warnsAllTree, rules: rulesTree, help: helpTree, stats: statsTree, info: infoTree };
 const KINDS = Object.keys(TREES);
-function tree(kind, data, ui) {
+function tree(kind, data, ui, theme) {
   const fn = TREES[kind];
   if (!fn) throw new Error('unknown card ' + kind);
+  THEME = theme === 'light' ? 'light' : 'dark';
+  ACCENT = ACCENTS[THEME];
   return fn(data || {}, langOf(data && data.lang), ui);
 }
 

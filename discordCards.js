@@ -320,7 +320,7 @@ async function drawNow(kind, data, theme, n) {
   // карточки бота (правила, наказания, справка...) — discordPics.js, высота по содержимому
   if (kind !== 'account' && kind !== 'servers') {
     const pics = require('./discordPics.js');
-    const svgText = await satori(pics.tree(kind, data, UI), { width: pics.W, fonts });
+    const svgText = await satori(pics.tree(kind, data, UI, theme), { width: pics.W, fonts });
     return Buffer.from(new Resvg(svgText, { fitTo: { mode: 'width', value: pics.W } }).render().asPng());
   }
   const { tree, height } = kind === 'account' ? profileTree(data, theme, n) : serversTree(data, theme);

@@ -744,6 +744,15 @@ const LANGS = [{ key: 'en', label: 'English', flag: '🇬🇧' }, { key: 'ru', l
 const langRow = (idOf, lang, current) => ({ type: 1, components: LANGS.map(l => Object.assign({ type: 2, style: l.key === lang ? 1 : 2, label: l.label,
   emoji: { name: l.flag }, custom_id: l.key === lang && current ? current : idOf(l.key) }, l.key === lang && current ? { disabled: true } : {})) });
 
+// тёмная и светлая тема карточки — вторым рядом кнопок (выбранная не нажимается)
+const THEME_BTN = { en: { dark: 'Dark theme', light: 'Light theme' }, ru: { dark: 'Тёмная тема', light: 'Светлая тема' } };
+const themeOfCard = t => t === 'light' ? 'light' : 'dark';
+/* Два ряда под картинкой: язык (флаги) и тема. idOf(язык, тема) — custom_id кнопки; у выбранных
+   кнопок id постоянный (prefix + '-lang' / '-theme'): они не нажимаются, а повторяться ids не могут. */
+const themeRow = (idOf, lang, theme, prefix) => ({ type: 1, components: ['dark', 'light'].map(x => Object.assign({ type: 2, style: x === theme ? 1 : 2,
+  label: THEME_BTN[lang][x], custom_id: x === theme ? prefix + '-theme' : idOf(lang, x) }, x === theme ? { disabled: true } : {})) });
+const picRows = (idOf, lang, theme, prefix) => [langRow(l => idOf(l, theme), lang, prefix + '-lang'), themeRow(idOf, lang, theme, prefix)];
+
 function keepCard(kind, data, gid) {
   const id = crypto.randomBytes(6).toString('hex'), now = Date.now();
   state.cards[id] = { k: kind, d: data, g: gid || null, at: now };
@@ -761,7 +770,10 @@ function avatarUrl(gid, user, member) {
   if (!user || !user.id) return null;
   if (member && member.avatar && gid) return cdnBase() + '/guilds/' + gid + '/users/' + user.id + '/avatars/' + member.avatar + '.png?size=128';
   if (user.avatar) return cdnBase() + '/avatars/' + user.id + '/' + user.avatar + '.png?size=128';
-  return null;
+  // своей аватарки нет — стандартная, какую Discord показывает всем: у новых имён по id, у старых по номеру после «#»
+  if (!/^\d+$/.test(String(user.id))) return null;
+  const n = user.discriminator && user.discriminator !== '0' ? Number(user.discriminator) % 5 : Number((BigInt(user.id) >> 22n) % 6n);
+  return cdnBase() + '/embed/avatars/' + n + '.png';
 }
 const avatars = new Map();           // ссылка -> { uri, until }
 async function avatarData(url) {
@@ -780,17 +792,18 @@ async function avatarData(url) {
   return uri;
 }
 
-async function renderCard(kind, data, lang) {
+async function renderCard(kind, data, lang, theme) {
+  theme = themeOfCard(theme);
   const d = Object.assign({}, data, { lang });
   if (d.avatarUrl) d.avatar = await avatarData(d.avatarUrl);
   if (Array.isArray(d.list)) d.list = await Promise.all(d.list.map(async x => x && x.avatarUrl ? Object.assign({}, x, { avatar: await avatarData(x.avatarUrl) }) : x));
-  try { return await cards.draw(kind, d, 'dark'); }
+  try { return await cards.draw(kind, d, theme); }
   catch (e) {
     if (!d.avatar && !(d.list || []).some(x => x && x.avatar)) throw e;
     // испорченная аватарка не должна ломать карточку — рисуем без неё
     delete d.avatar;
     if (Array.isArray(d.list)) d.list = d.list.map(x => Object.assign({}, x, { avatar: null }));
-    return cards.draw(kind, d, 'dark');
+    return cards.draw(kind, d, theme);
   }
 }
 
@@ -803,22 +816,22 @@ function liveData(rec) {
   return rec.d;
 }
 
-function cardRows(rec, id, lang) {
+function cardRows(rec, id, lang, theme) {
   const rows = [];
   if (rec.k === 'stats') rows.push({ type: 1, components: [linkButton(lang === 'ru' ? 'Открыть живую статистику' : 'Open live stats', require('./serversInfo.js').link())] });
   const link = rec.d && rec.d.link;
   if (link && link.url) rows.push({ type: 1, components: [linkButton(String((lang === 'ru' ? link.ru : link.en) || link.en || 'Open').slice(0, 80), link.url)] });
-  rows.push(langRow(l => 'cd:' + id + ':' + l, lang));
-  return rows;
+  return rows.concat(picRows((l, th) => 'cd:' + id + ':' + l + ':' + th, lang, theme, 'cd'));
 }
 
 // картинка, подпись к ней (alt) и кнопки: { body, files } — для нового сообщения, ответа на нажатие или правки
-async function cardMessage(rec, id, lang, ephemeral) {
+async function cardMessage(rec, id, lang, ephemeral, theme) {
+  theme = themeOfCard(theme);
   const data = LIVE.has(rec.k) ? liveData(rec) : rec.d;
-  const png = await renderCard(rec.k, data, lang);
+  const png = await renderCard(rec.k, data, lang, theme);
   const file = 'aibrofist-' + (rec.k === 'action' ? (rec.d.type || 'card') : rec.k.toLowerCase()) + '.png';
   const body = { attachments: [{ id: 0, filename: file, description: pics.alt(rec.k, data, lang).slice(0, 1000) }],
-                 components: cardRows(rec, id, lang), allowed_mentions: { parse: [] } };
+                 components: cardRows(rec, id, lang, theme), allowed_mentions: { parse: [] } };
   if (ephemeral) body.flags = 64;
   return { body, files: [{ name: file, data: png, type: 'image/png' }] };
 }
@@ -891,16 +904,16 @@ function showCard(i, g, kind, data, fallback) {
                  textAnswer(i, fallback || { content: pics.alt(kind, LIVE.has(kind) ? liveData(rec) : data, 'en') }));
 }
 
-// кнопка с флагом: та же карточка на выбранном языке, в том же сообщении
+// кнопка с флагом или темой: та же карточка на выбранном языке и в выбранной теме, в том же сообщении
 function onCardLang(i, cid) {
-  const m = /^cd:([0-9a-f]+):(en|ru)$/.exec(cid);
+  const m = /^cd:([0-9a-f]+):(en|ru)(?::(dark|light))?$/.exec(cid);
   if (!m || pressedTooFast(i)) return respond(i, { type: 6 });
-  const rec = state.cards[m[1]], lang = m[2];
+  const rec = state.cards[m[1]], lang = m[2], theme = m[3] || 'dark';
   if (!rec) return reply(i, { content: lang === 'ru' ? 'Эта карточка слишком старая: вызовите команду снова.' : 'This card is too old: use the command again.' });
   // справка, статистика и предупреждения — только владельцу (их и видит только он)
   const g = rec.g && guilds.get(rec.g);
   if (OWNER_ONLY.has(rec.k) && !(g && userOf(i) === g.owner)) return reply(i, card('Only the server owner can use this.'));
-  return sendPic(i, () => cardMessage(rec, m[1], lang, false), true, false,
+  return sendPic(i, () => cardMessage(rec, m[1], lang, false, theme), true, false,
                  textAnswer(i, { content: lang === 'ru' ? 'Не получилось перерисовать карточку, попробуйте ещё раз.' : 'Could not redraw the card right now. Please try again.' }, true));
 }
 
@@ -1546,25 +1559,26 @@ const rulesPost = (title, text, o) => {
    правила, свой текст владельца — как он написан. Под картинкой флаги:
    English и Русский (без русского текста флагов нет). Картинка одного и
    того же текста рисуется один раз. */
-const rulesPics = new Map();         // язык и текст -> картинка
+const rulesPics = new Map();         // язык, тема и текст -> картинка
 function rulesData(r, lang) {
   const ru = lang === 'ru' && !!r.ru;
   const std = r.en === R.rulesText('en') && (!r.ru || r.ru === R.rulesText('ru'));
   return { std, title: ru ? RULES_TITLE_RU : (r.title || RULES_TITLE), text: ru ? r.ru : r.en, at: r.at };
 }
-async function rulesPic(r, lang) {
+async function rulesPic(r, lang, theme) {
+  theme = themeOfCard(theme);
   const d = rulesData(r, lang);
-  const key = [lang, d.std, d.title, d.text, d.at].join('|');
+  const key = [lang, theme, d.std, d.title, d.text, d.at].join('|');
   let png = rulesPics.get(key);
   if (!png) {
-    png = await renderCard('rules', d, lang);
-    if (rulesPics.size >= 6) rulesPics.clear();
+    png = await renderCard('rules', d, lang, theme);
+    if (rulesPics.size >= 12) rulesPics.clear();
     rulesPics.set(key, png);
   }
   const file = 'aibrofist-rules-' + lang + '.png', alt = pics.alt('rules', d, lang).slice(0, 1000);
   return { body: { flags: COMPONENTS_V2, allowed_mentions: { parse: [] }, attachments: [{ id: 0, filename: file, description: alt }],
                    components: [{ type: 12, items: [{ media: { url: 'attachment://' + file }, description: alt }] }]
-                     .concat(r.ru ? [langRow(l => 'rules:' + l, lang)] : []) },
+                     .concat(r.ru ? picRows((l, th) => 'rules:' + l + ':' + th, lang, theme, 'rules') : [themeRow((l, th) => 'rules:' + l + ':' + th, lang, theme, 'rules')]) },
            files: [{ name: file, data: png, type: 'image/png' }] };
 }
 
@@ -1642,7 +1656,8 @@ async function postDefaultRules(g) {
   const en = R.rulesText('en'), ru = R.rulesText('ru');
   const c = g.channels.get(RULES_CHANNEL);
   const toPic = !!(old && old.message && !old.pic);
-  if (old && old.message && !force && !toPic && (old.custom || (old.en === en && old.ru === ru && !old.ruMessage))) return;
+  const upgrade = !state.fixes.rulesTheme;           // один раз: пост получает кнопки темы
+  if (old && old.message && !force && !toPic && !upgrade && (old.custom || (old.en === en && old.ru === ru && !old.ruMessage))) return;
   if (!old && !c) return;
   const chan = old && old.channel && g.channels.has(old.channel) ? old.channel : c && c.id;
   if (!chan) return;
@@ -1653,20 +1668,21 @@ async function postDefaultRules(g) {
   if (r.error) { log('could not post the rules in ' + chan + ':', r.error); return; }
   st.rules = Object.assign({ channel: chan, message: r.message }, text, { at: r.at, pic: r.pic }, keep ? { custom: true } : {});
   if (force) state.fixes.rules7 = true;
+  state.fixes.rulesTheme = true;
   save();
 }
 
 /* Флаги под правилами: картинка в том же посте меняется на другой язык (это
    правка самого поста, её видят все). Картинка не вышла — прежний текст;
    Discord правку не примет — отвечаем только нажавшему. */
-async function rulesSwitch(i, g, lang) {
+async function rulesSwitch(i, g, lang, theme) {
   const r = g && gstate(g.id).rules || {};
   const full = { title: r.title || RULES_TITLE, en: r.en || R.rulesText('en'), ru: r.ru === undefined ? R.rulesText('ru') : r.ru, at: r.at };
   const showRu = lang === 'ru' && !!full.ru;
   const text = showRu ? full.ru : full.en;
   const title = showRu ? RULES_TITLE_RU : full.title;
   const box = rulesPost(title, g ? linkify(g, text) : text, { lang: showRu ? 'ru' : full.ru ? 'en' : null, at: r.at });
-  return sendPic(i, () => rulesPic(full, showRu ? 'ru' : 'en'), true, false, async deferred => {
+  return sendPic(i, () => rulesPic(full, showRu ? 'ru' : 'en', theme), true, false, async deferred => {
     if (deferred) return api('PATCH', '/webhooks/' + (i.application_id || appId) + '/' + i.token + '/messages/@original', box);
     const res = await respond(i, { type: 7, data: box });
     if (res && !ok(res) && res.status === 400)
@@ -1785,7 +1801,8 @@ async function onUpdatesSubmit(i, g) {
 async function onInteraction(i) {
   if (!i) return;
   const cid = String((i.data && i.data.custom_id) || '');
-  if (i.type === 3 && (cid === 'rules:ru' || cid === 'rules:en')) return rulesSwitch(i, i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value, cid.slice(6));
+  const rs = i.type === 3 && /^rules:(en|ru)(?::(dark|light))?$/.exec(cid);       // без темы — кнопки поста, выложенного раньше
+  if (rs) return rulesSwitch(i, i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value, rs[1], rs[2] || 'dark');
   if (i.type === 2 && i.data && i.data.name === 'servers') return onServers(i);
   if (i.type === 2 && i.data && i.data.name === 'account') return onAccount(i);
   if (i.type === 4 && i.data && i.data.name === 'account') return onAccountHint(i);
