@@ -1,53 +1,41 @@
 // ============ DISCORD: что считается нарушением ============
 // Чистые проверки одного сообщения, без сети: discordBot.js решает, что с
-// найденным делать (удалить, дать штрафные баллы, замьютить). Каждая
+// найденным делать (удалить, предупредить, замьютить, забанить). Каждая
 // находка — { rule, weight, kind, note }: номер правила из discordRules.js,
-// штрафные баллы и короткое описание для модераторов.
+// тяжесть (чья находка важнее, если их несколько) и короткое описание.
 //
-// Главное здесь — не наказывать зря. Поэтому слова-оскорбления ищутся
-// целиком (а не кусками: «хачапури», «жидкий», «Нигерия», «night» не
-// задевают), обычный мат не наказывается, капс — только у длинных
-// сообщений, похожие на discord.com домены — только если это подделка,
-// а не просто сайт со словом discord в имени.
+// Главное здесь — не наказывать зря. Поэтому слова-оскорбления по признаку
+// ищутся целиком (а не кусками: «хачапури», «жидкий», «Нигерия», «night» не
+// задевают), обычный мат и личные оскорбления не наказываются, похожие на
+// discord.com домены — только если это подделка, а не просто сайт со
+// словом discord в имени. Наказание у каждого правила своё (discordRules.js).
 'use strict';
 
 const KIND = {
-  flood:       { rule: 2, weight: 1, note: 'Sending messages too fast' },
-  duplicate:   { rule: 2, weight: 1, note: 'Repeating the same message' },
-  caps:        { rule: 2, weight: 1, note: 'Message in all caps' },
-  mentions:    { rule: 2, weight: 1, note: 'Mass mentions' },
-  emoji:       { rule: 2, weight: 1, note: 'Emoji spam' },
-  chars:       { rule: 2, weight: 1, note: 'Long row of the same character' },
-  lines:       { rule: 2, weight: 1, note: 'Wall of text' },
-  zalgo:       { rule: 2, weight: 1, note: 'Glitch text' },
-  invite:      { rule: 3, weight: 1, note: 'Invite to another server' },
-  insult:      { rule: 1, weight: 1, note: 'Insulting another member' },
-  slur:        { rule: 1, weight: 2, note: 'Slur or hate speech' },
-  selfharm:    { rule: 1, weight: 2, note: 'Telling someone to hurt themselves' },
-  'nsfw-link': { rule: 4, weight: 2, note: 'Link to an adult website' },
-  'nsfw-image':{ rule: 4, weight: 2, note: 'Adult image' },
-  'nsfw-text': { rule: 4, weight: 2, note: 'Sexual content' },
-  'native-spam': { rule: 2, weight: 1, note: 'Spam blocked by Discord AutoMod' },
-  'native-word': { rule: 1, weight: 1, note: 'Blocked by a server AutoMod rule' },
-  cheat:       { rule: 7, weight: 1, note: 'Trading for real money' },
-  // mode: review — только сообщить модераторам; soft — убрать сообщение без балла;
-  // hide — убрать без балла и сообщить модераторам. Так — где слова бывают и невинными
-  'cheat-talk': { rule: 7, weight: 0, mode: 'review', note: 'Talk about cheats' },
-  politics:    { rule: 10, weight: 0, mode: 'soft', note: 'Politics' },
+  // правило 1: больше 3 сообщений за 2 секунды (см. FloodWatch)
+  flood:       { rule: 1, weight: 1, note: 'More than 3 messages within 2 seconds' },
+  invite:      { rule: 2, weight: 1, note: 'Invite to another server' },
+  'nsfw-link': { rule: 3, weight: 2, note: 'Link to an adult website' },
+  'nsfw-image':{ rule: 3, weight: 2, note: 'Adult image' },
+  slur:        { rule: 4, weight: 2, note: 'Slur or hate speech' },
+  selfharm:    { rule: 4, weight: 2, note: 'Telling someone to hurt themselves' },
   'scam-text': { rule: 5, weight: 2, note: 'Known scam message' },
   'everyone-link': { rule: 5, weight: 2, note: 'Mass ping with a link' },
-  'bad-name':  { rule: 9, weight: 1, note: 'Inappropriate name' },
-  impersonation: { rule: 9, weight: 1, note: 'Pretending to be staff' },
-  'nsfw-avatar': { rule: 4, weight: 2, note: 'Adult avatar' },
-  evasion:     { rule: 11, weight: 0, note: 'Ban evasion with another account' },
-  // без баллов: только сообщить владельцу (Discord запрещает аккаунты младше 13 лет)
-  underage:    { rule: 12, weight: 0, note: 'Says they are under 13' },
-  doxx:        { rule: 6, weight: 0, mode: 'hide', note: 'Possible IP address' },
   badfile:     { rule: 5, weight: 2, note: 'Executable file' },
-  // свои запрещённые слова сервера (владелец задаёт их командой rules)
-  custom:      { rule: 0, weight: 1, note: 'Word banned on this server' },
   scam:        { rule: 5, weight: 3, note: 'Scam or phishing link' },
-  grabber:     { rule: 5, weight: 3, note: 'IP grabber link' }
+  grabber:     { rule: 5, weight: 3, note: 'IP grabber link' },
+  cheat:       { rule: 6, weight: 1, note: 'Trading for real money' },
+  // mode: soft — убрать сообщение без наказания; hide — то же, но без подробностей в канале
+  doxx:        { rule: 7, weight: 0, mode: 'hide', note: 'Possible IP address' },
+  'bad-name':  { rule: 8, weight: 0, note: 'Inappropriate name' },
+  impersonation: { rule: 8, weight: 0, note: 'Pretending to be staff' },
+  politics:    { rule: 9, weight: 0, mode: 'soft', note: 'Politics' },
+  // без правила: только сообщить владельцу (Discord запрещает аккаунты младше 13 лет)
+  evasion:     { rule: 0, weight: 0, note: 'Ban evasion with another account' },
+  underage:    { rule: 0, weight: 0, note: 'Says they are under 13' },
+  // свои запрещённые слова сервера (владелец задаёт их командой rules) и блок встроенной AutoMod Discord
+  custom:      { rule: 0, weight: 1, note: 'Word banned on this server' },
+  'native-word': { rule: 0, weight: 1, note: 'Blocked by a server AutoMod rule' }
 };
 const finding = (kind, extra) => Object.assign({ kind }, KIND[kind], extra || {});
 
@@ -144,29 +132,6 @@ const SELF_HARM = [
   L('go\\s+(?:hang|kill)\\s+(?:your\\s*self|urself)'),
   C('убей(?:те)?\\s+себя|убейся|убейтесь|повесься|повесьтесь|выпились|выпилитесь|вскройся')
 ];
-
-// оскорбление, обращённое к человеку: «ты дебил», «you idiot», «иди нахуй»
-const INSULT_EN = 'idiots?|morons?|stupid|dumb|dumbass|retards?|losers?|bitch|whore|slut|cunt|dickhead|asshole|bastard|scum';
-const INSULT_RU = 'дебил[а-я]*|идиот[а-я]*|тупой|тупая|тупица|урод(?:ы|а|ов|ом|ина|ец|ка)?|лох|лошар[а-я]*|чмо|мраз[а-я]*|' +
-                  'твар[а-я]*|сука|шлюх[а-я]*|даун(?:ы|а|ов|ом)?|дегенерат[а-я]*|долбо[её]б[а-я]*|долба[её]б[а-я]*|' +
-                  'еблан[а-я]*|у[её]б[оа][кн][а-я]*|гнид[а-я]*|ничтожеств[а-я]*|кретин[а-я]*';
-const FILL_RU = 'же|ж|что|че|реально|такой|такая|такие|просто|конченый|конченая|конченный|полный|полная|настоящий|' +
-                'настоящая|какой|какая|прям|вообще|точно|тупой|тупая|тупые|еще|тоже|совсем|правда|блин|бля|блять|сам|сама|' +
-                'сами|как|ну|ебаный|ебаная|ебучий|гребаный|долбаный|жирный|мелкий|старый|натуральный|самый|самая';
-const DIRECTED = [
-  L('(?:you|u|ur|you\\s+re|youre)\\s+(?:are\\s+|r\\s+|a\\s+|an\\s+|such\\s+a\\s+|so\\s+|a\\s+fucking\\s+|fucking\\s+){0,2}(?:' + INSULT_EN + ')'),
-  L('f+u+c+k+\\s+(?:you|u|off)'),
-  // между «ты» и словом — только усилители: «ты же дебил», но не «ты не лох», «ты убил тварь»
-  C('(?:ты|вы)\\s+(?:(?:' + FILL_RU + ')\\s+){0,2}(?:' + INSULT_RU + ')'),
-  C('(?:иди|идите|пошел|пошла|пошли|пошёл)\\s+(?:на\\s*)?(?:хуй|хер|нахуй|нахер)|нахуй\\s+(?:иди|пошел|пошла)')
-];
-// при ответе или упоминании, в коротком сообщении — явные оскорбления-существительные
-// («@bob idiot»); в длинном слово скорее про что-то другое («@bob this boss is an idiot»)
-const NOUN_INSULT = [
-  L('idiot|moron|dumbass|retard|loser|bitch|whore|slut|cunt|dickhead|asshole|bastard'),
-  C('дебил|идиот|урод|лох|лошара|чмо|мразь|тварь|шлюха|даун|дегенерат|долбо[её]б|еблан|гнида|кретин|сдохни|сдохните')
-];
-const shortReply = content => String(content || '').replace(/<[@#][!&]?\d+>/g, ' ').trim().split(/\s+/).filter(Boolean).length <= 4;
 
 /* ---------- ссылки ---------- */
 const OFFICIAL = ['discord.com', 'discord.gg', 'discordapp.com', 'discordapp.net', 'discord.media',
@@ -286,28 +251,6 @@ function inviteCodes(content) {
 }
 
 /* ---------- спам в одном сообщении ---------- */
-const EMOJI = /\p{Extended_Pictographic}/gu;
-const CUSTOM_EMOJI = /<a?:\w+:\d+>/g;
-
-function checkSpam(msg) {
-  const content = String(msg.content || '');
-  const res = [];
-  const plain = content.replace(/```[\s\S]*?```/g, ' ').replace(/https?:\/\/\S+/g, ' ')
-                       .replace(/<a?:\w+:\d+>/g, ' ').replace(/<[@#][!&]?\d+>/g, ' ');
-  const letters = (plain.match(/\p{L}/gu) || []).length;
-  const upper = (plain.match(/\p{Lu}/gu) || []).length;
-  if (letters >= 15 && upper / letters >= 0.75) res.push(finding('caps'));
-  const people = new Set((msg.mentions || []).map(u => u && u.id).filter(Boolean));
-  const roles = new Set(msg.mention_roles || []);
-  if (people.size + roles.size >= 5) res.push(finding('mentions'));
-  const emoji = (content.match(EMOJI) || []).length + (content.match(CUSTOM_EMOJI) || []).length;
-  if (emoji >= 12) res.push(finding('emoji'));
-  if (/(\S)\1{14,}/u.test(plain.replace(/\s+/g, ''))) res.push(finding('chars'));
-  if ((content.match(/\n/g) || []).length >= 25) res.push(finding('lines'));
-  if ((content.match(/\p{Mn}/gu) || []).length >= 12) res.push(finding('zalgo'));
-  return res;
-}
-
 /* ---------- слова ---------- */
 function checkWords(msg) {
   const content = msg.content || '';
@@ -316,8 +259,6 @@ function checkWords(msg) {
   const res = [];
   if (SLURS.some(test)) res.push(finding('slur'));
   if (SELF_HARM.some(test)) res.push(finding('selfharm'));
-  const aimed = ((msg.mentions && msg.mentions.length) || !!msg.message_reference) && shortReply(content);
-  if (DIRECTED.some(test) || (aimed && NOUN_INSULT.some(test))) res.push(finding('insult'));
   return res;
 }
 
@@ -357,8 +298,6 @@ const B = src => new RegExp('(?<![a-zа-яё0-9])(?:' + src + ')(?![a-zа-яё0-
 const SELL = B('продам|продаю|продаём|куплю|покупаю|скупаю|обменяю|sell|selling|buying|wts|wtb');
 const GOODS = B('акк|акка|акков|аккаунт[а-я]*|монет[а-я]*|коин[а-я]*|account|accounts|acc|accs|coins?');
 const MONEY = /(?:руб|₽|грн|\$|usd|долл|евро|€|деньг|реал|paypal|qiwi|киви|сбер|на\s*карт|донат|money|cash|venmo|crypto|btc|usdt)/i;
-const CHEAT = B('чит|читы|читов|хак|хаки|взлом|взломы|инжектор[а-я]*|аимбот|aimbot|wallhack|speedhack|спидхак|дюп|cheat|cheats|hack|hacks|injector|exploit|dupe');
-const SHARE = B('скачать|скачай|ссылк[а-я]*|раздаю|продаю|бесплатн[а-я]*|кидаю|download|free|selling|sell');
 const POLITICS = B('путин[а-я]*|зеленск[а-я]*|лукашенк[а-я]*|навальн[а-я]*|байден[а-я]*|трамп(?:а|у|ом|е)?|сво|спецоперац[а-я]*|мобилизац[а-я]*|' +
                    'putin|zelensk[a-z]*|lukashenk[a-z]*|navaln[a-z]*|biden|' +          // trump — ещё и «козырь»
                    'войн[аеуыо]\\s+(?:с|на|в)\\s+(?:украин[а-я]*|росси[а-я]*)|(?:war\\s+in|war\\s+with)\\s+(?:ukraine|russia)|слава\\s+украине');
@@ -380,7 +319,6 @@ function checkRules(msg) {
   // взломанные аккаунты; объявление администрации пингует всех на самом деле
   if (/@(?:everyone|here)/.test(text) && !msg.mention_everyone && links(text).some(l => l.explicit)) res.push(finding('everyone-link'));
   if (SELL.test(text) && GOODS.test(text) && MONEY.test(text)) res.push(finding('cheat'));
-  else if (CHEAT.test(text) && SHARE.test(text)) res.push(finding('cheat-talk'));
   if (POLITICS.test(text)) res.push(finding('politics'));
   for (const re of AGE) {
     const m = re.exec(text);
@@ -389,10 +327,10 @@ function checkRules(msg) {
   return res;
 }
 
-/* ---------- имена (правило 9) ----------
-   Ник проверяется при входе на сервер и при каждой смене. Оскорбление или
-   ссылка в нике и «Admin»/«Модератор» — новый ник и балл; значки в начале
-   (чтобы стоять первым в списке) и нечитаемый ник — просто новый ник. */
+/* ---------- имена (правило 8) ----------
+   Ник проверяется при входе на сервер и при каждой смене. Слово вражды или
+   ссылка в нике и «Admin»/«Модератор» — просто новый ник, без наказания;
+   значки в начале (чтобы стоять первым в списке) и нечитаемый ник — тоже. */
 const STAFF_WORDS = /^(?:admin|administrator|moderator|staff|админ|администратор|администрация|модератор|модер)$/;
 // эти слова бывают и в обычных никах («Tech Support Guy», «aibrofist fan») — только если ник из них одних
 const STAFF_ONLY = /^(?:admin|administrator|moderator|staff|owner|support|system|official|aibrofist|админ|администратор|администрация|модератор|модер|владелец|поддержка|система)$/;
@@ -401,7 +339,7 @@ function checkName(name, opts) {
   const n = String(name || '');
   if (!n.trim()) return null;
   const words = checkWords({ content: n });
-  if (words.some(f => f.kind === 'slur' || f.kind === 'insult' || f.kind === 'selfharm') ||
+  if (words.length ||
       inviteCodes(n).length || checkLinks(n).length || /https?:\/\/|discord\.gg/i.test(n))
     return { kind: 'bad-name' };
   const forms = [latinForm(n, false), cyrForm(n, false)].map(f => f.split(/\s+/).filter(Boolean));
@@ -421,53 +359,39 @@ function checkName(name, opts) {
    Возвращает самые тяжёлые находки первыми. */
 function inspect(msg, opts) {
   opts = opts || {};
-  let res = [].concat(checkLinks(msg.content), checkFiles(msg), checkWords(msg), checkPrivacy(msg), checkRules(msg), checkSpam(msg));
-  if (opts.nsfw) res = res.filter(f => f.rule !== 4);
+  let res = [].concat(checkLinks(msg.content), checkFiles(msg), checkWords(msg), checkPrivacy(msg), checkRules(msg));
+  if (opts.nsfw) res = res.filter(f => f.rule !== 3);
   return res.sort((a, b) => b.weight - a.weight);
 }
 
-/* ---------- флуд и повторы по нескольким сообщениям ----------
-   Помним последние сообщения каждого игрока за минуту. Флуд — 6 и больше
-   сообщений за 6 секунд; повтор — один и тот же текст 3 раза за минуту,
-   в том числе в разных каналах (так обычно пишут взломанные аккаунты). */
+/* ---------- флуд по нескольким сообщениям ----------
+   Помним последние сообщения каждого игрока. Больше 3 сообщений за 2
+   секунды (4 и больше) — одно срабатывание, эти сообщения помечаются
+   разобранными и в следующем не считаются: пачка из 8 — два срабатывания,
+   из 5 — одно. Сколько срабатываний — решает бот (discordRules.SPAM). */
 class FloodWatch {
   constructor(opts) {
     opts = opts || {};
-    this.count = opts.count || 6;
-    this.window = opts.window || 6000;
-    this.dupCount = opts.dupCount || 3;
-    this.dupWindow = opts.dupWindow || 60000;
+    this.count = opts.count || 4;
+    this.window = opts.window || 2000;
     this.users = new Map();
   }
 
   add(key, m) {
     const now = m.t || Date.now();
-    let list = (this.users.get(key) || []).filter(x => now - x.t < this.dupWindow);
-    const text = String(m.content || '').toLowerCase().replace(/\s+/g, ' ').trim() +
-                 (m.attachments || []).map(a => '|' + a.size + ':' + a.filename).join('');
-    list.push({ id: m.id, channel: m.channel_id, t: now, text, done: false });
+    let list = (this.users.get(key) || []).filter(x => now - x.t < this.window);
+    list.push({ id: m.id, channel: m.channel_id, t: now, done: false });
     if (list.length > 30) list = list.slice(-30);
     this.users.set(key, list);
-    const recent = list.filter(x => now - x.t < this.window);
-    if (recent.length >= this.count) {
-      const ids = recent.filter(x => !x.done);
-      recent.forEach(x => { x.done = true; });
-      return { kind: 'flood', messages: ids.map(x => ({ id: x.id, channel: x.channel })) };
-    }
-    if (text.length >= 15 || /https?:\/\//.test(text)) {
-      const same = list.filter(x => x.text === text);
-      if (same.length >= this.dupCount) {
-        const ids = same.filter(x => !x.done);
-        same.forEach(x => { x.done = true; });
-        return { kind: 'duplicate', messages: ids.map(x => ({ id: x.id, channel: x.channel })) };
-      }
-    }
-    return null;
+    const fresh = list.filter(x => !x.done);
+    if (fresh.length < this.count) return null;
+    fresh.forEach(x => { x.done = true; });
+    return { kind: 'flood', messages: fresh.map(x => ({ id: x.id, channel: x.channel })) };
   }
 
   sweep(now) {
     now = now || Date.now();
-    for (const [k, list] of this.users) if (!list.length || now - list[list.length - 1].t > this.dupWindow) this.users.delete(k);
+    for (const [k, list] of this.users) if (!list.length || now - list[list.length - 1].t > this.window) this.users.delete(k);
   }
 }
 
@@ -488,6 +412,6 @@ function checkCustom(text, words) {
 }
 
 module.exports = {
-  KIND, finding, inspect, checkCustom, checkLinks, checkSpam, checkWords, checkPrivacy, checkFiles, checkRules, checkName,
+  KIND, finding, inspect, checkCustom, checkLinks, checkWords, checkPrivacy, checkFiles, checkRules, checkName,
   inviteCodes, links, isPhish, latinForm, cyrForm, FloodWatch, dist
 };

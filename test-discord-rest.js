@@ -3,8 +3,8 @@
    - через несколько секунд без подключения сам переходит на запросы и
      указывает Discord адрес для кнопок (/discord/interactions);
    - новые сообщения находит опросом: старые (до запуска) не трогает,
-     нарушения удаляет и наказывает (и модераторов тоже), волна флуда —
-     одно наказание;
+     нарушения удаляет и наказывает по правилу (и модераторов тоже), волна
+     флуда — удаляется, одно «помедленнее»;
    - секретная команда владельца работает так же;
    - кнопки приходят по HTTP: подпись Discord проверяется (чужая — 401),
      проверка адреса (PING) проходит, окно открывается;
@@ -141,10 +141,16 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      find(since(t), 'DELETE', /messages/).length === 1 && find(since(t), 'DELETE', new RegExp('/messages/' + modBad.id + '$')).length === 1 &&
      find(since(t), 'PATCH', /members\/M1$/).length === 1);
   t = Date.now();
-  for (let i = 0; i < 8; i++) say('U2', 'spam ' + i);
-  await waitFor(() => find(since(t), 'POST', /^\/channels\/dmU2\/messages$/).length);
+  const wave = [];
+  for (let i = 0; i < 8; i++) wave.push(say('U2', 'spam ' + i));
+  const slowNotes = () => find(since(t), 'POST', /^\/channels\/\d+\/messages$/).filter(x => /slow down/.test(x.body.content || ''));
+  await waitFor(() => slowNotes().length);
   await sleep(500);
-  ok('волна флуда пришла пачкой — одно наказание', find(since(t), 'POST', /^\/channels\/dmU2\/messages$/).length === 1);
+  const gone = find(since(t), 'POST', /bulk-delete$/).reduce((n, x) => n + x.body.messages.filter(id => wave.some(m => m.id === id)).length, 0) +
+               find(since(t), 'DELETE', /\/messages\/\d+$/).filter(x => wave.some(m => x.path.endsWith('/' + m.id))).length;
+  ok('волна флуда пришла пачкой — все сообщения удалены, одно «помедленнее», мьюта и личного сообщения ещё нет (это 1-е и 2-е срабатывание)',
+     gone === 8 && slowNotes().length === 1 && find(since(t), 'PATCH', /members\/U2$/).length === 0 &&
+     find(since(t), 'POST', /^\/channels\/dmU2\/messages$/).length === 0, gone + ' удалено, ' + slowNotes().length + ' заметок');
   ok('список каналов почти всё время отвечает 429 — бот всё равно читает сообщения', listCalls > 2);
   t = Date.now();
   const inNews = say('U1', 'ты пидор', { channel: CH.news });

@@ -2,19 +2,20 @@
 // Работает, только если на хостинге задан DISCORD_BOT_TOKEN; без него
 // модуль ничего не делает. Что умеет:
 //   - автомодерация: проверяет каждое сообщение (discordAutomod.js),
-//     удаляет нарушения, даёт штрафные баллы и наказывает по лестнице из
-//     discordRules.js — предупреждение, мьюты, бан только в крайнем случае;
+//     удаляет нарушения и наказывает так, как написано у самого правила
+//     (discordRules.js): предупреждение, мьют на 10 минут или час, бан
+//     только за мошенничество; счёта баллов нет;
 //     следит и за участниками: ники, рейды (больше 100 входов за минуту),
 //     имя как у забаненного;
-//     дополнительно включает встроенную AutoMod Discord, которая не даёт
-//     отправить оскорбления и спам упоминаниями вовсе;
-//   - пишет игроку в личку, за что и как он наказан, а модераторам — в
-//     канал mod-log (если он есть);
+//     дополнительно включает встроенную AutoMod Discord со списком
+//     слов вражды и 18+, которые она не даёт отправить вовсе;
+//   - пишет игроку в личку, за что и как он наказан, а в канал mod-log
+//     (если он есть) — запись о случае;
 //   - секретные команды владельца сервера прямо в канале (начало команд —
 //     DISCORD_CMD_PREFIX на хостинге): news (пост в любой канал с
 //     картинками и кнопкой-ссылкой — в окне, которое видит только он),
-//     updates (в какие каналы идут новости), warn, mute, unmute, strikes,
-//     pardon, modlog, clear (удалить сообщения в канале), help. Остальным
+//     updates (в какие каналы идут новости), warn, mute, unmute, ban,
+//     unban, modlog, clear (удалить сообщения в канале), help. Остальным
 //     они не видны и не работают.
 // Правила сервера владелец пишет в #rules сам; номера правил в
 // уведомлениях бота — из discordRules.js.
@@ -52,7 +53,7 @@ const RAID_MS = 10 * 60 * 1000;
 const NOTICE_MS = 10 * 1000;     // короткое предупреждение в канале исчезает само
 
 // banned — приметы забаненных (аватарка, имя): по ним ловим обход бана
-let state = { feed: [], guilds: {}, strikes: {}, cases: 0, banned: {}, unbans: {}, fixes: {} };
+let state = { feed: [], guilds: {}, cases: 0, banned: {}, unbans: {}, fixes: {} };
 let loaded = false, saveTimer = null;
 const guilds = new Map();        // id -> { id, name, owner, roles: Map, channels: Map }
 const setupDone = new Set();
@@ -65,7 +66,8 @@ const nameSeen = new Map();       // guild:user -> какой ник уже ра
 const joins = new Map();          // guild -> времена входов за последнюю минуту
 const raidUntil = new Map();
 const softHit = new Map();        // guild:user -> когда последний раз писали «подожди»
-const reviewHit = new Map();      // guild:user:вид -> когда последний раз сообщали модераторам
+const reviewHit = new Map();      // guild:user:вид -> когда последний раз сообщали владельцу
+const spamHits = new Map();       // guild:user -> { n, t }: сколько раз подряд спамил и когда в последний
 let gw = null, me = null, appId = null, timers = [];
 
 const log = (...a) => console.log('[discord]', ...a);
@@ -75,27 +77,21 @@ const once = (key, ...a) => { if (!said.has(key)) { said.add(key); log(...a); } 
 function loadState() {
   if (loaded) return;
   loaded = true;
+  let s0 = null;
   try {
-    const s = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    const s = s0 = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
     state = {
       feed: Array.isArray(s.feed) ? s.feed.filter(x => /^\d+$/.test(x)) : [],
       guilds: s.guilds && typeof s.guilds === 'object' ? s.guilds : {},
-      strikes: s.strikes && typeof s.strikes === 'object' ? s.strikes : {},
       cases: Number(s.cases) || 0,
       banned: s.banned && typeof s.banned === 'object' ? s.banned : {},
       unbans: s.unbans && typeof s.unbans === 'object' ? s.unbans : {},    // «сервер:игрок» -> когда снять бан
       fixes: s.fixes && typeof s.fixes === 'object' ? s.fixes : {}         // разовые исправления, уже сделанные
     };
   } catch (e) { /* первый запуск */ }
-  // баллы за аватарку от прежней проверки сняты: нейросеть принимала обычные фото за 18+
-  if (!state.fixes.avatarStrikes) {
-    for (const k of Object.keys(state.strikes)) {
-      state.strikes[k] = (state.strikes[k] || []).filter(x => x.k !== 'nsfw-avatar');
-      if (!state.strikes[k].length) delete state.strikes[k];
-    }
-    state.fixes.avatarStrikes = true;
-    save();
-  }
+  // штрафных баллов больше нет — у каждого правила своё наказание; накопленные при загрузке не читаются
+  // и пропадают при первом сохранении (у всех счёт с нуля)
+  if (s0 && s0.strikes) save();
 }
 
 function saveNow() {
@@ -114,23 +110,6 @@ function gstate(gid) {
   return g;
 }
 
-
-/* ---------- штрафные баллы ---------- */
-function activeStrikes(gid, uid) {
-  const key = gid + ':' + uid, now = Date.now();
-  const list = (state.strikes[key] || []).filter(s => now - s.t < R.STRIKE_TTL);
-  if (list.length) state.strikes[key] = list; else delete state.strikes[key];
-  return list;
-}
-const points = list => list.reduce((n, s) => n + s.p, 0);
-
-function addStrike(gid, uid, f, by) {
-  const list = activeStrikes(gid, uid);
-  list.push({ t: Date.now(), p: f.weight, r: f.rule || 0, k: f.kind, by: by || 'auto' });
-  state.strikes[gid + ':' + uid] = list;
-  save();
-  return points(list);
-}
 
 /* ---------- кэш сервера из событий Gateway ---------- */
 function cacheGuild(d) {
@@ -222,7 +201,7 @@ async function notice(channel, uid, text) {
 
 const quote = s => String(s || '').replace(/```/g, "'''").replace(/\s+\n/g, '\n').slice(0, 300);
 const color = step => !step ? R.COLORS.neutral : step.type === 'ban' ? R.COLORS.ban : step.type === 'mute' ? R.COLORS.mute : R.COLORS.warn;
-const ruleLine = id => { const r = R.ruleById(id); return r ? r.id + '. ' + r.title : 'Moderator decision'; };
+const ruleLine = id => { const r = R.ruleById(id); return r ? r.id + '. ' + r.title : 'Owner decision'; };
 
 async function modlog(g, entry) {
   const ch = modlogChannel(g);
@@ -233,7 +212,6 @@ async function modlog(g, entry) {
   ];
   if (entry.rule !== undefined) fields.push({ name: 'Rule', value: entry.ruleText || ruleLine(entry.rule), inline: true });
   if (entry.reason) fields.push({ name: 'Reason', value: String(entry.reason).slice(0, 1000) });
-  if (entry.strikes !== undefined) fields.push({ name: 'Active strikes', value: String(entry.strikes), inline: true });
   if (entry.channel) fields.push({ name: 'Channel', value: '<#' + entry.channel + '>', inline: true });
   const embed = { color: entry.color || R.COLORS.neutral, title: 'Case ' + entry.caseNo + ' | ' + entry.title, fields,
                   timestamp: new Date().toISOString() };
@@ -283,22 +261,23 @@ async function releaseBans(now) {
   }
 }
 
-/* Штраф + наказание по лестнице. f — находка ({rule, weight, kind, note}),
-   ctx.by — модератор (для /warn), ctx.channel — где было нарушение,
-   ctx.silent — не писать в канал (сообщение и так не появилось),
-   ctx.until — до какого времени игрок уже в мьюте (короче не делаем). */
+/* Наказание за нарушение. f — находка ({rule, weight, kind, note}); что делать,
+   написано у самого правила (R.actionFor), ctx.step — своё наказание
+   (спам, предупреждение владельца). ctx.by — владелец (для warn), ctx.channel —
+   где было нарушение, ctx.silent — не писать в канал (сообщение и так не
+   появилось), ctx.until — до какого времени игрок уже в мьюте (короче не делаем). */
 async function punish(g, user, f, ctx) {
   ctx = ctx || {};
-  const total = addStrike(g.id, user.id, f, ctx.by);
-  const step = R.punishmentFor(total);
+  const step = ctx.step || R.actionFor(f);
   const caseNo = ++state.cases;
   save();
   const rule = R.ruleById(f.rule);
-  const ruleText = rule ? rule.id + '. ' + rule.title : f.kind === 'custom' ? 'Server rules' : 'Moderator decision';
+  const ruleText = rule ? rule.id + '. ' + rule.title : f.kind === 'custom' ? 'Server rules' : 'Owner decision';
   // правила для всех, но Discord не даёт мьютить и банить владельца сервера, а мьютить — администраторов
+  const hard = step.type === 'mute' || step.type === 'ban';
   const owner = user.id === g.owner;
   const admin = !owner && !!(memberPerms(g, user.id, ctx.roles) & PERM.ADMIN);
-  const blocked = owner ? (step.type !== 'warn' ? 'the server owner cannot be muted or banned' : '')
+  const blocked = owner ? (hard ? 'the server owner cannot be muted or banned' : '')
                         : admin && step.type === 'mute' ? 'administrators cannot be muted' : '';
   const action = R.describe(step) + (blocked ? ' (not applied: ' + blocked + ')' : '');
   const why = f.note + (f.detail ? ' (' + f.detail + ')' : '');
@@ -307,22 +286,22 @@ async function punish(g, user, f, ctx) {
   // личное сообщение — до бана, иначе оно уже не дойдёт
   await dm(user.id, { embeds: [{
     color: color(step),
-    title: blocked || step.type === 'warn' ? 'Warning'
+    title: blocked || !hard ? 'Warning'
          : step.type === 'ban' ? (step.ms ? 'You have been banned for ' + R.duration(step.ms) : 'You have been banned permanently')
          : 'You have been muted',
-    description: ctx.dm || ((ctx.by ? 'A moderator of **' : 'Your message in **') + g.name + (ctx.by ? '** gave you a strike.' : '** was removed.')),
+    description: ctx.dm || ((ctx.by ? 'The owner of **' : 'Your message in **') + g.name + (ctx.by ? '** gave you a warning.' : '** was removed.')),
     fields: [
       { name: 'Rule', value: ruleText, inline: true },
       { name: 'Action', value: action, inline: true },
-      { name: 'Reason', value: why.slice(0, 1000) },
-      { name: 'Active strikes', value: total + ' (each strike expires after 30 days)' }
+      { name: 'Reason', value: why.slice(0, 1000) }
     ],
-    footer: { text: 'If you think this is a mistake, message a moderator.' }
+    footer: { text: step.type === 'ban' && step.ms ? 'The ban is lifted automatically when it ends. If you think this is a mistake, message the owner.'
+                                                     : 'If you think this is a mistake, message the owner.' }
   }] }).catch(() => false);
 
-  let done = true;                                     // blocked — наказывать нечем: только балл и предупреждение
+  let done = true;                                     // blocked — наказывать нечем: только предупреждение
   if (!blocked && step.type === 'mute') {
-    // уже замьючен дольше (например, модератором на неделю) — не сокращаем
+    // уже замьючен дольше (например, владельцем на неделю) — не сокращаем
     if (!(ctx.until && ctx.until > Date.now() + step.ms)) done = await timeout(g, user.id, step.ms, reason);
   }
   else if (!blocked && step.type === 'ban') {
@@ -331,14 +310,14 @@ async function punish(g, user, f, ctx) {
   }
 
   if (ctx.channel && !ctx.silent && (step.type !== 'ban' || blocked)) {
-    const what = ctx.by ? 'you received a strike' : 'your message was removed';
+    const what = ctx.by ? 'you received a warning' : 'your message was removed';
     await notice(ctx.channel, user.id, what + (rule ? ': rule ' + rule.id + ', ' + rule.title.toLowerCase() : '') +
-                 '. ' + action + ', ' + R.strikes(total) + '.').catch(() => {});
+                 '. ' + action + '.').catch(() => {});
   }
   await modlog(g, { caseNo, title: action + (done ? '' : ' (failed: no permission)'), color: color(step),
-                    user: user.id, by: ctx.by, rule: f.rule || 0, ruleText, reason: why, strikes: total,
+                    user: user.id, by: ctx.by, rule: f.rule || 0, ruleText, reason: why,
                     channel: ctx.channel, excerpt: ctx.excerpt }).catch(() => {});
-  return { step, total, caseNo, done };
+  return { step, caseNo, done };
 }
 
 // нарушение в сообщении: удалить и — если это не та же волна — наказать
@@ -346,11 +325,34 @@ async function enforce(g, m, f) {
   // решаем сразу, до ожидания сети: сообщения волны приходят почти разом
   const key = g.id + ':' + m.author.id, now = Date.now();
   const last = lastHit.get(key);
-  const repeat = !!(last && now - last.t < COOLDOWN && last.weight >= f.weight);
-  if (!repeat) lastHit.set(key, { t: now, weight: f.weight });
+  const repeat = f.kind !== 'flood' && !!(last && now - last.t < COOLDOWN && last.weight >= f.weight);
+  if (!repeat && f.kind !== 'flood') lastHit.set(key, { t: now, weight: f.weight });
   const msgs = f.messages && f.messages.length ? f.messages : [{ id: m.id, channel: m.channel_id }];
   await deleteMessages(msgs, f.note).catch(e => log('delete failed:', e.message));
+  if (f.kind === 'flood') return spam(g, m, f);
   if (repeat) return null;
+  const until = Date.parse(m.member && m.member.communication_disabled_until) || 0;
+  return punish(g, m.author, f, { channel: m.channel_id, excerpt: m.content, until, roles: m.member && m.member.roles });
+}
+
+/* Спам (правило 1): каждое срабатывание — сообщения уже удалены и игроку
+   коротко сказано «помедленнее»; на 5-е срабатывание за час — мьют на 10
+   минут; после мьюта и после часа без спама счёт начинается заново. */
+async function spam(g, m, f) {
+  const key = g.id + ':' + m.author.id, now = Date.now();
+  let h = spamHits.get(key);
+  if (!h || now - h.t > R.SPAM.reset) h = { n: 0, t: now };
+  h.n++; h.t = now;
+  if (h.n < R.SPAM.limit) {
+    spamHits.set(key, h);
+    // сообщение «помедленнее» — не чаще раза в несколько секунд: пачки идут одна за другой
+    if (now - (softHit.get('spam:' + key) || 0) > 5000) {
+      softHit.set('spam:' + key, now);
+      await notice(m.channel_id, m.author.id, 'slow down: more than 3 messages within 2 seconds is spam (rule 1, ' + h.n + ' of ' + R.SPAM.limit + ').').catch(() => {});
+    }
+    return null;
+  }
+  spamHits.delete(key);
   const until = Date.parse(m.member && m.member.communication_disabled_until) || 0;
   return punish(g, m.author, f, { channel: m.channel_id, excerpt: m.content, until, roles: m.member && m.member.roles });
 }
@@ -498,7 +500,7 @@ async function onMessage(m, edited) {
     if (fl) found.push(A.finding(fl.kind, { messages: fl.messages }));
   }
   found.sort((a, b) => b.weight - a.weight);
-  // спорные находки (слова бывают и невинными) — без балла: решают модераторы
+  // находки с mode (политика, чужой IP) — без наказания: сообщение просто убирается
   const sure = found.filter(f => !f.mode);
   if (sure.length) return enforce(g, m, sure[0]);
 
@@ -512,13 +514,13 @@ async function onMessage(m, edited) {
   if (found.length) {
     const f = found.find(x => x.mode === 'hide') || found.find(x => x.mode === 'soft') || found[0];
     await gentle(g, m, f, edited);
-    if (f.mode !== 'review') return;                                    // сообщение уже убрано
+    return;                                                             // сообщение уже убрано
   }
   if (SCAN_IMAGES && !ch.nsfw && !edited) queueImages(g, m);
 }
 
 /* Встроенная AutoMod Discord уже не дала отправить сообщение — бот только
-   засчитывает нарушение по той же лестнице и пишет игроку, за что. */
+   добавляет наказание по правилу и пишет игроку, за что. */
 const seenExec = new Map();
 async function onAutomodExecution(d) {
   if (!d || !d.action || d.action.type !== 1) return;     // считаем только блокировку, не алерты
@@ -530,11 +532,10 @@ async function onAutomodExecution(d) {
   seenExec.set(key, now);
   for (const [k, t] of seenExec) if (now - t > 60000) seenExec.delete(k);
 
-  // спам по догадке Discord и его общие списки слов тоже ошибаются: сообщение
-  // AutoMod уже не пропустила, а балл — только за то, что подтвердили сами
+  // спам по догадке Discord, упоминания и его общие списки слов тоже ошибаются:
+  // сообщение AutoMod уже не пропустила, а наказание — только за то, что подтвердили сами
   let f;
-  if (d.rule_trigger_type === 5) f = A.finding('mentions');
-  else if (d.rule_trigger_type === 3) return;
+  if (d.rule_trigger_type === 5 || d.rule_trigger_type === 3) return;
   else if (d.rule_trigger_type === 4) {
     const w = A.checkWords({ content: d.content || d.matched_content || '' });
     if (!(w.length && w[0].kind === 'slur')) return;
@@ -550,7 +551,7 @@ async function onAutomodExecution(d) {
 /* ---------- участники: ники, аватарки, рейды, обход бана ---------- */
 const DISCORD_EPOCH = 1420070400000n;
 
-// удалить сообщение и коротко объяснить почему — без баллов (раз в 30 секунд)
+// удалить сообщение и коротко объяснить почему — без наказания (раз в 30 секунд)
 async function softRemove(m, text) {
   await api('DELETE', '/channels/' + m.channel_id + '/messages/' + m.id).catch(() => {});
   const key = m.guild_id + ':' + m.author.id, now = Date.now();
@@ -561,8 +562,8 @@ async function softRemove(m, text) {
 
 const jump = m => 'https://discord.com/channels/' + m.guild_id + '/' + m.channel_id + '/' + m.id;
 const SOFT_TEXT = {
-  politics: 'politics is off-topic here (rule 10). No strike, just keep it out of the chat.',
-  doxx: 'it looked like an IP address, so it was hidden to protect privacy (rule 6). No strike.'
+  politics: 'no politics here (rule 9). No punishment, just keep it out of the chat.',
+  doxx: 'it looked like an IP address, so it was hidden to protect privacy (rule 7). No punishment.'
 };
 async function gentle(g, m, f, edited) {
   if (f.mode === 'soft' || f.mode === 'hide') await softRemove(m, SOFT_TEXT[f.kind] || 'please keep to the rules.');
@@ -573,7 +574,7 @@ async function gentle(g, m, f, edited) {
   for (const [k, t] of reviewHit) if (now - t > 10 * 60 * 1000) reviewHit.delete(k);
   await alert(g, f.note + ' (rule ' + f.rule + ')', '<@' + m.author.id + '> in <#' + m.channel_id + '>' +
     (f.mode === 'hide' ? ' (message hidden)' : ': ' + jump(m)) + '\n>>> ' + quote(m.content) +
-    '\n\nThe bot is not sure, so no strike was given. If it breaks the rules, give a strike with the command.').catch(() => {});
+    '\n\nThe bot is not sure, so the author was not punished. If it breaks the rules, use the warn command.').catch(() => {});
 }
 
 async function alert(g, title, text) {
@@ -597,13 +598,16 @@ async function checkName(g, d) {
   const nick = v.kind === 'hoist' && v.clean ? v.clean : 'Player ' + uid.slice(-4);
   const why = v.kind === 'impersonation' ? 'pretending to be staff' : v.kind === 'bad-name' ? 'inappropriate name' : 'unreadable name';
   if (!owner) {
-    const r = await api('PATCH', '/guilds/' + g.id + '/members/' + uid, { nick }, { reason: 'Rule 9: ' + why });
+    const r = await api('PATCH', '/guilds/' + g.id + '/members/' + uid, { nick }, { reason: 'Rule 8: ' + why });
     if (r.status === 403) once('nonick:' + g.id, 'cannot change nicknames in ' + g.name + ': give the bot Manage Nicknames and move its role above member roles');
     nameSeen.set(key, nick);
   }
   if (v.kind === 'bad-name' || v.kind === 'impersonation') {
-    await punish(g, d.user, A.finding(v.kind, { detail: shown.slice(0, 60) }), { silent: true, roles: d.roles,
-      dm: 'Your name in **' + g.name + '** breaks the rules' + (owner ? '. Please change it.' : ', so it was changed to "' + nick + '".') });
+    // наказания за ник нет (правило 8) — только личное сообщение
+    await dm(d.user.id, { embeds: [{ color: R.COLORS.warn, title: 'Notice',
+      description: 'Your name in **' + g.name + '** breaks the rules' + (owner ? '. Please change it.' : ', so it was changed to "' + nick + '".'),
+      fields: [{ name: 'Rule', value: R.ruleById(8).id + '. ' + R.ruleById(8).title, inline: true }, { name: 'Action', value: R.describe({ type: 'none' }), inline: true }],
+      footer: { text: 'If you think this is a mistake, message the owner.' } }] }).catch(() => false);
   }
 }
 
@@ -657,22 +661,30 @@ async function onMemberUpdate(d) {
 const BLOCK = { type: 1, metadata: { custom_message: 'This message breaks the server rules. Please read #rules.' } };
 const NATIVE = [
   { key: 'words', trigger: 4, body: { name: 'AIBROFIST: slurs and sexual content', event_type: 1, trigger_type: 4,
-    trigger_metadata: { presets: [2, 3] }, actions: [BLOCK], enabled: true } },
-  { key: 'mentions', trigger: 5, body: { name: 'AIBROFIST: mention spam', event_type: 1, trigger_type: 5,
-    trigger_metadata: { mention_total_limit: 6, mention_raid_protection_enabled: true }, actions: [BLOCK], enabled: true } },
-  { key: 'spam', trigger: 3, body: { name: 'AIBROFIST: suspected spam', event_type: 1, trigger_type: 3,
-    actions: [{ type: 1 }], enabled: true } }
+    trigger_metadata: { presets: [2, 3] }, actions: [BLOCK], enabled: true } }
 ];
+// правила прежних версий бота (спам упоминаниями, «подозрение на спам»): таких правил на сервере больше нет — убираем
+const OLD_NATIVE = ['mentions', 'spam'];
 
 async function ensureNativeAutomod(g) {
   const st = gstate(g.id);
-  if (NATIVE.every(n => st.automod[n.key])) return;
+  const stale = OLD_NATIVE.filter(k => /^\d+$/.test(String(st.automod[k] || '')));
+  if (NATIVE.every(n => st.automod[n.key]) && !stale.length) return;
   const list = await api('GET', '/guilds/' + g.id + '/auto-moderation/rules');
   if (list.status === 403) {
     once('noautomod:' + g.id, 'Discord AutoMod not set up in ' + g.name + ': give the bot Manage Server (optional, the bot still moderates on its own)');
     return;
   }
   if (!ok(list) || !Array.isArray(list.body)) return;
+  for (const k of stale) {
+    // только свои правила (имя начинается с «AIBROFIST:»): чужое администратор сервера мог сделать сам
+    const mine = list.body.find(r => r.id === st.automod[k] && /^AIBROFIST:/.test(r.name || ''));
+    if (mine) {
+      const r = await api('DELETE', '/guilds/' + g.id + '/auto-moderation/rules/' + mine.id, null, { reason: 'Not part of the server rules any more' });
+      if (!ok(r) && r.status !== 404) { log('AutoMod rule "' + k + '" not removed:', r.status); continue; }
+    }
+    st.automod[k] = 'removed';
+  }
   for (const n of NATIVE) {
     if (st.automod[n.key]) continue;
     // таких правил у сервера может быть только по одному — есть своё, не трогаем
@@ -697,7 +709,7 @@ async function ensureNativeAutomod(g) {
    видит только владелец. В закрытом канале не видно даже панели. */
 const PANEL_MS = 60 * 1000;
 const CONFIRM_MS = 5 * 1000;
-const COMMANDS = ['news', 'updates', 'rules', 'warn', 'mute', 'unmute', 'ban', 'unban', 'strikes', 'pardon', 'modlog', 'clear', 'purge', 'stats', 'help'];
+const COMMANDS = ['news', 'updates', 'rules', 'warn', 'mute', 'unmute', 'ban', 'unban', 'modlog', 'clear', 'purge', 'stats', 'help'];
 /* Начало команд задаётся на хостинге (DISCORD_CMD_PREFIX, например «!ab3»
    -> «!ab3news»). В открытом коде его нет — по исходникам не узнать, что
    набирать. Без настройки команды начинаются просто с «!». */
@@ -713,15 +725,12 @@ const DURATIONS = { '10m': ['10 minutes', 10 * R.MIN], '1h': ['1 hour', R.HOUR],
 const HELP = [
   '**' + PREFIX + 'news** - write a post: channel, title, text, up to 4 images and a link button',
   '**' + PREFIX + 'updates** - choose the channels for automatic game updates',
-  '**' + PREFIX + 'rules** - post the server rules (English, with a Russian button) and set extra banned words',
-  '**' + PREFIX + 'warn @user reason** - give a strike, punished by the same ladder as automod ' +
-    '(add a rule number: ' + PREFIX + 'warn @user 2 spam)',
+  '**' + PREFIX + 'rules** - post the server rules (English and Russian) and set extra banned words',
+  '**' + PREFIX + 'warn @user reason** - send a warning (add a rule number to name the rule: ' + PREFIX + 'warn @user 2 invite)',
   '**' + PREFIX + 'mute @user 1h reason** - mute for 10m, 1h, 6h, 1d, 3d or 7d',
   '**' + PREFIX + 'unmute @user** - lift a mute',
   '**' + PREFIX + 'ban @user 7d reason** - ban for 1d, 3d, 7d or 30d, without a duration - forever',
   '**' + PREFIX + 'unban @user** - lift a ban (a user ID works too)',
-  '**' + PREFIX + 'strikes @user** - show active strikes',
-  '**' + PREFIX + 'pardon @user** - remove all strikes',
   '**' + PREFIX + 'modlog** - send moderation logs to this channel, **' + PREFIX + 'modlog off** to stop',
   '**' + PREFIX + 'clear 50** - delete the last 50 messages in this channel, **' + PREFIX + 'clear all** - all of them ' +
     '(asks first), add @user to delete only theirs, **' + PREFIX + 'clear stop** to stop. Pinned messages and the rules post stay',
@@ -773,7 +782,7 @@ async function confirm(channel, text) {
 async function openPanel(g, m, kind, data) {
   const id = crypto.randomBytes(9).toString('hex');
   const label = { news: 'Open the post editor', updates: 'Choose update channels', help: 'Show commands',
-                  strikes: 'Show strikes', rules: 'Open the rules editor',
+                  rules: 'Open the rules editor',
                   clear: 'Delete all messages' + (data && data.user ? ' of this member' : '') + ' here',
                   stats: 'Show the stats link' }[kind];
   const r = await sendMessage(m.channel_id, { allowed_mentions: { parse: [] },
@@ -789,15 +798,6 @@ function closePanel(id) {
   if (!p) return;
   panels.delete(id);
   api('DELETE', '/channels/' + p.channel + '/messages/' + p.message).catch(() => {});
-}
-
-function strikesText(g, uid) {
-  const list = activeStrikes(g.id, uid);
-  if (!list.length) return '<@' + uid + '> has no active strikes.';
-  const lines = list.map(s => '<t:' + Math.floor(s.t / 1000) + ':R> ' + R.strikes(s.p) + (s.r ? ', rule ' + s.r : '') + ', ' +
-    ((A.KIND[s.k] && A.KIND[s.k].note) || (s.k === 'manual' ? 'warned by the owner' : s.k)) +
-    (s.by && s.by !== 'auto' ? ', by <@' + s.by + '>' : ''));
-  return '**<@' + uid + '> has ' + R.strikes(points(list)) + ':**\n' + lines.join('\n');
 }
 
 // «!команда ...» от владельца; true — команда узнана и выполнена
@@ -831,15 +831,6 @@ async function onOwnerCommand(g, m) {
   const uid = idm[1] || idm[2], rest = idm[3].trim();
   const mention = (m.mentions || []).find(u => u && u.id === uid);
   const target = mention || { id: uid };
-  if (cmd === 'strikes') { await openPanel(g, m, 'strikes', { user: uid }); return true; }
-  if (cmd === 'pardon') {
-    delete state.strikes[g.id + ':' + uid];
-    const caseNo = ++state.cases;
-    save();
-    await modlog(g, { caseNo, title: 'Strikes removed', color: R.COLORS.ok, user: uid, by: m.author.id });
-    await confirm(m.channel_id, 'All strikes of <@' + uid + '> are removed.');
-    return true;
-  }
   if (cmd === 'unban') {
     const r = await api('DELETE', '/guilds/' + g.id + '/bans/' + uid, null, { reason: 'Unbanned by the owner' });
     if (ok(r) || r.status === 404) forgetBan(g.id, uid);
@@ -861,7 +852,7 @@ async function onOwnerCommand(g, m) {
     const rule = rm && R.ruleById(Number(rm[1])) ? Number(rm[1]) : 0;
     const reason = (rule ? rm[2] : rest).trim().slice(0, 300);
     const f = { kind: 'manual', rule, weight: 1, note: reason || (rule ? R.ruleById(rule).title : 'Warned by the owner') };
-    await punish(g, target, f, { by: m.author.id, channel: m.channel_id, until, roles });
+    await punish(g, target, f, { step: { type: 'warn' }, by: m.author.id, channel: m.channel_id, until, roles });
     return true;
   }
   if (cmd === 'mute') {
@@ -877,7 +868,7 @@ async function onOwnerCommand(g, m) {
       await dm(uid, { embeds: [{ color: R.COLORS.mute, title: 'You have been muted',
         description: 'You were muted in **' + g.name + '** for ' + d[0] + '.',
         fields: [{ name: 'Reason', value: reason }],
-        footer: { text: 'If you think this is a mistake, message a moderator.' } }] }).catch(() => {});
+        footer: { text: 'If you think this is a mistake, message the owner.' } }] }).catch(() => {});
       await modlog(g, { caseNo, title: 'Mute for ' + d[0], color: R.COLORS.mute, user: uid, by: m.author.id, reason });
     }
     await confirm(m.channel_id, done ? '<@' + uid + '> is muted for ' + d[0] + '.' : 'I could not mute them: my role must be above theirs and have Timeout Members.');
@@ -894,7 +885,7 @@ async function onOwnerCommand(g, m) {
     // личное сообщение — до бана, иначе оно уже не дойдёт
     await dm(uid, { embeds: [{ color: R.COLORS.ban, title: ms ? 'You have been banned for ' + R.duration(ms) : 'You have been banned permanently',
       description: 'You were banned from **' + g.name + '**.', fields: [{ name: 'Reason', value: reason }],
-      footer: { text: ms ? 'The ban is lifted automatically when it ends.' : 'If you think this is a mistake, message a moderator.' } }] }).catch(() => {});
+      footer: { text: ms ? 'The ban is lifted automatically when it ends.' : 'If you think this is a mistake, message the owner.' } }] }).catch(() => {});
     const done = await ban(g, uid, 'Case ' + caseNo + ': ' + reason);
     if (done) {
       setUnban(g.id, uid, ms);
@@ -1039,10 +1030,11 @@ function updatesModalClassic(g) {
 }
 
 /* Правила сервера (команда rules): канал, заголовок, правила по-английски
-   (их видно в посте) и по-русски (по кнопке под постом, видит только
-   нажавший), свои запрещённые слова. Сразу вписаны стандартные правила
-   и лестница наказаний — бот следит именно за ними. */
+   и по-русски — двумя постами подряд, оба видны всем, — свои запрещённые
+   слова. Сразу вписаны стандартные правила с наказаниями — бот следит
+   именно за ними. */
 const RULES_TITLE = 'AIBROFIST Server Rules';
+const RULES_TITLE_RU = 'Правила сервера AIBROFIST';
 // канал #rules сервера AIBROFIST (DISCORD_RULES_CHANNEL_ID на хостинге его заменяет)
 const RULES_CHANNEL = String(process.env.DISCORD_RULES_CHANNEL_ID || '1543921319563886643').trim();
 function rulesNow(g) {
@@ -1058,9 +1050,9 @@ function rulesModal(g, p) {
     field('Title', null, { type: 4, custom_id: 'title', style: 1, required: true, max_length: 100, value: r.title }),
     field('Rules in English', 'Shown in the post. Keep the rule numbers: the bot names them.',
           { type: 4, custom_id: 'en', style: 2, required: true, max_length: 3700, value: r.en.slice(0, 3700) }),
-    field('Rules in Russian', 'Shown by the button under the post. Leave empty for no button.',
+    field('Rules in Russian', 'Posted right after the English one. Leave empty for English only.',
           { type: 4, custom_id: 'ru', style: 2, required: false, max_length: 3700, value: r.ru.slice(0, 3700) }),
-    field('Extra banned words', 'Comma or new line between them. A message with one is removed and gets a strike.',
+    field('Extra banned words', 'Comma or new line between them. A message with one is removed and the author gets a warning.',
           Object.assign({ type: 4, custom_id: 'words', style: 2, required: false, max_length: 2000 }, r.words ? { value: r.words } : {}))
   ] };
 }
@@ -1070,13 +1062,35 @@ function rulesModalClassic(g, p) {
     row('channel', 'Channel', 1, { required: true, max_length: 100, value: c ? c.name : '' }),
     row('title', 'Title', 1, { required: true, max_length: 100, value: r.title }),
     row('en', 'Rules in English', 2, { required: true, max_length: 3700, value: r.en.slice(0, 3700) }),
-    row('ru', 'Rules in Russian (button under the post)', 2, { max_length: 3700, value: r.ru.slice(0, 3700) }),
+    row('ru', 'Rules in Russian (second post)', 2, { max_length: 3700, value: r.ru.slice(0, 3700) }),
     row('words', 'Extra banned words (comma between them)', 2, Object.assign({ max_length: 2000 }, r.words ? { value: r.words } : {}))
   ] };
 }
-const rulesPost = (title, en, ru) => frame({ color: R.COLORS.neutral, title, text: en,
-  footer: 'AIBROFIST  ·  Updated <t:' + Math.floor(Date.now() / 1000) + ':D>',
-  button: ru ? { label: 'Русский', id: 'rules:ru' } : null });
+const rulesPost = (title, text) => frame({ color: R.COLORS.neutral, title, text,
+  footer: 'AIBROFIST  ·  Updated <t:' + Math.floor(Date.now() / 1000) + ':D>' });
+
+/* Два поста подряд: английский и русский, оба видны всем. Тот же канал —
+   правим прежние посты на месте, иначе кладём новые, а старые убираем.
+   Возвращает { message, ruMessage } или { error: код ответа Discord }. */
+async function publishRules(g, chan, r, old) {
+  old = old || {};
+  const same = old.channel === chan;
+  const put = async (text, title, prev) => {
+    const msg = rulesPost(title, linkify(g, text));
+    let res = null;
+    if (prev && same) res = await api('PATCH', '/channels/' + chan + '/messages/' + prev, msg);
+    if (!res || !ok(res)) res = await api('POST', '/channels/' + chan + '/messages', msg);
+    return res;
+  };
+  const en = await put(r.en, r.title, old.message);
+  if (!ok(en) || !en.body) return { error: en.status };
+  const ru = r.ru ? await put(r.ru, RULES_TITLE_RU, old.ruMessage) : null;
+  if (ru && (!ok(ru) || !ru.body)) return { error: ru.status, message: en.body.id, ruMessage: '' };
+  const out = { message: en.body.id, ruMessage: ru ? ru.body.id : '' };
+  for (const id of [old.message, old.ruMessage])
+    if (id && id !== out.message && id !== out.ruMessage) api('DELETE', '/channels/' + old.channel + '/messages/' + id).catch(() => {});
+  return out;
+}
 
 async function onRulesSubmit(i, g) {
   await defer(i);
@@ -1090,51 +1104,42 @@ async function onRulesSubmit(i, g) {
   const words = [...new Set(String(v.words || '').split(/[,\n;]+/).map(w => w.trim().toLowerCase().replace(/\s+/g, ' '))
                        .filter(w => w.length >= 2 && w.length <= 60))].slice(0, 200);
   const st = gstate(g.id), old = st.rules || {};
-  const msg = rulesPost(title, linkify(g, en), ru);
-  // тот же канал — правим прежний пост (он остаётся на месте), иначе — новый, а старый убираем
-  let r = null;
-  if (old.message && old.channel === chosen.id) r = await api('PATCH', '/channels/' + chosen.id + '/messages/' + old.message, msg);
-  if (!r || !ok(r)) {
-    r = await api('POST', '/channels/' + chosen.id + '/messages', msg);
-    if (ok(r) && old.message && !(old.channel === chosen.id && old.message === r.body.id))
-      api('DELETE', '/channels/' + old.channel + '/messages/' + old.message).catch(() => {});
-  }
-  if (!ok(r) || !r.body) return finish(i, card('Could not post in <#' + chosen.id + '> (error ' + r.status + '). Check that I can send messages there.'));
-  st.rules = { channel: chosen.id, message: r.body.id, title, en, ru, custom: true };   // свой текст — сам бот его больше не меняет
+  const r = await publishRules(g, chosen.id, { title, en, ru }, old);
+  if (r.error) return finish(i, card('Could not post in <#' + chosen.id + '> (error ' + r.error + '). Check that I can send messages there.'));
+  st.rules = { channel: chosen.id, message: r.message, ruMessage: r.ruMessage, title, en, ru, custom: true };   // свой текст — сам бот его больше не меняет
   st.words = words;
   save();
-  return finish(i, card('Rules are in <#' + chosen.id + '>: https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.body.id +
-    '\n' + (ru ? 'The Russian version opens with the button under the post.' : 'No Russian version, so there is no button.') +
-    '\n' + (words.length ? 'Extra banned words: ' + words.length + '. Messages with them are removed and get a strike.' : 'No extra banned words.')));
+  return finish(i, card('Rules are in <#' + chosen.id + '>: https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.message +
+    '\n' + (ru ? 'The Russian version is the next post.' : 'No Russian version.') +
+    '\n' + (words.length ? 'Extra banned words: ' + words.length + '. Messages with them are removed and the author gets a warning.' : 'No extra banned words.')));
 }
 
-/* Правила ещё не выкладывались — бот сам кладёт стандартные в #rules,
-   один раз. Поменялся стандартный текст (новая версия бота), а владелец
-   свой не писал — бот правит тот же пост. Написал свой командой rules
-   (custom) — не трогаем; удалил пост — бот его не возвращает. */
+/* Правила ещё не выкладывались — бот сам кладёт стандартные в #rules.
+   Поменялся стандартный текст (новая версия бота), а владелец свой не писал —
+   бот правит те же посты. Написал свой командой rules (custom) — не трогаем;
+   удалил пост — бот его не возвращает. Исключение — разовая замена на правила
+   с наказаниями у каждого правила (fixes.rules9): она перекрывает и свой текст,
+   и старый пост с кнопкой «Русский». */
 async function postDefaultRules(g) {
   const st = gstate(g.id);
   const old = st.rules;
-  if (old && old.message) {
-    const en = R.rulesText('en'), ru = R.rulesText('ru');
-    if (old.custom || old.removed || (old.en === en && old.ru === ru)) return;
-    const r = await api('PATCH', '/channels/' + old.channel + '/messages/' + old.message, rulesPost(old.title || RULES_TITLE, linkify(g, en), ru));
-    if (ok(r)) Object.assign(old, { en, ru });
-    else if (r.status === 404) old.removed = true;
-    save();
-    return;
-  }
+  const force = !state.fixes.rules9;
+  const en = R.rulesText('en'), ru = R.rulesText('ru');
   const c = g.channels.get(RULES_CHANNEL);
-  if (!c) return;
-  const r0 = rulesNow(g);
-  const r = await api('POST', '/channels/' + c.id + '/messages', rulesPost(r0.title, linkify(g, r0.en), r0.ru));
-  if (!ok(r) || !r.body) { log('could not post the rules in #' + c.name + ':', r.status); return; }
-  st.rules = { channel: c.id, message: r.body.id, title: r0.title, en: r0.en, ru: r0.ru };
+  if (old && old.message && !force && (old.custom || old.removed || (old.en === en && old.ru === ru && old.ruMessage))) return;
+  if (!old && !c) return;
+  const chan = old && old.channel && g.channels.has(old.channel) ? old.channel : c && c.id;
+  if (!chan) return;
+  const title = (old && !force && old.title) || RULES_TITLE;
+  const r = await publishRules(g, chan, { title, en, ru }, old || {});
+  if (r.error) { log('could not post the rules in ' + chan + ':', r.error); return; }
+  st.rules = { channel: chan, message: r.message, ruMessage: r.ruMessage, title, en, ru };
+  if (force) state.fixes.rules9 = true;
   save();
 }
 
-// кнопка «Русский» под правилами — нажать может любой, ответ видит только он
-// (и в личке у владельца, где лежит превью: там берём правила сервера бота)
+// кнопка «Русский» была под старым постом правил (теперь русский — отдельный пост);
+// нажатие на оставшуюся кнопку по-прежнему отвечает русским текстом
 function rulesInRussian(i, g) {
   const r = g && gstate(g.id).rules;
   const text = r && r.ru ? r.ru : R.rulesText('ru');
@@ -1264,7 +1269,6 @@ async function onInteraction(i) {
     if (p.kind === 'updates') return showModal(i, updatesModal(g), updatesModalClassic(g));
     if (p.kind === 'rules') return showModal(i, rulesModal(g, p), rulesModalClassic(g, p));
     if (p.kind === 'help') return reply(i, card(HELP));
-    if (p.kind === 'strikes') return reply(i, card(strikesText(g, p.data.user)));
     if (p.kind === 'stats') return reply(i, card('**Live server stats** (updates every second):\n' + require('./serversInfo.js').link() +
       '\n\nKeep this link private. **' + PREFIX + 'stats new** makes a new one and the old one stops working.'));
     if (p.kind === 'clear') {
