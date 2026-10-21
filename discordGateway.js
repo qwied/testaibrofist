@@ -34,6 +34,9 @@ class Gateway extends EventEmitter {
     this.fails = 0;
     this.stopped = false;
     this.retryTimer = null;
+    this.connTimer = null;
+    // открытое, но так и не «вошедшее» соединение (нет HELLO или READY) через столько рвётся и открывается заново
+    this.readyMs = Number(opts.readyMs || process.env.DISCORD_GW_READY_MS) || 30000;
     // для страницы состояния (/discord/status): что сейчас и что было последним
     this.state = 'idle';
     this.lastClose = null;
@@ -66,6 +69,9 @@ class Gateway extends EventEmitter {
     catch (e) { this.lastError = { message: e.message, at: Date.now() }; this.retry('connect failed: ' + e.message); return; }
     this.ws = ws;
     this.acked = true;
+    this.stopConn();
+    this.connTimer = setTimeout(() => { if (ws === this.ws && this.state !== 'ready') this.drop(4903, 'not ready in ' + this.readyMs + ' ms'); }, this.readyMs);
+    if (this.connTimer.unref) this.connTimer.unref();
     ws.on('message', data => {
       let msg;
       try { msg = JSON.parse(String(data)); } catch (e) { return; }
@@ -74,6 +80,7 @@ class Gateway extends EventEmitter {
     ws.on('close', (code, reason) => {
       if (ws !== this.ws) return;              // старое соединение, уже заменили
       this.stopBeat();
+      this.stopConn();
       this.ws = null;
       this.state = 'closed';
       this.lastClose = { code, reason: reason && reason.length ? String(reason) : '', at: Date.now() };
@@ -123,6 +130,7 @@ class Gateway extends EventEmitter {
         setTimeout(() => this.drop(4901, 'invalid session'), 1000 + Math.floor(Math.random() * 4000));
         break;
       case 0:
+        if (msg.t === 'READY' || msg.t === 'RESUMED') this.stopConn();
         if (msg.t === 'READY') {
           this.sessionId = msg.d.session_id;
           this.resumeUrl = msg.d.resume_gateway_url || null;
@@ -161,6 +169,10 @@ class Gateway extends EventEmitter {
     if (this.beat) { clearTimeout(this.beat); clearInterval(this.beat); this.beat = null; }
   }
 
+  stopConn() {
+    if (this.connTimer) { clearTimeout(this.connTimer); this.connTimer = null; }
+  }
+
   // закрыть текущее соединение кодом не 1000 — тогда сессию можно продолжить
   drop(code, why) {
     const ws = this.ws;
@@ -182,6 +194,7 @@ class Gateway extends EventEmitter {
   destroy() {
     this.stopped = true;
     this.stopBeat();
+    this.stopConn();
     if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
     if (this.ws) { try { this.ws.close(1000); } catch (e) {} this.ws = null; }
   }

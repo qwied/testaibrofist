@@ -1,4 +1,9 @@
 {
   "base": "e13308e9e2c65c76f5816e602d83da1deca774f9",
-  "updates": []
+  "updates": [
+    {
+      "title": "Discord rules and message checking",
+      "text": "The Discord rules are shorter, and the bot now reads every message in two independent ways."
+    }
+  ]
 }

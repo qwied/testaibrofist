@@ -45,7 +45,6 @@ const PRIVILEGED = INTENT.GUILD_MEMBERS | INTENT.MESSAGE_CONTENT;
 const PERM = { KICK: 1n << 1n, BAN: 1n << 2n, ADMIN: 1n << 3n, MANAGE_GUILD: 1n << 5n,
                MANAGE_MESSAGES: 1n << 13n, MODERATE: 1n << 40n };
 const ALL_PERMS = (1n << 64n) - 1n;
-const STAFF = PERM.ADMIN | PERM.MANAGE_GUILD | PERM.MANAGE_MESSAGES | PERM.MODERATE | PERM.KICK | PERM.BAN;
 
 const COOLDOWN = 30 * 1000;      // за одну волну спама — одно наказание, а не восемь
 const RAID_JOINS = 100;           // больше стольких входов за минуту — рейд
@@ -53,7 +52,7 @@ const RAID_MS = 10 * 60 * 1000;
 const NOTICE_MS = 10 * 1000;     // короткое предупреждение в канале исчезает само
 
 // banned — приметы забаненных (аватарка, имя): по ним ловим обход бана
-let state = { feed: [], guilds: {}, cases: 0, banned: {}, unbans: {}, fixes: {} };
+let state = { feed: [], guilds: {}, cases: 0, banned: {}, unbans: {}, fixes: {}, watch: { last: {} } };
 let loaded = false, saveTimer = null;
 const guilds = new Map();        // id -> { id, name, owner, roles: Map, channels: Map }
 const setupDone = new Set();
@@ -62,7 +61,6 @@ const inviteCache = new Map();   // код приглашения -> { guild, t 
 const dmChannels = new Map();
 const said = new Set();          // какие подсказки владельцу уже были в журнале
 const flood = new A.FloodWatch();
-const nameSeen = new Map();       // guild:user -> какой ник уже разобрали
 const joins = new Map();          // guild -> времена входов за последнюю минуту
 const raidUntil = new Map();
 const softHit = new Map();        // guild:user -> когда последний раз писали «подожди»
@@ -86,7 +84,8 @@ function loadState() {
       cases: Number(s.cases) || 0,
       banned: s.banned && typeof s.banned === 'object' ? s.banned : {},
       unbans: s.unbans && typeof s.unbans === 'object' ? s.unbans : {},    // «сервер:игрок» -> когда снять бан
-      fixes: s.fixes && typeof s.fixes === 'object' ? s.fixes : {}         // разовые исправления, уже сделанные
+      fixes: s.fixes && typeof s.fixes === 'object' ? s.fixes : {},        // разовые исправления, уже сделанные
+      watch: { last: s.watch && s.watch.last && typeof s.watch.last === 'object' ? s.watch.last : {} }   // канал -> последнее прочитанное сообщение
     };
   } catch (e) { /* первый запуск */ }
   // штрафных баллов больше нет — у каждого правила своё наказание; накопленные при загрузке не читаются
@@ -120,7 +119,7 @@ function cacheGuild(d) {
   guilds.set(g.id, g);
   return g;
 }
-const chan = c => ({ id: c.id, name: String(c.name || ''), type: c.type, nsfw: !!c.nsfw, parent: c.parent_id || null });
+const chan = c => ({ id: c.id, name: String(c.name || ''), type: c.type, nsfw: !!c.nsfw, parent: c.parent_id || null, last: c.last_message_id || null });
 
 function memberPerms(g, uid, roleIds) {
   if (g.owner === uid) return ALL_PERMS;
@@ -473,7 +472,13 @@ async function pumpImages() {
 }
 
 /* ---------- сообщения ---------- */
-async function onMessage(m, edited) {
+async function onMessage(m, edited, via) {
+  // каждое сообщение отмечается сразу, до любых проверок: живое подключение и второй канал чтения
+  // (ниже, «ловец») могут принести одно и то же — разбираем только раз
+  if (m && m.id && m.channel_id && m.guild_id && !edited) {
+    if (WATCH.seen.has(m.id)) return;
+    markSeen(m, via || 'gateway');
+  }
   if (!m || !m.guild_id || !m.author || m.author.bot || m.webhook_id) return;
   if (m.type !== undefined && m.type !== 0 && m.type !== 19) return;   // обычное сообщение и ответ
   if (edited && !(m.member && m.member.roles)) return;   // без ролей не отличить модератора
@@ -512,7 +517,7 @@ async function onMessage(m, edited) {
     }
   }
   if (found.length) {
-    const f = found.find(x => x.mode === 'hide') || found.find(x => x.mode === 'soft') || found[0];
+    const f = found.find(x => x.mode === 'hide') || found[0];
     await gentle(g, m, f, edited);
     return;                                                             // сообщение уже убрано
   }
@@ -548,7 +553,7 @@ async function onAutomodExecution(d) {
   await punish(g, { id: d.user_id }, f, { channel: d.channel_id, excerpt: d.content, silent: true });
 }
 
-/* ---------- участники: ники, аватарки, рейды, обход бана ---------- */
+/* ---------- участники: рейды, обход бана ---------- */
 const DISCORD_EPOCH = 1420070400000n;
 
 // удалить сообщение и коротко объяснить почему — без наказания (раз в 30 секунд)
@@ -562,12 +567,11 @@ async function softRemove(m, text) {
 
 const jump = m => 'https://discord.com/channels/' + m.guild_id + '/' + m.channel_id + '/' + m.id;
 const SOFT_TEXT = {
-  politics: 'no politics here (rule 9). No punishment, just keep it out of the chat.',
   doxx: 'it looked like an IP address, so it was hidden to protect privacy (rule 7). No punishment.'
 };
 async function gentle(g, m, f, edited) {
-  if (f.mode === 'soft' || f.mode === 'hide') await softRemove(m, SOFT_TEXT[f.kind] || 'please keep to the rules.');
-  if (f.mode === 'soft' || edited) return;
+  if (f.mode === 'hide') await softRemove(m, SOFT_TEXT[f.kind] || 'please keep to the rules.');
+  if (edited) return;
   const key = g.id + ':' + m.author.id + ':' + f.kind, now = Date.now();
   if (now - (reviewHit.get(key) || 0) < 10 * 60 * 1000) return;       // не заваливать журнал
   reviewHit.set(key, now);
@@ -582,33 +586,6 @@ async function alert(g, title, text) {
   const ch = modlogChannel(g);
   if (ch) await sendMessage(ch, { embeds: [embed], allowed_mentions: { parse: [] } });
   else if (g.owner) await dm(g.owner, { embeds: [embed] });     // журнала нет — владельцу в личку
-}
-
-const displayName = d => d.nick || (d.user && (d.user.global_name || d.user.username)) || '';
-
-async function checkName(g, d) {
-  const uid = d.user.id, shown = displayName(d), key = g.id + ':' + uid;
-  if (nameSeen.get(key) === shown) return;            // этот ник уже разобран
-  nameSeen.set(key, shown);
-  const owner = uid === g.owner;
-  const staff = owner || !!(memberPerms(g, uid, d.roles) & STAFF);
-  let v = A.checkName(shown, { owner: owner ? '' : g.ownerName });
-  if (v && v.kind === 'impersonation' && staff) v = null;   // настоящему модератору «Mod» в нике можно
-  if (!v || (owner && v.kind !== 'bad-name')) return;     // владельцу ник Discord менять не даёт
-  const nick = v.kind === 'hoist' && v.clean ? v.clean : 'Player ' + uid.slice(-4);
-  const why = v.kind === 'impersonation' ? 'pretending to be staff' : v.kind === 'bad-name' ? 'inappropriate name' : 'unreadable name';
-  if (!owner) {
-    const r = await api('PATCH', '/guilds/' + g.id + '/members/' + uid, { nick }, { reason: 'Rule 8: ' + why });
-    if (r.status === 403) once('nonick:' + g.id, 'cannot change nicknames in ' + g.name + ': give the bot Manage Nicknames and move its role above member roles');
-    nameSeen.set(key, nick);
-  }
-  if (v.kind === 'bad-name' || v.kind === 'impersonation') {
-    // наказания за ник нет (правило 8) — только личное сообщение
-    await dm(d.user.id, { embeds: [{ color: R.COLORS.warn, title: 'Notice',
-      description: 'Your name in **' + g.name + '** breaks the rules' + (owner ? '. Please change it.' : ', so it was changed to "' + nick + '".'),
-      fields: [{ name: 'Rule', value: R.ruleById(8).id + '. ' + R.ruleById(8).title, inline: true }, { name: 'Action', value: R.describe({ type: 'none' }), inline: true }],
-      footer: { text: 'If you think this is a mistake, message the owner.' } }] }).catch(() => false);
-  }
 }
 
 // больше 100 входов за минуту — рейд: следующие 10 минут каждый, кто заходит, получает мьют на час
@@ -646,13 +623,6 @@ async function onMemberAdd(d) {
   if (!g || !d.user || d.user.bot) return;
   await trackJoin(g, d);
   await checkEvasion(g, d);
-  await onMemberUpdate(d);
-}
-
-async function onMemberUpdate(d) {
-  const g = guilds.get(d.guild_id);
-  if (!g || !d.user || d.user.bot) return;
-  await checkName(g, d);
 }
 
 /* ---------- встроенная AutoMod Discord ----------
@@ -1030,9 +1000,10 @@ function updatesModalClassic(g) {
 }
 
 /* Правила сервера (команда rules): канал, заголовок, правила по-английски
-   и по-русски — двумя постами подряд, оба видны всем, — свои запрещённые
-   слова. Сразу вписаны стандартные правила с наказаниями — бот следит
-   именно за ними. */
+   и по-русски — одним постом: сверху английский, кнопка «Русский» меняет
+   текст в этом же окне на русский (и обратно, кнопка «English»), — свои
+   запрещённые слова. Сразу вписаны стандартные правила с наказаниями — бот
+   следит именно за ними. */
 const RULES_TITLE = 'AIBROFIST Server Rules';
 const RULES_TITLE_RU = 'Правила сервера AIBROFIST';
 // канал #rules сервера AIBROFIST (DISCORD_RULES_CHANNEL_ID на хостинге его заменяет)
@@ -1050,7 +1021,7 @@ function rulesModal(g, p) {
     field('Title', null, { type: 4, custom_id: 'title', style: 1, required: true, max_length: 100, value: r.title }),
     field('Rules in English', 'Shown in the post. Keep the rule numbers: the bot names them.',
           { type: 4, custom_id: 'en', style: 2, required: true, max_length: 3700, value: r.en.slice(0, 3700) }),
-    field('Rules in Russian', 'Posted right after the English one. Leave empty for English only.',
+    field('Rules in Russian', 'Shown in the same post by the Русский button. Leave empty for English only.',
           { type: 4, custom_id: 'ru', style: 2, required: false, max_length: 3700, value: r.ru.slice(0, 3700) }),
     field('Extra banned words', 'Comma or new line between them. A message with one is removed and the author gets a warning.',
           Object.assign({ type: 4, custom_id: 'words', style: 2, required: false, max_length: 2000 }, r.words ? { value: r.words } : {}))
@@ -1062,33 +1033,34 @@ function rulesModalClassic(g, p) {
     row('channel', 'Channel', 1, { required: true, max_length: 100, value: c ? c.name : '' }),
     row('title', 'Title', 1, { required: true, max_length: 100, value: r.title }),
     row('en', 'Rules in English', 2, { required: true, max_length: 3700, value: r.en.slice(0, 3700) }),
-    row('ru', 'Rules in Russian (second post)', 2, { max_length: 3700, value: r.ru.slice(0, 3700) }),
+    row('ru', 'Rules in Russian (Русский button)', 2, { max_length: 3700, value: r.ru.slice(0, 3700) }),
     row('words', 'Extra banned words (comma between them)', 2, Object.assign({ max_length: 2000 }, r.words ? { value: r.words } : {}))
   ] };
 }
-const rulesPost = (title, text) => frame({ color: R.COLORS.neutral, title, text,
-  footer: 'AIBROFIST  ·  Updated <t:' + Math.floor(Date.now() / 1000) + ':D>' });
+/* Пост с правилами. o.lang — какой язык показан: на английском внизу кнопка
+   «Русский», на русском — «English»; без русского текста кнопки нет.
+   o.at — когда пост выложен (подпись внизу не прыгает при переключении). */
+const rulesPost = (title, text, o) => {
+  o = o || {};
+  return frame({ color: R.COLORS.neutral, title, text,
+    footer: 'AIBROFIST  ·  Updated <t:' + Math.floor((o.at || Date.now()) / 1000) + ':D>',
+    button: o.lang === 'en' ? { label: 'Русский', id: 'rules:ru' } : o.lang === 'ru' ? { label: 'English', id: 'rules:en' } : null });
+};
 
-/* Два поста подряд: английский и русский, оба видны всем. Тот же канал —
-   правим прежние посты на месте, иначе кладём новые, а старые убираем.
-   Возвращает { message, ruMessage } или { error: код ответа Discord }. */
+/* Один пост: тот же канал — правим прежний на месте, иначе кладём новый, а
+   старый убираем. Прежний отдельный русский пост (если был) убирается.
+   Возвращает { message, at } или { error: код ответа Discord }. */
 async function publishRules(g, chan, r, old) {
   old = old || {};
-  const same = old.channel === chan;
-  const put = async (text, title, prev) => {
-    const msg = rulesPost(title, linkify(g, text));
-    let res = null;
-    if (prev && same) res = await api('PATCH', '/channels/' + chan + '/messages/' + prev, msg);
-    if (!res || !ok(res)) res = await api('POST', '/channels/' + chan + '/messages', msg);
-    return res;
-  };
-  const en = await put(r.en, r.title, old.message);
-  if (!ok(en) || !en.body) return { error: en.status };
-  const ru = r.ru ? await put(r.ru, RULES_TITLE_RU, old.ruMessage) : null;
-  if (ru && (!ok(ru) || !ru.body)) return { error: ru.status, message: en.body.id, ruMessage: '' };
-  const out = { message: en.body.id, ruMessage: ru ? ru.body.id : '' };
+  const at = Date.now();
+  const msg = rulesPost(r.title, linkify(g, r.en), { lang: r.ru ? 'en' : null, at });
+  let res = null;
+  if (old.message && old.channel === chan) res = await api('PATCH', '/channels/' + chan + '/messages/' + old.message, msg);
+  if (!res || !ok(res)) res = await api('POST', '/channels/' + chan + '/messages', msg);
+  if (!ok(res) || !res.body) return { error: res.status };
+  const out = { message: res.body.id, at };
   for (const id of [old.message, old.ruMessage])
-    if (id && id !== out.message && id !== out.ruMessage) api('DELETE', '/channels/' + old.channel + '/messages/' + id).catch(() => {});
+    if (id && id !== out.message && old.channel) api('DELETE', '/channels/' + old.channel + '/messages/' + id).catch(() => {});
   return out;
 }
 
@@ -1106,45 +1078,53 @@ async function onRulesSubmit(i, g) {
   const st = gstate(g.id), old = st.rules || {};
   const r = await publishRules(g, chosen.id, { title, en, ru }, old);
   if (r.error) return finish(i, card('Could not post in <#' + chosen.id + '> (error ' + r.error + '). Check that I can send messages there.'));
-  st.rules = { channel: chosen.id, message: r.message, ruMessage: r.ruMessage, title, en, ru, custom: true };   // свой текст — сам бот его больше не меняет
+  st.rules = { channel: chosen.id, message: r.message, title, en, ru, at: r.at, custom: true };   // свой текст — сам бот его больше не меняет
   st.words = words;
   save();
   return finish(i, card('Rules are in <#' + chosen.id + '>: https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.message +
-    '\n' + (ru ? 'The Russian version is the next post.' : 'No Russian version.') +
+    '\n' + (ru ? 'The Russian version opens with the button under the post, in the same window.' : 'No Russian version, so there is no button.') +
     '\n' + (words.length ? 'Extra banned words: ' + words.length + '. Messages with them are removed and the author gets a warning.' : 'No extra banned words.')));
 }
 
 /* Правила ещё не выкладывались — бот сам кладёт стандартные в #rules.
    Поменялся стандартный текст (новая версия бота), а владелец свой не писал —
-   бот правит те же посты. Написал свой командой rules (custom) — не трогаем;
-   удалил пост — бот его не возвращает. Исключение — разовая замена на правила
-   с наказаниями у каждого правила (fixes.rules9): она перекрывает и свой текст,
-   и старый пост с кнопкой «Русский». */
+   бот правит тот же пост. Написал свой командой rules (custom) — не трогаем;
+   удалил пост — бот выкладывает новый только когда текст правил меняется.
+   Исключение — разовая замена на 7 правил с одним постом и кнопкой «Русский»
+   (fixes.rules7): она перекрывает и свой текст, и убирает прежний отдельный
+   русский пост. */
 async function postDefaultRules(g) {
   const st = gstate(g.id);
   const old = st.rules;
-  const force = !state.fixes.rules9;
+  const force = !state.fixes.rules7;
   const en = R.rulesText('en'), ru = R.rulesText('ru');
   const c = g.channels.get(RULES_CHANNEL);
-  if (old && old.message && !force && (old.custom || old.removed || (old.en === en && old.ru === ru && old.ruMessage))) return;
+  if (old && old.message && !force && (old.custom || (old.en === en && old.ru === ru && !old.ruMessage))) return;
   if (!old && !c) return;
   const chan = old && old.channel && g.channels.has(old.channel) ? old.channel : c && c.id;
   if (!chan) return;
   const title = (old && !force && old.title) || RULES_TITLE;
   const r = await publishRules(g, chan, { title, en, ru }, old || {});
   if (r.error) { log('could not post the rules in ' + chan + ':', r.error); return; }
-  st.rules = { channel: chan, message: r.message, ruMessage: r.ruMessage, title, en, ru };
-  if (force) state.fixes.rules9 = true;
+  st.rules = { channel: chan, message: r.message, title, en, ru, at: r.at };
+  if (force) state.fixes.rules7 = true;
   save();
 }
 
-// кнопка «Русский» была под старым постом правил (теперь русский — отдельный пост);
-// нажатие на оставшуюся кнопку по-прежнему отвечает русским текстом
-function rulesInRussian(i, g) {
-  const r = g && gstate(g.id).rules;
-  const text = r && r.ru ? r.ru : R.rulesText('ru');
-  const box = frame({ color: R.COLORS.neutral, title: 'Правила сервера', text: g ? linkify(g, text) : text });
-  return respond(i, { type: 4, data: Object.assign(box, { flags: box.flags | 64 }) });
+/* Кнопка «Русский» / «English» под правилами: текст в том же окне меняется
+   на другой язык (это правка самого поста, её видят все). Если Discord
+   правку не примет, отвечаем русским текстом только нажавшему. */
+async function rulesSwitch(i, g, lang) {
+  const r = g && gstate(g.id).rules || {};
+  const en = r.en || R.rulesText('en'), ru = r.ru || R.rulesText('ru');
+  const showRu = lang === 'ru' && !!ru;
+  const text = showRu ? ru : en;
+  const title = showRu ? RULES_TITLE_RU : r.title || RULES_TITLE;
+  const box = rulesPost(title, g ? linkify(g, text) : text, { lang: showRu ? 'ru' : ru ? 'en' : null, at: r.at });
+  const res = await respond(i, { type: 7, data: box });
+  if (res && !ok(res) && res.status === 400)
+    return respond(i, { type: 4, data: Object.assign(box, { flags: box.flags | 64 }) });
+  return res;
 }
 
 async function showModal(i, modern, classic) {
@@ -1250,7 +1230,7 @@ async function onUpdatesSubmit(i, g) {
 async function onInteraction(i) {
   if (!i) return;
   const cid = String((i.data && i.data.custom_id) || '');
-  if (i.type === 3 && cid === 'rules:ru') return rulesInRussian(i, i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value);
+  if (i.type === 3 && (cid === 'rules:ru' || cid === 'rules:en')) return rulesSwitch(i, i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value, cid.slice(6));
   if (i.type === 2 && i.data && i.data.name === 'servers') return onServers(i);
   if (i.type === 2 && i.data && i.data.name === 'account') return onAccount(i);
   if (i.type === 4 && i.data && i.data.name === 'account') return onAccountHint(i);
@@ -1672,7 +1652,7 @@ async function pollMessages() {
           m.guild_id = g.id;
           m.member = (rest.members.get(g.id) || new Map()).get(m.author && m.author.id);
           (m.mentions || []).forEach(u => { if (!u.member) u.member = (rest.members.get(g.id) || new Map()).get(u.id); });
-          await onMessage(m, false).catch(e => log('message check failed:', e.message));
+          await onMessage(m, false, 'poll').catch(e => log('message check failed:', e.message));
         }
       }
     }
@@ -1681,7 +1661,153 @@ async function pollMessages() {
   } finally { if (rest) rest.busy = false; }
 }
 
-// участники: кто зашёл, кто сменил ник или аватарку
+/* ---------- второй канал чтения: ловец сообщений ----------
+   Живое подключение (Gateway) — основной и самый быстрый путь, но оно может
+   молча оборваться, пока бот переподключается, или потерять событие; пока
+   бот перезапускается (выкладка), сообщения вообще никто не читает. Чтобы
+   проверялось КАЖДОЕ сообщение, рядом всегда работает второй канал: раз в
+   секунду (тихие каналы — раз в 3 секунды) бот спрашивает у Discord, что
+   пришло в каждый канал после последнего прочитанного сообщения, и
+   разбирает всё, что живое подключение не принесло за 1,5 секунды.
+   - одно сообщение разбирается один раз (по номеру): подключение и ловец
+     друг другу не мешают;
+   - бот помнит, на каком сообщении остановился в каждом канале, и после
+     перезапуска доразбирает то, что пришло, пока он был выключен (не старше
+     10 минут);
+   - если живое подключение «потеряло» сообщение, бот его переподключает;
+   - в режиме запросов (см. выше) этим занят опрос, ловец молчит. */
+const WATCH = { seen: new Set(), last: new Map(), hot: new Map(), blocked: new Map(), misses: [], members: new Map(),
+                since: 0, rounds: 0, lastRound: 0, checked: 0, fromGateway: 0, fromCatchUp: 0, missed: 0, lastMessage: 0,
+                lastKick: 0, readyAt: 0, dirty: false, busy: false };
+const MSG_GRACE_MS = 1500;                    // столько живому подключению даётся, чтобы принести сообщение самому
+const BACKLOG_MS = 10 * 60 * 1000;            // после перезапуска разбираем то, что пришло не раньше 10 минут назад
+const SEEN_KEEP = 5000;
+
+function bumpLast(channel, id) {
+  const last = WATCH.last.get(channel);
+  if (!last || newer(id, last)) { WATCH.last.set(channel, id); WATCH.dirty = true; }
+}
+
+function markSeen(m, via) {
+  WATCH.seen.add(m.id);
+  if (WATCH.seen.size > SEEN_KEEP) {
+    let n = SEEN_KEEP / 5;
+    for (const id of WATCH.seen) { WATCH.seen.delete(id); if (--n <= 0) break; }
+  }
+  bumpLast(m.channel_id, m.id);
+  WATCH.hot.set(m.channel_id, Date.now());
+  WATCH.checked++;
+  WATCH.lastMessage = Date.now();
+  if (via === 'gateway') WATCH.fromGateway++; else WATCH.fromCatchUp++;
+}
+
+// участник сервера для сообщения, которое пришло не по подключению (у него есть роли и мьют — это нужно наказанию)
+async function memberOf(gid, uid) {
+  const k = gid + ':' + uid, c = WATCH.members.get(k), now = Date.now();
+  if (c && now - c.t < 60000) return c.m;
+  const r = await api('GET', '/guilds/' + gid + '/members/' + uid);
+  const m = ok(r) && r.body ? r.body : null;
+  WATCH.members.set(k, { m, t: now });
+  if (WATCH.members.size > 500) for (const key of WATCH.members.keys()) { WATCH.members.delete(key); if (WATCH.members.size <= 400) break; }
+  return m;
+}
+
+// новые сообщения одного канала после последнего прочитанного
+async function readNew(c, live) {
+  let last = WATCH.last.get(c.id);
+  if (!last && c.last) { WATCH.last.set(c.id, c.last); WATCH.dirty = true; return []; }   // первый раз: старое не трогаем
+  if (!last) {
+    const r0 = await api('GET', '/channels/' + c.id + '/messages?limit=1');
+    if (r0.status === 403 || r0.status === 404) { WATCH.blocked.set(c.id, Date.now() + BLOCK_MS); return []; }
+    if (ok(r0) && Array.isArray(r0.body)) { WATCH.last.set(c.id, r0.body[0] ? r0.body[0].id : '0'); WATCH.dirty = true; }
+    return [];
+  }
+  const r = await api('GET', '/channels/' + c.id + '/messages?after=' + last + '&limit=50');
+  if (r.status === 403 || r.status === 404) { WATCH.blocked.set(c.id, Date.now() + BLOCK_MS); return []; }   // закрыт для бота: загляним позже
+  if (!ok(r) || !Array.isArray(r.body)) return [];
+  const list = r.body.slice().sort((a, b) => newer(a.id, b.id) ? 1 : -1);
+  const out = [], now = Date.now();
+  for (const m of list) {
+    if (WATCH.seen.has(m.id)) { bumpLast(c.id, m.id); continue; }       // подключение уже принесло
+    const age = now - Date.parse(m.timestamp);
+    if (live && age < MSG_GRACE_MS) break;                              // пусть подключение принесёт само; спросим в следующий раз
+    if (age > BACKLOG_MS) { WATCH.seen.add(m.id); bumpLast(c.id, m.id); continue; }   // слишком старое — после долгого простоя
+    out.push(m);
+  }
+  if (out.length) WATCH.hot.set(c.id, now);
+  return out;
+}
+
+async function catchUpRound() {
+  if (WATCH.busy || rest) return;
+  WATCH.busy = true;
+  try {
+    const now = Date.now(), live = !!(gw && gw.state === 'ready'), quiet = WATCH.rounds % QUIET_EVERY === 0;
+    for (const g of guilds.values()) {
+      const chans = [...g.channels.values()].filter(c => TEXT_TYPES.has(c.type) && !((WATCH.blocked.get(c.id) || 0) > now) &&
+                                                        (quiet || now - (WATCH.hot.get(c.id) || 0) < HOT_MS));
+      for (let i = 0; i < chans.length; i += 10) {
+        const got = await Promise.all(chans.slice(i, i + 10).map(c => readNew(c, live).catch(() => [])));
+        for (const list of got) for (const m of list) {
+          m.guild_id = g.id;
+          if (m.author && !m.author.bot) m.member = await memberOf(g.id, m.author.id).catch(() => null) || undefined;
+          await onMessage(m, false, 'catchup').catch(e => log('message check failed:', e.message));
+          // отправлено, когда подключение уже было «в сети», а оно не принесло — потеряно им; то, что пришло, пока бот
+          // был выключен или переподключался, — не в счёт
+          if (live && Date.parse(m.timestamp) > WATCH.readyAt + 3000) noteMiss(now);
+        }
+      }
+    }
+    WATCH.rounds++;
+    WATCH.lastRound = Date.now();
+  } finally { WATCH.busy = false; }
+}
+
+// живое подключение не принесло сообщение, хотя «в сети»: два раза за 10 минут — переподключаем его (не чаще раза в 2 минуты)
+function noteMiss(now) {
+  WATCH.missed++;
+  WATCH.misses = WATCH.misses.filter(t => now - t < 10 * 60 * 1000);
+  WATCH.misses.push(now);
+  if (WATCH.misses.length >= 2 && gw && now - WATCH.lastKick > 120000) {
+    WATCH.lastKick = now;
+    log('the live connection missed messages, reconnecting');
+    gw.drop(4903, 'messages were missed');
+  }
+}
+
+// открытые ветки сервера: в них живое подключение сообщения присылает не всегда
+async function watchThreads() {
+  if (rest) return;
+  for (const g of guilds.values()) {
+    const r = await api('GET', '/guilds/' + g.id + '/threads/active');
+    if (!ok(r) || !r.body || !Array.isArray(r.body.threads)) continue;
+    const seen = new Set();
+    for (const t of r.body.threads) {
+      seen.add(t.id);
+      // ветка появилась уже после запуска — проверяем всё с её первого сообщения
+      if (!g.channels.has(t.id) && !WATCH.last.has(t.id) && createdAt(t.id) >= WATCH.since) { WATCH.last.set(t.id, '0'); WATCH.dirty = true; }
+      g.channels.set(t.id, chan(t));
+    }
+    for (const [id, c] of [...g.channels]) if (THREAD_TYPES.has(c.type) && !seen.has(id)) g.channels.delete(id);
+  }
+}
+
+function flushWatch() {
+  if (!WATCH.dirty) return;
+  WATCH.dirty = false;
+  const keep = {};
+  for (const [k, v] of WATCH.last) keep[k] = v;
+  state.watch = { last: keep };
+  save();
+}
+
+function watchStart() {
+  Object.assign(WATCH, { seen: new Set(), last: new Map(Object.entries((state.watch && state.watch.last) || {})), hot: new Map(), blocked: new Map(),
+                         misses: [], members: new Map(), since: Date.now(), rounds: 0, lastRound: 0, checked: 0, fromGateway: 0, fromCatchUp: 0,
+                         missed: 0, lastMessage: 0, lastKick: 0, readyAt: 0, dirty: false, busy: false });
+}
+
+// участники: кто зашёл (в режиме запросов)
 async function pollMembers(g, first) {
   if (!rest || (!first && gw && gw.state === 'ready')) return;
   const all = new Map();
@@ -1695,12 +1821,9 @@ async function pollMembers(g, first) {
   }
   const old = rest.members.get(g.id);
   rest.members.set(g.id, all);
-  const sig = m => [m.nick, m.avatar, m.user.avatar, m.user.global_name, m.user.username, (m.roles || []).join()].join('|');
   for (const [uid, m] of all) {
     const d = Object.assign({ guild_id: g.id }, m);
-    if (first) await onMemberUpdate(d).catch(() => {});
-    else if (!old.has(uid)) await onMemberAdd(d).catch(() => {});
-    else if (sig(old.get(uid)) !== sig(m)) await onMemberUpdate(d).catch(() => {});
+    if (!first && !old.has(uid)) await onMemberAdd(d).catch(() => {});
   }
 }
 
@@ -1744,21 +1867,19 @@ async function setupGuild(g) {
     await syncGlobalCommands();
     await ensureNativeAutomod(g);
     await postDefaultRules(g);
-    const o = await api('GET', '/guilds/' + g.id + '/members/' + g.owner);
-    if (ok(o) && o.body && o.body.user) g.ownerName = o.body.nick || o.body.user.global_name || o.body.user.username;
-    // ники всех, кто уже на сервере, — тоже проверить (ответ придёт пачками)
-    if (gw && gw.state === 'ready') gw.send({ op: 8, d: { guild_id: g.id, query: '', limit: 0 } });
   } catch (e) { log('setup failed for ' + g.name + ':', e.message); setupDone.delete(g.id); }
 }
 
 function onDispatch(t, d) {
   switch (t) {
     case 'READY':
+      WATCH.readyAt = Date.now();
       me = d.user;
       appId = d.application && d.application.id;
       log('connected as ' + (me && me.username));
       useLiveInteractions().catch(e => log('could not switch commands to the live connection:', e.message));
       break;
+    case 'RESUMED': WATCH.readyAt = Date.now(); break;
     case 'GUILD_CREATE': if (!d.unavailable) setupGuild(cacheGuild(d)); break;
     case 'GUILD_UPDATE': { const g = guilds.get(d.id); if (g) { g.name = d.name; g.owner = d.owner_id; } break; }
     case 'GUILD_DELETE': if (!d.unavailable) { guilds.delete(d.id); setupDone.delete(d.id); } break;
@@ -1776,11 +1897,7 @@ function onDispatch(t, d) {
     case 'CHANNEL_DELETE': case 'THREAD_DELETE': { const g = guilds.get(d.guild_id); if (g) g.channels.delete(d.id); break; }
     case 'MESSAGE_CREATE': onMessage(d, false).catch(e => log('message check failed:', e.message)); break;
     case 'GUILD_MEMBER_ADD': onMemberAdd(d).catch(e => log('member check failed:', e.message)); break;
-    case 'GUILD_MEMBER_UPDATE': onMemberUpdate(d).catch(e => log('member check failed:', e.message)); break;
     case 'GUILD_BAN_ADD': rememberBan(d.guild_id, d.user); break;
-    case 'GUILD_MEMBERS_CHUNK':
-      (d.members || []).forEach(mb => onMemberUpdate(Object.assign({ guild_id: d.guild_id }, mb)).catch(() => {}));
-      break;
     // правка сообщения проверяется так же: иначе нарушение дописали бы позже
     // (без edited_timestamp это Discord дорисовал превью ссылки, а не правка)
     case 'MESSAGE_UPDATE': if (typeof d.content === 'string' && d.author && d.edited_timestamp) onMessage(d, true).catch(() => {}); break;
@@ -1815,12 +1932,18 @@ function start() {
   if (!token() || gw) return;
   log('starting the bot');
   loadState();
+  watchStart();
   checkCdn();                        // заранее знать, можно ли скачивать картинки с CDN Discord
   connect(ALL_INTENTS);
   // живое подключение не открылось — работаем запросами (см. выше)
   const t0 = setTimeout(() => { if (gw && gw.state !== 'ready') startRest().catch(e => log('requests mode failed:', e.message)); }, REST_AFTER_MS);
   if (t0.unref) t0.unref();
   timers.push(t0);
+  // второй канал чтения сообщений — всегда, раз в секунду (см. «ловец сообщений» выше)
+  const tw = setInterval(() => catchUpRound().catch(e => once('watch:' + e.message, 'message catch-up failed:', e.message)), POLL_MS);
+  const tth = setInterval(() => watchThreads().catch(e => once('threads:' + e.message, 'thread check failed:', e.message)), THREADS_MS);
+  const tf = setInterval(flushWatch, 5000);
+  [tw, tth, tf].forEach(t => { if (t.unref) t.unref(); timers.push(t); });
   const t1 = setInterval(() => {
     flood.sweep();
     const now = Date.now();
@@ -1843,6 +1966,7 @@ function stop() {
   stopRest();
   cards.stop();
   shots.close();
+  flushWatch();
   saveNow();
   guilds.clear(); setupDone.clear(); lastHit.clear();
 }
@@ -1875,6 +1999,12 @@ async function status() {
     if ((gw.intents & PRIVILEGED) !== PRIVILEGED) out.problems.push('Message Content or Server Members Intent is off in the Developer Portal.');
   }
   out.bot = me ? me.username : null;
+  // видно, что бот читает сообщения прямо сейчас: сколько разобрано, кем принесено, когда последнее
+  out.watching = { messagesChecked: WATCH.checked, fromLiveConnection: WATCH.fromGateway, fromSecondReader: WATCH.fromCatchUp,
+                   lostByLiveConnection: WATCH.missed, lastMessage: ago(WATCH.lastMessage), secondReader: rest ? 'requests mode' : ago(WATCH.lastRound),
+                   rounds: WATCH.rounds, every: Math.round(POLL_MS / 100) / 10 + 's' };
+  if (!rest && guilds.size && WATCH.since && Date.now() - Math.max(WATCH.lastRound, WATCH.since) > 30000)
+    out.problems.push('The second message reader has not run for ' + Math.round((Date.now() - Math.max(WATCH.lastRound, WATCH.since)) / 1000) + ' seconds.');
   out.screenshots = shots.info();
   out.guilds = [...guilds.values()].map(g => ({ id: g.id, name: g.name }));
   const feed = require('./updatesFeed.js');

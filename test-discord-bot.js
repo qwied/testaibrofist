@@ -8,11 +8,14 @@
      Discord их мьютить не даёт);
    - спам — больше 3 сообщений за 2 секунды: сообщения удаляются, на 5-й раз
      мьют на 10 минут;
-   - участники: плохой ник меняется (без наказания), значки в начале убираются,
-     ники всех, кто уже на сервере, тоже проверяются; рейд (много входов
-     больше 100 за минуту) — входящие в мьют; аватарки и дату создания
-     аккаунта бот не смотрит; политика,
-     продажа аккаунтов, «мне 11 лет» (только сообщение владельцу);
+   - участники: рейд (много входов больше 100 за минуту) — входящие в мьют;
+     ники, аватарки и дату создания аккаунта бот не смотрит; политика
+     не нарушение; продажа аккаунтов, «мне 11 лет» (только сообщение владельцу);
+   - второй канал чтения («ловец»): раз в секунду спрашивает у Discord, что
+     пришло после последнего прочитанного, и разбирает то, что живое
+     подключение не принесло; то, что пришло по обоим путям, разбирается
+     один раз; ветки читаются; после перезапуска доразбирается то, что пришло
+     за время простоя; потеря сообщений подключением — повод его переоткрыть;
    - секретные команды владельца (начало задаётся на хостинге, здесь «!qa»):
      news, updates, warn, mute, clear, help — сообщение с командой исчезает,
      без секретного начала не срабатывают, окно видит только
@@ -59,9 +62,12 @@ const MOD_ROLE = '200';
 
 /* ---------- поддельный Discord ---------- */
 const calls = [];
-let msgId = 5000, rateLimitedOnce = false, rejectNewModal = false, amRules = [];
+let msgId = 5000, rateLimitedOnce = false, rejectNewModal = false, rejectUpdate = false, amRules = [];
+const chatLog = new Map();           // канал -> сообщения, которые есть в Discord (их отдаёт GET), даже если подключение их не принесло
+let threadsActive = [];              // открытые ветки сервера
 let appUrl = 'https://aibrofist.online/discord/interactions';   // как было у настоящего бота: команды шли через сайт
 const known = new Set();
+let pollCount = 0;
 const history = new Map();           // канал -> сообщения (новые первыми) для «!clear»
 const denied = new Set();            // каналы, куда боту писать нельзя (403)
 const server = http.createServer((req, res) => {
@@ -71,8 +77,11 @@ const server = http.createServer((req, res) => {
     const p = req.url.replace(/^\/api\/v10/, '');
     let json = null;
     try { json = body ? JSON.parse(body) : null; } catch (e) {}
-    calls.push({ method: req.method, path: p, body: json, raw: body, ct: req.headers['content-type'] || '',
-                 reason: req.headers['x-audit-log-reason'], t: Date.now() });
+    // запросы второго канала чтения (раз в секунду по каждому каналу) в журнал вызовов не пишем: он нужен для того, что бот сделал
+    const polled = req.method === 'GET' && /^\/channels\/(\w+)\/messages\?(?:after=\w+&)?limit=(?:1|50)$/.test(p) && !history.has((/^\/channels\/(\w+)/.exec(p) || [])[1]);
+    if (polled) pollCount++;
+    else calls.push({ method: req.method, path: p, body: json, raw: body, ct: req.headers['content-type'] || '',
+                      reason: req.headers['x-audit-log-reason'], t: Date.now() });
     const send = (status, obj) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(obj === undefined ? '' : JSON.stringify(obj)); };
     let m;
     if (p === '/cdn/pic.png') { res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(Buffer.from('PNGDATA')); }
@@ -89,6 +98,13 @@ const server = http.createServer((req, res) => {
     if (req.method === 'PATCH' && (m = /^\/channels\/\w+\/messages\/(\w+)$/.exec(p))) return known.has(m[1]) ? send(200, { id: m[1] }) : send(404, { code: 10008 });
     if (req.method === 'DELETE' && /^\/channels\/312\/messages\/\w+$/.test(p)) return setTimeout(() => send(204), 20);   // медленный канал
     if (req.method === 'DELETE' && /^\/channels\/\w+\/messages\/\w+$/.test(p)) return send(204);
+    if (req.method === 'GET' && (m = /^\/channels\/(\w+)\/messages\?(.*)$/.exec(p)) && !history.has(m[1])) {
+      const q = new URLSearchParams(m[2]), after = q.get('after'), lim = Number(q.get('limit') || 50);
+      const list = (chatLog.get(m[1]) || []).slice().sort((a, b) => (a.id.length - b.id.length) || (a.id < b.id ? -1 : 1));
+      if (after) return send(200, list.filter(x => x.id.length > after.length || (x.id.length === after.length && x.id > after)).slice(0, lim));
+      return send(200, list.slice(-lim).reverse());            // без after — самые новые первыми
+    }
+    if (req.method === 'GET' && /^\/guilds\/\w+\/threads\/active$/.test(p)) return send(200, { threads: threadsActive });
     if (req.method === 'GET' && (m = /^\/channels\/(\w+)\/messages\?(.*)$/.exec(p)) && history.has(m[1])) {
       const q = new URLSearchParams(m[2]), before = q.get('before'), list = history.get(m[1]);
       const from = before ? list.findIndex(x => x.id === before) + 1 : 0;
@@ -116,6 +132,7 @@ const server = http.createServer((req, res) => {
     if (/\/callback$/.test(p)) {
       const comps = json && json.type === 9 && json.data && json.data.components;
       if (rejectNewModal && comps && comps[0] && comps[0].type === 18) return send(400, { code: 50035, message: 'Invalid Form Body' });
+      if (rejectUpdate && json && json.type === 7) return send(400, { code: 50035, message: 'Invalid Form Body' });
       return send(204);
     }
     if (/^\/webhooks\//.test(p)) return send(200, {});
@@ -154,10 +171,6 @@ wss.on('connection', ws => {
       dispatch('GUILD_CREATE', guildCreate());
     }
     if (msg.op === 6) dispatch('RESUMED', {});
-    if (msg.op === 8) dispatch('GUILD_MEMBERS_CHUNK', { guild_id: G, chunk_index: 0, chunk_count: 1, members: [
-      { user: { id: 'E1', username: 'oldhoister' }, nick: '!!!Hoister', roles: [] },
-      { user: { id: 'E2', username: 'fine' }, roles: [] },
-      { user: { id: 'E3', username: 'staffer' }, nick: 'Admin', roles: [MOD_ROLE] }] });
   });
 });
 
@@ -170,6 +183,8 @@ function say(uid, content, extra) {
   return m;
 }
 const since = t => calls.filter(c => c.t >= t);
+// «ничего не сделал»: удаление бота собственных коротких предупреждений (они гаснут сами через 10 секунд) не в счёт
+const quietSince = t => since(t).filter(c => !(c.method === 'DELETE' && known.has(c.path.split('/').pop())));
 const points = list => (list || []).reduce((n, s) => n + s.p, 0);
 const find = (list, method, re) => list.filter(c => c.method === method && re.test(c.path));
 
@@ -183,6 +198,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     UPDATES_FEED_STATE: path.join(tmp, 'feed.json'), DISCORD_SCAN_IMAGES: '0', DISCORD_TEST_CDN: '127.0.0.1:' + port,
     DISCORD_CMD_PREFIX: 'qa', UPDATES_FILE: path.join(tmp, 'updates.json'), DISCORD_RULES_CHANNEL_ID: CH.rules,
     NEWS_DIR: path.join(tmp, 'news'), SERVERS_DATA_DIR: path.join(tmp, 'srv'),
+    DISCORD_THREADS_POLL_MS: '1000',     // ветки второй канал ищет раз в секунду, а не раз в 10
     DISCORD_SHOTS: 'off'                 // настоящего браузера здесь нет: снимок подменяем ниже
   });
   fs.mkdirSync(path.join(tmp, 'news'));
@@ -202,12 +218,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const ident = await waitFor(() => gwLog.find(m => m.op === 2));
   ok('входит с intents: серверы, участники, баны, сообщения, их текст, события AutoMod',
      ident && ident.d.intents === (1 | 2 | 4 | 512 | 32768 | 2097152), ident && ident.d.intents);
-  const op8 = await waitFor(() => gwLog.find(m => m.op === 8));
-  ok('запрашивает список участников, чтобы проверить уже стоящие ники', op8 && op8.d.guild_id === G);
-  await waitFor(() => find(calls, 'PATCH', /members\/E1$/).length);
-  const e1 = find(calls, 'PATCH', /members\/E1$/)[0];
-  ok('у старого участника значки в начале ника убраны (без наказания)', e1 && e1.body.nick === 'Hoister' && find(calls, 'PUT', /bans\/E1$/).length === 0);
-  ok('настоящему модератору ник «Admin» можно, обычный ник не трогает', find(calls, 'PATCH', /members\/(E2|E3)$/).length === 0);
+  ok('список участников для проверки ников не запрашивает: ники бот не смотрит', !gwLog.some(m => m.op === 8) && find(calls, 'PATCH', /members\//).length === 0);
   ok('токен — из DISCORD_BOT_TOKEN', ident && ident.d.token === 'test-token');
   await waitFor(() => find(calls, 'POST', /auto-moderation\/rules$/).length >= 1);
   const cmds = find(calls, 'PUT', /^\/applications\/700\/guilds\/100\/commands$/);
@@ -222,19 +233,18 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(calls, 'PATCH', /^\/applications\/@me$/).length);
   ok('команды и нажатия — по живому подключению: адрес на сайте убран (через сайт бывало по 20+ секунд)',
      appUrl === null && find(calls, 'PATCH', /^\/applications\/@me$/)[0].body.interactions_endpoint_url === null);
-  await waitFor(() => find(calls, 'POST', /^\/channels\/301\/messages$/).length >= 2);
-  await sleep(100);
+  await waitFor(() => find(calls, 'POST', /^\/channels\/301\/messages$/).length >= 1);
+  await sleep(200);
   const rauto = find(calls, 'POST', /^\/channels\/301\/messages$/);
-  const rpost = rauto[0], rruPost = rauto[1];
-  ok('правила сам выложил в #rules — один раз, английский пост карточкой в рамке, никого не пингуя', rauto.length === 2 &&
+  const rpost = rauto[0], rbtn = (partsOf(rpost.body, 1)[0] || { components: [] }).components[0];
+  ok('правила сам выложил в #rules — один пост, карточкой в рамке, никого не пингуя; 7 правил, без политики, ников и расы', rauto.length === 1 &&
      rpost.body.flags === 32768 && partsOf(rpost.body, 10)[0].content === '## AIBROFIST Server Rules' &&
-     /1\. No spam/.test(partsOf(rpost.body, 10)[1].content) && /9\. No politics/.test(partsOf(rpost.body, 10)[1].content) &&
-     !/strike/i.test(partsOf(rpost.body, 10)[1].content) && rpost.body.allowed_mentions.parse.length === 0);
-  ok('сразу за ним — русский пост, оба видны всем, без кнопок', rruPost.body.flags === 32768 && partsOf(rruPost.body, 10)[0].content === '## Правила сервера AIBROFIST' &&
-     /1\. Без спама/.test(partsOf(rruPost.body, 10)[1].content) && /9\. Без политики/.test(partsOf(rruPost.body, 10)[1].content) &&
-     partsOf(rpost.body, 1).length === 0 && partsOf(rruPost.body, 1).length === 0);
-  ok('оба поста запомнены, разовая замена правил отмечена', bot._test.state().guilds[G].rules.message === rpost.resId &&
-     bot._test.state().guilds[G].rules.ruMessage === rruPost.resId && bot._test.state().fixes.rules9 === true);
+     /1\. No spam/.test(partsOf(rpost.body, 10)[1].content) && /7\. No other people's IP addresses/.test(partsOf(rpost.body, 10)[1].content) &&
+     !/8\.|politic|nickname|\brace\b|strike/i.test(partsOf(rpost.body, 10)[1].content) && rpost.body.allowed_mentions.parse.length === 0);
+  ok('под правилами кнопка «Русский» (текст меняется в этом же окне), русского отдельного поста нет', rbtn && rbtn.style === 2 && rbtn.label === 'Русский' &&
+     rbtn.custom_id === 'rules:ru' && !/Без спама/.test(JSON.stringify(rpost.body)));
+  ok('пост запомнен (с временем выкладки), разовая замена правил отмечена', bot._test.state().guilds[G].rules.message === rpost.resId &&
+     bot._test.state().guilds[G].rules.ruMessage === undefined && bot._test.state().guilds[G].rules.at > 0 && bot._test.state().fixes.rules7 === true);
   const am = find(calls, 'POST', /auto-moderation\/rules$/).map(c => c.body.trigger_type).sort().join(',');
   ok('включает встроенную AutoMod только со списком слов вражды и 18+ (спама и упоминаний в правилах больше нет)', am === '4', am);
 
@@ -256,7 +266,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   say('U0', 'hello there, anyone up for a race?');
   await sleep(250);
-  ok('обычное сообщение не трогает', since(t).length === 0, since(t).map(c => c.method + ' ' + c.path).join(' | '));
+  ok('обычное сообщение не трогает', quietSince(t).length === 0, since(t).map(c => c.method + ' ' + c.path).join(' | '));
 
   t = Date.now();
   const bad = say('U1', 'ты пидор');
@@ -302,7 +312,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   say('U2', 'one'); say('U2', 'two'); say('U2', 'three');
   await sleep(300);
-  ok('3 сообщения подряд — ещё не спам', since(t).length === 0, since(t).map(c => c.method + ' ' + c.path).join(' | '));
+  ok('3 сообщения подряд — ещё не спам', quietSince(t).length === 0, since(t).map(c => c.method + ' ' + c.path).join(' | '));
   await sleep(2200);
   t = Date.now();
   const burst = [0, 1, 2, 3].map(i => say('U2', 'spam number ' + i));
@@ -341,7 +351,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   say('U2b', 'hello'); say('U2c', 'hello'); say('U2b', 'again'); say('U2c', 'again');
   await sleep(250);
-  ok('у каждого игрока свой счёт: 2 + 2 сообщения от двоих — не спам', since(t).length === 0);
+  ok('у каждого игрока свой счёт: 2 + 2 сообщения от двоих — не спам', quietSince(t).length === 0);
 
   t = Date.now();
   say('U3', 'free nitro for everyone https://dlscord.gift/abc');
@@ -387,7 +397,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     user_id: 'U6', channel_id: CH.general, content: 'alert only, not a block' });
   await sleep(350);
   ok('догадки Discord (упоминания, спам, общий список слов) и просто оповещения — без наказания: AutoMod и так не пропустила',
-     since(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
+     quietSince(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
   t = Date.now();
   dispatch('AUTO_MODERATION_ACTION_EXECUTION', { guild_id: G, action: { type: 1 }, rule_id: 'r4', rule_trigger_type: 4,
     user_id: 'U10', channel_id: CH.general, content: 'ты пидор' });
@@ -410,11 +420,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('продажа аккаунта за деньги — правило 6: удалено, предупреждение, без мьюта', find(since(t), 'DELETE', new RegExp(sale.id + '$')).length === 1 &&
      find(since(t), 'PATCH', /members\/V1$/).length === 0 && /6\. No selling accounts or coins for real money/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/dmV1\/messages$/)[0].body)));
   t = Date.now();
-  const pol = say('V2', 'а что вы думаете про путина?');
-  await waitFor(() => find(since(t), 'POST', /^\/channels\/300\/messages$/).length);
-  ok('политика — правило 9: удалено с объяснением, без наказания', find(since(t), 'DELETE', new RegExp(pol.id + '$')).length === 1 &&
-     /rule 9/.test(find(since(t), 'POST', /^\/channels\/300\/messages$/)[0].body.content) && find(since(t), 'PATCH', /members\/V2$/).length === 0 &&
-     find(since(t), 'POST', /^\/channels\/dmV2\/messages$/).length === 0);
+  const pol = say('V2', 'а что вы думаете про путина и выборы?');
+  await sleep(300);
+  ok('политика — больше не нарушение: ничего не тронуто', quietSince(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
   t = Date.now();
   const ip = say('V5', 'my ip is 85.143.20.11 add me');
   await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
@@ -425,7 +433,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const ch7 = say('V6', 'кидаю чит бесплатно скачать');
   const shout = say('V7', 'WHY IS THIS GAME SO HARD TODAY, YOU ARE SO STUPID', { mentions: [{ id: 'V6' }] });
   await sleep(300);
-  ok('разговор о читах, капс и оскорбления — больше не нарушения: ничего не тронуто', since(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
+  ok('разговор о читах, капс и оскорбления — больше не нарушения: ничего не тронуто', quietSince(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
   t = Date.now();
   const kid = say('V3', 'привет всем, мне 11 лет');
   await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
@@ -448,21 +456,10 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: 'W1', username: 'w1' }, nick: null, roles: [], joined_at: new Date().toISOString() });
   dispatch('GUILD_MEMBER_UPDATE', { guild_id: G, user: { id: 'W1', username: 'w1' }, nick: 'Модератор', roles: [] });
-  await waitFor(() => find(since(t), 'PATCH', /members\/W1$/).length);
-  await waitFor(() => find(since(t), 'POST', /^\/channels\/dmW1\/messages$/).length);
-  const dmW1 = JSON.stringify(find(since(t), 'POST', /^\/channels\/dmW1\/messages$/)[0].body);
-  ok('ник «Модератор» — заменён; игроку личное сообщение (правило 8), наказания нет', find(since(t), 'PATCH', /members\/W1$/)[0].body.nick === 'Player W1' &&
-     /8\. Keep nicknames clean/.test(dmW1) && /No punishment/.test(dmW1) && find(since(t), 'PATCH', /members\/W1$/).every(x => !x.body.communication_disabled_until) &&
-     /Rule 8/.test(decodeURIComponent(find(since(t), 'PATCH', /members\/W1$/)[0].reason || '')));
-  t = Date.now();
-  dispatch('GUILD_MEMBER_UPDATE', { guild_id: G, user: { id: 'W1', username: 'w1' }, nick: 'Player W1', roles: [] });
-  dispatch('GUILD_MEMBER_UPDATE', { guild_id: G, user: { id: 'W1', username: 'w1' }, nick: 'Player W1', roles: ['777'] });
-  await sleep(250);
-  ok('наш же новый ник — повторно не трогает', find(since(t), 'PATCH', /members\/W1$/).length === 0 && find(since(t), 'POST', /^\/channels\/dmW1\/messages$/).length === 0);
-  t = Date.now();
-  dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: 'W2', username: 'n1gg3r' }, roles: [] });
-  await waitFor(() => find(since(t), 'PATCH', /members\/W2$/).length);
-  ok('слово вражды в имени — ник заменён', find(since(t), 'PATCH', /members\/W2$/)[0].body.nick === 'Player W2');
+  dispatch('GUILD_MEMBER_ADD', { guild_id: G, user: { id: 'W2', username: 'n1gg3r' }, nick: '!!!Admin', roles: [] });
+  await sleep(450);
+  ok('ники бот не проверяет и не меняет: «Модератор», «!!!Admin», слова в имени — всё как есть, никому ничего не пишет',
+     quietSince(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
   t = Date.now();
   dispatch('GUILD_BAN_ADD', { guild_id: G, user: { id: 'B1', username: 'badguy', avatar: 'cafe1234' } });
   const B2 = snow(Date.now() - 86400000);
@@ -488,6 +485,55 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('больше 100 входов за минуту — рейд: сообщение владельцу и мьют всех входящих, даже старых аккаунтов',
      /Raid/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/))) &&
      find(since(t), 'PATCH', /members\/\d+$/).filter(x => x.body.communication_disabled_until).length >= 4);
+
+  console.log('\nвторой канал чтения — разбирает всё, что живое подключение не принесло:');
+  // сообщение, которое есть в Discord (его отдаёт GET), но подключение его не прислало; ageMs — сколько назад оно отправлено
+  const lost = (uid, content, ageMs, channel, extra) => {
+    const m = Object.assign({ id: String(++mid), channel_id: channel || CH.general, type: 0, content, timestamp: new Date(Date.now() - ageMs).toISOString(),
+      author: { id: uid, username: 'player' + uid }, mentions: [], mention_roles: [], attachments: [] }, extra || {});
+    if (!chatLog.has(m.channel_id)) chatLog.set(m.channel_id, []);
+    chatLog.get(m.channel_id).push(m);
+    return m;
+  };
+  const w0 = (await bot.status()).watching;
+  ok('всё до этого пришло по подключению; второй канал при этом работает раз в секунду и ничего не теряет', w0.fromLiveConnection > 30 &&
+     w0.fromSecondReader === 0 && w0.rounds > 10 && w0.lostByLiveConnection === 0 && /^[0-3]s ago$/.test(w0.secondReader) && w0.every === '1s', JSON.stringify(w0));
+  ok('и он на самом деле спрашивает Discord: запросов чтения каналов уже много', pollCount > 30, pollCount);
+  t = Date.now();
+  const m1 = lost('C1', 'free nitro for everyone https://dlscord.gift/abc', 3000);
+  await waitFor(() => find(since(t), 'PUT', /bans\/C1$/).length, 8000);
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/dmC1\/messages$/).length, 3000);
+  ok('сообщение, которое подключение не принесло, найдено за пару секунд и разобрано как обычное: удалено, бан за мошенничество (правило 5)',
+     find(since(t), 'DELETE', new RegExp('/messages/' + m1.id + '$')).length === 1 && find(since(t), 'PUT', /bans\/C1$/).length === 1 &&
+     /5\. No scams or dangerous links/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/dmC1\/messages$/)[0].body)));
+  ok('нужные для наказания сведения об авторе взяты отдельно (роли, мьют)', find(since(t), 'GET', /^\/guilds\/100\/members\/C1$/).length === 1);
+  t = Date.now();
+  const m2 = lost('C2', 'join us discord.gg/other', 3000);
+  dispatch('MESSAGE_CREATE', Object.assign({}, m2, { guild_id: G, member: member() }));
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/dmC2\/messages$/).length);
+  await sleep(3200);
+  ok('сообщение пришло и по подключению, и нашлось вторым каналом (в Discord оно одно) — разобрано один раз: одно удаление, одно предупреждение',
+     find(since(t), 'DELETE', new RegExp('/messages/' + m2.id + '$')).length === 1 && find(since(t), 'POST', /^\/channels\/dmC2\/messages$/).length === 1);
+  t = Date.now();
+  const m4 = lost('C4', 'free nitro https://dlscord.gift/old', 40000);
+  await sleep(100);
+  const beforeKick = gwLog.length;
+  const THREAD = snow(Date.now());
+  threadsActive = [{ id: THREAD, name: 'help', type: 11, parent_id: CH.general }];
+  await sleep(1300);                                        // ветку второй канал находит раз в секунду
+  const m3 = lost('C3', 'free nitro https://dlscord.gift/thread', 3000, THREAD);
+  await waitFor(() => find(since(t), 'PUT', /bans\/C3$/).length, 8000);
+  ok('сообщения в ветках тоже читаются: ветка найдена, сообщение в ней разобрано', find(since(t), 'DELETE', new RegExp('/channels/' + THREAD + '/messages/' + m3.id + '$')).length === 1 &&
+     find(since(t), 'PUT', /bans\/C3$/).length === 1);
+  ok('сообщение 40-секундной давности (пока подключение «спало») тоже найдено и разобрано', find(since(t), 'PUT', /bans\/C4$/).length === 1);
+  threadsActive = [];
+  const kick = await waitFor(() => gwLog.slice(beforeKick).find(x => x.op === 6), 8000);
+  ok('подключение дважды «потеряло» сообщения — бот сам переоткрыл его и продолжил ту же сессию (resume)', kick && kick.d.session_id === 'sess1');
+  for (let i = 0; i < 40 && (await bot.status()).gateway.state !== 'ready'; i++) await sleep(100);
+  const w1 = (await bot.status()).watching;
+  ok('на странице состояния видно, сколько сообщений разобрано, кем принесено и сколько потеряло подключение', w1.fromSecondReader >= 3 && w1.lostByLiveConnection >= 2 &&
+     w1.fromLiveConnection > w0.fromLiveConnection - 1 && w1.messagesChecked > 30, JSON.stringify(w1));
+  ok('на странице состояния проблем нет, секретов нет', (await bot.status()).problems.join() === 'none' && !JSON.stringify(await bot.status()).includes('test-token'));
 
   console.log('\nкартинки в сообщениях (нейросеть может ошибаться):');
   // настоящие цифры: обычное фото (одетый человек в коридоре) — «порно» 87%
@@ -548,7 +594,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   say('U0', '!qanews');
   say('U9', '!qawarn <@U1> test', { member: member([MOD_ROLE]), mentions: [{ id: 'U1' }] });
   await sleep(300);
-  ok('у игрока и модератора «!» команды не срабатывают (и не удаляются)', since(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
+  ok('у игрока и модератора «!» команды не срабатывают (и не удаляются)', quietSince(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
   t = Date.now();
   let bid = press('U0', panel.id);
   await waitFor(() => cb(since(t), bid).length);
@@ -675,7 +721,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   say(OWNER, '!qastrikes <@U1>', { mentions: [{ id: 'U1' }] });
   say(OWNER, '!qapardon <@U1>', { mentions: [{ id: 'U1' }] });
   await sleep(300);
-  ok('«!strikes» и «!pardon» больше нет: баллов нет, команды не узнаются (сообщения остаются обычными)', since(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
+  ok('«!strikes» и «!pardon» больше нет: баллов нет, команды не узнаются (сообщения остаются обычными)', quietSince(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
   t = Date.now();
   say(OWNER, '!qa help');
   await waitFor(() => panelOf(since(t)));
@@ -850,7 +896,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   say(OWNER, '!news');
   say(OWNER, '!help');
   await sleep(250);
-  ok('без секретного начала и неизвестные команды — обычные сообщения, не трогаем', since(t).length === 0);
+  ok('без секретного начала и неизвестные команды — обычные сообщения, не трогаем', quietSince(t).length === 0);
 
   console.log('\nправила сервера и свои запрещённые слова:');
   t = Date.now();
@@ -863,7 +909,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const rm = cb(since(t), bid)[0].body;
   const rtypes = rm.data.components.map(x => x.type + ':' + x.component.type).join(',');
   ok('«!rules» — окно: канал, заголовок, правила по-английски и по-русски, свои слова', rm.type === 9 && rtypes === '18:8,18:4,18:4,18:4,18:4', rtypes);
-  ok('в окне подсказано, что русский — второй пост, а слово из списка даёт предупреждение', /Posted right after/.test(JSON.stringify(rm.data.components)) &&
+  ok('в окне подсказано, что русский — кнопка в том же посте, а слово из списка даёт предупреждение', /Shown in the same post/.test(JSON.stringify(rm.data.components)) &&
      /gets a warning/.test(JSON.stringify(rm.data.components)) && !/strike/i.test(JSON.stringify(rm.data.components)));
   const pre = id => (rm.data.components.find(x => x.component.custom_id === id) || {}).component || {};
   ok('в окне уже вписаны стандартные правила и наказания', /1\. No spam/.test(pre('en').value) && /banned for 7 days/.test(pre('en').value) &&
@@ -879,24 +925,42 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const rid = submit('rules:' + CH.general, rulesForm('bananas, Free  Robux\nbananas', 'Server Rules'));
   await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + rid + '/messages/@original$')).length);
   const redit = find(since(t), 'PATCH', new RegExp('^/channels/301/messages/' + (rpost && rpost.resId) + '$'))[0];
-  const reditRu = find(since(t), 'PATCH', new RegExp('^/channels/301/messages/' + (rruPost && rruPost.resId) + '$'))[0];
-  ok('правила в #rules исправлены на месте: оба поста те же, новых нет, кнопок нет', redit && reditRu && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 &&
-     partsOf(redit.body, 10)[0].content === '## Server Rules' && partsOf(reditRu.body, 10)[0].content === '## Правила сервера AIBROFIST' &&
-     partsOf(redit.body, 1).length === 0 && partsOf(reditRu.body, 1).length === 0);
+  ok('правила в #rules исправлены на месте: тот же пост, нового нет, кнопка «Русский» на месте', redit && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 &&
+     partsOf(redit.body, 10)[0].content === '## Server Rules' && partsOf(redit.body, 1)[0].components[0].custom_id === 'rules:ru' &&
+     partsOf(redit.body, 1)[0].components[0].label === 'Русский');
   ok('свои слова запомнены, без повторов', JSON.stringify(bot._test.state().guilds[G].words) === '["bananas","free robux"]',
      JSON.stringify(bot._test.state().guilds[G].words));
+  const postedAt = bot._test.state().guilds[G].rules.at;
+  const textOf = body => partsOf(body, 10).map(x => x.content).join('\n');
   t = Date.now();
   bid = press('U0', 'rules:ru');
   await waitFor(() => cb(since(t), bid).length);
   const rru = cb(since(t), bid)[0] && cb(since(t), bid)[0].body;
-  ok('кнопка «Русский» под прежним постом (если осталась) отвечает русскими правилами — видит только нажавший', rru && rru.type === 4 && rru.data.flags === (64 | 32768) &&
-     /Без спама/.test(JSON.stringify(rru.data.components)));
+  ok('«Русский» — текст в том же окне становится русским (правка самого поста, тип 7), кнопка меняется на «English»',
+     rru && rru.type === 7 && rru.data.flags === 32768 && /## Правила сервера AIBROFIST/.test(textOf(rru.data)) && /1\. Без спама/.test(textOf(rru.data)) &&
+     partsOf(rru.data, 1)[0].components[0].label === 'English' && partsOf(rru.data, 1)[0].components[0].custom_id === 'rules:en' && !(rru.data.flags & 64));
+  ok('подпись с датой выкладки при переключении не прыгает', new RegExp('<t:' + Math.floor(postedAt / 1000) + ':D>').test(textOf(rru.data)));
+  ok('русский текст — тот же набор из 7 правил', /7\. Без чужих IP-адресов/.test(textOf(rru.data)) && !/8\./.test(textOf(rru.data)));
+  t = Date.now();
+  bid = press('U0', 'rules:en');
+  await waitFor(() => cb(since(t), bid).length);
+  const ren = cb(since(t), bid)[0] && cb(since(t), bid)[0].body;
+  ok('«English» — обратно английский в том же окне, кнопка снова «Русский»', ren && ren.type === 7 && /## Server Rules/.test(textOf(ren.data)) &&
+     /1\. No spam/.test(textOf(ren.data)) && partsOf(ren.data, 1)[0].components[0].label === 'Русский' && partsOf(ren.data, 1)[0].components[0].custom_id === 'rules:ru');
+  t = Date.now();
+  rejectUpdate = true;
+  bid = press('U0', 'rules:ru');
+  await waitFor(() => cb(since(t), bid).length >= 2);
+  rejectUpdate = false;
+  const cbs = cb(since(t), bid);
+  ok('если Discord не принял правку поста, русский текст получает только нажавший (запасной ответ)', cbs[0].body.type === 7 && cbs[1].body.type === 4 &&
+     (cbs[1].body.data.flags & 64) && /1\. Без спама/.test(textOf(cbs[1].body.data)));
   t = Date.now();
   dispatch('INTERACTION_CREATE', { id: 'dm1', token: 'tkdm1', type: 3, channel_id: 'dmOWNER', user: { id: OWNER },
     data: { custom_id: 'rules:ru', component_type: 2 } });
   await waitFor(() => cb(since(t), 'dm1').length);
-  ok('и в личке (превью правил) кнопка «Русский» тоже работает', cb(since(t), 'dm1')[0] &&
-     /Без спама/.test(JSON.stringify(cb(since(t), 'dm1')[0].body.data.components)));
+  ok('и в личке (превью правил) кнопка «Русский» тоже работает', cb(since(t), 'dm1')[0] && cb(since(t), 'dm1')[0].body.type === 7 &&
+     /1\. Без спама/.test(textOf(cb(since(t), 'dm1')[0].body.data)));
   t = Date.now();
   const bw = say('U20', 'I really love bananas');
   await waitFor(() => find(since(t), 'DELETE', new RegExp('/messages/' + bw.id + '$')).length);
@@ -908,9 +972,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   const rid2 = submit('rules:' + CH.general, rulesForm('', 'Server Rules'));
   await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + rid2 + '/messages/@original$')).length);
-  ok('повторный «!rules» в тот же канал правит прежние посты, а не дублирует', rpost &&
+  ok('повторный «!rules» в тот же канал правит прежний пост, а не дублирует', rpost &&
      find(since(t), 'PATCH', new RegExp('^/channels/301/messages/' + rpost.resId + '$')).length === 1 &&
-     find(since(t), 'PATCH', new RegExp('^/channels/301/messages/' + rruPost.resId + '$')).length === 1 &&
      find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0);
   ok('слова можно убрать', bot._test.state().guilds[G].words.length === 0);
   ok('свой текст правил бот потом сам не меняет', bot._test.state().guilds[G].rules.custom === true);
@@ -1124,17 +1187,21 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   bot.stop();
   await sleep(200);
-  // состояние от прежней версии бота: свои правила в #rules одним постом с кнопкой «Русский»,
-  // накопленные штрафные баллы и два встроенных правила AutoMod, которых теперь нет
+  // состояние от прежней версии бота: свой текст правил, отдельный русский пост, накопленные штрафные баллы
+  // и два встроенных правила AutoMod, которых теперь нет
   const sf = JSON.parse(fs.readFileSync(process.env.DISCORD_BOT_STATE, 'utf8'));
-  Object.assign(sf.guilds[G].rules, { custom: true, en: 'my own rules', ru: 'мои правила', ruMessage: undefined });
-  delete sf.guilds[G].rules.ruMessage;
-  delete sf.fixes.rules9;
+  ok('бот запомнил, на каком сообщении остановился в каждом канале (после остановки это уже в файле состояния)',
+     sf.watch && sf.watch.last && /^\d+$/.test(sf.watch.last[CH.general] || '') && Object.keys(sf.watch.last).length >= 3, JSON.stringify(sf.watch && Object.keys(sf.watch.last)));
+  Object.assign(sf.guilds[G].rules, { custom: true, en: 'my own rules', ru: 'мои правила', ruMessage: '9999' });
+  delete sf.fixes.rules7;
   sf.strikes = { [G + ':U1']: [{ t: Date.now(), p: 2, r: 1, k: 'slur', by: 'auto' }], [G + ':U2']: [{ t: Date.now(), p: 1, r: 2, k: 'caps', by: 'auto' }] };
   Object.assign(sf.guilds[G].automod, { mentions: '123', spam: '456' });
   fs.writeFileSync(process.env.DISCORD_BOT_STATE, JSON.stringify(sf));
   amRules = [{ id: '123', name: 'AIBROFIST: mention spam', trigger_type: 5 }, { id: '456', name: 'My own spam rule', trigger_type: 3 },
              { id: sf.guilds[G].automod.words, name: 'AIBROFIST: slurs and sexual content', trigger_type: 4 }];
+  // пока бот был выключен (выкладка), в чат пришло: 2 минуты назад — мошенник; 30 минут назад — тоже, но это уже давно
+  const down1 = lost('R1', 'free nitro https://dlscord.gift/while-off', 120000);
+  const down2 = lost('R2', 'free nitro https://dlscord.gift/long-ago', 30 * 60000);
   const before = gwLog.length;
   closeNextIdentify = 4014;
   bot._test.reload();
@@ -1142,23 +1209,26 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bot.start();
   const ident2 = await waitFor(() => gwLog.slice(before).filter(m => m.op === 2).length >= 2 && gwLog.slice(before).filter(m => m.op === 2)[1], 8000);
   ok('без привилегированных intents переподключается без них', ident2 && ident2.d.intents === (1 | 4 | 512 | 2097152), ident2 && ident2.d.intents);
-  await sleep(1000);
+  await waitFor(() => find(since(t), 'PUT', /bans\/R1$/).length, 8000);
+  await sleep(1500);
   c = since(t);
+  ok('пришедшее за время простоя (2 минуты назад) бот доразобрал сам: удалено, бан', find(c, 'DELETE', new RegExp('/messages/' + down1.id + '$')).length === 1 &&
+     find(c, 'PUT', /bans\/R1$/).length === 1);
+  ok('а давнее (30 минут назад) не трогает: после долгого простоя не наказываем за старое', find(c, 'DELETE', new RegExp('/messages/' + down2.id + '$')).length === 0 &&
+     find(c, 'PUT', /bans\/R2$/).length === 0);
   const rfix = find(c, 'PATCH', new RegExp('^/channels/301/messages/' + (rpost && rpost.resId) + '$'))[0];
-  const rnew = find(c, 'POST', /^\/channels\/301\/messages$/);
-  ok('один раз бот заменил и свой прежний текст: английский пост исправлен на месте — 9 правил с наказаниями', rfix &&
-     /1\. No spam/.test(JSON.stringify(rfix.body)) && /9\. No politics/.test(JSON.stringify(rfix.body)) && !/my own rules/.test(JSON.stringify(rfix.body)) &&
-     bot._test.state().guilds[G].rules.custom !== true && bot._test.state().fixes.rules9 === true);
-  ok('а русского поста раньше не было (был он за кнопкой) — выложен новым постом сразу следом', rnew.length === 1 &&
-     /Без спама/.test(JSON.stringify(rnew[0].body)) && bot._test.state().guilds[G].rules.ruMessage === rnew[0].resId);
+  ok('один раз бот заменил и свой прежний текст: пост исправлен на месте — 7 правил и кнопка «Русский», нового поста нет', rfix &&
+     /1\. No spam/.test(JSON.stringify(rfix.body)) && !/my own rules/.test(JSON.stringify(rfix.body)) && partsOf(rfix.body, 1)[0].components[0].label === 'Русский' &&
+     find(c, 'POST', /^\/channels\/301\/messages$/).length === 0 && bot._test.state().guilds[G].rules.custom !== true && bot._test.state().fixes.rules7 === true);
+  ok('прежний отдельный русский пост убран', find(c, 'DELETE', /^\/channels\/301\/messages\/9999$/).length === 1 && bot._test.state().guilds[G].rules.ruMessage === undefined);
   ok('пропавшие из правил встроенные правила AutoMod (упоминания) удалены, чужое («My own spam rule») не тронуто',
      find(c, 'DELETE', /auto-moderation\/rules\/123$/).length === 1 && find(c, 'DELETE', /auto-moderation\/rules\/456$/).length === 0 &&
      bot._test.state().guilds[G].automod.mentions === 'removed' && bot._test.state().guilds[G].automod.spam === 'removed' &&
      find(c, 'POST', /auto-moderation\/rules$/).length === 0);
-  ok('после перезапуска больше ничего не постит заново (команды); правила — только то, что выше', find(c, 'PUT', /commands$/).length === 0);
+  ok('после перезапуска больше ничего не постит заново (команды)', find(c, 'PUT', /commands$/).length === 0);
   await sleep(700);
   const saved = JSON.parse(fs.readFileSync(process.env.DISCORD_BOT_STATE, 'utf8'));
-  ok('в файле состояния баллов больше нет', !('strikes' in saved) && saved.fixes.rules9 === true);
+  ok('в файле состояния баллов больше нет', !('strikes' in saved) && saved.fixes.rules7 === true);
   t = Date.now();
   bot.stop();
   await sleep(200);
@@ -1166,10 +1236,11 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bot._test.reload();
   bot.start();
   await waitFor(() => gwLog.slice(before2).filter(m => m.op === 2).length >= 1, 8000);
-  await sleep(1000);
-  ok('ещё один перезапуск: правила не публикуются заново, AutoMod не трогается',
+  await sleep(2500);
+  ok('ещё один перезапуск: правила не публикуются заново, AutoMod не трогается, уже разобранное второй раз не разбирается (позиция сохранена)',
      find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 && find(since(t), 'PATCH', /^\/channels\/301\/messages\/\d+$/).length === 0 &&
-     find(since(t), 'DELETE', /auto-moderation/).length === 0 && find(since(t), 'POST', /auto-moderation/).length === 0);
+     find(since(t), 'DELETE', /auto-moderation/).length === 0 && find(since(t), 'POST', /auto-moderation/).length === 0 &&
+     find(since(t), 'PUT', /bans\/R1$/).length === 0 && find(since(t), 'DELETE', new RegExp('/messages/' + down1.id + '$')).length === 0);
 
   bot.stop();
   wss.close(); server.close();

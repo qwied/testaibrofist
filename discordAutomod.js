@@ -25,11 +25,8 @@ const KIND = {
   scam:        { rule: 5, weight: 3, note: 'Scam or phishing link' },
   grabber:     { rule: 5, weight: 3, note: 'IP grabber link' },
   cheat:       { rule: 6, weight: 1, note: 'Trading for real money' },
-  // mode: soft — убрать сообщение без наказания; hide — то же, но без подробностей в канале
+  // mode: hide — убрать сообщение без наказания и сказать владельцу (не уверены, что это чужой IP)
   doxx:        { rule: 7, weight: 0, mode: 'hide', note: 'Possible IP address' },
-  'bad-name':  { rule: 8, weight: 0, note: 'Inappropriate name' },
-  impersonation: { rule: 8, weight: 0, note: 'Pretending to be staff' },
-  politics:    { rule: 9, weight: 0, mode: 'soft', note: 'Politics' },
   // без правила: только сообщить владельцу (Discord запрещает аккаунты младше 13 лет)
   evasion:     { rule: 0, weight: 0, note: 'Ban evasion with another account' },
   underage:    { rule: 0, weight: 0, note: 'Says they are under 13' },
@@ -103,22 +100,18 @@ const L = src => new RegExp('(?<![a-z])(?:' + src + ')(?![a-z])');
 const C = src => new RegExp('(?<![а-я])(?:' + src + ')(?![а-я])', 'u');
 
 const SLURS = [
-  L('n+i+g{2,}(?:e+r+|a+h*|u+h*|e+r+z+|a+z+)s*'),
   L('f+a+g{1,2}(?:o+t+|i+t+)?s*'),
-  L('r+e+t+a+r+d+(?:s|e+d|o+s?)?'),
   L('t+r+a+n+n+(?:y|i+e+)s*'),
   L('k+i+k+e+s*'),
   L('s+p+i+c+s*'),
   L('w+e+t+b+a+c+k+s*'),
   L('b+e+a+n+e+r+s*'),
   L('t+o+w+e+l+h+e+a+d+s*'),
-  L('g+o+o+k+s*'),
   L('p+i+d+[oa]+r+[a-z]*|p+i+d+r+[a-z]*'),                 // транслит
   C('п+и+д+[оаеы]+р+[а-я]*|п+и+д+р+[а-я]*'),
   C('х+а+ч(?:и|ей|ик|ики|ику|ам|ами|ах|у|а|ом)?'),
   C('ч+у+р+к(?:а|и|е|у|ой|ам|ами|ах)?|ч+у+р+о+к'),
   C('ж+и+д(?:ы|ов|ам|ами|ах|у|а|ом|ок|ки|овск[а-я]*|яр[а-я]*)?'),
-  C('н+и+г{2,}[еаэ]+р+[а-я]*|н+и+г+е+р(?:ы|ов|ам|ами|а|у|ок|ом)?|н+и+г{2,}а+'),
   C('х+о+х+л(?:ы|ов|ам|ами|ах|а|у|ом|ушк[а-я]*|яцк[а-я]*)?|х+о+х+о+л'),
   C('к+а+ц+а+п[а-я]*'),
   C('м+о+с+к+а+л(?:ь|и|ей|я|ям|ями|ях)?'),
@@ -298,9 +291,6 @@ const B = src => new RegExp('(?<![a-zа-яё0-9])(?:' + src + ')(?![a-zа-яё0-
 const SELL = B('продам|продаю|продаём|куплю|покупаю|скупаю|обменяю|sell|selling|buying|wts|wtb');
 const GOODS = B('акк|акка|акков|аккаунт[а-я]*|монет[а-я]*|коин[а-я]*|account|accounts|acc|accs|coins?');
 const MONEY = /(?:руб|₽|грн|\$|usd|долл|евро|€|деньг|реал|paypal|qiwi|киви|сбер|на\s*карт|донат|money|cash|venmo|crypto|btc|usdt)/i;
-const POLITICS = B('путин[а-я]*|зеленск[а-я]*|лукашенк[а-я]*|навальн[а-я]*|байден[а-я]*|трамп(?:а|у|ом|е)?|сво|спецоперац[а-я]*|мобилизац[а-я]*|' +
-                   'putin|zelensk[a-z]*|lukashenk[a-z]*|navaln[a-z]*|biden|' +          // trump — ещё и «козырь»
-                   'войн[аеуыо]\\s+(?:с|на|в)\\s+(?:украин[а-я]*|росси[а-я]*)|(?:war\\s+in|war\\s+with)\\s+(?:ukraine|russia)|слава\\s+украине');
 const SCAM_TEXT = [
   /(?:accidentally|accidently|mistakenly)\s+report(?:ed)?\s+(?:you|u|your)/i,
   /случайно\s+(?:кинул|отправил|подал|зарепортил|пожаловался)[а-я]*\s+(?:на\s+тебя|репорт|жалоб)/i,
@@ -319,39 +309,11 @@ function checkRules(msg) {
   // взломанные аккаунты; объявление администрации пингует всех на самом деле
   if (/@(?:everyone|here)/.test(text) && !msg.mention_everyone && links(text).some(l => l.explicit)) res.push(finding('everyone-link'));
   if (SELL.test(text) && GOODS.test(text) && MONEY.test(text)) res.push(finding('cheat'));
-  if (POLITICS.test(text)) res.push(finding('politics'));
   for (const re of AGE) {
     const m = re.exec(text);
     if (m && +m[1] >= 5 && +m[1] <= 12) { res.push(finding('underage')); break; }
   }
   return res;
-}
-
-/* ---------- имена (правило 8) ----------
-   Ник проверяется при входе на сервер и при каждой смене. Слово вражды или
-   ссылка в нике и «Admin»/«Модератор» — просто новый ник, без наказания;
-   значки в начале (чтобы стоять первым в списке) и нечитаемый ник — тоже. */
-const STAFF_WORDS = /^(?:admin|administrator|moderator|staff|админ|администратор|администрация|модератор|модер)$/;
-// эти слова бывают и в обычных никах («Tech Support Guy», «aibrofist fan») — только если ник из них одних
-const STAFF_ONLY = /^(?:admin|administrator|moderator|staff|owner|support|system|official|aibrofist|админ|администратор|администрация|модератор|модер|владелец|поддержка|система)$/;
-function checkName(name, opts) {
-  opts = opts || {};
-  const n = String(name || '');
-  if (!n.trim()) return null;
-  const words = checkWords({ content: n });
-  if (words.length ||
-      inviteCodes(n).length || checkLinks(n).length || /https?:\/\/|discord\.gg/i.test(n))
-    return { kind: 'bad-name' };
-  const forms = [latinForm(n, false), cyrForm(n, false)].map(f => f.split(/\s+/).filter(Boolean));
-  const flat = latinForm(n).replace(/\s+/g, '');
-  const owner = opts.owner ? latinForm(opts.owner).replace(/\s+/g, '') : '';
-  if (forms.some(ts => ts.some(t => STAFF_WORDS.test(t)) || (ts.length && ts.every(t => STAFF_ONLY.test(t)))) ||
-      (owner.length >= 3 && flat === owner)) return { kind: 'impersonation' };
-  const marks = (n.match(/\p{M}/gu) || []).length;
-  const readable = n.replace(/[^\p{L}\p{N}]/gu, '');
-  if (marks >= 5 || !readable.length) return { kind: 'unreadable' };
-  if (/^[^\p{L}\p{N}]/u.test(n)) return { kind: 'hoist', clean: n.replace(/^[^\p{L}\p{N}]+/u, '').slice(0, 32) };
-  return null;
 }
 
 /* Все проверки, которые можно сделать сразу, по одному сообщению.
@@ -412,6 +374,6 @@ function checkCustom(text, words) {
 }
 
 module.exports = {
-  KIND, finding, inspect, checkCustom, checkLinks, checkWords, checkPrivacy, checkFiles, checkRules, checkName,
+  KIND, finding, inspect, checkCustom, checkLinks, checkWords, checkPrivacy, checkFiles, checkRules,
   inviteCodes, links, isPhish, latinForm, cyrForm, FloodWatch, dist
 };

@@ -8,7 +8,7 @@
    - секретная команда владельца работает так же;
    - кнопки приходят по HTTP: подпись Discord проверяется (чужая — 401),
      проверка адреса (PING) проходит, окно открывается;
-   - новые участники и смена ника замечаются опросом.
+   - новые участники замечаются опросом (ники бот не трогает).
    Запуск: node test-discord-rest.js */
 'use strict';
 const http = require('http');
@@ -216,13 +216,10 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   console.log('\nучастники опросом:');
   t = Date.now();
   members.set('W1', { user: { id: 'W1', username: 'newbie' }, nick: 'Admin', roles: [], joined_at: new Date().toISOString() });
-  await waitFor(() => find(since(t), 'PATCH', /members\/W1$/).length, 4000);
-  const w1 = find(since(t), 'PATCH', /members\/W1$/)[0];
-  ok('новый участник с ником «Admin» — ник заменён', w1 && w1.body.nick === 'Player W1');
-  t = Date.now();
   members.get('U2').nick = '!!!Top';
-  await waitFor(() => find(since(t), 'PATCH', /members\/U2$/).filter(x => x.body.nick).length, 4000);
-  ok('смена ника замечена — значки убраны', (find(since(t), 'PATCH', /members\/U2$/).filter(x => x.body.nick)[0] || {}).body.nick === 'Top');
+  await sleep(2200);                                      // список участников опрашивается каждые 0,6 с в этом тесте
+  ok('ники бот не проверяет и не меняет: новый участник «Admin» и смена ника на «!!!Top» замечены, но ничего не тронуто',
+     find(since(t), 'PATCH', /members\//).length === 0, find(since(t), 'PATCH', /members\//).length);
 
   bot.stop();
   server.close();

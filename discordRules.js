@@ -1,6 +1,6 @@
 // ============ DISCORD: правила сервера и наказания ============
 // Правила в #rules выкладывает команда rules (текст можно поправить в её
-// окне) — здесь те же 9 правил в том же порядке: по ним бот называет
+// окне) — здесь те же 7 правил в том же порядке: по ним бот называет
 // игроку номер и название нарушенного правила («rule 2, No invites»).
 // У каждого правила своё наказание (поле act), счёта баллов нет.
 // Поменялся порядок в #rules — поменять и тут.
@@ -25,8 +25,8 @@ const RULES = [
     en: 'Images, links and text. The message is deleted and you get a 1-hour mute.',
     ru: ['Без контента 18+', 'Картинки, ссылки и текст. Сообщение удаляется, мьют на 1 час.'] },
   { id: 4, title: 'No hate speech', act: { type: 'mute', ms: HOUR },
-    en: 'No slurs about race, nationality, religion, gender or orientation, and never tell anyone to hurt themselves. The message is deleted and you get a 1-hour mute.',
-    ru: ['Без языка вражды', 'Без оскорблений по расе, национальности, религии, полу и ориентации, и не желайте никому навредить себе. Сообщение удаляется, мьют на 1 час.'] },
+    en: 'No slurs about nationality, religion, gender or orientation, and never tell anyone to hurt themselves. The message is deleted and you get a 1-hour mute.',
+    ru: ['Без языка вражды', 'Без оскорблений по национальности, религии, полу и ориентации, и не желайте никому навредить себе. Сообщение удаляется, мьют на 1 час.'] },
   { id: 5, title: 'No scams or dangerous links', act: { type: 'ban', ms: 7 * DAY },
     en: 'Phishing, fake "free Nitro" and giveaways, IP grabbers, .exe files. The message is deleted and you are banned for 7 days (the bot lifts it by itself). This is the only rule with a ban.',
     ru: ['Без мошенничества и опасных ссылок', 'Фишинг, «бесплатный Nitro» и фейковые розыгрыши, IP-логгеры, exe-файлы. Сообщение удаляется, бан на 7 дней (бот сам снимает). Это единственное правило с баном.'] },
@@ -35,13 +35,7 @@ const RULES = [
     ru: ['Без продажи аккаунтов и монет за реальные деньги', 'Сообщение удаляется, предупреждение.'] },
   { id: 7, title: 'No other people\'s IP addresses', act: { type: 'none' },
     en: 'The message is deleted, no punishment.',
-    ru: ['Без чужих IP-адресов', 'Сообщение удаляется, без наказания.'] },
-  { id: 8, title: 'Keep nicknames clean', act: { type: 'none' },
-    en: 'No slurs or links in a nickname, and no posing as an admin or the bot. The bot just changes your nickname.',
-    ru: ['Приличные ники', 'Без слов вражды и ссылок в нике и без выдачи себя за админа или бота. Бот просто меняет ник.'] },
-  { id: 9, title: 'No politics', act: { type: 'none' },
-    en: 'The message is deleted, no punishment.',
-    ru: ['Без политики', 'Сообщение удаляется, без наказания.'] }
+    ru: ['Без чужих IP-адресов', 'Сообщение удаляется, без наказания.'] }
 ];
 
 const ruleById = id => RULES.find(r => r.id === id) || null;
