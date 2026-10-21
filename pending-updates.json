@@ -1,9 +1,4 @@
 {
-  "base": "2993aa026624f9acf52a3fb967fc28f2dc8d31bf",
-  "updates": [
-    {
-      "title": "Discord rules",
-      "text": "The Discord server rules are shorter and softer: nine rules, each with its own punishment, and no strikes."
-    }
-  ]
+  "base": "e13308e9e2c65c76f5816e602d83da1deca774f9",
+  "updates": []
 }
