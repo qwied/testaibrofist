@@ -5,11 +5,11 @@
 <title>AIBrofist — Servers</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="AIBrofist servers: rooms and players online right now.">
-<link rel="stylesheet" href="ui.css?v=170">
+<link rel="stylesheet" href="ui.css?v=171">
 <script src="offline.js?v=2"></script>
-<script src="theme.js?v=170"></script>
-<script src="device.js?v=170"></script>
-<script src="sound.js?v=170"></script>
+<script src="theme.js?v=171"></script>
+<script src="device.js?v=171"></script>
+<script src="sound.js?v=171"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -67,46 +67,52 @@
 <div class="bfWrap">
   <div id="svShot">
     <div class="svHead">
-      <div class="svTitle">Servers</div>
-      <div class="svLive" id="svLive"><i></i><span id="svClock">connecting…</span></div>
+      <div class="svTitle" data-i18n="svTitle">Servers</div>
+      <div class="svLive" id="svLive"><i></i><span id="svClock" data-i18n="svConnecting">connecting…</span></div>
     </div>
     <div class="svKpis">
-      <div class="svKpi"><div class="svKpiL">Online now</div><div class="svKpiV" id="kOnline">–</div><div class="svKpiS">players in the game</div></div>
-      <div class="svKpi"><div class="svKpiL">Rooms</div><div class="svKpiV" id="kRooms">–</div><div class="svKpiS">up to 40 players each</div></div>
+      <div class="svKpi"><div class="svKpiL" data-i18n="svOnline">Online now</div><div class="svKpiV" id="kOnline">–</div><div class="svKpiS" data-i18n="svInGame">players in the game</div></div>
+      <div class="svKpi"><div class="svKpiL" data-i18n="svRooms">Rooms</div><div class="svKpiV" id="kRooms">–</div><div class="svKpiS" data-i18n="svUpTo40">up to 40 players each</div></div>
     </div>
     <div class="svCols">
       <div><div class="rlTitle"><span>Race</span><span id="tRace"></span></div><div class="rlBox" id="svRace"></div></div>
       <div><div class="rlTitle"><span>Hide and Seek</span><span id="tHide"></span></div><div class="rlBox" id="svHide"></div></div>
     </div>
-    <div class="svFoot">Click a room to join it · <a href="/">aibrofist.online</a></div>
+    <div class="svFoot"><span data-i18n="svClick">Click a room to join it</span> · <a href="/">aibrofist.online</a></div>
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=170">
-<script src="i18n.js?v=170"></script>
-<script src="coin.js?v=170"></script>
-<script src="skinRender.js?v=170"></script>
-<script src="skinAvatar.js?v=170" defer></script>
-<script src="shell.js?v=170"></script>
-<script src="abuseShow.js?v=170" defer></script>
-<script src="account.js?v=170" defer></script>
+<link rel="stylesheet" href="mobile.css?v=171">
+<script src="i18n.js?v=171"></script>
+<script src="coin.js?v=171"></script>
+<script src="skinRender.js?v=171"></script>
+<script src="skinAvatar.js?v=171" defer></script>
+<script src="shell.js?v=171"></script>
+<script src="abuseShow.js?v=171" defer></script>
+<script src="account.js?v=171" defer></script>
 <script>
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var COLOR = { full: '#dc2626', freeing: '#f59e0b', open: '#16a34a' };
-  var PHASE = { lobby: 'Hiding', round: 'Hunt', storyEnd: 'Story ended' };
+  // тексты — из словаря i18n.js (английский или русский, как выбрано в Settings)
+  var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; };
+  var PHASE = { lobby: ['svHiding', 'Hiding'], round: ['svHunt', 'Hunt'], storyEnd: ['svStoryEnd', 'Story ended'] };
   var NAMES_SHOWN = 10;
   function two(n) { return (n < 10 ? '0' : '') + n; }
   function mmss(s) { return Math.floor(s / 60) + ':' + two(s % 60); }
   function get(url) { return fetch(url, { credentials: 'same-origin', cache: 'no-store' }).then(function (r) { return r.json(); }); }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
-  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+  // 1 игрок, 2 игрока, 5 игроков (по-английски: 1 player, 2 players)
+  function plural(n, key) {
+    var a = n % 100, b = n % 10, f = a > 10 && a < 20 ? '5' : b === 1 ? '1' : b >= 2 && b <= 4 ? '2' : '5';
+    return n + ' ' + T(key + f, f === '1' ? key.slice(2).toLowerCase() : key.slice(2).toLowerCase() + 's');
+  }
 
   // комнаты одного режима — как список комнат на странице режима, плюс карта и фаза
   function rooms(box, mode, list, names) {
     box.textContent = '';
-    if (!list.length) { box.appendChild(el('div', 'rlEmpty', 'No rooms right now. Press Play and a new room opens.')); return; }
+    if (!list.length) { box.appendChild(el('div', 'rlEmpty', T('svNoRooms', 'No rooms right now. Press Play and a new room opens.'))); return; }
     list.forEach(function (r) {
       var row = el('div', 'rlRow'), head = el('div', 'rlHead'), dot = el('span', 'rlDot');
       dot.style.background = COLOR[r.status] || COLOR.open;
@@ -115,13 +121,14 @@
       head.appendChild(el('span', 'rlCount', r.players + ' / ' + (r.limit || 40)));
       row.appendChild(head);
       var meta = [];
-      if (r.map) meta.push('Map: ' + r.map);
-      if (r.phase) meta.push((PHASE[r.phase] || r.phase) + (r.secondsLeft !== null && r.secondsLeft !== undefined ? ' · ' + mmss(r.secondsLeft) + ' left' : ''));
+      if (r.map) meta.push(T('svMap', 'Map') + ': ' + r.map);
+      var ph = PHASE[r.phase];
+      if (r.phase) meta.push((ph ? T(ph[0], ph[1]) : r.phase) + (r.secondsLeft !== null && r.secondsLeft !== undefined ? ' · ' + T('svLeft', '{t} left').replace('{t}', mmss(r.secondsLeft)) : ''));
       if (meta.length) row.appendChild(el('div', 'rlMeta', meta.join('  ·  ')));
       var who = names[r.room] || [];
       if (who.length) {
         var extra = who.length - NAMES_SHOWN;
-        row.appendChild(el('div', 'rlWho', who.slice(0, NAMES_SHOWN).join(', ') + (extra > 0 ? ' + ' + extra + ' more' : '')));
+        row.appendChild(el('div', 'rlWho', who.slice(0, NAMES_SHOWN).join(', ') + (extra > 0 ? ' ' + T('svMore', '+ {n} more').replace('{n}', extra) : '')));
       }
       row.onclick = function () { location.href = 'game?mode=' + encodeURIComponent(mode) + '&room=' + encodeURIComponent(r.room); };
       box.appendChild(row);
@@ -140,16 +147,18 @@
       $('kOnline').textContent = a.online;
       $('kRooms').textContent = a.rooms;
       // игроки и комнаты режима — в заголовке его списка
-      $('tRace').textContent = plural(a.modes.race.players, 'player', 'players') + ' · ' + plural(race.length, 'room', 'rooms');
-      $('tHide').textContent = plural(a.modes.hideAndSeek.players, 'player', 'players') + ' · ' + plural(hide.length, 'room', 'rooms');
+      $('tRace').textContent = plural(a.modes.race.players, 'svPlayer') + ' · ' + plural(race.length, 'svRoom');
+      $('tHide').textContent = plural(a.modes.hideAndSeek.players, 'svPlayer') + ' · ' + plural(hide.length, 'svRoom');
       rooms($('svRace'), 'race', race, namesOf(res[1]));
       rooms($('svHide'), 'hideAndSeek', hide, namesOf(res[2]));
       var t = new Date(res[0].at || Date.now());
-      $('svClock').textContent = 'Live · ' + two(t.getUTCHours()) + ':' + two(t.getUTCMinutes()) + ':' + two(t.getUTCSeconds()) + ' UTC';
+      $('svClock').textContent = T('svLive', 'Live') + ' · ' + two(t.getUTCHours()) + ':' + two(t.getUTCMinutes()) + ':' + two(t.getUTCSeconds()) + ' UTC';
+      $('svClock').removeAttribute('data-i18n');          // дальше текст часов пишет сама страница
       $('svLive').className = 'svLive';
       document.body.setAttribute('data-ready', '1');
     }).catch(function () {
-      $('svClock').textContent = 'No connection, retrying…';
+      $('svClock').textContent = T('svNoConn', 'No connection, retrying…');
+      $('svClock').removeAttribute('data-i18n');
       $('svLive').className = 'svLive off';
     });
   }

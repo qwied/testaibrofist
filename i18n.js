@@ -750,6 +750,30 @@
     nameTooShortTitle: "Name too short",
     nameTooShortBody: "Need at least 2 characters.",
     edHomeTitle: "Home",
+
+    /* ---------- Servers (servers.html) ---------- */
+    svTitle: "Servers",
+    svOnline: "Online now",
+    svInGame: "players in the game",
+    svRooms: "Rooms",
+    svUpTo40: "up to 40 players each",
+    svClick: "Click a room to join it",
+    svNoRooms: "No rooms right now. Press Play and a new room opens.",
+    svLive: "Live",
+    svConnecting: "connecting…",
+    svNoConn: "No connection, retrying…",
+    svMap: "Map",
+    svLeft: "{t} left",
+    svHiding: "Hiding",
+    svHunt: "Hunt",
+    svStoryEnd: "Story ended",
+    svMore: "+ {n} more",
+    svPlayer1: "player",
+    svPlayer2: "players",
+    svPlayer5: "players",
+    svRoom1: "room",
+    svRoom2: "rooms",
+    svRoom5: "rooms",
   };
 
   /* Русский. Ключи один в один как в D: чего тут нет, то покажется
@@ -1455,7 +1479,30 @@
     publishNamePrompt: "Название карты (2–30 символов):",
     nameTooShortTitle: "Слишком короткое название",
     nameTooShortBody: "Нужно хотя бы 2 символа.",
-    edHomeTitle: "На главную"
+    edHomeTitle: "На главную",
+
+    svTitle: "Серверы",
+    svOnline: "Сейчас в игре",
+    svInGame: "игроков в игре",
+    svRooms: "Комнаты",
+    svUpTo40: "до 40 игроков в каждой",
+    svClick: "Нажмите на комнату, чтобы войти",
+    svNoRooms: "Сейчас комнат нет. Нажмите «Играть» — откроется новая.",
+    svLive: "Онлайн",
+    svConnecting: "подключение…",
+    svNoConn: "Нет связи, пробуем снова…",
+    svMap: "Карта",
+    svLeft: "осталось {t}",
+    svHiding: "Прячутся",
+    svHunt: "Охота",
+    svStoryEnd: "Сюжет окончен",
+    svMore: "+ ещё {n}",
+    svPlayer1: "игрок",
+    svPlayer2: "игрока",
+    svPlayer5: "игроков",
+    svRoom1: "комната",
+    svRoom2: "комнаты",
+    svRoom5: "комнат"
   };
 
   /* строки, которые рисуют чужие бандлы — ловим по тексту */

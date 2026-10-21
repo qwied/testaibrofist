@@ -13,6 +13,10 @@ const MIN = 60 * 1000, HOUR = 60 * MIN, DAY = 24 * HOUR;
    Спам (правило 1) особый: каждое срабатывание убирает сообщения, а
    мьют даётся на SPAM.limit-е срабатывание за SPAM.reset (см. discordBot.js). */
 const SPAM = { count: 4, window: 2000, limit: 5, reset: HOUR };   // 4 сообщения за 2 секунды — одно срабатывание
+/* Предупреждения копятся: каждое запоминается (за какое правило, почему, кто
+   выдал), действует window; limit-е действующее даёт act (мьют на час), и
+   эти предупреждения больше не считаются — счёт начинается заново. */
+const WARNS = { limit: 3, window: 30 * DAY, act: { type: 'mute', ms: HOUR } };
 
 const RULES = [
   { id: 1, title: 'No spam', act: { type: 'mute', ms: 10 * MIN },
@@ -61,18 +65,20 @@ function describe(p) {
 /* Готовый текст правил для #rules (команда rules): по-английски и по-русски.
    Владелец может его поправить в окне, но номера правил лучше не менять:
    бот пишет нарушителю номер и название правила. */
+const WARNS_EN = '**Warnings add up.** The 3rd warning within 30 days gives a 1-hour mute, then the count starts over.';
+const WARNS_RU = '**Предупреждения копятся.** 3-е предупреждение за 30 дней — мьют на 1 час, после него счёт начинается заново.';
 const FOOT_EN = 'Rules are checked by the bot automatically, there are no human moderators. Think the bot made a mistake? Message the owner.';
 const FOOT_RU = 'Правила проверяет бот автоматически, модераторов нет. Ошибся бот? Напишите владельцу.';
 
 function rulesText(lang) {
-  if (lang === 'ru') return RULES.map(r => '**' + r.id + '. ' + r.ru[0] + '.** ' + r.ru[1]).join('\n') + '\n\n' + FOOT_RU;
-  return RULES.map(r => '**' + r.id + '. ' + r.title + '.** ' + r.en).join('\n') + '\n\n' + FOOT_EN;
+  if (lang === 'ru') return RULES.map(r => '**' + r.id + '. ' + r.ru[0] + '.** ' + r.ru[1]).join('\n') + '\n\n' + WARNS_RU + '\n\n' + FOOT_RU;
+  return RULES.map(r => '**' + r.id + '. ' + r.title + '.** ' + r.en).join('\n') + '\n\n' + WARNS_EN + '\n\n' + FOOT_EN;
 }
 
 // цвета полосы слева у сообщений бота: без эмодзи, но с понятным оттенком
 const COLORS = { neutral: 0x99A1AE, warn: 0xE0A100, mute: 0xE67E22, ban: 0xE04141, ok: 0x3BA55D };
 
 module.exports = {
-  RULES, ruleById, actionFor, SPAM, describe, duration, rulesText,
+  RULES, ruleById, actionFor, SPAM, WARNS, describe, duration, rulesText,
   COLORS, MIN, HOUR, DAY
 };

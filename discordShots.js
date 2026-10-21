@@ -143,7 +143,8 @@ const boxOf = async (page, sel) => { const el = await page.$(sel); return el ? e
              нажимаются по очереди: период Today/This Week, потом Maps);
      crop  — селектор блока: снимок только его (с небольшим полем вокруг),
              без бокового меню и шапки сайта;
-     ready — селектор, который появляется, когда страница загрузила данные. */
+     ready — селектор, который появляется, когда страница загрузила данные;
+     lang  — 'en' | 'ru': язык сайта (i18n.js), по умолчанию английский. */
 async function shoot(where, theme, opts) {
   opts = typeof opts === 'string' ? { tab: opts } : (opts || {});
   if (off()) throw new Error('screenshots are off (DISCORD_SHOTS=off)');
@@ -155,6 +156,7 @@ async function shoot(where, theme, opts) {
     page = await b.newPage();
     await page.setCacheEnabled(false);                // каждый снимок — свежие данные, без кэша браузера
     const mode = theme === 'light' ? 'light' : 'dark';
+    const lang = opts.lang === 'ru' ? 'ru' : 'en';
     await page.setRequestInterception(true);
     page.on('request', r => {
       const u = r.url();
@@ -162,11 +164,14 @@ async function shoot(where, theme, opts) {
       // тему гостю сайт не даёт выбрать — для снимка говорим, что выбрана нужная
       if (/\/theme\/get(\?|$)/.test(u)) return r.respond({ status: 200, contentType: 'application/json',
         body: JSON.stringify({ unlocked: true, mode, guest: true, price: 0, coins: 0 }) }).catch(() => {});
+      // и язык: гостю сайт отвечает английским — для снимка говорим, что выбран нужный
+      if (/\/i18n\/get(\?|$)/.test(u)) return r.respond({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ lang, guest: true, langs: ['en', 'ru'] }) }).catch(() => {});
       r.continue().catch(() => {});
     });
-    await page.evaluateOnNewDocument((m, c) => {
-      try { localStorage.setItem('bfThemeMode', m); localStorage.setItem('bfConsent', c); } catch (e) { /* без памяти — тоже снимем */ }
-    }, mode, CONSENT);
+    await page.evaluateOnNewDocument((m, c, l) => {
+      try { localStorage.setItem('bfThemeMode', m); localStorage.setItem('bfConsent', c); localStorage.setItem('bfLang', l); } catch (e) { /* без памяти — тоже снимем */ }
+    }, mode, CONSENT, lang);
     // страница не открылась (сервер не ответил, 404/500) — это не снимок, а ошибка:
     // вызвавший ответит запасной картинкой
     const res = await page.goto(base + where, { waitUntil: 'domcontentloaded', timeout: PAGE_MS });

@@ -4,19 +4,22 @@
 //   - автомодерация: проверяет каждое сообщение (discordAutomod.js),
 //     удаляет нарушения и наказывает так, как написано у самого правила
 //     (discordRules.js): предупреждение, мьют на 10 минут или час, бан
-//     только за мошенничество; счёта баллов нет;
+//     только за мошенничество; предупреждения копятся — 3-е за 30 дней
+//     даёт мьют на час (счёта баллов нет);
 //     следит и за участниками: ники, рейды (больше 100 входов за минуту),
 //     имя как у забаненного;
 //     дополнительно включает встроенную AutoMod Discord со списком
 //     слов вражды и 18+, которые она не даёт отправить вовсе;
 //   - пишет игроку в личку, за что и как он наказан, а в канал mod-log
 //     (если он есть) — запись о случае;
+//   - отвечает не текстом, а картинками-карточками в стиле сайта
+//     (discordPics.js) с флагами English / Русский под ними;
 //   - секретные команды владельца сервера прямо в канале (начало команд —
 //     DISCORD_CMD_PREFIX на хостинге): news (пост в любой канал с
 //     картинками и кнопкой-ссылкой — в окне, которое видит только он),
-//     updates (в какие каналы идут новости), warn, mute, unmute, ban,
-//     unban, modlog, clear (удалить сообщения в канале), help. Остальным
-//     они не видны и не работают.
+//     updates (в какие каналы идут новости), warn, warns, unwarn, mute,
+//     unmute, ban, unban, modlog, clear (удалить сообщения в канале),
+//     stats, help. Остальным они не видны и не работают.
 // Правила сервера владелец пишет в #rules сам; номера правил в
 // уведомлениях бота — из discordRules.js.
 // Новости в #updates публикует updatesFeed.js — каналы для них берёт отсюда.
@@ -26,7 +29,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const crypto = require('crypto');
-const { api, ok, token, frame } = require('./discordApi.js');
+const { api, ok, token, frame, COMPONENTS_V2 } = require('./discordApi.js');
 const { Gateway } = require('./discordGateway.js');
 const R = require('./discordRules.js');
 const A = require('./discordAutomod.js');
@@ -52,7 +55,8 @@ const RAID_MS = 10 * 60 * 1000;
 const NOTICE_MS = 10 * 1000;     // короткое предупреждение в канале исчезает само
 
 // banned — приметы забаненных (аватарка, имя): по ним ловим обход бана
-let state = { feed: [], guilds: {}, cases: 0, banned: {}, unbans: {}, fixes: {}, watch: { last: {} } };
+// warns — предупреждения участников («сервер:игрок» -> список), cards — карточки-картинки, которые можно перерисовать на другом языке
+let state = { feed: [], guilds: {}, cases: 0, banned: {}, unbans: {}, fixes: {}, watch: { last: {} }, warns: {}, cards: {} };
 let loaded = false, saveTimer = null;
 const guilds = new Map();        // id -> { id, name, owner, roles: Map, channels: Map }
 const setupDone = new Set();
@@ -85,7 +89,9 @@ function loadState() {
       banned: s.banned && typeof s.banned === 'object' ? s.banned : {},
       unbans: s.unbans && typeof s.unbans === 'object' ? s.unbans : {},    // «сервер:игрок» -> когда снять бан
       fixes: s.fixes && typeof s.fixes === 'object' ? s.fixes : {},        // разовые исправления, уже сделанные
-      watch: { last: s.watch && s.watch.last && typeof s.watch.last === 'object' ? s.watch.last : {} }   // канал -> последнее прочитанное сообщение
+      watch: { last: s.watch && s.watch.last && typeof s.watch.last === 'object' ? s.watch.last : {} },  // канал -> последнее прочитанное сообщение
+      warns: s.warns && typeof s.warns === 'object' ? s.warns : {},
+      cards: s.cards && typeof s.cards === 'object' ? s.cards : {}
     };
   } catch (e) { /* первый запуск */ }
   // штрафных баллов больше нет — у каждого правила своё наказание; накопленные при загрузке не читаются
@@ -189,16 +195,27 @@ async function deleteMessages(list, reason) {
   }
 }
 
-async function dm(uid, body) {
+async function dmChannel(uid) {
   let ch = dmChannels.get(uid);
   if (!ch) {
     const r = await api('POST', '/users/@me/channels', { recipient_id: uid });
-    if (!ok(r) || !r.body) return false;
+    if (!ok(r) || !r.body) return null;
     ch = r.body.id;
     dmChannels.set(uid, ch);
   }
+  return ch;
+}
+async function dm(uid, body) {
+  const ch = await dmChannel(uid);
+  if (!ch) return false;
   const r = await api('POST', '/channels/' + ch + '/messages', noPing(body));
   return ok(r);          // 403 — у игрока закрыты личные сообщения
+}
+// в личку — карточкой-картинкой (не вышло нарисовать — текстом fallback)
+async function dmCard(uid, kind, data, gid, fallback) {
+  const ch = await dmChannel(uid);
+  if (!ch) return false;
+  return ok(await postCard(ch, kind, data, gid, fallback, true));
 }
 
 async function notice(channel, name, text) {
@@ -275,7 +292,9 @@ async function releaseBans(now) {
    написано у самого правила (R.actionFor), ctx.step — своё наказание
    (спам, предупреждение владельца). ctx.by — владелец (для warn), ctx.channel —
    где было нарушение, ctx.silent — не писать в канал (сообщение и так не
-   появилось), ctx.until — до какого времени игрок уже в мьюте (короче не делаем). */
+   появилось), ctx.until — до какого времени игрок уже в мьюте (короче не делаем),
+   ctx.card — в канал не писать: вызвавший сам выложит карточку (res.card).
+   Предупреждение засчитывается (addWarn): третье за 30 дней — ещё и мьют на час. */
 async function punish(g, user, f, ctx) {
   ctx = ctx || {};
   const step = ctx.step || R.actionFor(f);
@@ -289,14 +308,31 @@ async function punish(g, user, f, ctx) {
   const admin = !owner && !!(memberPerms(g, user.id, ctx.roles) & PERM.ADMIN);
   const blocked = owner ? (hard ? 'the server owner cannot be muted or banned' : '')
                         : admin && step.type === 'mute' ? 'administrators cannot be muted' : '';
-  const action = R.describe(step) + (blocked ? ' (not applied: ' + blocked + ')' : '');
   const why = f.note + (f.detail ? ' (' + f.detail + ')' : '');
   const reason = 'Case ' + caseNo + ': ' + (rule ? 'rule ' + rule.id + ', ' : '') + why;
+  const name = ctx.name || nameOf(user, ctx.member);
+  const av = avatarUrl(g.id, user, ctx.member);
 
-  // личное сообщение — до бана, иначе оно уже не дойдёт
-  await dm(user.id, { embeds: [{
+  // предупреждение засчитывается; набралось три — мьют на час (владельца и администраторов Discord мьютить не даёт)
+  let warned = null, esc = null, escBlocked = '';
+  if (step.type === 'warn' && !user.bot) {
+    warned = addWarn(g.id, user.id, { at: Date.now(), rule: f.rule || 0, kind: f.kind === 'manual' ? undefined : f.kind, reason: why,
+                                      by: ctx.by ? (ctx.byName || 'owner') : '', caseNo, name, av });
+    if (warned.escalate) { esc = R.WARNS.act; escBlocked = owner ? 'the server owner cannot be muted or banned' : admin ? 'administrators cannot be muted' : ''; }
+  }
+  const action = warned
+    ? 'Warning ' + warned.n + ' of ' + warned.limit + (esc ? ': ' + R.describe(esc).toLowerCase() + (escBlocked ? ' (not applied: ' + escBlocked + ')' : '') : '')
+    : R.describe(step) + (blocked ? ' (not applied: ' + blocked + ')' : '');
+  const cardData = { type: step.type === 'none' ? 'none' : step.type, name, user: user.username || '', avatarUrl: av,
+                     rule: f.rule || 0, kind: f.kind === 'manual' ? undefined : f.kind, detail: f.detail, reason: why, ms: step.ms || 0,
+                     n: warned ? warned.n : undefined, limit: warned ? warned.limit : undefined, escalated: esc ? { ms: esc.ms } : null,
+                     blocked: blocked ? (owner ? 'owner' : 'admin') : escBlocked ? (owner ? 'owner' : 'admin') : '',
+                     by: ctx.by ? (ctx.byName || '') : '', caseNo, at: Date.now() };
+
+  // личное сообщение — до бана, иначе оно уже не дойдёт; карточкой, не вышло — текстом
+  await dmCard(user.id, 'action', cardData, g.id, { embeds: [{
     color: color(step),
-    title: blocked || !hard ? 'Warning'
+    title: blocked || !hard ? (esc && !escBlocked ? 'You have been muted' : 'Warning')
          : step.type === 'ban' ? (step.ms ? 'You have been banned for ' + R.duration(step.ms) : 'You have been banned permanently')
          : 'You have been muted',
     description: ctx.dm || ((ctx.by ? 'The owner of **' : 'Your message in **') + g.name + (ctx.by ? '** gave you a warning.' : '** was removed.')),
@@ -318,19 +354,22 @@ async function punish(g, user, f, ctx) {
     done = await ban(g, user.id, reason);
     if (done) setUnban(g.id, user.id, step.ms);
   }
+  if (esc && !escBlocked && !(ctx.until && ctx.until > Date.now() + esc.ms))
+    done = await timeout(g, user.id, esc.ms, reason + ' (' + warned.limit + ' warnings within 30 days)');
+  cardData.failed = !done;
 
-  if (ctx.channel && !ctx.silent && (step.type !== 'ban' || blocked)) {
-    // предупреждение владельца: за какое правило и почему; автоматическое: что сделано с сообщением
+  if (ctx.channel && !ctx.silent && !ctx.card && (step.type !== 'ban' || blocked)) {
+    // автоматическое: что сделано с сообщением (предупреждение владельца — карточкой, её выкладывает вызвавший)
     const line = ctx.by
-      ? 'you received a warning' + (rule ? ' for rule ' + rule.id + ', ' + rule.title.toLowerCase() : '') + ': ' + why.replace(/[.!?\s]+$/, '') + '.'
+      ? 'you received a warning' + (rule ? ' for rule ' + rule.id + ', ' + rule.title.toLowerCase() : '') + ': ' + why.replace(/[.!?\s]+$/, '') + '. ' + action + '.'
       : 'your message was removed' + (rule ? ': rule ' + rule.id + ', ' + rule.title.toLowerCase() : '') + '. ' + action + '.';
-    await notice(ctx.channel, ctx.name || nameOf(user), line).catch(() => {});
+    await notice(ctx.channel, name, line).catch(() => {});
   }
-  await modlog(g, { caseNo, title: action + (done ? '' : ' (failed: no permission)'), color: color(step),
+  await modlog(g, { caseNo, title: action + (done ? '' : ' (failed: no permission)'), color: color(esc && !escBlocked ? esc : step),
                     user: user.id, userName: ctx.name || (user.username || user.global_name ? nameOf(user) : ''), by: ctx.by, byName: ctx.byName,
                     rule: f.rule || 0, ruleText, reason: why,
                     channel: ctx.channel, excerpt: ctx.excerpt }).catch(() => {});
-  return { step, caseNo, done };
+  return { step, caseNo, done, warned, esc, card: cardData };
 }
 
 // нарушение в сообщении: удалить и — если это не та же волна — наказать
@@ -345,7 +384,7 @@ async function enforce(g, m, f) {
   if (f.kind === 'flood') return spam(g, m, f);
   if (repeat) return null;
   const until = Date.parse(m.member && m.member.communication_disabled_until) || 0;
-  return punish(g, m.author, f, { channel: m.channel_id, excerpt: m.content, until, roles: m.member && m.member.roles, name: nameOf(m.author, m.member) });
+  return punish(g, m.author, f, { channel: m.channel_id, excerpt: m.content, until, roles: m.member && m.member.roles, name: nameOf(m.author, m.member), member: m.member });
 }
 
 /* Спам (правило 1): каждое срабатывание — сообщения уже удалены и игроку
@@ -367,7 +406,7 @@ async function spam(g, m, f) {
   }
   spamHits.delete(key);
   const until = Date.parse(m.member && m.member.communication_disabled_until) || 0;
-  return punish(g, m.author, f, { channel: m.channel_id, excerpt: m.content, until, roles: m.member && m.member.roles, name: nameOf(m.author, m.member) });
+  return punish(g, m.author, f, { channel: m.channel_id, excerpt: m.content, until, roles: m.member && m.member.roles, name: nameOf(m.author, m.member), member: m.member });
 }
 
 /* ---------- приглашения на чужие серверы ---------- */
@@ -564,7 +603,11 @@ async function onAutomodExecution(d) {
   const hk = g.id + ':' + d.user_id, last = lastHit.get(hk);
   if (last && now - last.t < COOLDOWN && last.weight >= f.weight) return;
   lastHit.set(hk, { t: now, weight: f.weight });
-  await punish(g, { id: d.user_id }, f, { channel: d.channel_id, excerpt: d.content, silent: true });
+  // кто это: имя и аватарка для карточки, роли (администратора Discord мьютить не даёт), уже действующий мьют
+  const mb = await memberOf(g.id, d.user_id).catch(() => null);
+  const user = (mb && mb.user) || { id: d.user_id };
+  await punish(g, user, f, { channel: d.channel_id, excerpt: d.content, silent: true, member: mb, roles: mb && mb.roles,
+                             name: nameOf(user, mb), until: Date.parse(mb && mb.communication_disabled_until) || 0 });
 }
 
 /* ---------- участники: рейды, обход бана ---------- */
@@ -681,6 +724,257 @@ async function ensureNativeAutomod(g) {
 }
 
 
+/* ---------- карточки-картинки ----------
+   Ответы бота — картинки в стиле сайта (discordPics.js), каждая рисуется
+   заново, со свежими данными. Под картинкой кнопки с флагами: English и
+   Русский — нажатие перерисовывает картинку в том же сообщении на
+   выбранном языке (видят все, кто видит сообщение); живые карточки
+   (справка, статистика, предупреждения) при этом снова берут данные.
+   Что нарисовано, бот помнит (state.cards) — кнопки работают и после
+   перезапуска. Нарисовать не вышло — бот отвечает прежним текстом. */
+const pics = require('./discordPics.js');
+const CARD_KEEP = 400;
+const CARD_AGE = 60 * R.DAY;
+const FLASH_MS = 15 * 1000;          // итог команды в канале (журнал включён, канал почищен) гаснет сам
+const LIVE = new Set(['help', 'stats', 'warns', 'warnsAll']);
+const OWNER_ONLY = new Set(['help', 'stats', 'warns', 'warnsAll']);
+const LANGS = [{ key: 'en', label: 'English', flag: '🇬🇧' }, { key: 'ru', label: 'Русский', flag: '🇷🇺' }];
+// флаги внизу карточки: выбранный язык подсвечен, нажатие на него — просто перерисовать.
+// current — id для выбранного (тогда он не нажимается): если такой же id уже у «Refresh», Discord не примет два одинаковых
+const langRow = (idOf, lang, current) => ({ type: 1, components: LANGS.map(l => Object.assign({ type: 2, style: l.key === lang ? 1 : 2, label: l.label,
+  emoji: { name: l.flag }, custom_id: l.key === lang && current ? current : idOf(l.key) }, l.key === lang && current ? { disabled: true } : {})) });
+
+function keepCard(kind, data, gid) {
+  const id = crypto.randomBytes(6).toString('hex'), now = Date.now();
+  state.cards[id] = { k: kind, d: data, g: gid || null, at: now };
+  for (const k of Object.keys(state.cards)) if (now - (state.cards[k].at || 0) > CARD_AGE) delete state.cards[k];
+  const left = Object.keys(state.cards);
+  if (left.length > CARD_KEEP) left.sort((a, b) => state.cards[a].at - state.cards[b].at).slice(0, left.length - CARD_KEEP).forEach(k => delete state.cards[k]);
+  save();
+  return id;
+}
+
+/* Аватарка участника — настоящая, с CDN Discord (через посредника, если он
+   есть). Не скачалась за 3 секунды или это не картинка — рисуется фигурка. */
+const cdnBase = () => TEST_CDN && !relayOn() ? 'http://' + TEST_CDN : 'https://cdn.discordapp.com';
+function avatarUrl(gid, user, member) {
+  if (!user || !user.id) return null;
+  if (member && member.avatar && gid) return cdnBase() + '/guilds/' + gid + '/users/' + user.id + '/avatars/' + member.avatar + '.png?size=128';
+  if (user.avatar) return cdnBase() + '/avatars/' + user.id + '/' + user.avatar + '.png?size=128';
+  return null;
+}
+const avatars = new Map();           // ссылка -> { uri, until }
+async function avatarData(url) {
+  if (!url || cdn.ok === false) return null;
+  const c = avatars.get(url);
+  if (c && c.until > Date.now()) return c.uri;
+  let uri = null;
+  try {
+    const got = await Promise.race([download(url, 512 * 1024), sleep(3000).then(() => null)]);
+    const b = got && got.buf;
+    if (b && b.length > 8 && ((b[0] === 0x89 && b[1] === 0x50) || (b[0] === 0xFF && b[1] === 0xD8)))
+      uri = 'data:image/' + (b[0] === 0x89 ? 'png' : 'jpeg') + ';base64,' + b.toString('base64');
+  } catch (e) { uri = null; }
+  if (avatars.size > 300) avatars.clear();
+  avatars.set(url, { uri, until: Date.now() + (uri ? 30 : 5) * 60 * 1000 });
+  return uri;
+}
+
+async function renderCard(kind, data, lang) {
+  const d = Object.assign({}, data, { lang });
+  if (d.avatarUrl) d.avatar = await avatarData(d.avatarUrl);
+  if (Array.isArray(d.list)) d.list = await Promise.all(d.list.map(async x => x && x.avatarUrl ? Object.assign({}, x, { avatar: await avatarData(x.avatarUrl) }) : x));
+  try { return await cards.draw(kind, d, 'dark'); }
+  catch (e) {
+    if (!d.avatar && !(d.list || []).some(x => x && x.avatar)) throw e;
+    // испорченная аватарка не должна ломать карточку — рисуем без неё
+    delete d.avatar;
+    if (Array.isArray(d.list)) d.list = d.list.map(x => Object.assign({}, x, { avatar: null }));
+    return cards.draw(kind, d, 'dark');
+  }
+}
+
+function liveData(rec) {
+  const g = rec.g && guilds.get(rec.g);
+  if (rec.k === 'help') return helpData(g);
+  if (rec.k === 'stats') return statsData();
+  if (rec.k === 'warns') return g ? warnsData(g, rec.d) : rec.d;
+  if (rec.k === 'warnsAll') return g ? warnsAllData(g) : rec.d;
+  return rec.d;
+}
+
+function cardRows(rec, id, lang) {
+  const rows = [];
+  if (rec.k === 'stats') rows.push({ type: 1, components: [linkButton(lang === 'ru' ? 'Открыть живую статистику' : 'Open live stats', require('./serversInfo.js').link())] });
+  const link = rec.d && rec.d.link;
+  if (link && link.url) rows.push({ type: 1, components: [linkButton(String((lang === 'ru' ? link.ru : link.en) || link.en || 'Open').slice(0, 80), link.url)] });
+  rows.push(langRow(l => 'cd:' + id + ':' + l, lang));
+  return rows;
+}
+
+// картинка, подпись к ней (alt) и кнопки: { body, files } — для нового сообщения, ответа на нажатие или правки
+async function cardMessage(rec, id, lang, ephemeral) {
+  const data = LIVE.has(rec.k) ? liveData(rec) : rec.d;
+  const png = await renderCard(rec.k, data, lang);
+  const file = 'aibrofist-' + (rec.k === 'action' ? (rec.d.type || 'card') : rec.k.toLowerCase()) + '.png';
+  const body = { attachments: [{ id: 0, filename: file, description: pics.alt(rec.k, data, lang).slice(0, 1000) }],
+                 components: cardRows(rec, id, lang), allowed_mentions: { parse: [] } };
+  if (ephemeral) body.flags = 64;
+  return { body, files: [{ name: file, data: png, type: 'image/png' }] };
+}
+
+// новая карточка в канал или в личку (dm: закрытая личка — обычное дело, в журнал не пишем);
+// не нарисовалась или Discord её не взял — запасной текст
+async function postCard(channel, kind, data, gid, fallback, dm) {
+  const rec = { k: kind, d: data, g: gid || null };
+  const id = keepCard(kind, data, gid);
+  let msg = null;
+  try { msg = await cardMessage(rec, id, 'en'); }
+  catch (e) { once('card:' + e.message, 'could not draw the ' + kind + ' card, sending text instead:', e.message); }
+  if (msg) {
+    const r = await api('POST', '/channels/' + channel + '/messages', msg.body, { files: msg.files });
+    if (ok(r)) return r;
+    if (r.status === 403) {
+      if (!dm) once('nowrite:' + channel, 'cannot write to channel ' + channel + ': allow View Channel, Send Messages and Attach Files for the bot there');
+      return r;
+    }
+    log('Discord did not take the ' + kind + ' card:', r.status, JSON.stringify(r.body).slice(0, 200));
+  }
+  return fallback ? api('POST', '/channels/' + channel + '/messages', noPing(fallback)) : { status: 0, body: null };
+}
+
+// итог команды в канале, который сам гаснет (журнал включён, канал почищен)
+async function flashCard(channel, g, data, text) {
+  const r = await postCard(channel, 'info', Object.assign({ at: Date.now() }, data), g.id, { content: text, allowed_mentions: { parse: [] } });
+  if (ok(r) && r.body && r.body.id) {
+    const t = setTimeout(() => api('DELETE', '/channels/' + channel + '/messages/' + r.body.id).catch(() => {}), FLASH_MS);
+    if (t.unref) t.unref();
+  }
+  return r;
+}
+
+/* Ответ на нажатие картинкой: сразу, если она готова за QUICK_MS, иначе
+   сначала «думаю…», а картинка подменяет его, когда готова. make() —
+   обещание { body, files }; fallback(deferred) — запасной ответ текстом. */
+async function sendPic(i, make, update, eph, fallback) {
+  const job = make();
+  let got = null, failed = false;
+  if (!i._http) got = await Promise.race([job, sleep(QUICK_MS).then(() => null)]).catch(() => { failed = true; return null; });
+  if (got) {
+    const r = await api('POST', '/interactions/' + i.id + '/' + i.token + '/callback', { type: update ? 7 : 4, data: got.body }, { files: got.files });
+    if (ok(r)) return r;
+    log('Discord did not take the card:', r.status, JSON.stringify(r.body).slice(0, 200));
+    return fallback(false);
+  }
+  if (failed) return fallback(false);
+  await respond(i, update ? { type: 6 } : { type: 5, data: { flags: eph ? 64 : 0 } });
+  try { got = await job; } catch (e) { return fallback(true); }
+  const r = await api('PATCH', '/webhooks/' + (i.application_id || appId) + '/' + i.token + '/messages/@original', got.body, { files: got.files });
+  if (ok(r)) return r;
+  log('Discord did not take the card:', r.status, JSON.stringify(r.body).slice(0, 200));
+  return fallback(true);
+}
+// запасной ответ текстом (виден только нажавшему)
+const textAnswer = (i, data, update) => deferred => {
+  const d = Object.assign({ flags: 64, allowed_mentions: { parse: [] } }, data);
+  if (!deferred) return respond(i, { type: 4, data: d });
+  const hook = '/webhooks/' + (i.application_id || appId) + '/' + i.token;
+  if (update) return api('POST', hook, d);
+  return api('PATCH', hook + '/messages/@original', Object.assign({ allowed_mentions: { parse: [] } }, data));
+};
+
+// карточка в ответ на нажатие (видит только нажавший); fallback — текст на случай, если не нарисуется
+function showCard(i, g, kind, data, fallback) {
+  const rec = { k: kind, d: data, g: g ? g.id : null };
+  const id = keepCard(kind, data, rec.g);
+  return sendPic(i, () => cardMessage(rec, id, 'en', true), false, true,
+                 textAnswer(i, fallback || { content: pics.alt(kind, LIVE.has(kind) ? liveData(rec) : data, 'en') }));
+}
+
+// кнопка с флагом: та же карточка на выбранном языке, в том же сообщении
+function onCardLang(i, cid) {
+  const m = /^cd:([0-9a-f]+):(en|ru)$/.exec(cid);
+  if (!m || pressedTooFast(i)) return respond(i, { type: 6 });
+  const rec = state.cards[m[1]], lang = m[2];
+  if (!rec) return reply(i, { content: lang === 'ru' ? 'Эта карточка слишком старая: вызовите команду снова.' : 'This card is too old: use the command again.' });
+  // справка, статистика и предупреждения — только владельцу (их и видит только он)
+  const g = rec.g && guilds.get(rec.g);
+  if (OWNER_ONLY.has(rec.k) && !(g && userOf(i) === g.owner)) return reply(i, card('Only the server owner can use this.'));
+  return sendPic(i, () => cardMessage(rec, m[1], lang, false), true, false,
+                 textAnswer(i, { content: lang === 'ru' ? 'Не получилось перерисовать карточку, попробуйте ещё раз.' : 'Could not redraw the card right now. Please try again.' }, true));
+}
+
+/* ---------- предупреждения ----------
+   Каждое предупреждение (от бота или владельца) запоминается: за какое
+   правило, почему, кто выдал. Действует R.WARNS.window (30 дней); третье
+   действующее даёт R.WARNS.act (мьют на час), и эти три больше не
+   считаются — счёт начинается заново. Команда unwarn снимает все. */
+const WARN_KEEP = 50;
+const wkey = (gid, uid) => gid + ':' + uid;
+const warnState = (w, now) => w.used ? 'used' : now - (w.at || 0) >= R.WARNS.window ? 'expired' : 'active';
+const warnsOf = (gid, uid) => state.warns[wkey(gid, uid)] || [];
+function countActive(gid) {
+  let n = 0;
+  const now = Date.now();
+  for (const [k, list] of Object.entries(state.warns)) if (k.indexOf(gid + ':') === 0) n += list.filter(w => warnState(w, now) === 'active').length;
+  return n;
+}
+function addWarn(gid, uid, w) {
+  const list = warnsOf(gid, uid).concat([w]).slice(-WARN_KEEP);
+  state.warns[wkey(gid, uid)] = list;
+  const now = Date.now(), active = list.filter(x => warnState(x, now) === 'active');
+  const escalate = active.length >= R.WARNS.limit;
+  if (escalate) active.forEach(x => { x.used = true; });
+  save();
+  return { n: escalate ? R.WARNS.limit : active.length, limit: R.WARNS.limit, escalate };
+}
+// снять все предупреждения участника (uid) или всех на сервере (uid не задан); сколько снято
+function clearWarns(gid, uid) {
+  let n = 0;
+  for (const k of Object.keys(state.warns)) {
+    if (uid ? k !== wkey(gid, uid) : k.indexOf(gid + ':') !== 0) continue;
+    n += state.warns[k].length;
+    delete state.warns[k];
+  }
+  // и счёт спама («1 из 5») тоже с нуля
+  for (const k of [...spamHits.keys()]) if (uid ? k === wkey(gid, uid) : k.indexOf(gid + ':') === 0) spamHits.delete(k);
+  save();
+  return n;
+}
+function warnsData(g, who) {
+  const now = Date.now(), list = warnsOf(g.id, who.uid).slice().reverse();
+  // ушёл с сервера (нашли по id) — имя из его последнего предупреждения
+  const name = who.name && who.name !== who.uid ? who.name : (list[0] && list[0].name) || who.name;
+  return { uid: who.uid, name, user: who.user, avatarUrl: who.avatarUrl, limit: R.WARNS.limit, at: now,
+           active: list.filter(w => warnState(w, now) === 'active').length, total: list.length, last: list.length ? list[0].at : 0,
+           list: list.map(w => ({ at: w.at, rule: w.rule, kind: w.kind, reason: w.reason, by: w.by, status: warnState(w, now) })) };
+}
+function warnsAllData(g) {
+  const now = Date.now(), out = [];
+  let active = 0, total = 0;
+  for (const [k, list] of Object.entries(state.warns)) {
+    if (k.indexOf(g.id + ':') !== 0 || !list.length) continue;
+    const a = list.filter(w => warnState(w, now) === 'active').length, last = list[list.length - 1];
+    active += a; total += list.length;
+    out.push({ uid: k.slice(g.id.length + 1), name: last.name || k.slice(g.id.length + 1), avatarUrl: last.av || null, active: a, total: list.length, last: last.at });
+  }
+  out.sort((x, y) => y.active - x.active || y.last - x.last);
+  return { members: out.length, active, total, limit: R.WARNS.limit, list: out.slice(0, 10), at: now };
+}
+function helpData(g) {
+  const b = statusBrief();
+  return { prefix: PREFIX, online: b.mode === 'live' || b.mode === 'requests', mode: b.mode, checked: WATCH.checked,
+           activeWarns: g ? countActive(g.id) : 0, cases: state.cases, at: Date.now() };
+}
+function statsData() {
+  let s = {};
+  try { s = require('./serversInfo.js').details(); } catch (e) { s = {}; }
+  const a = s.aibrofist || {}, sv = s.server || {}, ex = s.extra || {}, b = statusBrief();
+  return { online: a.online || 0, rooms: a.rooms || 0, modes: a.modes || {}, peak: (sv.peak && sv.peak.n) || 0, peakAt: sv.peak && sv.peak.at,
+           accounts: ex.accounts || 0, maps: ex.maps || 0, uptime: sv.uptimeSec || 0, memory: (sv.memoryMb && sv.memoryMb.rss) || 0,
+           sockets: sv.sockets || 0, botOnline: b.mode === 'live' || b.mode === 'requests', botMode: b.mode, checked: WATCH.checked, at: Date.now() };
+}
+
 /* ---------- секретные команды владельца ----------
    Команды пишутся прямо в канале и начинаются с «!». Срабатывают только
    у владельца сервера, сообщение с командой бот сразу удаляет, у всех
@@ -693,7 +987,7 @@ async function ensureNativeAutomod(g) {
    видит только владелец. В закрытом канале не видно даже панели. */
 const PANEL_MS = 60 * 1000;
 const CONFIRM_MS = 5 * 1000;
-const COMMANDS = ['news', 'updates', 'rules', 'warn', 'mute', 'unmute', 'ban', 'unban', 'modlog', 'clear', 'purge', 'stats', 'help'];
+const COMMANDS = ['news', 'updates', 'rules', 'warn', 'warns', 'unwarn', 'mute', 'unmute', 'ban', 'unban', 'modlog', 'clear', 'purge', 'stats', 'help'];
 /* Начало команд задаётся на хостинге (DISCORD_CMD_PREFIX, например «!ab3»
    -> «!ab3news»). В открытом коде его нет — по исходникам не узнать, что
    набирать. Без настройки команды начинаются просто с «!». */
@@ -711,6 +1005,8 @@ const HELP = [
   '**' + PREFIX + 'updates** - choose the channels for automatic game updates',
   '**' + PREFIX + 'rules** - post the server rules (English and Russian) and set extra banned words',
   '**' + PREFIX + 'warn** - open the warning form: the member, the rule and the reason are all required (' + PREFIX + 'warn name fills in the member)',
+  '**' + PREFIX + 'warns name** - warnings of a member, **' + PREFIX + 'warns** - everyone who has them. Warnings add up: the 3rd within 30 days gives a 1-hour mute',
+  '**' + PREFIX + 'unwarn name** - remove all warnings of a member, **' + PREFIX + 'unwarn all** - of everyone (asks first)',
   '**' + PREFIX + 'mute name 1h reason** - mute for 10m, 1h, 6h, 1d, 3d or 7d',
   '**' + PREFIX + 'unmute name** - lift a mute',
   '**' + PREFIX + 'ban name 7d reason** - ban for 1d, 3d, 7d or 30d, without a duration - forever',
@@ -770,11 +1066,13 @@ async function confirm(channel, text) {
 async function openPanel(g, m, kind, data) {
   const id = crypto.randomBytes(9).toString('hex');
   const label = { news: 'Open the post editor', updates: 'Choose update channels', help: 'Show commands', warn: 'Open the warning form',
+                  warns: 'Show warnings' + (data && data.name ? ' of ' + String(data.name).slice(0, 30) : ''),
+                  unwarnAll: 'Remove all warnings on the server',
                   rules: 'Open the rules editor',
                   clear: 'Delete all messages' + (data && data.userName ? ' of ' + String(data.userName).slice(0, 30) : '') + ' here',
                   stats: 'Show the stats link' }[kind];
   const r = await sendMessage(m.channel_id, { allowed_mentions: { parse: [] },
-    components: [{ type: 1, components: [{ type: 2, style: kind === 'clear' ? 4 : 2, label, custom_id: 'panel:' + id }] }] });
+    components: [{ type: 1, components: [{ type: 2, style: kind === 'clear' || kind === 'unwarnAll' ? 4 : 2, label, custom_id: 'panel:' + id }] }] });
   if (!ok(r) || !r.body) return;
   panels.set(id, { kind, guild: g.id, channel: m.channel_id, message: r.body.id, data: data || {} });
   const t = setTimeout(() => closePanel(id), PANEL_MS);
@@ -817,9 +1115,29 @@ async function onOwnerCommand(g, m) {
     const off = /^off$/i.test(args);
     gstate(g.id).modlog = off ? '' : m.channel_id;
     save();
-    await confirm(m.channel_id, off ? 'Moderation logs are off.' : 'Moderation logs will be posted here.');
+    await flashCard(m.channel_id, g, off
+      ? { tag: { en: 'Moderation log', ru: 'Журнал модерации' }, color: 'warn',
+          title: { en: 'Moderation logs are off', ru: 'Журнал модерации выключен' },
+          lines: [{ en: 'Type the command in a channel again to send the logs there.', ru: 'Чтобы включить, наберите команду в нужном канале.' }] }
+      : { tag: { en: 'Moderation log', ru: 'Журнал модерации' }, color: 'ok',
+          title: { en: 'Moderation logs will be posted here', ru: 'Журнал модерации теперь в этом канале' },
+          lines: [{ en: 'Every case: who, which rule, why and what the bot did.', ru: 'Каждый случай: кто, какое правило, почему и что сделал бот.' }] },
+      off ? 'Moderation logs are off.' : 'Moderation logs will be posted here.');
     return true;
   }
+  if (cmd === 'warns') {
+    // «!warns» — у кого есть предупреждения, «!warns имя» — все предупреждения участника (видит только владелец, по кнопке)
+    let data = {};
+    const tw = targetOf(args);
+    if (tw) {
+      const fw = await findMember(g, tw.ref, m, tw.id);
+      if (fw.error) { await confirm(m.channel_id, whoText(fw, 'on the server')); return true; }
+      data = { uid: fw.id, name: nameOf(fw.user, fw.member), user: fw.user.username || '', avatarUrl: avatarUrl(g.id, fw.user, fw.member) };
+    }
+    await openPanel(g, m, 'warns', data);
+    return true;
+  }
+  if (cmd === 'unwarn' && /^(all|все|всё)$/i.test(args)) { await openPanel(g, m, 'unwarnAll'); return true; }
 
   // дальше — команды над игроком: имя, id или упоминание
   const tg = targetOf(args);
@@ -831,8 +1149,11 @@ async function onOwnerCommand(g, m) {
     const uid = b.id, who = b.name;
     const r = await api('DELETE', '/guilds/' + g.id + '/bans/' + uid, null, { reason: 'Unbanned by the owner' });
     if (ok(r) || r.status === 404) forgetBan(g.id, uid);
-    if (ok(r)) await modlog(g, { caseNo: ++state.cases, title: 'Ban lifted', color: R.COLORS.ok, user: uid, userName: who, by: m.author.id, byName });
-    await confirm(m.channel_id, ok(r) ? '**' + plainName(who) + '** is unbanned.' : r.status === 404 ? '**' + plainName(who) + '** is not banned.' : 'I could not unban them.');
+    if (!ok(r)) { await confirm(m.channel_id, r.status === 404 ? '**' + plainName(who) + '** is not banned.' : 'I could not unban them.'); return true; }
+    const caseNo = ++state.cases;
+    await modlog(g, { caseNo, title: 'Ban lifted', color: R.COLORS.ok, user: uid, userName: who, by: m.author.id, byName });
+    await postCard(m.channel_id, 'action', { type: 'unban', name: who, user: (b.user && b.user.username) || '', avatarUrl: avatarUrl(g.id, b.user),
+                                             by: byName, caseNo, at: Date.now() }, g.id, { content: '**' + plainName(who) + '** is unbanned.' });
     return true;
   }
   const found = await findMember(g, tg.ref, m, tg.id);
@@ -840,6 +1161,18 @@ async function onOwnerCommand(g, m) {
   const uid = found.id, target = found.user, rest = tg.rest, who = nameOf(found.user, found.member), shown = plainName(who);
   // себя (владельца Discord наказать не даёт) и ботов — незачем; администраторов — можно, кроме мьюта
   const roles = found.member && found.member.roles;
+  // карточка итога в канале: кто, что, по чьей команде
+  const base = { name: who, user: target.username || '', avatarUrl: avatarUrl(g.id, target, found.member), by: byName, at: Date.now() };
+  if (cmd === 'unwarn') {
+    const n = clearWarns(g.id, uid);
+    if (!n) { await confirm(m.channel_id, '**' + shown + '** has no warnings.'); return true; }
+    const caseNo = ++state.cases;
+    save();
+    await modlog(g, { caseNo, title: 'Warnings removed (' + n + ')', color: R.COLORS.ok, user: uid, userName: who, by: m.author.id, byName });
+    await postCard(m.channel_id, 'action', Object.assign({ type: 'unwarn', count: n, caseNo }, base), g.id,
+                   { content: 'All warnings of **' + shown + '** are removed (' + n + ').' });
+    return true;
+  }
   if (uid === g.owner || (me && uid === me.id) || target.bot) {
     await confirm(m.channel_id, 'The server owner and bots cannot be punished.');
     return true;
@@ -856,14 +1189,14 @@ async function onOwnerCommand(g, m) {
     const caseNo = ++state.cases;
     save();
     const done = until > Date.now() + d[1] ? true : await timeout(g, uid, d[1], 'Case ' + caseNo + ': ' + reason);
-    if (done) {
-      await dm(uid, { embeds: [{ color: R.COLORS.mute, title: 'You have been muted',
-        description: 'You were muted in **' + g.name + '** for ' + d[0] + '.',
-        fields: [{ name: 'Reason', value: reason }],
-        footer: { text: 'If you think this is a mistake, message the owner.' } }] }).catch(() => {});
-      await modlog(g, { caseNo, title: 'Mute for ' + d[0], color: R.COLORS.mute, user: uid, userName: who, by: m.author.id, byName, reason });
-    }
-    await confirm(m.channel_id, done ? '**' + shown + '** is muted for ' + d[0] + '.' : 'I could not mute them: my role must be above theirs and have Timeout Members.');
+    if (!done) { await confirm(m.channel_id, 'I could not mute them: my role must be above theirs and have Timeout Members.'); return true; }
+    const mc = Object.assign({ type: 'mute', ms: d[1], reason, rule: null, caseNo }, base);
+    await dmCard(uid, 'action', mc, g.id, { embeds: [{ color: R.COLORS.mute, title: 'You have been muted',
+      description: 'You were muted in **' + g.name + '** for ' + d[0] + '.',
+      fields: [{ name: 'Reason', value: reason }],
+      footer: { text: 'If you think this is a mistake, message the owner.' } }] }).catch(() => {});
+    await modlog(g, { caseNo, title: 'Mute for ' + d[0], color: R.COLORS.mute, user: uid, userName: who, by: m.author.id, byName, reason });
+    await postCard(m.channel_id, 'action', mc, g.id, { content: '**' + shown + '** is muted for ' + d[0] + '.' });
     return true;
   }
   if (cmd === 'ban') {
@@ -874,23 +1207,25 @@ async function onOwnerCommand(g, m) {
     const what = ms ? 'Ban for ' + R.duration(ms) : 'Permanent ban';
     const caseNo = ++state.cases;
     save();
+    const bc = Object.assign({ type: 'ban', ms, reason, rule: null, caseNo }, base);
     // личное сообщение — до бана, иначе оно уже не дойдёт
-    await dm(uid, { embeds: [{ color: R.COLORS.ban, title: ms ? 'You have been banned for ' + R.duration(ms) : 'You have been banned permanently',
+    await dmCard(uid, 'action', bc, g.id, { embeds: [{ color: R.COLORS.ban, title: ms ? 'You have been banned for ' + R.duration(ms) : 'You have been banned permanently',
       description: 'You were banned from **' + g.name + '**.', fields: [{ name: 'Reason', value: reason }],
       footer: { text: ms ? 'The ban is lifted automatically when it ends.' : 'If you think this is a mistake, message the owner.' } }] }).catch(() => {});
     const done = await ban(g, uid, 'Case ' + caseNo + ': ' + reason);
-    if (done) {
-      setUnban(g.id, uid, ms);
-      await modlog(g, { caseNo, title: what, color: R.COLORS.ban, user: uid, userName: who, by: m.author.id, byName, reason });
-    }
-    await confirm(m.channel_id, done ? '**' + shown + '** is banned ' + (ms ? 'for ' + R.duration(ms) : 'permanently') + '.'
-                                     : 'I could not ban them: my role must be above theirs and have Ban Members.');
+    if (!done) { await confirm(m.channel_id, 'I could not ban them: my role must be above theirs and have Ban Members.'); return true; }
+    setUnban(g.id, uid, ms);
+    await modlog(g, { caseNo, title: what, color: R.COLORS.ban, user: uid, userName: who, by: m.author.id, byName, reason });
+    await postCard(m.channel_id, 'action', bc, g.id, { content: '**' + shown + '** is banned ' + (ms ? 'for ' + R.duration(ms) : 'permanently') + '.' });
     return true;
   }
   if (cmd === 'unmute') {
     const done = await timeout(g, uid, 0, 'Unmuted by the owner');
-    if (done) { await modlog(g, { caseNo: ++state.cases, title: 'Mute lifted', color: R.COLORS.ok, user: uid, userName: who, by: m.author.id, byName }); save(); }
-    await confirm(m.channel_id, done ? '**' + shown + '** can talk again.' : 'I could not unmute them.');
+    if (!done) { await confirm(m.channel_id, 'I could not unmute them.'); return true; }
+    const caseNo = ++state.cases;
+    save();
+    await modlog(g, { caseNo, title: 'Mute lifted', color: R.COLORS.ok, user: uid, userName: who, by: m.author.id, byName });
+    await postCard(m.channel_id, 'action', Object.assign({ type: 'unmute', caseNo }, base), g.id, { content: '**' + shown + '** can talk again.' });
     return true;
   }
   return true;
@@ -933,7 +1268,7 @@ async function findBanned(g, ref, isId) {
   const low = ref.toLowerCase(), nm = b => [b.user.global_name, b.user.username].filter(Boolean).map(x => String(x).toLowerCase());
   const exact = list.filter(b => nm(b).indexOf(low) !== -1), pre = list.filter(b => nm(b).some(n => n.indexOf(low) === 0));
   const pick = exact.length ? exact : pre;
-  if (pick.length === 1) return { id: pick[0].user.id, name: nameOf(pick[0].user) };
+  if (pick.length === 1) return { id: pick[0].user.id, name: nameOf(pick[0].user), user: pick[0].user };
   return { error: pick.length ? 'several' : 'none', ref, names: pick.slice(0, 5).map(b => nameOf(b.user)) };
 }
 
@@ -988,13 +1323,20 @@ function startClear(g, channel, limit, user, by, skip, userName, byName) {
   clearing.set(channel, job);
   clearChannel(g, channel, limit, user, skip, job)
     .then(async n => {
-      await confirm(channel, (job.stop ? 'Stopped. ' : '') + 'Deleted ' + n + (n === 1 ? ' message.' : ' messages.'));
+      // удаление закончено — новую чистку можно начинать, пока рисуется итог
+      if (clearing.get(channel) === job) clearing.delete(channel);
       if (n) await modlog(g, { caseNo: ++state.cases, title: 'Deleted ' + n + (n === 1 ? ' message' : ' messages'), color: R.COLORS.neutral,
                                user: user || by, userName: user ? userName : byName, by, byName, channel, reason: user ? 'Only messages of this member' : undefined });
       save();
+      const text = (job.stop ? 'Stopped. ' : '') + 'Deleted ' + n + (n === 1 ? ' message.' : ' messages.');
+      await flashCard(channel, g, { tag: { en: 'Channel', ru: 'Канал' }, color: job.stop ? 'warn' : 'info',
+        title: { en: 'Deleted ' + n + (n === 1 ? ' message' : ' messages'), ru: 'Удалено: ' + ruCount(n, 'сообщение', 'сообщения', 'сообщений') },
+        lines: [].concat(job.stop ? [{ en: 'Stopped before the end.', ru: 'Остановлено раньше конца.' }] : [],
+                         user ? [{ en: 'Only messages of ' + userName + '.', ru: 'Только сообщения ' + userName + '.' }] : [],
+                         [{ en: 'Pinned messages and the rules post stay.', ru: 'Закреплённые сообщения и правила остались.' }]) }, text);
     })
     .catch(e => log('clear failed:', e.message))
-    .finally(() => clearing.delete(channel));
+    .finally(() => { if (clearing.get(channel) === job) clearing.delete(channel); });
 }
 
 async function clearChannel(g, channel, limit, user, skip, job) {
@@ -1119,11 +1461,38 @@ async function onWarnSubmit(i, g) {
   if (uid === g.owner || (me && uid === me.id) || found.user.bot) return finish(i, card('Not sent: the server owner and bots cannot be punished.'));
   const who = nameOf(found.user, found.member), by = (i.member && i.member.user) || {};
   const f = { kind: 'manual', rule, weight: 1, note: reason };
-  await punish(g, found.user, f, { step: { type: 'warn' }, by: by.id, byName: nameOf(by, i.member), name: who,
-                                   channel: g.channels.has(channel) ? channel : null, roles: found.member && found.member.roles });
-  const r = R.ruleById(rule);
-  return finish(i, card('Warning sent to **' + plainName(who) + '**.\n' + (r ? 'Rule ' + r.id + ': ' + r.title : 'Rule: other') + '\nReason: ' + reason));
+  const ch = g.channels.has(channel) ? channel : null;
+  // предупреждение засчитывается; в канал — карточка (её выкладываем сами, ниже)
+  const res = await punish(g, found.user, f, { step: { type: 'warn' }, by: by.id, byName: nameOf(by, i.member), name: who, member: found.member,
+                                               channel: ch, roles: found.member && found.member.roles, card: true });
+  const r = R.ruleById(rule), w = res.warned || { n: 1, limit: R.WARNS.limit };
+  const count = 'Warning ' + w.n + ' of ' + w.limit + (res.esc ? (res.card.blocked ? '' : ': ' + R.describe(res.esc).toLowerCase()) : '');
+  if (ch) {
+    const line = '**' + plainName(who) + '**, you received a warning' + (r ? ' for rule ' + r.id + ', ' + r.title.toLowerCase() : '') + ': ' +
+                 reason.replace(/[.!?\s]+$/, '') + '. ' + count + '.';
+    const pr = await postCard(ch, 'action', res.card, g.id, { content: line });
+    // карточка в канале — и есть ответ: «думаю…», которое видит только владелец, убираем
+    if (ok(pr)) { await api('DELETE', '/webhooks/' + (i.application_id || appId) + '/' + i.token + '/messages/@original').catch(() => {}); return pr; }
+  }
+  // в канал не вышло — карточку видит хотя бы владелец
+  return finishPic(i, g, 'action', res.card, count + ' sent to **' + plainName(who) + '**.\n' + (r ? 'Rule ' + r.id + ': ' + r.title : 'Rule: other') + '\nReason: ' + reason);
 }
+
+// итог окна (пост, каналы, правила) — карточкой вместо «думаю…»; не вышло — текстом
+async function finishPic(i, g, kind, data, text) {
+  const rec = { k: kind, d: Object.assign({ at: Date.now() }, data), g: g ? g.id : null };
+  const id = keepCard(kind, rec.d, rec.g);
+  try {
+    const msg = await cardMessage(rec, id, 'en', true);
+    const r = await api('PATCH', '/webhooks/' + (i.application_id || appId) + '/' + i.token + '/messages/@original', msg.body, { files: msg.files });
+    if (ok(r)) return r;
+    log('Discord did not take the ' + kind + ' card:', r.status, JSON.stringify(r.body).slice(0, 200));
+  } catch (e) { once('card:' + e.message, 'could not draw the ' + kind + ' card, sending text instead:', e.message); }
+  return finish(i, card(text));
+}
+const chName = (g, id) => { const c = g.channels.get(id); return '#' + (c ? c.name : id); };
+// «5 сообщений», «1 сообщение»
+const ruCount = (n, one, few, many) => { const a = n % 100, b = n % 10; return n + ' ' + (a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many); };
 
 /* Правила сервера (команда rules): канал, заголовок, правила по-английски
    и по-русски — одним постом: сверху английский, кнопка «Русский» меняет
@@ -1173,18 +1542,54 @@ const rulesPost = (title, text, o) => {
     button: o.lang === 'en' ? { label: 'Русский', id: 'rules:ru' } : o.lang === 'ru' ? { label: 'English', id: 'rules:en' } : null });
 };
 
+/* Правила картинкой (discordPics.js): стандартные — с наказанием у каждого
+   правила, свой текст владельца — как он написан. Под картинкой флаги:
+   English и Русский (без русского текста флагов нет). Картинка одного и
+   того же текста рисуется один раз. */
+const rulesPics = new Map();         // язык и текст -> картинка
+function rulesData(r, lang) {
+  const ru = lang === 'ru' && !!r.ru;
+  const std = r.en === R.rulesText('en') && (!r.ru || r.ru === R.rulesText('ru'));
+  return { std, title: ru ? RULES_TITLE_RU : (r.title || RULES_TITLE), text: ru ? r.ru : r.en, at: r.at };
+}
+async function rulesPic(r, lang) {
+  const d = rulesData(r, lang);
+  const key = [lang, d.std, d.title, d.text, d.at].join('|');
+  let png = rulesPics.get(key);
+  if (!png) {
+    png = await renderCard('rules', d, lang);
+    if (rulesPics.size >= 6) rulesPics.clear();
+    rulesPics.set(key, png);
+  }
+  const file = 'aibrofist-rules-' + lang + '.png', alt = pics.alt('rules', d, lang).slice(0, 1000);
+  return { body: { flags: COMPONENTS_V2, allowed_mentions: { parse: [] }, attachments: [{ id: 0, filename: file, description: alt }],
+                   components: [{ type: 12, items: [{ media: { url: 'attachment://' + file }, description: alt }] }]
+                     .concat(r.ru ? [langRow(l => 'rules:' + l, lang)] : []) },
+           files: [{ name: file, data: png, type: 'image/png' }] };
+}
+
 /* Один пост: тот же канал — правим прежний на месте, иначе кладём новый, а
    старый убираем. Прежний отдельный русский пост (если был) убирается.
-   Возвращает { message, at } или { error: код ответа Discord }. */
+   Сначала картинкой; не нарисовалась или Discord её не взял — текстом.
+   Возвращает { message, at, pic } или { error: код ответа Discord }. */
 async function publishRules(g, chan, r, old) {
   old = old || {};
   const at = Date.now();
-  const msg = rulesPost(r.title, linkify(g, r.en), { lang: r.ru ? 'en' : null, at });
-  let res = null;
-  if (old.message && old.channel === chan) res = await api('PATCH', '/channels/' + chan + '/messages/' + old.message, msg);
-  if (!res || !ok(res)) res = await api('POST', '/channels/' + chan + '/messages', msg);
-  if (!ok(res) || !res.body) return { error: res.status };
-  const out = { message: res.body.id, at };
+  const tries = [];
+  try { tries.push(await rulesPic(Object.assign({}, r, { at }), 'en')); }
+  catch (e) { once('rulespic:' + e.message, 'could not draw the rules, posting text instead:', e.message); }
+  tries.push({ body: rulesPost(r.title, linkify(g, r.en), { lang: r.ru ? 'en' : null, at }) });
+  let res = null, used = null;
+  for (const m of tries) {
+    const opts = m.files ? { files: m.files } : undefined;
+    res = null;
+    if (old.message && old.channel === chan) res = await api('PATCH', '/channels/' + chan + '/messages/' + old.message, m.body, opts);
+    if (!res || !ok(res)) res = await api('POST', '/channels/' + chan + '/messages', m.body, opts);
+    if (ok(res) && res.body) { used = m; break; }
+    if (m.files) log('Discord did not take the rules picture:', res.status, JSON.stringify(res.body).slice(0, 200));
+  }
+  if (!used) return { error: res.status };
+  const out = { message: res.body.id, at, pic: !!used.files };
   for (const id of [old.message, old.ruMessage])
     if (id && id !== out.message && old.channel) api('DELETE', '/channels/' + old.channel + '/messages/' + id).catch(() => {});
   return out;
@@ -1204,18 +1609,29 @@ async function onRulesSubmit(i, g) {
   const st = gstate(g.id), old = st.rules || {};
   const r = await publishRules(g, chosen.id, { title, en, ru }, old);
   if (r.error) return finish(i, card('Could not post in <#' + chosen.id + '> (error ' + r.error + '). Check that I can send messages there.'));
-  st.rules = { channel: chosen.id, message: r.message, title, en, ru, at: r.at, custom: true };   // свой текст — сам бот его больше не меняет
+  st.rules = { channel: chosen.id, message: r.message, title, en, ru, at: r.at, custom: true, pic: r.pic };   // свой текст — сам бот его больше не меняет
   st.words = words;
   save();
-  return finish(i, card('Rules are in <#' + chosen.id + '>: https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.message +
+  const url = 'https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.message;
+  return finishPic(i, g, 'info', {
+    tag: { en: 'Server rules', ru: 'Правила сервера' }, color: 'ok', link: { url, en: 'Open the rules', ru: 'Открыть правила' },
+    title: { en: 'Rules are posted in ' + chName(g, chosen.id), ru: 'Правила выложены в ' + chName(g, chosen.id) },
+    lines: [ru ? { en: 'The flag buttons under the post switch it between English and Russian.', ru: 'Кнопки с флагами под постом переключают английский и русский.' }
+               : { en: 'No Russian version, so there are no language buttons.', ru: 'Русского текста нет, поэтому и кнопок языка нет.' },
+            words.length ? { en: 'Extra banned words: ' + words.length + '. A message with one is removed and the author gets a warning.',
+                             ru: 'Своих запрещённых слов: ' + words.length + '. Сообщение с таким словом удаляется, автору — предупреждение.' }
+                         : { en: 'No extra banned words.', ru: 'Своих запрещённых слов нет.' }]
+  }, 'Rules are in <#' + chosen.id + '>: ' + url +
     '\n' + (ru ? 'The Russian version opens with the button under the post, in the same window.' : 'No Russian version, so there is no button.') +
-    '\n' + (words.length ? 'Extra banned words: ' + words.length + '. Messages with them are removed and the author gets a warning.' : 'No extra banned words.')));
+    '\n' + (words.length ? 'Extra banned words: ' + words.length + '. Messages with them are removed and the author gets a warning.' : 'No extra banned words.'));
 }
 
 /* Правила ещё не выкладывались — бот сам кладёт стандартные в #rules.
    Поменялся стандартный текст (новая версия бота), а владелец свой не писал —
    бот правит тот же пост. Написал свой командой rules (custom) — не трогаем;
    удалил пост — бот выкладывает новый только когда текст правил меняется.
+   Пост текстом прежних версий бота один раз перерисовывается картинкой (pic),
+   свой текст владельца при этом остаётся.
    Исключение — разовая замена на 7 правил с одним постом и кнопкой «Русский»
    (fixes.rules7): она перекрывает и свой текст, и убирает прежний отдельный
    русский пост. */
@@ -1225,32 +1641,38 @@ async function postDefaultRules(g) {
   const force = !state.fixes.rules7;
   const en = R.rulesText('en'), ru = R.rulesText('ru');
   const c = g.channels.get(RULES_CHANNEL);
-  if (old && old.message && !force && (old.custom || (old.en === en && old.ru === ru && !old.ruMessage))) return;
+  const toPic = !!(old && old.message && !old.pic);
+  if (old && old.message && !force && !toPic && (old.custom || (old.en === en && old.ru === ru && !old.ruMessage))) return;
   if (!old && !c) return;
   const chan = old && old.channel && g.channels.has(old.channel) ? old.channel : c && c.id;
   if (!chan) return;
-  const title = (old && !force && old.title) || RULES_TITLE;
-  const r = await publishRules(g, chan, { title, en, ru }, old || {});
+  const keep = !!(old && old.custom && !force);
+  const text = keep ? { title: old.title || RULES_TITLE, en: old.en || en, ru: old.ru || '' }
+                    : { title: (old && !force && old.title) || RULES_TITLE, en, ru };
+  const r = await publishRules(g, chan, text, old || {});
   if (r.error) { log('could not post the rules in ' + chan + ':', r.error); return; }
-  st.rules = { channel: chan, message: r.message, title, en, ru, at: r.at };
+  st.rules = Object.assign({ channel: chan, message: r.message }, text, { at: r.at, pic: r.pic }, keep ? { custom: true } : {});
   if (force) state.fixes.rules7 = true;
   save();
 }
 
-/* Кнопка «Русский» / «English» под правилами: текст в том же окне меняется
-   на другой язык (это правка самого поста, её видят все). Если Discord
-   правку не примет, отвечаем русским текстом только нажавшему. */
+/* Флаги под правилами: картинка в том же посте меняется на другой язык (это
+   правка самого поста, её видят все). Картинка не вышла — прежний текст;
+   Discord правку не примет — отвечаем только нажавшему. */
 async function rulesSwitch(i, g, lang) {
   const r = g && gstate(g.id).rules || {};
-  const en = r.en || R.rulesText('en'), ru = r.ru || R.rulesText('ru');
-  const showRu = lang === 'ru' && !!ru;
-  const text = showRu ? ru : en;
-  const title = showRu ? RULES_TITLE_RU : r.title || RULES_TITLE;
-  const box = rulesPost(title, g ? linkify(g, text) : text, { lang: showRu ? 'ru' : ru ? 'en' : null, at: r.at });
-  const res = await respond(i, { type: 7, data: box });
-  if (res && !ok(res) && res.status === 400)
-    return respond(i, { type: 4, data: Object.assign(box, { flags: box.flags | 64 }) });
-  return res;
+  const full = { title: r.title || RULES_TITLE, en: r.en || R.rulesText('en'), ru: r.ru === undefined ? R.rulesText('ru') : r.ru, at: r.at };
+  const showRu = lang === 'ru' && !!full.ru;
+  const text = showRu ? full.ru : full.en;
+  const title = showRu ? RULES_TITLE_RU : full.title;
+  const box = rulesPost(title, g ? linkify(g, text) : text, { lang: showRu ? 'ru' : full.ru ? 'en' : null, at: r.at });
+  return sendPic(i, () => rulesPic(full, showRu ? 'ru' : 'en'), true, false, async deferred => {
+    if (deferred) return api('PATCH', '/webhooks/' + (i.application_id || appId) + '/' + i.token + '/messages/@original', box);
+    const res = await respond(i, { type: 7, data: box });
+    if (res && !ok(res) && res.status === 400)
+      return respond(i, { type: 4, data: Object.assign({}, box, { flags: box.flags | 64 }) });
+    return res;
+  });
 }
 
 async function showModal(i, modern, classic) {
@@ -1306,8 +1728,8 @@ async function onNewsSubmit(i, g) {
       // тип — по ответу Discord, а если его нет — по расширению имени
       const ext = ((/\.(png|jpe?g|gif|webp)$/i.exec(a.filename || '') || [])[1] || '').toLowerCase().replace('jpeg', 'jpg');
       const type = /^image\//.test(a.content_type || '') ? a.content_type : ext ? 'image/' + (ext === 'jpg' ? 'jpeg' : ext) : '';
-      if (!type) { notes.push(shown + ': not an image'); continue; }
-      if ((a.size || 0) > 10 * 1024 * 1024) { notes.push(shown + ': bigger than 10 MB'); continue; }
+      if (!type) { notes.push({ en: shown + ': not an image', ru: shown + ': это не картинка' }); continue; }
+      if ((a.size || 0) > 10 * 1024 * 1024) { notes.push({ en: shown + ': bigger than 10 MB', ru: shown + ': больше 10 МБ' }); continue; }
       // CDN Discord сайту недоступен (так бывает у хостинга) — не ждём таймаута на каждой картинке
       let got = null, why = cdn.ok === false ? 'the site cannot reach the Discord CDN' : '';
       for (const u of cdn.ok === false ? [] : [a.url, a.proxy_url]) {
@@ -1321,7 +1743,8 @@ async function onNewsSubmit(i, g) {
       } else if (a.url) {
         // скачать не вышло — показываем по ссылке Discord, она со временем может пропасть
         images.push(a.url);
-        notes.push(shown + ': could not copy it (' + why + '), so it is shown by link and may disappear later');
+        notes.push({ en: shown + ': could not copy it (' + why + '), so it is shown by link and may disappear later',
+                     ru: shown + ': не удалось скопировать (' + why + '), показана по ссылке и может со временем пропасть' });
       }
     }
   }
@@ -1336,8 +1759,10 @@ async function onNewsSubmit(i, g) {
   });
   const r = await api('POST', '/channels/' + chosen.id + '/messages', msg, files.length ? { files } : undefined);
   if (!ok(r) || !r.body) return finish(i, card('Could not post in <#' + chosen.id + '> (error ' + r.status + '). Check that I can send messages, embeds and files there.'));
-  return finish(i, card('Posted in <#' + chosen.id + '>: https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.body.id +
-                        (notes.length ? '\n\nImages:\n' + notes.map(n => '- ' + n).join('\n') : '')));
+  const url = 'https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.body.id;
+  return finishPic(i, g, 'info', { tag: { en: 'Post', ru: 'Пост' }, color: notes.length ? 'warn' : 'ok', link: { url, en: 'Open the post', ru: 'Открыть пост' },
+                                   title: { en: 'Posted in ' + chName(g, chosen.id), ru: 'Опубликовано в ' + chName(g, chosen.id) }, lines: notes },
+    'Posted in <#' + chosen.id + '>: ' + url + (notes.length ? '\n\nImages:\n' + notes.map(n => '- ' + n.en).join('\n') : ''));
 }
 
 async function onUpdatesSubmit(i, g) {
@@ -1349,8 +1774,12 @@ async function onUpdatesSubmit(i, g) {
   // каналы других серверов (если бот где-то ещё) не трогаем
   state.feed = state.feed.filter(c => !g.channels.has(c)).concat([...new Set(list)]);
   save();
-  return finish(i, card(list.length ? 'Game updates will be posted in: ' + list.map(c => '<#' + c + '>').join(', ') + '.'
-                                    : 'No channels chosen: game updates go to the #updates channel.'));
+  const names = list.map(c => chName(g, c)).join(', ');
+  return finishPic(i, g, 'info', { tag: { en: 'Game updates', ru: 'Новости игры' }, color: 'ok',
+    title: list.length ? { en: 'Game updates will be posted in ' + names, ru: 'Новости игры будут в ' + names }
+                       : { en: 'Game updates go to the #updates channel', ru: 'Новости игры идут в канал #updates' },
+    lines: [{ en: 'New game updates appear there by themselves.', ru: 'Новые обновления игры появляются там сами.' }] },
+    list.length ? 'Game updates will be posted in: ' + list.map(c => '<#' + c + '>').join(', ') + '.' : 'No channels chosen: game updates go to the #updates channel.');
 }
 
 async function onInteraction(i) {
@@ -1361,6 +1790,7 @@ async function onInteraction(i) {
   if (i.type === 2 && i.data && i.data.name === 'account') return onAccount(i);
   if (i.type === 4 && i.data && i.data.name === 'account') return onAccountHint(i);
   if (i.type === 3 && /^(sv|ac):/.test(cid)) return onCardButton(i, cid);
+  if (i.type === 3 && cid.indexOf('cd:') === 0) return onCardLang(i, cid);
   if (!i.guild_id) return;
   const g = guilds.get(i.guild_id);
   if (!g) return;
@@ -1375,9 +1805,19 @@ async function onInteraction(i) {
     if (p.kind === 'updates') return showModal(i, updatesModal(g), updatesModalClassic(g));
     if (p.kind === 'rules') return showModal(i, rulesModal(g, p), rulesModalClassic(g, p));
     if (p.kind === 'warn') return showModal(i, warnModal(g, p), warnModalClassic(g, p));
-    if (p.kind === 'help') return reply(i, card(HELP));
-    if (p.kind === 'stats') return reply(i, card('**Live server stats** (updates every second):\n' + require('./serversInfo.js').link() +
+    if (p.kind === 'help') return showCard(i, g, 'help', {}, card(HELP));
+    if (p.kind === 'stats') return showCard(i, g, 'stats', {}, card('**Live server stats** (updates every second):\n' + require('./serversInfo.js').link() +
       '\n\nKeep this link private. **' + PREFIX + 'stats new** makes a new one and the old one stops working.'));
+    if (p.kind === 'warns') return p.data && p.data.uid ? showCard(i, g, 'warns', p.data) : showCard(i, g, 'warnsAll', {});
+    if (p.kind === 'unwarnAll') {
+      const members = warnsAllData(g).members, n = clearWarns(g.id), byName = nameOf(i.member.user, i.member);
+      if (n) { await modlog(g, { caseNo: ++state.cases, title: 'All warnings removed (' + n + ')', color: R.COLORS.ok, user: g.id, userName: 'All members', by: uid, byName }); save(); }
+      return showCard(i, g, 'info', { tag: { en: 'Warnings', ru: 'Предупреждения' }, color: 'ok', at: Date.now(),
+        title: n ? { en: 'All warnings removed', ru: 'Все предупреждения сняты' } : { en: 'Nobody had warnings', ru: 'Ни у кого не было предупреждений' },
+        lines: n ? [{ en: n + (n === 1 ? ' warning' : ' warnings') + ' of ' + members + (members === 1 ? ' member' : ' members') + '. Everyone starts from zero.',
+                      ru: 'Снято: ' + ruCount(n, 'предупреждение', 'предупреждения', 'предупреждений') + ' у ' + ruCount(members, 'участника', 'участников', 'участников') + '. У всех счёт с нуля.' }] : [] },
+        card(n ? 'All warnings are removed: ' + n + '.' : 'Nobody had warnings.'));
+    }
     if (p.kind === 'clear') {
       await reply(i, card('Deleting all messages' + (p.data.user ? ' of **' + plainName(p.data.userName || p.data.user) + '**' : '') + ' in <#' + p.channel + '>. ' +
                           'Type ' + PREFIX + 'clear stop to stop.'));
@@ -1454,40 +1894,52 @@ const periodOf = p => PERIODS.some(x => x.key === p) ? p : 'all';
 const PERIOD_TAB = p => '#upStatTabs .upStatTab[data-period="' + p + '"]';
 const pageOf = (n, of) => Math.max(0, Math.min(of - 1, Number(n) || 0));
 
+// подписи кнопок под снимком по-русски (снимок на русском — и кнопки тоже)
+const RU_LABEL = { 'Dark theme': 'Тёмная тема', 'Light theme': 'Светлая тема', Refresh: 'Обновить', Previous: 'Назад', Next: 'Дальше',
+                   Servers: 'Серверы', Profile: 'Профиль', Maps: 'Карты', 'Play now': 'Играть', 'Open profile': 'Открыть профиль',
+                   Today: 'Сегодня', 'This Week': 'За неделю', 'All Time': 'За всё время' };
+const tr = (lang, s) => lang === 'ru' && RU_LABEL[s] ? RU_LABEL[s] : s;
+const langOf = l => l === 'ru' ? 'ru' : 'en';
+
 // листание, тема, «Refresh» и ссылка; id(тема, страница) — custom_id кнопки
-function controls(id, pageId, th, n, of, title, link) {
-  const rows = [{ type: 1, components: [button(THEME_NAME[otherTheme(th)], id(otherTheme(th), n)), button('Refresh', id(th, n)),
-                                        linkButton(link.label, link.url)] }];
-  if (of > 1) rows.unshift({ type: 1, components: [button('Previous', id(th, n - 1), n === 0),
-                                                   button(title + ' · ' + (n + 1) + ' / ' + of, pageId, true),
-                                                   button('Next', id(th, n + 1), n >= of - 1)] });
+function controls(id, pageId, th, n, of, title, link, lang) {
+  const rows = [{ type: 1, components: [button(tr(lang, THEME_NAME[otherTheme(th)]), id(otherTheme(th), n)), button(tr(lang, 'Refresh'), id(th, n)),
+                                        linkButton(tr(lang, link.label), link.url)] }];
+  if (of > 1) rows.unshift({ type: 1, components: [button(tr(lang, 'Previous'), id(th, n - 1), n === 0),
+                                                   button(tr(lang, title) + ' · ' + (n + 1) + ' / ' + of, pageId, true),
+                                                   button(tr(lang, 'Next'), id(th, n + 1), n >= of - 1)] });
   return rows;
 }
-function serversView(th, page) {
+// снимок сайта на английском или русском: флаги внизу перерисовывают его на другом языке
+function serversView(th, page, lang) {
+  lang = langOf(lang);
   const n = pageOf(page, SERVER_PAGES.length), p = SERVER_PAGES[n];
-  return { kind: 'servers', theme: th, where: p.where, crop: p.crop, ready: p.ready, file: 'aibrofist-servers.png',
-           backup: () => [cards.serversData(), 0],
-           rows: controls((t, k) => 'sv:' + t + ':' + k, 'sv-page', th, n, SERVER_PAGES.length, p.title,
-                          { label: 'Play now', url: SITE_URL }) };
+  const id = (t, k, l) => 'sv:' + t + ':' + k + ':' + (l || lang);
+  const rows = controls((t, k) => id(t, k), 'sv-page', th, n, SERVER_PAGES.length, p.title, { label: 'Play now', url: SITE_URL }, lang);
+  rows.push(langRow(l => id(th, n, l), lang, 'sv-lang'));
+  return { kind: 'servers', theme: th, lang, where: p.where, crop: p.crop, ready: p.ready, file: 'aibrofist-servers.png',
+           backup: () => [cards.serversData(), 0], rows };
 }
-function accountView(name, th, page, period) {
+function accountView(name, th, page, period, lang) {
   const d = cards.profileData(name);
   if (!d) return null;
+  lang = langOf(lang);
   const n = pageOf(page, ACCOUNT_PAGES.length), p = ACCOUNT_PAGES[n], per = periodOf(period);
   const url = SITE_URL + '/users?name=' + encodeURIComponent(d.name);
-  const id = (t, k, q) => 'ac:' + t + ':' + k + ':' + (q || per) + ':' + d.name;
-  const rows = controls((t, k) => id(t, k), 'ac-page', th, n, ACCOUNT_PAGES.length, p.title, { label: 'Open profile', url });
+  const id = (t, k, q, l) => 'ac:' + t + ':' + k + ':' + (q || per) + ':' + (l || lang) + ':' + d.name;
+  const rows = controls((t, k) => id(t, k), 'ac-page', th, n, ACCOUNT_PAGES.length, p.title, { label: 'Open profile', url }, lang);
   // выбранный период подсвечен (и нажимать его незачем), остальные — переключают
   rows.splice(rows.length - 1, 0, { type: 1, components: PERIODS.map(x => x.key === per
-    ? Object.assign(button(x.label, 'ac-per', true), { style: 1 })
-    : button(x.label, id(th, n, x.key))) });
-  return { kind: 'account', theme: th, where: '/users?name=' + encodeURIComponent(d.name), crop: p.crop,
+    ? Object.assign(button(tr(lang, x.label), 'ac-per', true), { style: 1 })
+    : button(tr(lang, x.label), id(th, n, x.key))) });
+  rows.push(langRow(l => id(th, n, per, l), lang, 'ac-lang'));
+  return { kind: 'account', theme: th, lang, where: '/users?name=' + encodeURIComponent(d.name), crop: p.crop,
            tab: [per !== 'all' ? PERIOD_TAB(per) : null, p.tab].filter(Boolean),
            file: 'aibrofist-profile.png', backup: () => [d, n], rows };
 }
 // снимок сайта, а не вышел — нарисованная картинка с теми же данными
 function picture(view) {
-  return shots.shoot(view.where, view.theme, { tab: view.tab, crop: view.crop, ready: view.ready }).catch(e => {
+  return shots.shoot(view.where, view.theme, { tab: view.tab, crop: view.crop, ready: view.ready, lang: view.lang }).catch(e => {
     once('shot:' + e.message, 'real screenshot failed, sending a drawn picture instead:', e.message);
     const [data, page] = view.backup();
     return cards.draw(view.kind, data, view.theme, page);
@@ -1553,13 +2005,13 @@ function onAccountHint(i) {
 }
 function onCardButton(i, cid) {
   if (pressedTooFast(i)) return respond(i, { type: 6 });
-  // «sv:тема» без страницы — кнопки сообщений, отправленных до листания
-  const sv = /^sv:(dark|light)(?::(-?\d+))?$/.exec(cid);
-  if (sv) return sendCard(i, serversView(sv[1], sv[2]), true);
-  // ac:тема:страница:период:ник; у сообщений, отправленных раньше, периода нет
-  const m = /^ac:(dark|light):(-?\d+):(?:(day|week|all):)?([^:]+)$/.exec(cid);
+  // «sv:тема» без страницы — кнопки сообщений, отправленных до листания; без языка — до флагов
+  const sv = /^sv:(dark|light)(?::(-?\d+))?(?::(en|ru))?$/.exec(cid);
+  if (sv) return sendCard(i, serversView(sv[1], sv[2], sv[3]), true);
+  // ac:тема:страница:период:язык:ник; у сообщений, отправленных раньше, периода и языка нет
+  const m = /^ac:(dark|light):(-?\d+):(?:(day|week|all):)?(?:(en|ru):)?([^:]+)$/.exec(cid);
   if (!m) return respond(i, { type: 6 });
-  const view = accountView(m[4], m[1], m[2], m[3]);
+  const view = accountView(m[5], m[1], m[2], m[3], m[4]);
   if (!view) return reply(i, { content: 'This player is no longer on aibrofist.online.' });
   return sendCard(i, view, true);
 }

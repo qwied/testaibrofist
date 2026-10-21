@@ -1,6 +1,7 @@
 /* Настоящие снимки страниц для бота (discordShots.js) — с настоящим
    браузером из @sparticuz/chromium, против маленького сайта на localhost:
    - тема для снимка подменяется (тёмная/светлая), окно соглашения не мешает;
+   - язык сайта для снимка — английский или русский (гостю сайт отвечает английским);
    - страница грузит только сам сайт: запрос наружу до чужого сервера не доходит;
    - вкладка нажимается, длинная страница снимается целиком, но не выше MAX_H;
    - страница с ошибкой (404, сервер не отвечает) — ошибка, а не снимок ошибки;
@@ -37,6 +38,13 @@ const PAGE = outsidePort => `<!doctype html><html><head><style>
 const TAB = `<!doctype html><body style="margin:0;background:#fff">
 <button id="t" style="width:200px;height:60px" onclick="document.body.style.background='#000';window.first=1">Maps</button>
 <button id="u" style="width:200px;height:60px" onclick="if(window.first)document.body.style.background='#00f'">Week</button></body>`;
+// язык: и браузерная память (bfLang), и ответ сайта (/i18n/get) — как в i18n.js; русский — синий фон, английский — жёлтый
+const LANG = `<!doctype html><body style="margin:0;background:#888"><script>
+  fetch('/i18n/get').then(r => r.json()).then(d => {
+    var l = localStorage.getItem('bfLang');
+    document.body.style.background = l === d.lang ? (l === 'ru' ? '#00f' : '#ff0') : '#f00';
+  });
+</script></body>`;
 const TALL = `<!doctype html><body style="margin:0"><div style="height:3000px;background:#888"></div></body>`;
 // блок для обрезки: 400x300 на позиции (300, 120); слева «боковое меню» сайта (.bfHead) красным;
 // данные приходят с задержкой — до них блок серый, после — зелёный и с отметкой data-ready
@@ -53,6 +61,8 @@ const CROP = `<!doctype html><body style="margin:0;background:#fff">
     if (req.url === '/page') return res.end(PAGE(outsidePort));
     if (req.url === '/tab') return res.end(TAB);
     if (req.url === '/tall') return res.end(TALL);
+    if (req.url === '/lang') return res.end(LANG);
+    if (req.url === '/i18n/get') { res.setHeader('Content-Type', 'application/json'); return res.end('{"lang":"en","guest":true,"langs":["en","ru"]}'); }
     if (req.url === '/crop') return res.end(CROP);
     res.statusCode = 404; res.end('not found');
   });
@@ -80,6 +90,10 @@ const CROP = `<!doctype html><body style="margin:0;background:#fff">
   const two = PNG.sync.read(await S.shoot('/tab', 'light', { tab: ['#t', '#u'] }));
   const bi = (two.width * 600 + 600) * 4;
   ok('несколько вкладок — по очереди (период, потом Maps)', two.data[bi + 2] > 200 && two.data[bi] < 40, [two.data[bi], two.data[bi + 1], two.data[bi + 2]].join());
+  const rgb = (img, x, y) => { const i = (img.width * y + x) * 4; return [img.data[i], img.data[i + 1], img.data[i + 2]].join(); };
+  const ru = PNG.sync.read(await S.shoot('/lang', 'dark', { lang: 'ru' })), en = PNG.sync.read(await S.shoot('/lang', 'dark'));
+  ok('язык сайта на снимке — русский по флагу «Русский», иначе английский (гостю сайт отвечает английским)',
+     rgb(ru, 600, 600) === '0,0,255' && rgb(en, 600, 600) === '255,255,0', rgb(ru, 600, 600) + ' / ' + rgb(en, 600, 600));
   const tall = PNG.sync.read(await S.shoot('/tall', 'light'));
   ok('длинная страница — целиком, но не выше ' + S.MAX_H, tall.height === S.MAX_H, tall.height);
   const green = (img, x, y) => { const i = (img.width * y + x) * 4; return img.data[i] < 60 && img.data[i + 1] > 200 && img.data[i + 2] < 60; };
