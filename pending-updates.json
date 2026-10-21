@@ -1,9 +1,4 @@
 {
-  "base": "f964e2a1d39ee8eb2ea102ff128bc2c3cafc3789",
-  "updates": [
-    {
-      "title": "Discord bot cards and warnings",
-      "text": "Bot replies in Discord are now pictures in the game style, with English and Russian buttons under them, including the server rules. Warnings now add up: the third warning within 30 days gives a 1-hour mute. The Servers page is now fully translated into Russian."
-    }
-  ]
+  "base": "71faaba6c75deb82818000f67212567d5d373337",
+  "updates": []
 }
