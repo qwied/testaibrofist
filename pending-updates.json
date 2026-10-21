@@ -1,9 +1,4 @@
 {
-  "base": "4ea5ca1bafc62e8c2adea06a2771ab1a883d2be0",
-  "updates": [
-    {
-      "title": "Discord commands without pings",
-      "text": "Discord bot never pings anyone, and members in admin commands can be written by name."
-    }
-  ]
+  "base": "1d36cf7d472efee21b85d5cab98507e46e1a865a",
+  "updates": []
 }
