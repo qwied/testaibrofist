@@ -1,9 +1,4 @@
 {
-  "base": "3419882df84f8013c353ad91bfa42d7ef9af0b63",
-  "updates": [
-    {
-      "title": "New rules and about posts",
-      "text": "Discord: the /rules command is gone. The rules and about posts were posted again, with a hint on how to read them in your language: right-click (or press and hold), Apps, Translate."
-    }
-  ]
+  "base": "7c2d8447b2b50f6aef72eebd466677ecba9b16dc",
+  "updates": []
 }
