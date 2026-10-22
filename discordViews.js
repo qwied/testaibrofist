@@ -360,17 +360,24 @@ const SHORT = {
 };
 // короткая строка под названием правила на языке
 const shortOf = (id, lang) => { const l = langOf(lang); return l === 'ru' ? SHORT[id][1] : l === 'en' ? SHORT[id][0] : PACKS[l].short[id - 1] || SHORT[id][0]; };
+/* Подсказка под публичными постами (правила, about): как прочитать пост на своём языке. Название пункта меню Discord
+   показывает человеку на его языке, поэтому перечислены названия на всех языках Discord — по одному из них он узнает свой. */
+const HINT_LOCALES = ['en-US', 'es-ES', 'pt-BR', 'de', 'fr', 'tr', 'pl', 'ru', 'uk', 'it', 'zh-CN', 'zh-TW', 'ja', 'ko', 'id', 'da', 'hr', 'lt', 'hu', 'nl', 'no', 'ro', 'fi',
+                      'sv-SE', 'vi', 'cs', 'el', 'bg', 'hi', 'th'];
+const translateHint = () => 'To read this in your language: right-click it (on a phone, press and hold), then Apps → ' +
+  [...new Set(HINT_LOCALES.map(l => say(fromLocale(l), 'trCmd')))].join(' · ');
+
 function rules(d, lang) {
   const L = (k, v) => say(lang, k, v);
   const ru = langOf(lang) === 'ru';
   const title = esc(d.title || (ru ? 'Правила сервера' : 'Server Rules'));
   if (!d.std) {
     return { color: R.COLORS.neutral, parts: [txt('## ' + String(d.title || (ru ? 'Правила сервера' : 'Server Rules')).slice(0, 200)), txt(String(d.text || '').slice(0, 3600)),
-      txt(small(d.at ? L('updated', { d: date(d.at, lang) }) : ''))] };
+      txt(small(d.at ? L('updated', { d: date(d.at, lang) }) : '')), d.hint ? txt(small(translateHint())) : null] };
   }
   const body = R.RULES.map(r => '**' + r.id + '  ' + ruleTitle(r, lang) + '**  ' + code(actLabel(r.act, lang)) + '\n' + small(shortOf(r.id, lang))).join('\n');
   return { color: R.COLORS.neutral, parts: [txt('## ' + title), txt(body), txt(dots(3, 3) + '  ' + L('warnsAddShort')),
-    txt(small(L('mistake') + (d.at ? '  ·  ' + L('updated', { d: date(d.at, lang) }) : '')))] };
+    txt(small(L('mistake') + (d.at ? '  ·  ' + L('updated', { d: date(d.at, lang) }) : ''))), d.hint ? txt(small(translateHint())) : null] };
 }
 
 /* ---------- справка по командам владельца ---------- */
@@ -447,7 +454,7 @@ const aboutText = lang => say(lang, 'aboutIntro') + '\n\n' + [1, 2, 3, 4, 5].map
 /* d: { imageUrl — картинка поста (ссылка на неё в самом сообщении), url — куда ведёт кнопка } */
 function about(d, lang) {
   const gallery = d.imageUrl ? { type: 12, items: [{ media: { url: String(d.imageUrl) } }] } : null;
-  return { color: 0x1f2937, parts: [txt('## AIBROFIST'), txt(aboutText(lang)), gallery, { type: 14, divider: true, spacing: 1 }].filter(Boolean) };
+  return { color: 0x1f2937, parts: [txt('## AIBROFIST'), txt(aboutText(lang)), gallery, { type: 14, divider: true, spacing: 1 }, d.hint ? txt(small(translateHint())) : null].filter(Boolean) };
 }
 
 /* ---------- /servers: комнаты обоих режимов ---------- */
@@ -525,4 +532,4 @@ function view(kind, data, lang, extra) {
   return fn(data || {}, langOf(lang), extra && extra.page, extra && extra.period);
 }
 
-module.exports = { view, message, button, linkButton, row, tabs, say, aboutText, langOf, fromLocale, duration, date, dshort, ruleText, reasonText, esc, code, small, txt, SHORT, HELP, NOTE_RU, VIEWS };
+module.exports = { view, message, button, linkButton, row, tabs, say, aboutText, translateHint, langOf, fromLocale, duration, date, dshort, ruleText, reasonText, esc, code, small, txt, SHORT, HELP, NOTE_RU, VIEWS };

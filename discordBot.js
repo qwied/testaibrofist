@@ -19,7 +19,8 @@
 //     /language (discordWorld.js) даёт выбрать любую из 200 стран мира или
 //     один из 52 языков: выбор помнится, и дальше бот отвечает на нём во
 //     всех командах и в личных сообщениях человеку. Карточки в канале
-//     английские (общие для всех), правила на своём языке — команда /rules;
+//     английские (общие для всех); любое сообщение бота читается на своём языке пунктом
+//     меню «Translate» (Приложения -> Translate), а в постах правил и about об этом написано;
 //   - секретные команды владельца сервера прямо в канале (начало команд —
 //     DISCORD_CMD_PREFIX на хостинге): news (пост в любой канал с
 //     картинками и кнопкой-ссылкой — в окне, которое видит только он),
@@ -1021,8 +1022,9 @@ const HELP = [
     'an @mention in your command pings the person before the bot can delete the message. A user ID works too (a mention as well, but it pings). ' +
     'A name with spaces goes in quotes: ' + PREFIX + 'mute "Big Bob" 1h.',
   '',
-  'For everyone: **/servers** - game rooms and players online right now, **/rules** - the server rules in your language, **/account nick** - a player profile, ' +
-    '**/language** - choose the language the bot answers in: any country in the world (it is remembered per person).',
+  'For everyone: **/servers** - game rooms and players online right now, **/account nick** - a player profile, ' +
+    '**/language** - choose the language the bot answers in: any country in the world (it is remembered per person), ' +
+    '**Apps > Translate** in a bot message menu - read that message in your language.',
   'Only you can use these commands. The message with a command is removed at once.'
 ].join('\n');
 
@@ -1562,8 +1564,9 @@ const rulesPost = (title, text, o) => {
 /* Правила сообщением (discordViews.js): стандартные — с наказанием у каждого
    правила и на любом языке Discord (discordLang.js), свой текст владельца — как он
    написан (только английский и русский). Кнопок под текстом нет. Пост в канале
-   один на всех — он английский; на своём языке каждый читает правила командой /rules. */
-const CARD_DESIGN = 6;               // версия оформления ответов бота (1-3 — картинки, 4 — сообщения Discord, 5 — с кнопками языка, 6 — без них): поменялось — пост правил один раз перерисуется
+   один на всех — он английский; на своём языке каждый читает правила пунктом меню «Translate». */
+const CARD_DESIGN = 7;               // версия оформления ответов бота (1-3 — картинки, 4 — сообщения Discord, 5 — с кнопками языка, 6 — без них, 7 — с подсказкой про «Translate»): поменялось — пост правил один раз перерисуется
+const RULES_FRESH = 1;               // разовая публикация правил НОВЫМ постом (старый удаляется), без правки на месте
 const rulesAreStd = r => r.en === R.rulesText('en') && (!r.ru || r.ru === R.rulesText('ru'));
 function rulesData(g, r, lang) {
   const ru = lang === 'ru' && !!r.ru, std = rulesAreStd(r), title = r.title || RULES_TITLE;
@@ -1572,11 +1575,11 @@ function rulesData(g, r, lang) {
   return { std, title: ru ? RULES_TITLE_RU : lang !== 'en' && lang !== 'ru' && title === RULES_TITLE ? V.say(lang, 'rulesTitle') : title,
            text: g ? linkify(g, text) : text, at: r.at };
 }
-function rulesMessage(g, r, lang) {
+function rulesMessage(g, r, lang, hint) {
   lang = V.langOf(lang);
   const std = rulesAreStd(r);
   if ((lang === 'ru' && !r.ru) || (!std && lang !== 'en' && lang !== 'ru')) lang = 'en';
-  return V.message(V.view('rules', rulesData(g, r, lang), lang), []);
+  return V.message(V.view('rules', Object.assign(rulesData(g, r, lang), { hint: !!hint }), lang), []);     // hint — подсказка про «Translate» (только в самом посте)
 }
 
 /* Один пост: тот же канал — правим прежний на месте (картинку прежней версии
@@ -1584,17 +1587,17 @@ function rulesMessage(g, r, lang) {
    пост (если был) убирается. Сначала красивым сообщением; не собралось или
    Discord его не взял — простой рамкой с текстом.
    Возвращает { message, at, pic } или { error: код ответа Discord }. */
-async function publishRules(g, chan, r, old) {
+async function publishRules(g, chan, r, old, fresh) {
   old = old || {};
   const at = Date.now();
   const tries = [];
-  try { tries.push({ body: rulesMessage(g, Object.assign({}, r, { at }), 'en'), nice: true }); }
+  try { tries.push({ body: rulesMessage(g, Object.assign({}, r, { at }), 'en', true), nice: true }); }
   catch (e) { once('rulespic:' + e.message, 'could not build the rules, posting plain text instead:', e.message); }
   tries.push({ body: rulesPost(r.title, linkify(g, r.en), { lang: r.ru ? 'en' : null, at }) });
   let res = null, used = null;
   for (const m of tries) {
     res = null;
-    if (old.message && old.channel === chan) res = await api('PATCH', '/channels/' + chan + '/messages/' + old.message, Object.assign({ attachments: [] }, m.body));
+    if (old.message && old.channel === chan && !fresh) res = await api('PATCH', '/channels/' + chan + '/messages/' + old.message, Object.assign({ attachments: [] }, m.body));
     if (!res || !ok(res)) res = await api('POST', '/channels/' + chan + '/messages', m.body);
     if (ok(res) && res.body) { used = m; break; }
     if (m.nice) log('Discord did not take the rules message:', res.status, JSON.stringify(res.body).slice(0, 200));
@@ -1654,18 +1657,51 @@ async function postDefaultRules(g) {
   const c = g.channels.get(RULES_CHANNEL);
   const toPic = !!(old && old.message && !old.pic);
   const upgrade = state.fixes.rulesCard !== CARD_DESIGN;     // один раз на версию оформления: пост перерисовывается
-  if (old && old.message && !force && !toPic && !upgrade && (old.custom || (old.en === en && old.ru === ru && !old.ruMessage))) return;
+  const fresh = state.fixes.rulesFresh !== RULES_FRESH;       // один раз: не правка на месте, а новый пост (прежний удаляется)
+  if (old && old.message && !force && !toPic && !upgrade && !fresh && (old.custom || (old.en === en && old.ru === ru && !old.ruMessage))) return;
   if (!old && !c) return;
   const chan = old && old.channel && g.channels.has(old.channel) ? old.channel : c && c.id;
   if (!chan) return;
   const keep = !!(old && old.custom && !force);
   const text = keep ? { title: old.title || RULES_TITLE, en: old.en || en, ru: old.ru || '' }
                     : { title: (old && !force && old.title) || RULES_TITLE, en, ru };
-  const r = await publishRules(g, chan, text, old || {});
+  const r = await publishRules(g, chan, text, old || {}, fresh);
   if (r.error) { log('could not post the rules in ' + chan + ':', r.error); return; }
   st.rules = Object.assign({ channel: chan, message: r.message }, text, { at: r.at, pic: r.pic }, keep ? { custom: true } : {});
   if (force) state.fixes.rules7 = true;
   state.fixes.rulesCard = CARD_DESIGN;
+  state.fixes.rulesFresh = RULES_FRESH;
+  save();
+}
+
+/* Пост в канале #about: рассказ об игре и скриншот главного меню (файл news/about-menu.png прикладывается к сообщению), под ним
+   подсказка, как прочитать пост на своём языке (пункт «Translate»). Выкладывается сам, один раз на версию (ABOUT_VER): прежние
+   посты бота с тем же заголовком в этом канале удаляются. Нет канала #about или файла картинки — пост без картинки. */
+const ABOUT_VER = 1;
+const ABOUT_IMAGE = path.join(__dirname, 'news', 'about-menu.png');
+const aboutChannel = g => [...g.channels.values()].find(c => c.type === 0 && c.name === 'about') || null;
+async function postAbout(g) {
+  const st = gstate(g.id), c = aboutChannel(g);
+  if (!c || (st.about && st.about.ver === ABOUT_VER && st.about.message)) return;
+  let img = null;
+  try { img = fs.readFileSync(ABOUT_IMAGE); } catch (e) { img = null; }
+  const make = withImage => V.message(V.view('about', { imageUrl: withImage ? 'attachment://about-menu.png' : '', hint: true }, 'en'),
+                                      [V.row(V.linkButton(V.say('en', 'playNow'), SITE_URL))]);
+  let r = img ? await api('POST', '/channels/' + c.id + '/messages', make(true), { files: [{ name: 'about-menu.png', data: img, type: 'image/png' }] }) : null;
+  if (!r || !ok(r)) r = await api('POST', '/channels/' + c.id + '/messages', make(false));
+  if (!ok(r) || !r.body) {
+    if (r.status === 403) once('noabout:' + c.id, 'cannot write to #about: allow View Channel and Send Messages for the bot there');
+    else log('could not post the about message:', r.status, JSON.stringify(r.body).slice(0, 200));
+    return;
+  }
+  const list = await api('GET', '/channels/' + c.id + '/messages?limit=30');
+  if (ok(list) && Array.isArray(list.body)) {
+    for (const m of list.body) {
+      if (m.id === r.body.id || !me || !m.author || m.author.id !== me.id || partsOf(m).texts[0] !== '## AIBROFIST') continue;
+      api('DELETE', '/channels/' + c.id + '/messages/' + m.id).catch(() => {});
+    }
+  }
+  st.about = { channel: c.id, message: r.body.id, ver: ABOUT_VER, at: Date.now() };
   save();
 }
 
@@ -1801,7 +1837,6 @@ async function onInteraction(i) {
   if (i.type === 2 && i.data && i.data.type === 3) return i.data.name === 'Translate' ? onTranslate(i) : undefined;
   if (i.type === 2 && i.data && i.data.name === 'servers') return onServers(i);
   if (i.type === 2 && i.data && i.data.name === 'account') return onAccount(i);
-  if (i.type === 2 && i.data && i.data.name === 'rules') return onRules(i);
   if (i.type === 4 && i.data && i.data.name === 'account') return onAccountHint(i);
   if (i.type === 2 && i.data && i.data.name === 'language') return onLanguage(i);
   if (i.type === 4 && i.data && i.data.name === 'language') return onLanguageHint(i);
@@ -1901,15 +1936,10 @@ async function answerCommand(i, make, what, ephemeral) {
 function onServers(i) {
   return answerCommand(i, () => serversMessage(userLang(i)), 'servers');
 }
-// /rules: правила сервера на языке самого человека (по языку его Discord), видны только ему. Пост в канале один на всех и английский.
+// правила сервера как они сейчас записаны (по умолчанию — стандартные): для поста и для пункта «Translate»
 function rulesFull(g) {
   const r = gstate(g.id).rules || {};
   return { title: r.title || RULES_TITLE, en: r.en || R.rulesText('en'), ru: r.ru === undefined ? R.rulesText('ru') : r.ru, at: r.at };
-}
-function onRules(i) {
-  const g = i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value;
-  if (!g) return reply(i, { content: 'The server rules are not available right now.' });
-  return answerCommand(i, () => rulesMessage(g, rulesFull(g), userLang(i)), 'rules', true);
 }
 function onAccount(i) {
   const opt = ((i.data && i.data.options) || []).find(o => o.name === 'nick');
@@ -2012,7 +2042,7 @@ function translateMessage(m, g, lang) {
   const rec = state.posts[m.id];
   if (rec && rec.k === 'action') return cardMessage({ k: rec.k, d: rec.d, g: rec.g }, lang, true);
   const p = partsOf(m);
-  if (p.texts[0] === '## AIBROFIST' && p.texts[1] === V.aboutText('en')) {
+  if (p.texts[0] === '## AIBROFIST' && (p.texts[1] === V.aboutText('en') || (g && gstate(g.id).about && gstate(g.id).about.message === m.id))) {
     const url = /^https:\/\/[^\s"]+$/.test(p.link) ? p.link : 'https://aibrofist.online';
     return V.message(V.view('about', { imageUrl: /^https:\/\/[^\s"]+$/.test(p.image) ? p.image : '' }, lang), [V.row(V.linkButton(V.say(lang, 'playNow'), url))], { ephemeral: true });
   }
@@ -2075,8 +2105,6 @@ function translateNames() {
 const GLOBAL_COMMANDS = [
   { name: 'servers', type: 1, description: 'AIBROFIST game rooms and players online right now',
     contexts: [0, 1], integration_types: [0] },
-  { name: 'rules', type: 1, description: 'The server rules in your language',
-    contexts: [0, 1], integration_types: [0] },
   { name: 'language', type: 1, description: 'Choose the language the bot answers in: any country or language in the world',
     contexts: [0, 1], integration_types: [0],
     options: [{ type: 3, name: 'country', description: 'Type a country or a language, or pick Automatic', required: false, autocomplete: true, max_length: 60 }] },
@@ -2086,14 +2114,14 @@ const GLOBAL_COMMANDS = [
     options: [{ type: 3, name: 'nick', description: 'Player nickname on aibrofist.online', required: true, autocomplete: true,
                 min_length: 1, max_length: 20 }] }
 ];
-const GLOBAL_VER = 'servers-rules-account-language-translate-1';
+const GLOBAL_VER = 'servers-account-language-translate-2';
 async function syncGlobalCommands() {
   if (state.fixes.globalCommands === GLOBAL_VER) return;
   if (!appId) await loadApp().catch(() => null);
   if (!appId) return;
   const r = await api('PUT', '/applications/' + appId + '/commands', GLOBAL_COMMANDS);
   if (ok(r)) { state.fixes.globalCommands = GLOBAL_VER; save(); }
-  else log('could not set the /servers, /rules, /account, /language and Translate commands:', r.status);
+  else log('could not set the /servers, /account, /language and Translate commands:', r.status);
 }
 
 /* Слэш-команд на сервере у бота нет — все команды секретные, с «!». Если
@@ -2507,6 +2535,7 @@ async function setupGuild(g) {
     await syncGlobalCommands();
     await ensureNativeAutomod(g);
     await postDefaultRules(g);
+    await postAbout(g).catch(e => log('could not post the about message:', e.message));
   } catch (e) { log('setup failed for ' + g.name + ':', e.message); setupDone.delete(g.id); }
 }
 

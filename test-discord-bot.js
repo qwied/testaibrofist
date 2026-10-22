@@ -81,7 +81,7 @@ async function waitFor(fn, ms) {
 }
 
 const G = '100', OWNER = '900', BOT = '800', APP = '700';
-const CH = { general: '300', rules: '301', updates: '302', modlog: '303', nsfw: '304', promo: '305', news2: '306' };
+const CH = { general: '300', rules: '301', updates: '302', modlog: '303', nsfw: '304', promo: '305', news2: '306', about: '307' };
 const MOD_ROLE = '200';
 
 /* ---------- поддельный Discord ---------- */
@@ -195,7 +195,7 @@ const guildCreate = () => ({
     { id: CH.general, name: 'general', type: 0 }, { id: CH.rules, name: 'rules', type: 0 },
     { id: CH.updates, name: 'updates', type: 0 }, { id: CH.modlog, name: 'mod-log', type: 0 },
     { id: CH.nsfw, name: 'nsfw', type: 0, nsfw: true }, { id: CH.promo, name: 'self-promo', type: 0 },
-    { id: CH.news2, name: 'news', type: 5 }]
+    { id: CH.news2, name: 'news', type: 5 }, { id: CH.about, name: 'about', type: 0 }]
 });
 function dispatch(t, d) { if (sock) sock.send(JSON.stringify({ op: 0, t, s: ++seq, d })); }
 wss.on('connection', ws => {
@@ -247,6 +247,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   delete process.env.DISCORD_UPDATES_CHANNEL_ID; delete process.env.DISCORD_MODLOG_CHANNEL_ID;
   const { api } = require('./discordApi.js');
   const bot = require('./discordBot.js');
+  const V = require('./discordViews.js');
 
   console.log('HTTP API:');
   const t0r = Date.now();
@@ -267,8 +268,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(calls, 'PUT', /^\/applications\/700\/commands$/).length);
   const gcmds = find(calls, 'PUT', /^\/applications\/700\/commands$/);
   const nick = gcmds[0] && (gcmds[0].body.find(c => c.name === 'account') || {}).options && gcmds[0].body.find(c => c.name === 'account').options[0];
-  ok('у приложения пять команд для всех — /servers, /rules, /language, «Translate» (меню сообщения) и /account (старая /say убрана: список заменяется целиком)', gcmds.length === 1 &&
-     gcmds[0].body.map(c => c.name).join() === 'servers,rules,language,Translate,account' && gcmds[0].body.every(c => !c.default_member_permissions),
+  ok('у приложения четыре команды для всех — /servers, /language, «Translate» (меню сообщения) и /account (старых /say и /rules нет: список заменяется целиком)', gcmds.length === 1 &&
+     gcmds[0].body.map(c => c.name).join() === 'servers,language,Translate,account' && gcmds[0].body.every(c => !c.default_member_permissions),
      gcmds[0] && JSON.stringify(gcmds[0].body.map(c => c.name)));
   ok('/account: обязательный ник с подсказками по мере ввода', nick && nick.name === 'nick' && nick.type === 3 && nick.required && nick.autocomplete);
   await waitFor(() => find(calls, 'PATCH', /^\/applications\/@me$/).length);
@@ -285,13 +286,30 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('у каждого правила своё наказание и короткая строка; никаких картинок, логотипа и описаний (alt)', /2 No invites to other Discord servers WARNING /.test(rtxt) &&
      /5 No scams or dangerous links BAN 7 DAYS /.test(rtxt) && !/"type":12|"type":13|"description"|attachment:/.test(JSON.stringify(rb)));
   ok('предупреждения копятся — это тоже в правилах: 3-е за 30 дней даёт мьют на час', /Warnings add up: the 3rd within 30 days gives a 1-hour mute/.test(rtxt));
-  ok('под правилами никаких кнопок: ни выбора языка (ни флагов, ни глобуса), ни темы — язык определяется по Discord человека, правила на своём языке даёт /rules', rbtns.length === 0 &&
+  ok('под правилами никаких кнопок: ни выбора языка (ни флагов, ни глобуса), ни темы — правила на своём языке даёт пункт меню «Translate»', rbtns.length === 0 &&
      rowsOf(rb).length === 0 && !/English|Русский|My language|Мой язык|Dark theme|Light theme|🌐|🇬🇧|🇷🇺/.test(JSON.stringify(rb)) && !/Без спама/.test(JSON.stringify(rb)));
+  const rhint = textsOf(rb).slice(-1)[0] || '';
+  ok('внизу поста правил подсказка, как прочитать его на своём языке: правый клик (долгое нажатие) -> Apps -> «Translate», и название пункта на всех языках Discord', /^-# To read this in your language: right-click it \(on a phone, press and hold\), then Apps → Translate · Traducir · /.test(rhint) &&
+     ['Перевести', 'Übersetzen', 'Traduire', '翻译', '翻譯', '翻訳', '번역', 'Çevir', 'Przetłumacz', 'Перекласти', 'Μετάφραση', 'Преведи', 'अनुवाद करें', 'แปล', 'Dịch'].every(w => rhint.indexOf(w) > 0) &&
+     rhint.split(' · ').length === new Set(rhint.split(' · ')).size && !/emoji|[\u{1F300}-\u{1FAFF}]/u.test(rhint), rhint.slice(0, 120));
   ok('пост запомнен (с временем выкладки, картинкой), разовая замена правил отмечена', bot._test.state().guilds[G].rules.message === rpost.resId &&
      bot._test.state().guilds[G].rules.ruMessage === undefined && bot._test.state().guilds[G].rules.at > 0 && bot._test.state().guilds[G].rules.pic === true &&
-     bot._test.state().fixes.rules7 === true && bot._test.state().fixes.rulesCard === 6);
+     bot._test.state().fixes.rules7 === true && bot._test.state().fixes.rulesCard === 7 && bot._test.state().fixes.rulesFresh === 1);
   const am = find(calls, 'POST', /auto-moderation\/rules$/).map(c => c.body.trigger_type).sort().join(',');
   ok('включает встроенную AutoMod только со списком слов вражды и 18+ (спама и упоминаний в правилах больше нет)', am === '4', am);
+  await waitFor(() => find(calls, 'POST', /^\/channels\/307\/messages$/).length >= 1);
+  await sleep(200);
+  const apost = find(calls, 'POST', /^\/channels\/307\/messages$/), amp = multipartOf(apost[0]), ab = bodyOf(apost[0]) || {};
+  const atx = textsOf(ab), abtn = buttonsOf(ab);
+  ok('в #about бот сам выложил один пост с рассказом об игре: рамка, заголовок, текст (7 строк), скриншот главного меню файлом, кнопка-ссылка «Play now»', apost.length === 1 && amp && amp.files.join() === 'about-menu.png image/png' && amp.png &&
+     ab.flags === 32768 && ab.components[0].type === 17 && atx[0] === '## AIBROFIST' && atx[1] === V.aboutText('en') && atx[1].split('\n').length === 7 &&
+     JSON.stringify(ab.components[0].components.filter(c => c.type === 12)) === '[{"type":12,"items":[{"media":{"url":"attachment://about-menu.png"}}]}]' &&
+     abtn.length === 1 && abtn[0].style === 5 && abtn[0].label === 'Play now' && /^https:\/\/[^ ]+$/.test(abtn[0].url) && ab.allowed_mentions.parse.length === 0, atx[0] + ' | ' + (atx[1] || '').slice(0, 50));
+  ok('у картинки нет описания (иначе Discord рисует плашку «ПОДСКАЗКА»/ALT), эмодзи нигде нет', !/"description"/.test(JSON.stringify(ab)) && !/[\u{1F300}-\u{1FAFF}]/u.test(JSON.stringify(ab)));
+  ok('под текстом та же подсказка про «Translate» (правый клик -> Apps), с названиями пункта на языках Discord', /^-# To read this in your language: right-click it \(on a phone, press and hold\), then Apps → Translate · Traducir · /.test(atx.slice(-1)[0]) &&
+     ['Перевести', 'Übersetzen', '翻訳', 'Çevir'].every(w => atx.slice(-1)[0].indexOf(w) > 0));
+  ok('пост запомнен (канал, версия), прежних постов в канале не было — удалять нечего', bot._test.state().guilds[G].about.message === apost[0].resId && bot._test.state().guilds[G].about.ver === 1 &&
+     bot._test.state().guilds[G].about.channel === CH.about && find(calls, 'DELETE', /^\/channels\/307\/messages\/\d+$/).length === 0);
 
   console.log('\nстраница состояния:');
   const st = await bot.status();
@@ -1054,6 +1072,15 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     await waitFor(() => cb(since(t), id).length, 5000);
     return cb(since(t), id)[0];
   };
+  // «Translate» (пункт меню сообщения): msg — сообщение, на которое нажали; ответ виден только нажавшему
+  const trx = async (id, msg, uid, locale) => {
+    t = Date.now();
+    dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type: 2, guild_id: G, channel_id: CH.general, member: { user: { id: uid }, permissions: '1024' }, locale,
+      data: { id: '900', name: 'Translate', type: 3, target_id: msg.id, resolved: { messages: { [msg.id]: msg } } } });
+    await waitFor(() => cb(since(t), id).length, 5000);
+    return cb(since(t), id)[0];
+  };
+  const botMsg = (id, o) => Object.assign({ id, author: { id: BOT, bot: true, username: 'AIBROFIST' }, channel_id: CH.general, flags: 0, components: [], embeds: [] }, o);
   // все языки Discord (32 locale: en-US и en-GB — один английский, es-ES и es-419 — один испанский) -> язык ответа; таблица написана вручную, не из кода бота
   const DISCORD_LOCALES = { id: 'id', da: 'da', de: 'de', 'en-GB': 'en', 'en-US': 'en', 'es-ES': 'es', 'es-419': 'es', fr: 'fr', hr: 'hr', it: 'it', lt: 'lt', hu: 'hu', nl: 'nl',
     no: 'no', pl: 'pl', 'pt-BR': 'pt', ro: 'ro', fi: 'fi', 'sv-SE': 'sv', vi: 'vi', tr: 'tr', cs: 'cs', el: 'el', bg: 'bg', ru: 'ru', uk: 'uk', hi: 'hi', th: 'th', 'zh-CN': 'zh',
@@ -1094,23 +1121,24 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => cb(since(t), 'lg7').length);
   ok('то же в /account: вкладка «Карты» остаётся итальянской', cb(since(t), 'lg7')[0].body.type === 7 && /^qwied Iscritto il .* Forest CORSA IN GIOCO /.test(plainOf(cb(since(t), 'lg7')[0])) &&
      labels(cb(since(t), 'lg7')[0].body)[0] === 'Profilo=ac:p:all:it:qwied | Mappe(off)=ac-page | Amici=ac:f:all:it:qwied', labels(cb(since(t), 'lg7')[0].body).join(' || '));
-  // /rules — правила на языке человека, видны только ему; пост в канале один на всех (английский)
+  // «Translate» на посте с правилами — правила на языке человека, видны только ему; пост в канале один на всех (английский)
+  const rulesPostId = bot._test.state().guilds[G].rules.message;
   const rulesBy = {
     'es-ES': /^Reglas del servidor AIBROFIST 1 Sin spam SILENCIO 10 MINUTOS Más de 3 mensajes en 2 segundos\. Silencio a la 5\.ª vez\. 2 Sin invitaciones a otros servidores de Discord ADVERTENCIA /,
     ru: /^Правила сервера AIBROFIST 1 Без спама МЬЮТ 10 МИНУТ /, ko: /^AIBROFIST 서버 규칙 1 도배 금지 채팅 금지 10분 /, 'zh-TW': /^AIBROFIST 伺服器規則 1 禁止洗版 禁言 10分鐘 /,
     tr: /^AIBROFIST Sunucu Kuralları 1 Spam yok SUSTURMA 10 DAKİKA /, pl: /^Regulamin serwera AIBROFIST 1 Zakaz spamu WYCISZENIE 10 MINUT /,
+    de: /^Serverregeln von AIBROFIST 1 Kein Spam STUMM 10 MINUTEN /,
     'en-US': /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /, am: /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /, undefined: /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /
   };
   const badRules = [];
   for (const [loc, re] of Object.entries(rulesBy)) {
-    const m = await lang1('lgr' + (++n), loc === 'undefined' ? undefined : loc, null, 'rules');
-    if (!(m && m.body.type === 4 && m.body.data.flags === (32768 | 64) && re.test(plainOf(m)) && buttonsOf(m.body).length === 0 && m.body.data.allowed_mentions.parse.length === 0))
+    const m = await trx('lgr' + (++n), botMsg(rulesPostId), 'Ulgr' + n, loc === 'undefined' ? undefined : loc);
+    if (!(m && m.body.type === 4 && m.body.data.flags === (32768 | 64) && re.test(plainOf(m)) && buttonsOf(m.body).length === 0 && m.body.data.allowed_mentions.parse.length === 0 &&
+          !/To read this in your language/.test(plainOf(m))))
       badRules.push(loc + ' -> ' + (m ? plainOf(m).slice(0, 70) : 'нет ответа'));
   }
-  ok('/rules: правила на языке Discord человека (испанский, русский, корейский, китайский традиционный, турецкий, польский; английский, если языка нет), видны только ему, без кнопок', badRules.length === 0, badRules.join(' | '));
-  dispatch('INTERACTION_CREATE', { id: 'lgdm', token: 'tklgdm', type: 2, user: { id: 'U71' }, locale: 'de', channel_id: 'dmU71', data: { name: 'rules', type: 1 } });
-  await waitFor(() => cb(calls, 'lgdm').length);
-  ok('/rules работает и в личке с ботом (берёт сервер бота)', /^Serverregeln von AIBROFIST 1 Kein Spam STUMM 10 MINUTEN /.test(plainOf(cb(calls, 'lgdm')[0])), plainOf(cb(calls, 'lgdm')[0]).slice(0, 80));
+  ok('«Translate» на посте с правилами: правила на языке Discord человека (испанский, русский, корейский, китайский традиционный, турецкий, польский, немецкий; английский, если языка нет), видны только ему, без кнопок и без подсказки', badRules.length === 0, badRules.join(' | '));
+  ok('команды /rules больше нет: у приложения её нет, и сообщения о ней бот не отправляет', !JSON.stringify(gcmds[0].body).match(/"name":"rules"/) && !/\/rules/.test(JSON.stringify(gcmds[0].body)));
   console.log('\nкоманда /language — все страны мира, выбор запоминается:');
   const lgCmd = gcmds[0].body.find(c => c.name === 'language'), lgOpt = lgCmd && (lgCmd.options || [])[0];
   ok('/language: необязательное поле «страна или язык» с подсказками по мере ввода, описание в пределах Discord, работает и в личке с ботом',
@@ -1158,10 +1186,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('«/language» без поля — какой язык сейчас и как сменить, на этом же языке', rulesDe && /^Sprache Deutsch · Германия Der Bot antwortet jetzt bei jedem Befehl in dieser Sprache\. Zum Ändern gib nach \/language ein Land oder eine Sprache ein\. So liest du eine ältere Bot-Nachricht in deiner Sprache: Rechtsklick darauf \(am Handy gedrückt halten\), dann Apps und Übersetzen\.$/.test(plainOf(rulesDe)), rulesDe && plainOf(rulesDe));
   const viewAuto = await lgc('lgn5', undefined, 'U82', 'ru');
   ok('без выбора — «Автоматически» и язык его Discord', viewAuto && /^Язык Автоматически Бот следует языку вашего Discord: Русский\. Чтобы сменить, введите страну или язык после \/language\. Чтобы прочитать старое сообщение бота на своём языке: нажмите на него правой кнопкой \(на телефоне — зажмите\), затем «Приложения» и «Перевести»\.$/.test(plainOf(viewAuto)), viewAuto && plainOf(viewAuto));
-  t = Date.now();
-  ix('lgn7', 2, { name: 'rules', type: 1 }, 'U81', false, { locale: 'ru' });
-  await waitFor(() => cb(since(t), 'lgn7').length, 5000);
-  ok('/rules у него — тоже на немецком (все команды следуют выбору)', /^Serverregeln von AIBROFIST 1 Kein Spam STUMM 10 MINUTEN /.test(plainOf(cb(since(t), 'lgn7')[0])), plainOf(cb(since(t), 'lgn7')[0]).slice(0, 60));
+  const rulesSaved = await trx('lgn7', botMsg(rulesPostId), 'U81', 'ru');
+  ok('«Translate» на правилах у него — на немецком (выбор /language важнее языка Discord)', rulesSaved && /^Serverregeln von AIBROFIST 1 Kein Spam STUMM 10 MINUTEN /.test(plainOf(rulesSaved)), rulesSaved && plainOf(rulesSaved).slice(0, 60));
   const jp = await lgc('lgn8', 'Japan', 'U81', 'ru');
   ok('напечатал название вручную («Japan», не из подсказки) — нашлось, японский; прежний выбор заменён', jp && /^言語 日本語 · Япония ボットはすべてのコマンドにこの言語で返信します。 ボットの古いメッセージを自分の言語で読むには：メッセージを右クリック（スマホでは長押し）して、「アプリ」から「翻訳」を選んでください。$/.test(plainOf(jp)) && bot._test.state().langs.U81 === 'JP-ja', jp && plainOf(jp));
   const frb = await lgc('lgn9', 'BE-fr', 'U81', 'ru');
@@ -1349,12 +1375,12 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('слова можно убрать', bot._test.state().guilds[G].words.length === 0);
   ok('свой текст правил бот потом сам не меняет', bot._test.state().guilds[G].rules.custom === true);
   {
-    // свой текст владельца есть только по-английски и по-русски: /rules на другом языке показывает английский, на русском — русский, кнопок нет
+    // свой текст владельца есть только по-английски и по-русски: «Translate» на другом языке показывает английский, на русском — русский, кнопок нет
     const rr = bot._test.state().guilds[G].rules, keep = { en: rr.en, ru: rr.ru };
     rr.en = 'my own rules'; rr.ru = 'мои правила';
-    const mDe = await lang1('lgc1', 'de', null, 'rules'), mRu = await lang1('lgc2', 'ru', null, 'rules'), mJa = await lang1('lgc3', 'ja', null, 'rules');
+    const mDe = await trx('lgc1', botMsg(rr.message), 'Ulgc1', 'de'), mRu = await trx('lgc2', botMsg(rr.message), 'Ulgc2', 'ru'), mJa = await trx('lgc3', botMsg(rr.message), 'Ulgc3', 'ja');
     rr.en = keep.en; rr.ru = keep.ru;
-    ok('/rules со своим текстом владельца: немецкий и японский — английский текст, русский — русский; переводить чужой текст бот не берётся; кнопок нет',
+    ok('«Translate» на правилах со своим текстом владельца: немецкий и японский — английский текст, русский — русский; переводить чужой текст бот не берётся; кнопок нет',
        /^Server Rules my own rules /.test(plainOf(mDe)) && /^Server Rules my own rules /.test(plainOf(mJa)) && /^Правила сервера AIBROFIST мои правила /.test(plainOf(mRu)) &&
        [mDe, mRu, mJa].every(m => buttonsOf(m.body).length === 0 && m.body.data.flags === (32768 | 64)), [mDe, mRu, mJa].map(m => plainOf(m).slice(0, 40)).join(' | '));
   }
@@ -1470,19 +1496,10 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      /^Warning · 2 of 3 Alice @alice_p .* Count: ●●○ /.test(plainOf(aliceCards[1])) && bot._test.state().warns[G + ':70001'].length === 2);
 
   console.log('\nпункт меню «Translate»: старые сообщения бота на своём языке:');
-  const V = require('./discordViews.js');
   const trCmd = gcmds[0].body.find(c => c.name === 'Translate');
   ok('«Translate» — команда сообщения (тип 3): без описания и полей, названия на языках Discord, английское — по умолчанию', trCmd && trCmd.type === 3 && !trCmd.options && !trCmd.description &&
      JSON.stringify(trCmd.contexts) === '[0,1]' && trCmd.name_localizations.ru === 'Перевести' && trCmd.name_localizations.de === 'Übersetzen' && trCmd.name_localizations.ja === '翻訳' &&
      Object.keys(trCmd.name_localizations).length === 30 && !('en-US' in trCmd.name_localizations) && Object.values(trCmd.name_localizations).every(n => n.length >= 1 && n.length <= 32), JSON.stringify(trCmd));
-  const trx = async (id, msg, uid, locale) => {
-    t = Date.now();
-    dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type: 2, guild_id: G, channel_id: CH.general, member: { user: { id: uid }, permissions: '1024' }, locale,
-      data: { id: '900', name: 'Translate', type: 3, target_id: msg.id, resolved: { messages: { [msg.id]: msg } } } });
-    await waitFor(() => cb(since(t), id).length, 5000);
-    return cb(since(t), id)[0];
-  };
-  const botMsg = (id, o) => Object.assign({ id, author: { id: BOT, bot: true, username: 'AIBROFIST' }, channel_id: CH.general, flags: 0, components: [], embeds: [] }, o);
   const deS = PACKS.de.s;
   const tr1 = await trx('trn1', { id: '5001', author: { id: 'U77', username: 'bob' }, content: 'hola', components: [], embeds: [] }, 'U91', 'de');
   ok('сообщение человека не переводится (оно бы ушло стороннему сервису) — объяснение на языке спросившего, видно только ему', tr1 && tr1.body.type === 4 && tr1.body.data.flags === (32768 | 64) &&
@@ -1936,7 +1953,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bot.stop();
   await sleep(200);
   const sf2 = JSON.parse(fs.readFileSync(process.env.DISCORD_BOT_STATE, 'utf8'));
-  ok('в состоянии отмечено: пост правил уже в нынешнем оформлении (сообщения Discord без кнопок)', sf2.fixes.rulesCard === 6);
+  ok('в состоянии отмечено: пост правил уже в нынешнем оформлении (сообщения Discord без кнопок, с подсказкой про «Translate»)', sf2.fixes.rulesCard === 7 && sf2.fixes.rulesFresh === 1 && sf2.guilds[G].about.ver === 1);
   sf2.fixes.rulesCard = 5;                // состояние от прежнего оформления (с кнопками языка)
   fs.writeFileSync(process.env.DISCORD_BOT_STATE, JSON.stringify(sf2));
   t = Date.now();
@@ -1948,10 +1965,44 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('после выкладки нового оформления бот один раз правит пост правил на месте: нового поста нет, прежняя картинка убрана из поста, вместо неё текст, кнопок нет',
      upg.length === 1 && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 && bodyOf(upg[0]).flags === 32768 && !multipartOf(upg[0]) &&
      Array.isArray(bodyOf(upg[0]).attachments) && bodyOf(upg[0]).attachments.length === 0 && rowsOf(bodyOf(upg[0])).length === 0 &&
-     /^AIBROFIST Server Rules 1 No spam /.test(plainOf(upg[0])) && bot._test.state().fixes.rulesCard === 6 &&
+     /^AIBROFIST Server Rules 1 No spam /.test(plainOf(upg[0])) && bot._test.state().fixes.rulesCard === 7 &&
      buttonsOf(bodyOf(upg[0])).length === 0,
      upg.length + ' ' + (upg[0] ? JSON.stringify(Object.keys(bodyOf(upg[0]))) + ' ' + plainOf(upg[0]).slice(0, 60) + ' rows ' + rowsOf(bodyOf(upg[0])).length : '') + ' card=' + bot._test.state().fixes.rulesCard);
 
+
+  // разовая публикация нового поста правил: не правка на месте, а новое сообщение; прежнее удаляется; пост about тоже заново, прежние посты бота в #about убираются
+  console.log('\nновые посты в #rules и #about:');
+  bot.stop();
+  await sleep(200);
+  const sf3 = JSON.parse(fs.readFileSync(process.env.DISCORD_BOT_STATE, 'utf8'));
+  const oldRules = sf3.guilds[G].rules.message, oldAbout = sf3.guilds[G].about.message;
+  delete sf3.fixes.rulesFresh;
+  sf3.guilds[G].about.ver = 0;
+  fs.writeFileSync(process.env.DISCORD_BOT_STATE, JSON.stringify(sf3));
+  // в канале #about лежат: прежний пост бота (его надо убрать), пост другого бота и сообщение человека (их трогать нельзя)
+  const aboutOld = { id: '7001', author: { id: BOT }, components: [{ type: 17, components: [{ type: 10, content: '## AIBROFIST' }, { type: 10, content: 'old text' }] }] };
+  chatLog.set(CH.about, [aboutOld, { id: '7002', author: { id: 'OTHERBOT' }, components: [{ type: 17, components: [{ type: 10, content: '## AIBROFIST' }] }] },
+                         { id: '7003', author: { id: 'U5' }, content: '## AIBROFIST' }, { id: '7004', author: { id: BOT }, content: 'a plain bot message' }]);
+  t = Date.now();
+  bot._test.reload();
+  bot.start();
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/307\/messages$/).length && find(since(t), 'POST', /^\/channels\/301\/messages$/).length, 8000);
+  await sleep(600);
+  const freshRules = find(since(t), 'POST', /^\/channels\/301\/messages$/), freshAbout = find(since(t), 'POST', /^\/channels\/307\/messages$/);
+  ok('разовая публикация: правила — НОВЫМ сообщением (не правка на месте), с подсказкой про «Translate»; прежний пост удалён, в состоянии новый', freshRules.length === 1 && find(since(t), 'PATCH', /^\/channels\/301\/messages\/\d+$/).length === 0 &&
+     find(since(t), 'DELETE', new RegExp('^/channels/301/messages/' + oldRules + '$')).length === 1 && bot._test.state().guilds[G].rules.message === freshRules[0].resId && bot._test.state().guilds[G].rules.message !== oldRules &&
+     /Apps → Translate · /.test(plainOf(freshRules[0])) && bot._test.state().fixes.rulesFresh === 1, String(freshRules.length));
+  const delAbout = find(since(t), 'DELETE', /^\/channels\/307\/messages\/\d+$/).map(c => c.path.split('/').pop());
+  ok('about — новым постом; прежний пост бота в канале убран, а чужого бота, сообщение человека и обычное сообщение бота не тронуты', freshAbout.length === 1 && delAbout.join() === '7001' &&
+     bot._test.state().guilds[G].about.message === freshAbout[0].resId && bot._test.state().guilds[G].about.ver === 1 && bot._test.state().guilds[G].about.message !== oldAbout, delAbout.join());
+  await sleep(300);
+  bot.stop();
+  await sleep(200);
+  t = Date.now();
+  bot._test.reload();
+  bot.start();
+  await sleep(2500);
+  ok('и ещё один перезапуск — ни правила, ни about заново не выкладываются', find(since(t), 'POST', /^\/channels\/(301|307)\/messages$/).length === 0 && find(since(t), 'DELETE', /^\/channels\/(301|307)\/messages\/\d+$/).length === 0);
   bot.stop();
   wss.close(); server.close();
   fs.rmSync(tmp, { recursive: true, force: true });

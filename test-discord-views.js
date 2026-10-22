@@ -154,13 +154,13 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
              { type: 'mute', name: 'Owner', rule: 4, ms: 3600000, blocked: 'owner', at: now }, { type: 'mute', name: 'Bob', rule: 4, ms: 3600000, failed: true, at: now }],
     warns: [{ name: 'Alice', user: 'alice', active: 2, total: 9, limit: 3, list: many(6, i => ({ at: now - i * 1000, rule: 2, reason: 'r' + i, by: 'o', status: ['active', 'expired', 'used'][i % 3] })) }, { name: 'Alice', active: 0, total: 0, list: [] }],
     warnsAll: [{ members: 12, active: 5, total: 30, limit: 3, list: many(8, i => ({ name: 'M' + i, active: i % 4, total: i, last: now })) }, { members: 0, active: 0, total: 0, list: [] }],
-    rules: [{ std: true, title: 'Rules', at: now }, { std: false, title: 'My rules', text: '1. one\n2. two', at: now }],
+    rules: [{ std: true, title: 'Rules', at: now }, { std: true, title: 'Rules', at: now, hint: true }, { std: false, title: 'My rules', text: '1. one\n2. two', at: now }, { std: false, title: 'My rules', text: '1. one\n2. two', at: now, hint: true }],
     help: [{ prefix: '!q7', online: true, checked: 1234567, activeWarns: 3, cases: 55 }, { prefix: '!', online: false }],
     stats: [{ online: 5, rooms: 2, modes: { race: { players: 3, rooms: 1 }, hideAndSeek: { players: 2, rooms: 1 } }, peak: 40, accounts: 1200, maps: 300, uptime: 90000, botOnline: true, checked: 99, memory: 120, at: now }, {}],
     info: [{ tag: { en: 'Post', ru: 'Пост' }, color: 'ok', title: { en: 'Posted', ru: 'Опубликовано' }, lines: [{ en: 'a', ru: 'б' }], at: now }, { tag: 'x', title: 'y' }],
     servers: [servers, { at: now, online: 0, rooms: 0, modes: {}, list: [] }],
     account: [p1, empty],
-    about: [{ imageUrl: 'https://cdn.discordapp.com/attachments/1/2/menu.png?ex=1' }, {}],
+    about: [{ imageUrl: 'https://cdn.discordapp.com/attachments/1/2/menu.png?ex=1' }, { imageUrl: 'attachment://about-menu.png', hint: true }, {}],
     language: [{ mode: 'set', label: 'Deutsch · Germany' }, { mode: 'auto', discord: 'Русский' }, { mode: 'view', label: '' }, { mode: 'view', label: 'Español · Spain' },
                { mode: 'none', q: 'xyz', suggest: ['Germany — Deutsch', 'Austria — Deutsch'] }, { mode: 'none', q: '*_`@everyone', suggest: [] }]
   };
@@ -223,6 +223,9 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
   ok('английский текст поста #about в коде — слово в слово тот, что выложен на сервере (по нему бот узнаёт пост)', V.aboutText('en') === LIVE_ABOUT);
   const aboutBad = ALL.filter(l => { const t = V.aboutText(l); return !/\*\*.+\*\*/.test(t) || t.split('\n').length !== 7 || /undefined|\{|\}/.test(t) || !V.say(l, 'trCmd') || V.say(l, 'trCmd').length > 32; });
   ok('текст #about на каждом языке (' + ALL.length + '): 7 строк, режимы выделены, нет «undefined» и скобок; название пункта меню до 32 знаков', aboutBad.length === 0, aboutBad.join());
+  const hint = V.translateHint();
+  ok('подсказка под постами: одно предложение по-английски и названия пункта «Translate» на всех языках Discord (30 разных), без повторов и эмодзи', /^To read this in your language: right-click it \(on a phone, press and hold\), then Apps → Translate · /.test(hint) &&
+     hint.split(' → ')[1].split(' · ').length === new Set(hint.split(' → ')[1].split(' · ')).size && hint.split(' → ')[1].split(' · ').length >= 28 && hint.length < 600 && !/[\u{1F300}-\u{1FAFF}]/u.test(hint), hint.length + ' знаков');
   ok('предупреждение «чужие сообщения не переводятся» есть на каждом языке', ALL.every(l => V.say(l, 'trNotMine').length > 20 && V.say(l, 'trNone').length > 5 && V.say(l, 'langTip').length > 20));
 
   console.log('\nстраны мира и языки (/language):');
