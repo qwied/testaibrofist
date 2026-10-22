@@ -1,9 +1,4 @@
 {
-  "base": "a38424da2e1e0dc199b6592bff969d0d5844fd64",
-  "updates": [
-    {
-      "title": "Discord bot messages",
-      "text": "The bot now answers with neat Discord messages and buttons instead of pictures: smaller, faster and easier to read."
-    }
-  ]
+  "base": "13f9f8f5a03fb9f246cc81ca8c2fc1f594850357",
+  "updates": []
 }
