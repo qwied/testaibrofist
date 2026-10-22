@@ -1262,12 +1262,14 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
 
   console.log('\nпредупреждения: список, снятие, флаги языка:');
   const alice = { id: '70001', username: 'alice_p', global_name: 'Alice' };
-  for (const why of ['link to another server', 'sold coins']) {
+  const tAlice = Date.now();
+  for (const [k, why] of ['link to another server', 'sold coins'].entries()) {
     t = Date.now();
     warnSend(alice, 2, why);
-    await waitFor(() => cardIn(since(t), /^Warning: Alice\./));
+    await waitFor(() => find(since(tAlice), 'POST', /^\/channels\/300\/messages$/).filter(x => /^Warning: Alice\./.test(altOf(x))).length > k);
   }
-  ok('у Alice два предупреждения — на второй карточке «2 из 3»', /Warnings: 2 of 3/.test(altOf(cardIn(since(t), /^Warning: Alice\./))) &&
+  const aliceCards = find(since(tAlice), 'POST', /^\/channels\/300\/messages$/).filter(x => /^Warning: Alice\./.test(altOf(x)));
+  ok('у Alice два предупреждения — на второй карточке «2 из 3»', aliceCards.length === 2 && /Warnings: 1 of 3/.test(altOf(aliceCards[0])) && /Warnings: 2 of 3/.test(altOf(aliceCards[1])) &&
      bot._test.state().warns[G + ':70001'].length === 2);
   t = Date.now();
   say(OWNER, '!qawarns alice_p');
