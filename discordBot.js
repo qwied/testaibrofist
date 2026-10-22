@@ -1671,7 +1671,7 @@ async function postDefaultRules(g) {
   if (force) state.fixes.rules7 = true;
   state.fixes.rulesCard = CARD_DESIGN;
   state.fixes.rulesFresh = RULES_FRESH;
-  save();
+  saveNow();                       // сразу на диск: оборвётся запуск — после него бот не выложит правила второй раз
 }
 
 /* Пост в канале #about: рассказ об игре и скриншот главного меню (файл news/about-menu.png прикладывается к сообщению), под ним
@@ -1702,7 +1702,7 @@ async function postAbout(g) {
     }
   }
   st.about = { channel: c.id, message: r.body.id, ver: ABOUT_VER, at: Date.now() };
-  save();
+  saveNow();
 }
 
 /* Кнопки языка под правилами: English и Русский меняют текст в том же посте (это правка самого поста, её видят
