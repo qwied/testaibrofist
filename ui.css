@@ -54,10 +54,10 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,san
 .bfBrand{display:flex !important;align-items:center;gap:8px;text-decoration:none;
   color:var(--sb-ink);flex:0 0 auto;white-space:nowrap;padding:4px 6px 10px}
 .bfBrand b{font-size:19px;letter-spacing:.5px;color:var(--sb-brand)}
-.bfBrandMark{width:14px;height:26px;position:relative;flex:0 0 auto}
+.bfBrandMark{width:14px;height:32px;position:relative;flex:0 0 auto}
 .bfBrandMark i{position:absolute;left:0;background:var(--sb-brand);display:block}
 .bfBrandMark i:nth-child(1){top:0;width:14px;height:14px;border-radius:50%}
-.bfBrandMark i:nth-child(2){top:17px;width:14px;height:9px;border-radius:3px}
+.bfBrandMark i:nth-child(2){top:17px;width:14px;height:15px;border-radius:3px}
 .bfNav{display:flex !important;flex-direction:column !important;gap:1px;flex:0 0 auto}
 .bfNavItem{display:flex !important;align-items:center;gap:11px;background:none;border:none;
   font:inherit;color:var(--sb-ink);padding:7px 10px;border-radius:9px;cursor:pointer;
@@ -244,9 +244,9 @@ body.bfHasSidebar{padding-left:var(--sbw)}
      телефоне уменьшаем именно его, иначе панель нельзя сузить, ничего
      не выбрасывая. */
   .bfBrand b{font-size:13px;letter-spacing:.2px}
-  .bfBrandMark{width:10px;height:18px}
+  .bfBrandMark{width:10px;height:23px}
   .bfBrandMark i:nth-child(1){width:10px;height:10px}
-  .bfBrandMark i:nth-child(2){top:12px;width:10px;height:6px}
+  .bfBrandMark i:nth-child(2){top:12px;width:10px;height:11px;border-radius:2px}
   /* Подписи переносятся на вторую строку вместо обрезания: «Maps
      Browser» и «Daily Reward» длиннее любого отдельного слова, и без
      переноса панель пришлось бы держать под них широкой. Пункт остаётся

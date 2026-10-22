@@ -736,6 +736,10 @@ const pics = require('./discordPics.js');
 const CARD_KEEP = 400;
 const CARD_AGE = 60 * R.DAY;
 const FLASH_MS = 15 * 1000;          // итог команды в канале (журнал включён, канал почищен) гаснет сам
+/* Описание картинки (alt): Discord показывает его плашкой «ALT» («ПОДСКАЗКА») поверх картинки — она мешает и закрывает
+   подпись, поэтому к карточкам описание не прикладывается. В тестах (DISCORD_CARD_ALT=1) оно включено: по нему
+   проверяется, что именно нарисовано. */
+const withAlt = (obj, text) => process.env.DISCORD_CARD_ALT === '1' ? Object.assign(obj, { description: text().slice(0, 1000) }) : obj;
 const LIVE = new Set(['help', 'stats', 'warns', 'warnsAll']);
 const OWNER_ONLY = new Set(['help', 'stats', 'warns', 'warnsAll']);
 const LANGS = [{ key: 'en', label: 'English', flag: '🇬🇧' }, { key: 'ru', label: 'Русский', flag: '🇷🇺' }];
@@ -830,7 +834,7 @@ async function cardMessage(rec, id, lang, ephemeral, theme) {
   const data = LIVE.has(rec.k) ? liveData(rec) : rec.d;
   const png = await renderCard(rec.k, data, lang, theme);
   const file = 'aibrofist-' + (rec.k === 'action' ? (rec.d.type || 'card') : rec.k.toLowerCase()) + '.png';
-  const body = { attachments: [{ id: 0, filename: file, description: pics.alt(rec.k, data, lang).slice(0, 1000) }],
+  const body = { attachments: [withAlt({ id: 0, filename: file }, () => pics.alt(rec.k, data, lang))],
                  components: cardRows(rec, id, lang, theme), allowed_mentions: { parse: [] } };
   if (ephemeral) body.flags = 64;
   return { body, files: [{ name: file, data: png, type: 'image/png' }] };
@@ -1560,7 +1564,7 @@ const rulesPost = (title, text, o) => {
    English и Русский (без русского текста флагов нет). Картинка одного и
    того же текста рисуется один раз. */
 const rulesPics = new Map();         // язык, тема и текст -> картинка
-const CARD_DESIGN = 2;               // версия оформления карточек (1 — крупные, 2 — компактные с темой): поменялось — пост правил один раз перерисуется
+const CARD_DESIGN = 3;               // версия оформления карточек (1 — крупные, 2 — компактные, 3 — аккуратные, без плашки ALT): поменялось — пост правил один раз перерисуется
 function rulesData(r, lang) {
   const ru = lang === 'ru' && !!r.ru;
   const std = r.en === R.rulesText('en') && (!r.ru || r.ru === R.rulesText('ru'));
@@ -1576,9 +1580,9 @@ async function rulesPic(r, lang, theme) {
     if (rulesPics.size >= 12) rulesPics.clear();
     rulesPics.set(key, png);
   }
-  const file = 'aibrofist-rules-' + lang + '.png', alt = pics.alt('rules', d, lang).slice(0, 1000);
-  return { body: { flags: COMPONENTS_V2, allowed_mentions: { parse: [] }, attachments: [{ id: 0, filename: file, description: alt }],
-                   components: [{ type: 12, items: [{ media: { url: 'attachment://' + file }, description: alt }] }]
+  const file = 'aibrofist-rules-' + lang + '.png', alt = () => pics.alt('rules', d, lang);
+  return { body: { flags: COMPONENTS_V2, allowed_mentions: { parse: [] }, attachments: [withAlt({ id: 0, filename: file }, alt)],
+                   components: [{ type: 12, items: [withAlt({ media: { url: 'attachment://' + file } }, alt)] }]
                      .concat(r.ru ? picRows((l, th) => 'rules:' + l + ':' + th, lang, theme, 'rules') : [themeRow((l, th) => 'rules:' + l + ':' + th, lang, theme, 'rules')]) },
            files: [{ name: file, data: png, type: 'image/png' }] };
 }

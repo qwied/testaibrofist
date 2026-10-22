@@ -88,10 +88,11 @@ function figure(c, size) {
     shape('rect', { x: 0, y: 116, width: 100, height: 120, rx: 22, fill: c }));
 }
 // значок сайта (как на странице статистики)
+// значок сайта: круг-голова и высокое прямое тело, как у игрока (пропорции 1 : 1,2 у тела, небольшие скругления)
 function logo(c, size) {
-  return svg(size, size, '0 0 24 24',
-    shape('circle', { cx: 12, cy: 6, r: 5, fill: c }),
-    shape('rect', { x: 7, y: 12.5, width: 10, height: 11, rx: 3, fill: c }));
+  return svg(size * 0.43, size, '0 0 46 108',
+    shape('circle', { cx: 23, cy: 21, r: 21, fill: c }),
+    shape('rect', { x: 2, y: 48, width: 42, height: 60, rx: 7, fill: c }));
 }
 function dot(c, size) {
   return svg(size, size, '0 0 10 10', shape('circle', { cx: 5, cy: 5, r: 5, fill: c }));
