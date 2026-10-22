@@ -144,7 +144,10 @@ const boxOf = async (page, sel) => { const el = await page.$(sel); return el ? e
      crop  — селектор блока: снимок только его (с небольшим полем вокруг),
              без бокового меню и шапки сайта;
      ready — селектор, который появляется, когда страница загрузила данные;
-     lang  — 'en' | 'ru': язык сайта (i18n.js), по умолчанию английский. */
+     lang  — 'en' | 'ru': язык сайта (i18n.js), по умолчанию английский;
+     width — ширина окна браузера (по умолчанию 1280): уже окно — страница
+             перестраивается компактнее, и текст на снимке крупнее;
+     scale — плотность пикселей (по умолчанию 1; 2 — вдвое чётче, размер картинки вдвое больше). */
 async function shoot(where, theme, opts) {
   opts = typeof opts === 'string' ? { tab: opts } : (opts || {});
   if (off()) throw new Error('screenshots are off (DISCORD_SHOTS=off)');
@@ -154,6 +157,8 @@ async function shoot(where, theme, opts) {
   try {
     const b = await getBrowser();
     page = await b.newPage();
+    const vw = Math.max(320, Math.min(VIEW.width, Math.round(opts.width) || VIEW.width)), dpr = opts.scale === 2 ? 2 : 1;
+    if (vw !== VIEW.width || dpr !== 1) await page.setViewport({ width: vw, height: VIEW.height, deviceScaleFactor: dpr });
     await page.setCacheEnabled(false);                // каждый снимок — свежие данные, без кэша браузера
     const mode = theme === 'light' ? 'light' : 'dark';
     const lang = opts.lang === 'ru' ? 'ru' : 'en';
@@ -189,9 +194,9 @@ async function shoot(where, theme, opts) {
     let box = opts.crop ? await boxOf(page, opts.crop) : null;
     if (box && box.width > 0 && box.height > 0) {
       const need = Math.min(Math.ceil(box.y) + MAX_H, Math.ceil(box.y + box.height + CROP_PAD));
-      if (need > VIEW.height) { await page.setViewport({ width: VIEW.width, height: need }); box = (await boxOf(page, opts.crop)) || box; }
+      if (need > VIEW.height) { await page.setViewport({ width: vw, height: need, deviceScaleFactor: dpr }); box = (await boxOf(page, opts.crop)) || box; }
       const x = Math.max(0, Math.floor(box.x - CROP_PAD)), y = Math.max(0, Math.floor(box.y - CROP_PAD));
-      const clip = { x, y, width: Math.min(VIEW.width - x, Math.ceil(box.width + CROP_PAD * 2)),
+      const clip = { x, y, width: Math.min(vw - x, Math.ceil(box.width + CROP_PAD * 2)),
                      height: Math.min(MAX_H, Math.ceil(box.height + CROP_PAD * 2)) };
       const cut = Buffer.from(await page.screenshot({ type: 'png', clip }));
       status.ms = Date.now() - t0;
@@ -200,7 +205,7 @@ async function shoot(where, theme, opts) {
     // длинная страница — снимаем целиком, но не выше MAX_H
     const h = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)).catch(() => VIEW.height);
     const height = Math.max(VIEW.height, Math.min(MAX_H, Math.ceil(h)));
-    if (height !== VIEW.height) await page.setViewport({ width: VIEW.width, height });
+    if (height !== VIEW.height) await page.setViewport({ width: vw, height, deviceScaleFactor: dpr });
     const png = Buffer.from(await page.screenshot({ type: 'png' }));
     status.ms = Date.now() - t0;
     return png;

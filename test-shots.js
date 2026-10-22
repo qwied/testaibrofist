@@ -94,6 +94,8 @@ const CROP = `<!doctype html><body style="margin:0;background:#fff">
   const ru = PNG.sync.read(await S.shoot('/lang', 'dark', { lang: 'ru' })), en = PNG.sync.read(await S.shoot('/lang', 'dark'));
   ok('язык сайта на снимке — русский по флагу «Русский», иначе английский (гостю сайт отвечает английским)',
      rgb(ru, 600, 600) === '0,0,255' && rgb(en, 600, 600) === '255,255,0', rgb(ru, 600, 600) + ' / ' + rgb(en, 600, 600));
+  const cut2 = PNG.sync.read(await S.shoot('/crop', 'light', { crop: '#blk', ready: 'body[data-ready]', width: 800, scale: 2 }));
+  ok('узкое окно и вдвое чётче: блок тот же, в картинке вдвое больше точек', cut2.width === (400 + 32) * 2 && cut2.height === (300 + 32) * 2, cut2.width + 'x' + cut2.height);
   const tall = PNG.sync.read(await S.shoot('/tall', 'light'));
   ok('длинная страница — целиком, но не выше ' + S.MAX_H, tall.height === S.MAX_H, tall.height);
   const green = (img, x, y) => { const i = (img.width * y + x) * 4; return img.data[i] < 60 && img.data[i + 1] > 200 && img.data[i + 2] < 60; };

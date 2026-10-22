@@ -1902,6 +1902,7 @@ const SITE_URL = require('./discordApi.js').SITE;
 const presses = new Map();           // кто -> когда нажимал в последний раз
 const userOf = i => ((i.member && i.member.user) || i.user || {}).id || '';
 const sleep = ms => new Promise(done => setTimeout(done, ms));
+const SHOT_WIDTH = 760;
 const MAPS_TAB = '#upTabs .bfTab[data-tab="maps"]';
 const SERVER_PAGES = [{ title: 'Servers', where: '/servers', crop: '#svShot', ready: 'body[data-ready]' }];
 const ACCOUNT_PAGES = [{ title: 'Profile', crop: '#upBody' }, { title: 'Maps', tab: MAPS_TAB, crop: '#upBody' }];
@@ -1956,7 +1957,8 @@ function accountView(name, th, page, period, lang) {
 }
 // снимок сайта, а не вышел — нарисованная картинка с теми же данными
 function picture(view) {
-  return shots.shoot(view.where, view.theme, { tab: view.tab, crop: view.crop, ready: view.ready, lang: view.lang }).catch(e => {
+  // окно уже обычного (760): страница перестраивается компактнее, текст крупнее; вдвое чётче
+  return shots.shoot(view.where, view.theme, { tab: view.tab, crop: view.crop, ready: view.ready, lang: view.lang, width: SHOT_WIDTH, scale: 2 }).catch(e => {
     once('shot:' + e.message, 'real screenshot failed, sending a drawn picture instead:', e.message);
     const [data, page] = view.backup();
     return cards.draw(view.kind, data, view.theme, page);

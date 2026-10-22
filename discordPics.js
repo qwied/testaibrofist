@@ -9,8 +9,8 @@
 'use strict';
 const R = require('./discordRules.js');
 
-const W = 1000;
-const STRIPE = ['#3b82f6', '#8b5cf6', '#10b981', '#ec4899'];      // полоса с превью сайта (preview.png)
+const W = 600;                 // ширина в точках; рисуется вдвое чётче (SCALE) — Discord показывает картинку примерно такой ширины
+const SCALE = 2;
 // цвета наказаний: на светлом фоне темнее, чтобы читались
 const ACCENTS = {
   dark: { warn: '#eaa94a', mute: '#f0883e', ban: '#f26b6b', ok: '#3ccf7a', info: '#a3acba', none: '#a3acba' },
@@ -44,10 +44,13 @@ const S = {
     botOnline: 'Bot', online: 'Online', offline: 'Reconnecting', checked: 'Messages checked', cases: 'Cases', helpNote:
       'Only you can use these commands, and the message with a command is removed at once. Write names without @: the bot never pings anyone.',
     secPosts: 'Posts', secMod: 'Moderation', secChannel: 'Channel', secInfo: 'Info',
-    onlineNow: 'Online now', rooms: 'Rooms', race: 'Race', hns: 'Hide and Seek', peak: 'Peak since restart', players: 'Registered players',
-    maps: 'Maps', uptime: 'Server uptime', memory: 'Memory', sockets: 'Connections', inGame: 'players in the game', upTo40: 'up to 40 players each',
+    onlineNow: 'Online now', rooms: 'Rooms', race: 'Race', hns: 'Hide and Seek', peak: 'Peak online', players: 'Players',
+    maps: 'Maps', uptime: 'Uptime', memory: 'Memory', sockets: 'Connections', inGame: 'players in the game', upTo40: 'up to 40 players each',
     roomsN: '{n} rooms', roomN: '1 room', keepPrivate: 'Keep the stats link private', at: 'at {d}', playersN: '{n} players', playerN: '1 player',
-    warnsNow: 'Active warnings'
+    warnsNow: 'Warnings',
+    warnsAddShort: 'Warnings add up: the 3rd within 30 days gives a 1-hour mute.',
+    helpNoteShort: 'Only you can use these. Write names without @.',
+    warnsNoteShort: 'Active for 30 days. The 3rd gives a 1-hour mute.'
   },
   ru: {
     moderation: 'Модерация', caseN: 'Случай {n}', warnings: 'Предупреждения', rulesTag: 'Правила сервера', helpTag: 'Команды владельца',
@@ -72,10 +75,13 @@ const S = {
     botOnline: 'Бот', online: 'В сети', offline: 'Подключается', checked: 'Проверено сообщений', cases: 'Случаев', helpNote:
       'Команды работают только у вас, сообщение с командой сразу удаляется. Имена пишите без @: бот никого не пингует.',
     secPosts: 'Посты', secMod: 'Модерация', secChannel: 'Канал', secInfo: 'Сведения',
-    onlineNow: 'Сейчас в игре', rooms: 'Комнаты', race: 'Гонка', hns: 'Прятки', peak: 'Пик с перезапуска', players: 'Игроков всего',
-    maps: 'Карт', uptime: 'Сервер работает', memory: 'Память', sockets: 'Подключений', inGame: 'игроков в игре', upTo40: 'до 40 игроков в каждой',
+    onlineNow: 'Сейчас в игре', rooms: 'Комнаты', race: 'Гонка', hns: 'Прятки', peak: 'Пик онлайна', players: 'Игроков',
+    maps: 'Карт', uptime: 'Работает', memory: 'Память', sockets: 'Подключений', inGame: 'игроков в игре', upTo40: 'до 40 игроков в каждой',
     roomsN: '{n} комн.', roomN: '1 комната', keepPrivate: 'Ссылку на статистику никому не давайте', at: '{d}', playersN: '{n} игр.', playerN: '1 игрок',
-    warnsNow: 'Предупреждений'
+    warnsNow: 'Предупреждений',
+    warnsAddShort: 'Предупреждения копятся: 3-е за 30 дней — мьют на 1 час.',
+    helpNoteShort: 'Работают только у вас. Имена — без @.',
+    warnsNoteShort: 'Действует 30 дней. 3-е даёт мьют на 1 час.'
   }
 };
 const langOf = l => l === 'ru' ? 'ru' : 'en';
@@ -114,6 +120,12 @@ function short(ms, lang) {
   const t = two(d.getUTCHours()) + ':' + two(d.getUTCMinutes()) + ' UTC';
   return (l === 'ru' ? d.getUTCDate() + ' ' + m : m + ' ' + d.getUTCDate()) + ', ' + t;
 }
+// «Oct 22» (год — только если он не текущий)
+function dshort(ms, lang) {
+  const d = new Date(Number(ms) || 0), l = langOf(lang), m = MON[l][d.getUTCMonth()];
+  const y = d.getUTCFullYear() === new Date().getUTCFullYear() ? '' : (l === 'ru' ? ' ' : ', ') + d.getUTCFullYear();
+  return (l === 'ru' ? d.getUTCDate() + ' ' + m : m + ' ' + d.getUTCDate()) + y;
+}
 const ordinal = (n, lang) => langOf(lang) === 'ru' ? n + '-е' : n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
 
 // что нашёл автомод — по-русски (по-английски это note самой находки)
@@ -140,41 +152,42 @@ const actLabel = (act, lang) => !act || act.type === 'none' ? say(lang, 'actNone
   : say(lang, act.type === 'ban' ? 'actBan' : 'actMute', { d: act.ms ? duration(act.ms, lang).toUpperCase() : say(lang, 'forever').toUpperCase() });
 const actColor = act => !act || act.type === 'none' ? ACCENT.none : ACCENT[act.type] || ACCENT.info;
 
-/* ---------- общие части ---------- */
+/* ---------- общие части ----------
+   Карточки компактные: 600 точек в ширину (рисуются вдвое чётче, см. SCALE) — в Discord
+   картинка показывается примерно такой ширины, поэтому текст читается без увеличения.
+   Оформление — как у игры: плоский фон, панели с тонкой рамкой, мелкие подписи
+   заглавными, крупные жирные числа; цвет — только у наказаний. */
 function kit(ui, lang) {
   const { el, txt, clean } = ui;
   const t = ui.THEMES[THEME] || ui.THEMES.dark;
   const L = (k, v) => say(lang, k, v);
-  const stripe = () => el('div', { width: W, height: 8, flexShrink: 0 }, STRIPE.map(c => el('div', { flexGrow: 1, height: 8, backgroundColor: c })));
-  const page = (...kids) => el('div', { width: W, flexDirection: 'column', fontFamily: ui.FONT_FAMILY, color: t.ink, backgroundColor: t.bg,
-                                        backgroundImage: 'linear-gradient(160deg, ' + t.bg2 + ' 0%, ' + t.bg + ' 100%)' },
-    stripe(), el('div', { flexDirection: 'column', padding: '30px 40px 28px' }, ...kids));
-  const tag = (s, c) => txt({ fontSize: 15, fontWeight: 800, letterSpacing: 1.6, textTransform: 'uppercase', color: c || t.muted,
-                              border: '1px solid ' + (c || t.line), borderRadius: 999, padding: '5px 14px' }, s);
-  const head = right => el('div', { alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
-    el('div', { alignItems: 'center' }, ui.logo(t.ink, 30), txt({ fontSize: 26, fontWeight: 800, marginLeft: 12, letterSpacing: 1.5 }, 'AIBROFIST')),
-    right ? tag(right) : null);
-  const foot = (left, right) => el('div', { marginTop: 24, paddingTop: 16, borderTop: '1px solid ' + t.line, justifyContent: 'space-between',
-                                            alignItems: 'center', color: t.muted, fontSize: 17 },
-    txt({ fontWeight: 600 }, left || 'aibrofist.online'), txt({}, right || ''));
-  const box = (style, ...kids) => el('div', Object.assign({ backgroundColor: t.panel, border: '1px solid ' + t.line, borderRadius: 16 }, style), ...kids);
-  const label = (s, c) => txt({ fontSize: 14, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', color: c || t.muted }, s);
-  const pill = (s, c) => txt({ fontSize: 13, fontWeight: 800, letterSpacing: 0.8, padding: '4px 11px', borderRadius: 999, border: '1px solid ' + c, color: c, flexShrink: 0 }, s);
-  const dots = (n, limit, c) => el('div', { alignItems: 'center' },
-    Array.from({ length: limit }, (x, i) => el('div', { width: 18, height: 18, borderRadius: 18, marginRight: 8,
+  const page = (...kids) => el('div', { width: W, flexDirection: 'column', padding: '18px 20px 16px', fontFamily: ui.FONT_FAMILY, color: t.ink, backgroundColor: t.bg }, ...kids);
+  // шапка: значок и имя игры слева, что за карточка — справа (tag: текст или [текст, цвет])
+  const head = tag => el('div', { alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+    el('div', { alignItems: 'center' }, ui.logo(t.ink, 20), txt({ fontSize: 15, fontWeight: 800, marginLeft: 8, letterSpacing: 2 }, 'AIBROFIST')),
+    tag ? el('div', { alignItems: 'center' }, [].concat(tag).map((x, i) => txt({ fontSize: 12, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase',
+      color: Array.isArray(x) ? x[1] : t.muted, marginLeft: i ? 8 : 0 }, Array.isArray(x) ? x[0] : x))) : null);
+  const foot = (left, right) => el('div', { marginTop: 12, justifyContent: 'space-between', alignItems: 'center', color: t.muted, fontSize: 12 },
+    txt({ fontWeight: 600, flexShrink: 1, marginRight: 10 }, left || 'aibrofist.online'), txt({ flexShrink: 0 }, right || ''));
+  const box = (style, ...kids) => el('div', Object.assign({ backgroundColor: t.panel, border: '1px solid ' + t.line, borderRadius: 12 }, style), ...kids);
+  const label = (s, c) => txt({ fontSize: 10, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase', color: c || t.muted }, s);
+  const pill = (s, c) => txt({ fontSize: 10, fontWeight: 800, letterSpacing: 0.6, padding: '3px 8px', borderRadius: 999, border: '1px solid ' + c, color: c, flexShrink: 0 }, s);
+  const dots = (n, limit, c, size) => el('div', { alignItems: 'center' },
+    Array.from({ length: limit }, (x, i) => el('div', { width: size || 12, height: size || 12, borderRadius: 12, marginRight: 5,
       backgroundColor: i < n ? c : 'transparent', border: '2px solid ' + (i < n ? c : t.line) })));
   const avatar = (src, size) => src
-    ? { type: 'img', props: { src, width: size, height: size, style: { width: size, height: size, borderRadius: size, border: '2px solid ' + t.line, flexShrink: 0 } } }
-    : el('div', { width: size, height: size, borderRadius: size, backgroundColor: t.raised, border: '2px solid ' + t.line, alignItems: 'center',
+    ? { type: 'img', props: { src, width: size, height: size, style: { width: size, height: size, borderRadius: size, flexShrink: 0 } } }
+    : el('div', { width: size, height: size, borderRadius: size, backgroundColor: t.raised, border: '1px solid ' + t.line, alignItems: 'center',
                   justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }, ui.figure(t.ink, Math.round(size * 0.7)));
-  const tile = (k, v, sub, c, width) => box({ flexDirection: 'column', padding: '14px 18px', width },
-    label(k), txt({ fontSize: 36, fontWeight: 800, letterSpacing: -0.5, marginTop: 4, color: c || t.ink }, v),
-    sub ? txt({ fontSize: 15, color: t.muted, marginTop: 2 }, sub) : null);
+  const tile = (k, v, sub, c, width) => box({ flexDirection: 'column', padding: '8px 12px', width },
+    label(k), txt({ fontSize: 24, fontWeight: 800, letterSpacing: -0.5, marginTop: 2, color: c || t.ink }, v),
+    sub ? txt({ fontSize: 11, color: t.muted, marginTop: 1 }, sub) : null);
+  // человек: аватарка Discord (нет — стандартная её, нет и той — фигурка) и имя
   const who = (d, size) => el('div', { alignItems: 'center', flexGrow: 1, minWidth: 0 },
     avatar(d.avatar, size),
-    el('div', { flexDirection: 'column', marginLeft: 22, minWidth: 0, flexShrink: 1 },
-      txt({ fontSize: size > 90 ? 44 : 30, fontWeight: 800, letterSpacing: -0.5 }, clean(d.name, 26) || clean(d.user, 26) || 'member'),
-      d.user && clean(d.user, 32) && clean(d.user, 32) !== clean(d.name, 26) ? txt({ fontSize: 19, color: t.muted, marginTop: 2 }, '@' + clean(d.user, 32)) : null));
+    el('div', { flexDirection: 'column', marginLeft: 12, minWidth: 0, flexShrink: 1 },
+      txt({ fontSize: size > 50 ? 22 : 17, fontWeight: 800, letterSpacing: -0.3 }, clean(d.name, 24) || clean(d.user, 24) || 'member'),
+      d.user && clean(d.user, 32) && clean(d.user, 32) !== clean(d.name, 24) ? txt({ fontSize: 12, color: t.muted, marginTop: 1 }, '@' + clean(d.user, 32)) : null));
   return { t, el, txt, clean, L, page, head, foot, box, label, pill, dots, avatar, tile, who };
 }
 
@@ -190,106 +203,88 @@ function actionTree(d, lang, ui) {
   else if (type === 'mute' && d.ms) { big = duration(d.ms, lang); small = L('muteWord'); }
   else if (type === 'ban') { big = d.ms ? duration(d.ms, lang) : L('forever'); small = L('banWord'); }
   else if (type === 'unwarn') { big = String(d.count || 0); small = L('removedWord'); }
-  const hero = k.box({ alignItems: 'center', padding: '22px 26px', borderLeft: '8px solid ' + c },
-    el('div', { flexDirection: 'column', flexGrow: 1, minWidth: 0 },
-      txt({ fontSize: 22, fontWeight: 800, letterSpacing: 2.5, textTransform: 'uppercase', color: c, marginBottom: 12 }, title),
-      k.who(d, 112)),
-    big ? el('div', { flexDirection: 'column', alignItems: 'flex-end', marginLeft: 20, flexShrink: 0 },
-      txt({ fontSize: 46, fontWeight: 800, color: c, letterSpacing: -1 }, big), txt({ fontSize: 17, color: t.muted, marginTop: 2 }, small)) : null);
-  const rows = [];
-  const field = (key, value, color) => el('div', { flexDirection: 'column', marginTop: 18 },
-    k.label(key), txt({ fontSize: 24, fontWeight: 600, marginTop: 6, lineHeight: 1.35, color: color || t.ink, display: 'block', lineClamp: 4 }, value));
-  if (d.rule !== undefined && d.rule !== null && type !== 'unwarn' && type !== 'unmute' && type !== 'unban') rows.push(field(L('rule'), ruleText(d, lang)));
-  if (d.reason || d.kind) rows.push(field(L('reason'), k.clean(reasonText(d, lang), 300)));
-  // что дальше: шкала предупреждений, срок мьюта или бана
+  const hasRule = d.rule !== undefined && d.rule !== null && type !== 'unwarn' && type !== 'unmute' && type !== 'unban';
+  const reason = d.reason || d.kind ? k.clean(reasonText(d, lang), 200) : '';
+  // что дальше: шкала предупреждений, срок мьюта или бана, что снято
   let after = null;
   if (type === 'warn' && d.limit) {
     const line = d.escalated ? (d.blocked || !d.escalated.ms ? L('escalatedBlocked', { n: d.limit }) : L('escalated', { n: d.limit, d: duration(d.escalated.ms, lang) }))
                              : L('nextMute', { nth: ordinal(d.limit, lang) });
-    after = el('div', { alignItems: 'center', marginTop: 22, padding: '14px 18px', borderRadius: 14, border: '1px dashed ' + t.line },
-      k.dots(Math.min(d.n, d.limit), d.limit, d.escalated ? ACCENT.mute : c), txt({ fontSize: 19, color: d.escalated ? ACCENT.mute : t.muted, marginLeft: 8 }, line));
+    after = el('div', { alignItems: 'center' }, k.dots(Math.min(d.n, d.limit), d.limit, d.escalated ? ACCENT.mute : c, 10),
+      txt({ fontSize: 12, color: d.escalated ? ACCENT.mute : t.muted, marginLeft: 3 }, line));
   } else if (type === 'mute' && d.ms && !d.blocked && !d.failed) {
-    after = txt({ fontSize: 19, color: t.muted, marginTop: 20 }, L('until', { d: date((d.at || Date.now()) + d.ms, lang, true) }));
+    after = txt({ fontSize: 12, color: t.muted }, L('until', { d: date((d.at || Date.now()) + d.ms, lang, true) }));
   } else if (type === 'ban' && !d.blocked && !d.failed) {
-    after = txt({ fontSize: 19, color: t.muted, marginTop: 20 }, d.ms ? L('liftsAt', { d: date((d.at || Date.now()) + d.ms, lang) }) : L('permanent'));
+    after = txt({ fontSize: 12, color: t.muted }, d.ms ? L('liftsAt', { d: date((d.at || Date.now()) + d.ms, lang) }) : L('permanent'));
   } else if (type === 'unmute' || type === 'unban' || type === 'unwarn') {
-    after = txt({ fontSize: 19, color: ACCENT.ok, marginTop: 20 }, L(type === 'unmute' ? 'canTalk' : type === 'unban' ? 'backIn' : 'clean'));
+    after = txt({ fontSize: 12, color: ACCENT.ok }, L(type === 'unmute' ? 'canTalk' : type === 'unban' ? 'backIn' : 'clean'));
   }
   const warnLine = d.failed ? L('failed') : d.blocked ? L('notApplied', { why: L(d.blocked === 'owner' ? 'ownerBlocked' : 'adminBlocked') }) : '';
-  // наказал бот сам — как оспорить
+  // наказал бот сам — как оспорить (в самом низу, мелко)
   const appeal = !d.by && ['warn', 'mute', 'ban', 'none'].indexOf(type) !== -1;
+  const details = [hasRule ? txt({ fontSize: 15, fontWeight: 800, lineHeight: 1.3 }, ruleText(d, lang)) : null,
+                   reason ? txt({ fontSize: 14, color: t.muted, marginTop: hasRule ? 2 : 0, lineHeight: 1.35, display: 'block', lineClamp: 2 }, reason) : null,
+                   after ? el('div', { marginTop: 8 }, after) : null,
+                   warnLine ? txt({ fontSize: 12, color: ACCENT.warn, marginTop: 6 }, warnLine) : null].filter(Boolean);
   return k.page(
-    k.head(L('moderation') + (d.caseNo ? '  ·  ' + L('caseN', { n: d.caseNo }) : '')),
-    hero,
-    el('div', { flexDirection: 'column', padding: '0 4px' }, rows, after,
-       warnLine ? txt({ fontSize: 18, color: ACCENT.warn, marginTop: 14 }, warnLine) : null,
-       appeal ? txt({ fontSize: 17, color: t.muted, marginTop: 14 }, L('mistake')) : null),
-    k.foot(d.by ? L('by', { who: k.clean(d.by, 30) || '?' }) : L('byBot'), date(d.at || Date.now(), lang, true)));
+    k.head([[title, c]].concat(d.caseNo ? [L('caseN', { n: d.caseNo })] : [])),
+    k.box({ flexDirection: 'column', padding: '14px 16px', borderLeft: '4px solid ' + c },
+      el('div', { alignItems: 'center' }, k.who(d, 52),
+        big ? el('div', { flexDirection: 'column', alignItems: 'flex-end', marginLeft: 12, flexShrink: 0 },
+          txt({ fontSize: 28, fontWeight: 800, color: c, letterSpacing: -0.5 }, big), txt({ fontSize: 11, color: t.muted }, small)) : null),
+      details.length ? el('div', { flexDirection: 'column', marginTop: 12, paddingTop: 10, borderTop: '1px solid ' + t.line }, details) : null),
+    k.foot(d.by ? L('by', { who: k.clean(d.by, 30) || '?' }) : appeal ? L('mistake') : L('byBot'), date(d.at || Date.now(), lang)));
 }
 
 /* ---------- предупреждения одного участника ---------- */
 function warnsTree(d, lang, ui) {
   const k = kit(ui, lang), { t, el, txt, L } = k;
-  const list = (d.list || []).slice(0, 8);
+  const list = (d.list || []).slice(0, 6);
   const limit = d.limit || 3;
   const status = w => w.status === 'used' ? [L('statusUsed'), ACCENT.mute] : w.status === 'expired' ? [L('statusExpired'), t.muted] : [L('statusActive'), ACCENT.warn];
-  const row = (w, i) => el('div', { alignItems: 'center', backgroundColor: t.panel, border: '1px solid ' + t.line, borderRadius: 12,
-                                    padding: '12px 16px', marginTop: i ? 10 : 0 },
-    el('div', { flexDirection: 'column', width: 150, flexShrink: 0 },
-      txt({ fontSize: 16, fontWeight: 700 }, date(w.at, lang)), txt({ fontSize: 14, color: t.muted, marginTop: 2 }, w.by ? k.clean(w.by, 16) : L('byBot'))),
-    el('div', { flexDirection: 'column', flexGrow: 1, flexShrink: 1, minWidth: 0, marginLeft: 10 },
-      txt({ fontSize: 18, fontWeight: 800 }, ruleText(w, lang)),
-      txt({ fontSize: 16, color: t.muted, marginTop: 3, display: 'block', lineClamp: 1 }, k.clean(reasonText(w, lang), 90))),
+  const row = (w, i) => el('div', { alignItems: 'center', padding: '8px 0', borderTop: i ? '1px solid ' + t.line : 'none' },
+    txt({ width: 62, flexShrink: 0, fontSize: 12, color: t.muted }, dshort(w.at, lang)),
+    el('div', { flexDirection: 'column', flexGrow: 1, flexShrink: 1, minWidth: 0, marginRight: 8 },
+      txt({ fontSize: 14, fontWeight: 800 }, ruleText(w, lang)),
+      txt({ fontSize: 12, color: t.muted, marginTop: 1, display: 'block', lineClamp: 1 }, k.clean(reasonText(w, lang), 80))),
     k.pill(...status(w)));
   return k.page(
     k.head(L('warnings')),
-    k.box({ alignItems: 'center', padding: '20px 24px' },
-      k.who(d, 96),
-      el('div', { flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, marginLeft: 16 },
-        txt({ fontSize: 44, fontWeight: 800, color: d.active ? ACCENT.warn : ACCENT.ok }, L('ofLimit', { n: d.active || 0, limit })),
-        el('div', { marginTop: 8 }, k.dots(d.active || 0, limit, ACCENT.warn)))),
-    el('div', { justifyContent: 'space-between', marginTop: 16, marginBottom: 16 },
-      k.tile(L('active'), String(d.active || 0), null, d.active ? ACCENT.warn : null, 296),
-      k.tile(L('allTime'), String(d.total || 0), null, null, 296),
-      k.tile(L('last'), d.last ? date(d.last, lang) : L('none'), null, null, 296)),
-    list.length ? el('div', { flexDirection: 'column' }, list.map(row))
-      : el('div', { height: 120, border: '2px dashed ' + t.line, borderRadius: 14, alignItems: 'center', justifyContent: 'center', color: ACCENT.ok, fontSize: 22 }, L('noWarns')),
-    (d.total || 0) > list.length ? txt({ fontSize: 16, color: t.muted, marginTop: 10 }, L('moreN', { n: d.total - list.length })) : null,
-    txt({ fontSize: 17, color: t.muted, marginTop: 16, lineHeight: 1.4 }, L('warnsNote')),
-    k.foot(null, date(d.at || Date.now(), lang, true)));
+    k.box({ flexDirection: 'column', padding: '14px 16px' },
+      el('div', { alignItems: 'center' }, k.who(d, 52),
+        el('div', { flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, marginLeft: 12 },
+          txt({ fontSize: 28, fontWeight: 800, color: d.active ? ACCENT.warn : ACCENT.ok, letterSpacing: -0.5 }, L('ofLimit', { n: d.active || 0, limit })),
+          el('div', { marginTop: 4 }, k.dots(d.active || 0, limit, ACCENT.warn, 11)))),
+      list.length ? el('div', { flexDirection: 'column', marginTop: 10, paddingTop: 2, borderTop: '1px solid ' + t.line }, list.map(row))
+        : txt({ fontSize: 14, color: ACCENT.ok, marginTop: 12 }, L('noWarns'))),
+    (d.total || 0) > list.length ? txt({ fontSize: 12, color: t.muted, marginTop: 8 }, L('moreN', { n: d.total - list.length })) : null,
+    k.foot(L('warnsNoteShort'), L('allTime') + ': ' + (d.total || 0)));
 }
 
 /* ---------- у кого есть предупреждения (команда warns без имени) ---------- */
 function warnsAllTree(d, lang, ui) {
   const k = kit(ui, lang), { t, el, txt, L } = k;
-  const list = (d.list || []).slice(0, 10), limit = d.limit || 3;
-  const row = (m, i) => el('div', { alignItems: 'center', backgroundColor: t.panel, border: '1px solid ' + t.line, borderRadius: 12,
-                                    padding: '10px 16px', marginTop: i ? 8 : 0 },
-    k.avatar(m.avatar, 44),
-    el('div', { flexDirection: 'column', flexGrow: 1, minWidth: 0, marginLeft: 14 },
-      txt({ fontSize: 20, fontWeight: 800 }, k.clean(m.name, 26) || 'member'),
-      txt({ fontSize: 15, color: t.muted, marginTop: 2 }, L('last') + ': ' + date(m.last, lang) + '  ·  ' + L('allTime') + ': ' + m.total)),
-    k.dots(m.active, limit, ACCENT.warn),
-    txt({ fontSize: 22, fontWeight: 800, color: m.active ? ACCENT.warn : t.muted, width: 90, justifyContent: 'flex-end' }, m.active + ' / ' + limit));
+  const list = (d.list || []).slice(0, 8), limit = d.limit || 3;
+  const row = (m, i) => el('div', { alignItems: 'center', padding: '7px 0', borderTop: i ? '1px solid ' + t.line : 'none' },
+    k.avatar(m.avatar, 30),
+    el('div', { flexDirection: 'column', flexGrow: 1, minWidth: 0, marginLeft: 10 },
+      txt({ fontSize: 15, fontWeight: 800 }, k.clean(m.name, 26) || 'member'),
+      txt({ fontSize: 11, color: t.muted, marginTop: 1 }, L('last') + ': ' + dshort(m.last, lang) + '  ·  ' + L('allTime') + ': ' + m.total)),
+    k.dots(m.active, limit, ACCENT.warn, 10),
+    txt({ fontSize: 15, fontWeight: 800, color: m.active ? ACCENT.warn : t.muted, width: 46, justifyContent: 'flex-end' }, m.active + '/' + limit));
   return k.page(
-    k.head(L('warnings')),
-    txt({ fontSize: 36, fontWeight: 800, letterSpacing: -0.5, marginBottom: 16 }, L('overviewTitle')),
-    el('div', { justifyContent: 'space-between', marginBottom: 16 },
-      k.tile(L('membersWarned'), String(d.members || 0), null, null, 296),
-      k.tile(L('activeWarns'), String(d.active || 0), null, d.active ? ACCENT.warn : null, 296),
-      k.tile(L('allWarns'), String(d.total || 0), null, null, 296)),
-    list.length ? el('div', { flexDirection: 'column' }, list.map(row))
-      : el('div', { height: 120, border: '2px dashed ' + t.line, borderRadius: 14, alignItems: 'center', justifyContent: 'center', color: ACCENT.ok, fontSize: 22 }, L('nobody')),
-    (d.members || 0) > list.length ? txt({ fontSize: 16, color: t.muted, marginTop: 10 }, L('moreN', { n: d.members - list.length })) : null,
-    txt({ fontSize: 17, color: t.muted, marginTop: 16, lineHeight: 1.4 }, L('warnsNote')),
-    k.foot(null, date(d.at || Date.now(), lang, true)));
+    k.head([[L('overviewTitle'), t.ink]]),
+    list.length ? k.box({ flexDirection: 'column', padding: '4px 14px' }, list.map(row))
+      : k.box({ padding: '18px', justifyContent: 'center', color: ACCENT.ok, fontSize: 14 }, L('nobody')),
+    (d.members || 0) > list.length ? txt({ fontSize: 12, color: t.muted, marginTop: 8 }, L('moreN', { n: d.members - list.length })) : null,
+    k.foot(L('membersWarned') + ': ' + (d.members || 0) + '  ·  ' + L('activeWarns') + ': ' + (d.active || 0), L('allWarns') + ': ' + (d.total || 0)));
 }
 
 /* ---------- правила ----------
-   Стандартные правила (d.std) — из discordRules.js: у каждого номер, название,
-   пояснение и наказание плашкой справа. Свой текст владельца (команда rules)
-   разбирается построчно: «**1. Название.** пояснение» — правило, остальное —
-   абзацы. Разметку Discord (**, __, ` и т.п.) на картинке не рисуем. */
+   Стандартные правила (d.std) — из discordRules.js: номер, название, одна короткая
+   строка и наказание плашкой справа (полный текст — в подписи картинки и на сайте).
+   Свой текст владельца (команда rules) разбирается построчно: «**1. Название.** пояснение» —
+   правило, остальное — абзацы. Разметку Discord (**, __, ` и т.п.) на картинке не рисуем. */
 const plain = s => String(s || '').replace(/<#\d+>/g, '#channel').replace(/<@&?\d+>/g, '@').replace(/\*\*|__|~~|`|^>+\s?|^#+\s/gm, '').replace(/-#\s/g, '').trim();
 function parseRules(text) {
   const out = [];
@@ -302,102 +297,102 @@ function parseRules(text) {
   }
   return out;
 }
+// короткая строка под названием правила на картинке
+const SHORT = {
+  1: ['More than 3 messages in 2 seconds. Mute on the 5th time.', 'Больше 3 сообщений за 2 секунды. Мьют на 5-й раз.'],
+  2: ['Message deleted, you get a warning.', 'Сообщение удаляется, предупреждение.'],
+  3: ['Images, links and text.', 'Картинки, ссылки и текст.'],
+  4: ['Slurs, and telling anyone to hurt themselves.', 'Оскорбления и призывы навредить себе.'],
+  5: ['Phishing, fake Nitro, IP grabbers, .exe. The only ban.', 'Фишинг, фейк-Nitro, IP-логгеры, exe. Единственный бан.'],
+  6: ['Message deleted, you get a warning.', 'Сообщение удаляется, предупреждение.'],
+  7: ['Message deleted, no punishment.', 'Сообщение удаляется, без наказания.']
+};
 function rulesTree(d, lang, ui) {
   const k = kit(ui, lang), { t, el, txt, L } = k;
   const ru = langOf(lang) === 'ru';
   const items = d.std
-    ? R.RULES.map(r => ({ n: r.id, title: ru ? r.ru[0] : r.title, text: ru ? r.ru[1] : r.en, act: r.act }))
+    ? R.RULES.map(r => ({ n: r.id, title: ru ? r.ru[0] : r.title, text: SHORT[r.id][ru ? 1 : 0], act: r.act }))
     : parseRules(d.text).filter(x => x.n || x.p);
-  const rule = (r, i) => el('div', { alignItems: 'flex-start', backgroundColor: t.panel, border: '1px solid ' + t.line, borderRadius: 14,
-                                     padding: '16px 18px', marginTop: i ? 10 : 0 },
-    txt({ width: 46, height: 46, borderRadius: 46, backgroundColor: t.raised, border: '1px solid ' + t.line, alignItems: 'center',
-          justifyContent: 'center', fontSize: 22, fontWeight: 800, flexShrink: 0 }, String(r.n)),
-    el('div', { flexDirection: 'column', flexGrow: 1, flexShrink: 1, minWidth: 0, marginLeft: 16, marginRight: r.act ? 14 : 0 },
-      txt({ fontSize: 24, fontWeight: 800, lineHeight: 1.25 }, k.clean(r.title, 80)),
-      r.text ? txt({ fontSize: 19, color: t.muted, marginTop: 5, lineHeight: 1.4 }, k.clean(r.text, 400)) : null),
+  const rule = (r, i) => el('div', { alignItems: 'center', padding: '9px 0', borderTop: i ? '1px solid ' + t.line : 'none' },
+    txt({ width: 26, height: 26, borderRadius: 26, backgroundColor: t.raised, border: '1px solid ' + t.line, alignItems: 'center',
+          justifyContent: 'center', fontSize: 13, fontWeight: 800, flexShrink: 0 }, String(r.n)),
+    el('div', { flexDirection: 'column', flexGrow: 1, flexShrink: 1, minWidth: 0, marginLeft: 12, marginRight: r.act ? 10 : 0 },
+      txt({ fontSize: 16, fontWeight: 800, lineHeight: 1.2 }, k.clean(r.title, 80)),
+      r.text ? txt({ fontSize: 12, color: t.muted, marginTop: 2, lineHeight: 1.3, display: 'block', lineClamp: 3 }, k.clean(r.text, 300)) : null),
     r.act ? k.pill(actLabel(r.act, lang), actColor(r.act)) : null);
   let i = 0;
-  const body = items.map(x => x.n ? rule(x, i++) : txt({ fontSize: 19, color: t.muted, marginTop: 12, lineHeight: 1.4 }, k.clean(x.p, 500)));
+  const body = items.map(x => x.n ? rule(x, i++) : txt({ fontSize: 12, color: t.muted, marginTop: 8, lineHeight: 1.35 }, k.clean(x.p, 500)));
   return k.page(
     k.head(L('rulesTag')),
-    txt({ fontSize: 42, fontWeight: 800, letterSpacing: -0.8 }, k.clean(d.title, 60) || (ru ? 'Правила сервера' : 'Server Rules')),
-    d.std ? txt({ fontSize: 19, color: t.muted, marginTop: 6, marginBottom: 20 }, L('rulesSub')) : el('div', { height: 18 }),
-    el('div', { flexDirection: 'column' }, body),
-    d.std ? el('div', { alignItems: 'center', marginTop: 16, padding: '16px 20px', borderRadius: 14, border: '1px dashed ' + ACCENT.warn },
-      k.dots(3, 3, ACCENT.warn),
-      el('div', { flexDirection: 'column', marginLeft: 8, flexShrink: 1 },
-        txt({ fontSize: 21, fontWeight: 800, color: ACCENT.warn }, L('warnsAdd')),
-        txt({ fontSize: 18, color: t.muted, marginTop: 3, lineHeight: 1.35 }, L('warnsAddText')))) : null,
+    txt({ fontSize: 26, fontWeight: 800, letterSpacing: -0.5, marginBottom: 8 }, k.clean(d.title, 60) || (ru ? 'Правила сервера' : 'Server Rules')),
+    k.box({ flexDirection: 'column', padding: '2px 14px' }, body),
+    d.std ? el('div', { alignItems: 'center', marginTop: 10, padding: '9px 12px', borderRadius: 10, border: '1px dashed ' + ACCENT.warn },
+      k.dots(3, 3, ACCENT.warn, 10),
+      txt({ fontSize: 12, color: t.muted, marginLeft: 3, flexShrink: 1 }, L('warnsAddShort'))) : null,
     k.foot(d.std ? L('mistake') : null, d.at ? L('updated', { d: date(d.at, lang) }) : ''));
 }
 
 /* ---------- справка по командам владельца ---------- */
+// [команда, описание (en), описание (ru), коротко (en), коротко (ru)]: коротко — на картинке, полное — в подписи к ней
 const HELP = [
-  ['secPosts', [['news', 'Write a post: channel, title, text, up to 4 images and a link button', 'Пост: канал, заголовок, текст, до 4 картинок и кнопка-ссылка'],
-                ['updates', 'Choose the channels for automatic game updates', 'Каналы для автоматических новостей игры'],
-                ['rules', 'Edit and post the server rules, set extra banned words', 'Изменить и выложить правила, свои запрещённые слова']]],
-  ['secMod', [['warn [name]', 'Warning form: member, rule and reason are required', 'Форма предупреждения: участник, правило и причина обязательны'],
-              ['warns [name]', 'Warnings of a member, or everyone who has them', 'Предупреждения участника или всех, у кого они есть'],
-              ['unwarn name', 'Remove all warnings of a member (unwarn all: of everyone)', 'Снять все предупреждения участника (unwarn all — у всех)'],
-              ['mute name 1h reason', 'Mute for 10m, 1h, 6h, 1d, 3d or 7d', 'Мьют на 10m, 1h, 6h, 1d, 3d или 7d'],
-              ['unmute name', 'Lift a mute', 'Снять мьют'],
-              ['ban name 7d reason', 'Ban for 1d, 3d, 7d or 30d, without a duration: forever', 'Бан на 1d, 3d, 7d или 30d, без срока — навсегда'],
-              ['unban name', 'Lift a ban', 'Снять бан']]],
-  ['secChannel', [['clear 50', 'Delete the last 50 messages here (clear all, clear 20 name, clear stop)', 'Удалить 50 последних сообщений (clear all, clear 20 имя, clear stop)'],
-                  ['modlog', 'Send moderation logs to this channel (modlog off: stop)', 'Журнал модерации в этот канал (modlog off — выключить)']]],
-  ['secInfo', [['stats', 'Live server stats and your secret link (stats new: new link)', 'Статистика сервера и секретная ссылка (stats new — новая)'],
-               ['help', 'This card', 'Эта карточка']]]
+  ['secPosts', [['news', 'Write a post: channel, title, text, up to 4 images and a link button', 'Пост: канал, заголовок, текст, до 4 картинок и кнопка-ссылка', 'Write a post', 'Написать пост'],
+                ['updates', 'Choose the channels for automatic game updates', 'Каналы для автоматических новостей игры', 'Channels for game updates', 'Каналы новостей игры'],
+                ['rules', 'Edit and post the server rules, set extra banned words', 'Изменить и выложить правила, свои запрещённые слова', 'Edit the rules and banned words', 'Правила и запрещённые слова']]],
+  ['secMod', [['warn [name]', 'Warning form: member, rule and reason are required', 'Форма предупреждения: участник, правило и причина обязательны', 'Warning form (all fields required)', 'Форма предупреждения'],
+              ['warns [name]', 'Warnings of a member, or everyone who has them', 'Предупреждения участника или всех, у кого они есть', 'Warnings of a member or of all', 'Предупреждения участника или всех'],
+              ['unwarn name', 'Remove all warnings of a member (unwarn all: of everyone)', 'Снять все предупреждения участника (unwarn all — у всех)', 'Remove warnings (unwarn all: everyone)', 'Снять предупреждения (unwarn all — у всех)'],
+              ['mute name 1h reason', 'Mute for 10m, 1h, 6h, 1d, 3d or 7d', 'Мьют на 10m, 1h, 6h, 1d, 3d или 7d', 'Mute: 10m, 1h, 6h, 1d, 3d, 7d', 'Мьют: 10m, 1h, 6h, 1d, 3d, 7d'],
+              ['unmute name', 'Lift a mute', 'Снять мьют', 'Lift a mute', 'Снять мьют'],
+              ['ban name 7d reason', 'Ban for 1d, 3d, 7d or 30d, without a duration: forever', 'Бан на 1d, 3d, 7d или 30d, без срока — навсегда', 'Ban: 1d, 3d, 7d, 30d or forever', 'Бан: 1d, 3d, 7d, 30d или навсегда'],
+              ['unban name', 'Lift a ban', 'Снять бан', 'Lift a ban', 'Снять бан']]],
+  ['secChannel', [['clear 50', 'Delete the last 50 messages here (clear all, clear 20 name, clear stop)', 'Удалить 50 последних сообщений (clear all, clear 20 имя, clear stop)', 'Delete messages (all, 20 name, stop)', 'Удалить сообщения (all, 20 имя, stop)'],
+                  ['modlog', 'Send moderation logs to this channel (modlog off: stop)', 'Журнал модерации в этот канал (modlog off — выключить)', 'Moderation log here (modlog off)', 'Журнал модерации сюда (modlog off)']]],
+  ['secInfo', [['stats', 'Live server stats and your secret link (stats new: new link)', 'Статистика сервера и секретная ссылка (stats new — новая)', 'Live stats and secret link', 'Статистика и секретная ссылка'],
+               ['help', 'This card', 'Эта карточка', 'This card', 'Эта карточка']]]
 ];
 function helpTree(d, lang, ui) {
   const k = kit(ui, lang), { t, el, txt, L } = k;
   const ru = langOf(lang) === 'ru';
   const prefix = k.clean(d.prefix || '!', 12);
-  const tw = (W - 80 - 3 * 12) / 4;
-  const section = ([key, rows]) => el('div', { flexDirection: 'column', marginTop: 18 },
-    k.label(L(key)),
-    k.box({ flexDirection: 'column', padding: '6px 18px', marginTop: 8 },
-      rows.map((r, i) => el('div', { alignItems: 'center', padding: '10px 0', borderTop: i ? '1px solid ' + t.line : 'none' },
-        txt({ width: 330, flexShrink: 0, fontSize: 20, fontWeight: 800 }, prefix + r[0]),
-        txt({ fontSize: 18, color: t.muted, flexShrink: 1, lineHeight: 1.35 }, ru ? r[2] : r[1])))));
+  const rows = [].concat(...HELP.map(sec => sec[1]));
+  // состояние бота — одной строкой из четырёх цифр
+  const stat = (key, value, c) => el('div', { flexDirection: 'column', flexGrow: 1 }, k.label(key), txt({ fontSize: 18, fontWeight: 800, marginTop: 1, color: c || t.ink }, value));
   return k.page(
     k.head(L('helpTag')),
-    el('div', { justifyContent: 'space-between' },
-      k.tile(L('botOnline'), d.online ? L('online') : L('offline'), d.mode || null, d.online ? ACCENT.ok : ACCENT.warn, tw),
-      k.tile(L('checked'), ui.num(d.checked), null, null, tw),
-      k.tile(L('warnsNow'), ui.num(d.activeWarns), null, d.activeWarns ? ACCENT.warn : null, tw),
-      k.tile(L('cases'), ui.num(d.cases), null, null, tw)),
-    HELP.map(section),
-    txt({ fontSize: 17, color: t.muted, marginTop: 18, lineHeight: 1.45 }, L('helpNote')),
-    k.foot(null, date(d.at || Date.now(), lang, true)));
+    k.box({ padding: '10px 14px', marginBottom: 8 },
+      stat(L('botOnline'), d.online ? L('online') : L('offline'), d.online ? ACCENT.ok : ACCENT.warn),
+      stat(L('checked'), ui.num(d.checked)),
+      stat(L('warnsNow'), ui.num(d.activeWarns), d.activeWarns ? ACCENT.warn : null),
+      stat(L('cases'), ui.num(d.cases))),
+    k.box({ flexDirection: 'column', padding: '2px 14px' }, rows.map((r, i) =>
+      el('div', { alignItems: 'center', padding: '6px 0', borderTop: i ? '1px solid ' + t.line : 'none' },
+        txt({ width: 196, flexShrink: 0, fontSize: 13, fontWeight: 800 }, prefix + r[0]),
+        txt({ fontSize: 12, color: t.muted, flexShrink: 1 }, ru ? r[4] : r[3])))),
+    k.foot(L('helpNoteShort'), date(d.at || Date.now(), lang)));
 }
 
 /* ---------- живая статистика (команда stats) ---------- */
 function statsTree(d, lang, ui) {
   const k = kit(ui, lang), { t, el, txt, L } = k;
-  const tw = (W - 80 - 3 * 12) / 4;
+  const tw = (W - 40 - 3 * 8) / 4;
   const rooms = n => n === 1 ? L('roomN') : L('roomsN', { n });
-  const players = n => n === 1 ? L('playerN') : L('playersN', { n: ui.num(n) });
   const up = s => { s = Math.max(0, Number(s) || 0); const dd = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
-                    return (dd ? dd + (langOf(lang) === 'ru' ? 'д ' : 'd ') : '') + h + (langOf(lang) === 'ru' ? 'ч ' : 'h ') + m + (langOf(lang) === 'ru' ? 'м' : 'm'); };
+                    const r = langOf(lang) === 'ru';
+                    return (dd ? dd + (r ? 'д ' : 'd ') : '') + h + (r ? 'ч ' : 'h ') + m + (r ? 'м' : 'm'); };
   const m = d.modes || {};
   return k.page(
     k.head(L('statsTag')),
     el('div', { justifyContent: 'space-between' },
       k.tile(L('onlineNow'), ui.num(d.online), L('inGame'), ACCENT.ok, tw),
-      k.tile(L('rooms'), ui.num(d.rooms), L('upTo40'), null, tw),
+      k.tile(L('rooms'), ui.num(d.rooms), null, null, tw),
       k.tile(L('race'), ui.num((m.race || {}).players), rooms((m.race || {}).rooms || 0), null, tw),
       k.tile(L('hns'), ui.num((m.hideAndSeek || {}).players), rooms((m.hideAndSeek || {}).rooms || 0), null, tw)),
-    el('div', { justifyContent: 'space-between', marginTop: 12 },
-      k.tile(L('peak'), ui.num(d.peak), d.peakAt ? L('at', { d: short(d.peakAt, lang) }) : null, null, tw),
+    el('div', { justifyContent: 'space-between', marginTop: 8 },
+      k.tile(L('peak'), ui.num(d.peak), d.peakAt ? short(d.peakAt, lang) : null, null, tw),
       k.tile(L('players'), ui.num(d.accounts), null, null, tw),
       k.tile(L('maps'), ui.num(d.maps), null, null, tw),
       k.tile(L('uptime'), up(d.uptime), null, null, tw)),
-    el('div', { justifyContent: 'space-between', marginTop: 12 },
-      k.tile(L('botOnline'), d.botOnline ? L('online') : L('offline'), d.botMode || null, d.botOnline ? ACCENT.ok : ACCENT.warn, tw),
-      k.tile(L('checked'), ui.num(d.checked), null, null, tw),
-      k.tile(L('memory'), ui.num(d.memory) + ' MB', null, null, tw),
-      k.tile(L('sockets'), ui.num(d.sockets), players(d.online || 0), null, tw)),
-    k.foot(L('keepPrivate'), date(d.at || Date.now(), lang, true)));
+    k.foot((d.botOnline ? L('online') : L('offline')) + '  ·  ' + L('checked') + ': ' + ui.num(d.checked) + '  ·  ' + ui.num(d.memory) + ' MB', date(d.at || Date.now(), lang)));
 }
 
 /* ---------- короткий итог команды ----------
@@ -408,11 +403,11 @@ function infoTree(d, lang, ui) {
   const pick = x => x && typeof x === 'object' ? (x[langOf(lang)] || x.en || '') : String(x || '');
   const c = ACCENT[d.color] || ACCENT.info;
   return k.page(
-    k.head(pick(d.tag)),
-    k.box({ flexDirection: 'column', padding: '24px 28px', borderLeft: '8px solid ' + c },
-      txt({ fontSize: 34, fontWeight: 800, letterSpacing: -0.5, color: t.ink, lineHeight: 1.2 }, k.clean(pick(d.title), 120)),
-      (d.lines || []).map(l => txt({ fontSize: 21, color: t.muted, marginTop: 10, lineHeight: 1.4 }, k.clean(pick(l), 300)))),
-    k.foot(null, date(d.at || Date.now(), lang, true)));
+    k.head([[pick(d.tag), c]]),
+    k.box({ flexDirection: 'column', padding: '14px 16px', borderLeft: '4px solid ' + c },
+      txt({ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, lineHeight: 1.25 }, k.clean(pick(d.title), 120)),
+      (d.lines || []).map(l => txt({ fontSize: 13, color: t.muted, marginTop: 6, lineHeight: 1.35 }, k.clean(pick(l), 300)))),
+    k.foot(null, date(d.at || Date.now(), lang)));
 }
 
 /* ---------- то же текстом ----------
@@ -468,4 +463,4 @@ function tree(kind, data, ui, theme) {
   return fn(data || {}, langOf(data && data.lang), ui);
 }
 
-module.exports = { tree, alt, KINDS, W, say, duration, date, parseRules, NOTE_RU, ruleText, reasonText };
+module.exports = { tree, alt, KINDS, W, SCALE, say, duration, date, parseRules, NOTE_RU, ruleText, reasonText };

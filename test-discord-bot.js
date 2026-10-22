@@ -331,11 +331,13 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   const modMsg = say('U19', 'ты пидор', { member: member([MOD_ROLE]) });
   await waitFor(() => find(since(t), 'PATCH', /members\/U19$/).length);
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);    // запись в журнал — последнее, что бот делает
   ok('модератора — как всех: удалено и мьют', find(since(t), 'DELETE', new RegExp('/messages/' + modMsg.id + '$')).length === 1 &&
      find(since(t), 'PATCH', /members\/U19$/).length === 1);
   t = Date.now();
   const ownMsg = say(OWNER, 'ты пидор');
   await waitFor(() => find(since(t), 'POST', /^\/channels\/dm900\/messages$/).length);
+  await waitFor(() => find(since(t), 'POST', /^\/channels\/303\/messages$/).length);
   const ownDm = J(find(since(t), 'POST', /^\/channels\/dm900\/messages$/)[0]);
   ok('владельца тоже: удалено и предупреждение, но без мьюта (Discord не даёт)',
      find(since(t), 'DELETE', new RegExp('/messages/' + ownMsg.id + '$')).length === 1 &&

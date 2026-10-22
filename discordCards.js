@@ -321,7 +321,7 @@ async function drawNow(kind, data, theme, n) {
   if (kind !== 'account' && kind !== 'servers') {
     const pics = require('./discordPics.js');
     const svgText = await satori(pics.tree(kind, data, UI, theme), { width: pics.W, fonts });
-    return Buffer.from(new Resvg(svgText, { fitTo: { mode: 'width', value: pics.W } }).render().asPng());
+    return Buffer.from(new Resvg(svgText, { fitTo: { mode: 'width', value: pics.W * pics.SCALE } }).render().asPng());
   }
   const { tree, height } = kind === 'account' ? profileTree(data, theme, n) : serversTree(data, theme);
   const svgText = await satori(tree, { width: W, height, fonts });
