@@ -160,6 +160,7 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
     info: [{ tag: { en: 'Post', ru: 'Пост' }, color: 'ok', title: { en: 'Posted', ru: 'Опубликовано' }, lines: [{ en: 'a', ru: 'б' }], at: now }, { tag: 'x', title: 'y' }],
     servers: [servers, { at: now, online: 0, rooms: 0, modes: {}, list: [] }],
     account: [p1, empty],
+    about: [{ imageUrl: 'https://cdn.discordapp.com/attachments/1/2/menu.png?ex=1' }, {}],
     language: [{ mode: 'set', label: 'Deutsch · Germany' }, { mode: 'auto', discord: 'Русский' }, { mode: 'view', label: '' }, { mode: 'view', label: 'Español · Spain' },
                { mode: 'none', q: 'xyz', suggest: ['Germany — Deutsch', 'Austria — Deutsch'] }, { mode: 'none', q: '*_`@everyone', suggest: [] }]
   };
@@ -170,7 +171,7 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
       let m;
       try { m = V.message(V.view(kind, d, lang, { page, period }), [V.row(V.button('x', 'x:1'))]); } catch (e) { bad.push(kind + '/' + lang + '/' + i + ': ' + e.message); continue; }
       const all = allText(m);
-      if (/undefined|NaN|\[object|null|\{[a-zA-Z0-9]+\}/.test(all) || !all.trim()) bad.push(kind + '/' + lang + '/' + i + ': ' + all.replace(/\s+/g, ' ').slice(0, 100));
+      if (/undefined|NaN|\[object|\bnull\b|\{[a-zA-Z0-9]+\}/.test(all) || !all.trim()) bad.push(kind + '/' + lang + '/' + i + ': ' + all.replace(/\s+/g, ' ').slice(0, 100));
       if (all.length > 4000 || count(m) > 40 || m.components[0].components.some(c => c.type === 10 && !c.content.trim())) bad.push(kind + '/' + lang + '/' + i + ': пределы');
     }
   }
@@ -215,6 +216,14 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
      TC.searchNames('e', 5).indexOf('Tester') !== -1 && TC.searchNames('', 2).length === 2);
   const sd = TC.serversData();
   ok('сводка серверов — без имён игроков', sd && Array.isArray(sd.list) && !/"names"/.test(JSON.stringify(sd)));
+
+  console.log('\nпост #about и пункт «Translate»:');
+  const LIVE_ABOUT = 'A free multiplayer browser game. Jump into a shared server, play **Hide and Seek** or **Race** with other players, and build your own maps. No download needed.\n\n- Hide and Seek and Race modes\n' +
+    '- Map Editor and Maps Browser: make maps and play maps made by players\n- Quests, Daily Reward, Story Mode and Leaderboards\n- Avatar shop to customize your character\n- Works on desktop and phone';
+  ok('английский текст поста #about в коде — слово в слово тот, что выложен на сервере (по нему бот узнаёт пост)', V.aboutText('en') === LIVE_ABOUT);
+  const aboutBad = ALL.filter(l => { const t = V.aboutText(l); return !/\*\*.+\*\*/.test(t) || t.split('\n').length !== 7 || /undefined|\{|\}/.test(t) || !V.say(l, 'trCmd') || V.say(l, 'trCmd').length > 32; });
+  ok('текст #about на каждом языке (' + ALL.length + '): 7 строк, режимы выделены, нет «undefined» и скобок; название пункта меню до 32 знаков', aboutBad.length === 0, aboutBad.join());
+  ok('предупреждение «чужие сообщения не переводятся» есть на каждом языке', ALL.every(l => V.say(l, 'trNotMine').length > 20 && V.say(l, 'trNone').length > 5 && V.say(l, 'langTip').length > 20));
 
   console.log('\nстраны мира и языки (/language):');
   const W = require('./discordWorld.js');

@@ -1,4 +1,9 @@
 {
   "base": "b3a02c4648d519d8a1194bd5ec3e20beebdb873d",
-  "updates": []
+  "updates": [
+    {
+      "title": "Translate older bot messages",
+      "text": "Discord bot: press and hold (or right-click) an older bot message, then choose Apps, then Translate, to read it in your language. Works for the rules, the about post, punishment cards and log entries."
+    }
+  ]
 }

@@ -6,7 +6,8 @@
 // владельца: справка, статистика, список предупреждений), показывается по-английски. Переводы вшиты в код —
 // никуда ничего не отправляется.
 // Языки лежат в четырёх файлах: этот (28 языков — все языки Discord) и discordLangW1..W4.js (ещё 22 для /language).
-// Строки команды /language для всех языков — discordLangCmd.js (дописываются в «s» при загрузке).
+// Строки команды /language — discordLangCmd.js, пункта меню «Translate» и поста #about — discordLangTr.js
+// (дописываются в «s» каждого языка при загрузке).
 // Подстановки в фигурных скобках ({n}, {d}...) переводить нельзя: их ставит бот.
 // Добавить язык: новая запись с теми же ключами (test-discord-views.js проверяет, что ничего не забыто и
 // подстановки на месте) + строки из discordLangCmd.js + страны в TABLE (discordWorld.js); если код языка
@@ -23,7 +24,8 @@ const KEYS = ['warn', 'mute', 'ban', 'unmute', 'unban', 'unwarn', 'removed', 'ru
   'openProfile', 'tabProfile', 'tabMaps', 'tabFriends', 'perToday', 'perWeek', 'perAll', 'joined', 'coinsL', 'raceScores', 'hsScores', 'noRank',
   'aboutL', 'nothingWritten', 'todayWord', 'weekWord', 'noMapsYet', 'noFriendsYet', 'published', 'inGameTag', 'likesN', 'onlineNowTag',
   'minAgo', 'hAgo', 'dAgo', 'longAgo', 'friendsL', 'mapsL', 'moreN2', 'race', 'hns', 'rulesTitle',
-  'langTitle', 'langNow', 'langAutoName', 'langAutoText', 'langHow', 'langNone'];
+  'langTitle', 'langNow', 'langAutoName', 'langAutoText', 'langHow', 'langNone',
+  'trCmd', 'trNotMine', 'trNone', 'langTip', 'aboutIntro', 'aboutB1', 'aboutB2', 'aboutB3', 'aboutB4', 'aboutB5'];
 // что нашёл автомод (kind находки)
 const NOTE_KEYS = ['flood', 'invite', 'nsfw-link', 'nsfw-image', 'slur', 'selfharm', 'scam-text', 'everyone-link', 'badfile', 'scam', 'grabber', 'cheat',
   'custom', 'native-word', 'warns'];
@@ -1060,7 +1062,9 @@ const PACKS = {
 
 // остальные языки и строки команды /language
 for (const f of ['./discordLangW1.js', './discordLangW2.js', './discordLangW3.js', './discordLangW4.js']) Object.assign(PACKS, require(f).PACKS);
-const CMD = require('./discordLangCmd.js');
-for (const l of Object.keys(CMD)) if (PACKS[l]) Object.assign(PACKS[l].s, CMD[l]);
+for (const f of ['./discordLangCmd.js', './discordLangTr.js']) {
+  const extra = require(f);
+  for (const l of Object.keys(extra)) if (PACKS[l]) Object.assign(PACKS[l].s, extra[l]);
+}
 
 module.exports = { PACKS, KEYS, NOTE_KEYS };

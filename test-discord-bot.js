@@ -267,8 +267,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(calls, 'PUT', /^\/applications\/700\/commands$/).length);
   const gcmds = find(calls, 'PUT', /^\/applications\/700\/commands$/);
   const nick = gcmds[0] && (gcmds[0].body.find(c => c.name === 'account') || {}).options && gcmds[0].body.find(c => c.name === 'account').options[0];
-  ok('у приложения четыре команды для всех — /servers, /rules, /language и /account (старая /say убрана: список заменяется целиком)', gcmds.length === 1 &&
-     gcmds[0].body.map(c => c.name).join() === 'servers,rules,language,account' && gcmds[0].body.every(c => !c.default_member_permissions),
+  ok('у приложения пять команд для всех — /servers, /rules, /language, «Translate» (меню сообщения) и /account (старая /say убрана: список заменяется целиком)', gcmds.length === 1 &&
+     gcmds[0].body.map(c => c.name).join() === 'servers,rules,language,Translate,account' && gcmds[0].body.every(c => !c.default_member_permissions),
      gcmds[0] && JSON.stringify(gcmds[0].body.map(c => c.name)));
   ok('/account: обязательный ник с подсказками по мере ввода', nick && nick.name === 'nick' && nick.type === 3 && nick.required && nick.autocomplete);
   await waitFor(() => find(calls, 'PATCH', /^\/applications\/@me$/).length);
@@ -1138,7 +1138,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
 
   const set1 = await lgc('lgn1', 'DE-de', 'U81', 'ru');
   ok('выбрал Германию (из подсказки) — ответ сразу на немецком, хотя Discord у человека русский; виден только ему, без кнопок и упоминаний', set1 && set1.body.type === 4 &&
-     set1.body.data.flags === (32768 | 64) && /^Sprache Deutsch · Германия Der Bot antwortet jetzt bei jedem Befehl in dieser Sprache\.$/.test(plainOf(set1)) && buttonsOf(set1.body).length === 0 &&
+     set1.body.data.flags === (32768 | 64) && /^Sprache Deutsch · Германия Der Bot antwortet jetzt bei jedem Befehl in dieser Sprache\. So liest du eine ältere Bot-Nachricht in deiner Sprache: Rechtsklick darauf \(am Handy gedrückt halten\), dann Apps und Übersetzen\.$/.test(plainOf(set1)) && buttonsOf(set1.body).length === 0 &&
      set1.body.data.allowed_mentions.parse.length === 0, set1 && plainOf(set1));
   ok('в памяти бота — только «страна-язык» у человека (ни ника, ни прочего)', bot._test.state().langs.U81 === 'DE-de' && Object.values(bot._test.state().langs).every(v => /^[A-Z]{2}-[a-z]{2,3}$/.test(v)));
   await sleep(800);
@@ -1155,21 +1155,21 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const meDe = cb(since(t), bid)[0];
   ok('кнопка «Обновить» с «sv:r:me» (сообщения прежних версий) тоже даёт выбранный язык', meDe && plainOf(meDe).indexOf(de.serversTitle + ' · ') === 0, meDe && plainOf(meDe).slice(0, 40));
   const rulesDe = await lgc('lgn4', undefined, 'U81', 'ru');
-  ok('«/language» без поля — какой язык сейчас и как сменить, на этом же языке', rulesDe && /^Sprache Deutsch · Германия Der Bot antwortet jetzt bei jedem Befehl in dieser Sprache\. Zum Ändern gib nach \/language ein Land oder eine Sprache ein\.$/.test(plainOf(rulesDe)), rulesDe && plainOf(rulesDe));
+  ok('«/language» без поля — какой язык сейчас и как сменить, на этом же языке', rulesDe && /^Sprache Deutsch · Германия Der Bot antwortet jetzt bei jedem Befehl in dieser Sprache\. Zum Ändern gib nach \/language ein Land oder eine Sprache ein\. So liest du eine ältere Bot-Nachricht in deiner Sprache: Rechtsklick darauf \(am Handy gedrückt halten\), dann Apps und Übersetzen\.$/.test(plainOf(rulesDe)), rulesDe && plainOf(rulesDe));
   const viewAuto = await lgc('lgn5', undefined, 'U82', 'ru');
-  ok('без выбора — «Автоматически» и язык его Discord', viewAuto && /^Язык Автоматически Бот следует языку вашего Discord: Русский\. Чтобы сменить, введите страну или язык после \/language\.$/.test(plainOf(viewAuto)), viewAuto && plainOf(viewAuto));
+  ok('без выбора — «Автоматически» и язык его Discord', viewAuto && /^Язык Автоматически Бот следует языку вашего Discord: Русский\. Чтобы сменить, введите страну или язык после \/language\. Чтобы прочитать старое сообщение бота на своём языке: нажмите на него правой кнопкой \(на телефоне — зажмите\), затем «Приложения» и «Перевести»\.$/.test(plainOf(viewAuto)), viewAuto && plainOf(viewAuto));
   t = Date.now();
   ix('lgn7', 2, { name: 'rules', type: 1 }, 'U81', false, { locale: 'ru' });
   await waitFor(() => cb(since(t), 'lgn7').length, 5000);
   ok('/rules у него — тоже на немецком (все команды следуют выбору)', /^Serverregeln von AIBROFIST 1 Kein Spam STUMM 10 MINUTEN /.test(plainOf(cb(since(t), 'lgn7')[0])), plainOf(cb(since(t), 'lgn7')[0]).slice(0, 60));
   const jp = await lgc('lgn8', 'Japan', 'U81', 'ru');
-  ok('напечатал название вручную («Japan», не из подсказки) — нашлось, японский; прежний выбор заменён', jp && /^言語 日本語 · Япония ボットはすべてのコマンドにこの言語で返信します。$/.test(plainOf(jp)) && bot._test.state().langs.U81 === 'JP-ja', jp && plainOf(jp));
+  ok('напечатал название вручную («Japan», не из подсказки) — нашлось, японский; прежний выбор заменён', jp && /^言語 日本語 · Япония ボットはすべてのコマンドにこの言語で返信します。 ボットの古いメッセージを自分の言語で読むには：メッセージを右クリック（スマホでは長押し）して、「アプリ」から「翻訳」を選んでください。$/.test(plainOf(jp)) && bot._test.state().langs.U81 === 'JP-ja', jp && plainOf(jp));
   const frb = await lgc('lgn9', 'BE-fr', 'U81', 'ru');
   ok('у страны несколько языков (Бельгия): выбранный язык, не основной — французский', frb && /^Langue Français · Бельгия /.test(plainOf(frb)) && bot._test.state().langs.U81 === 'BE-fr', frb && plainOf(frb));
   const bel = await lgc('lgn10', 'Belgium', 'U84', 'en-US');
   ok('просто «Belgium» — основной язык страны (нидерландский)', bel && /^Taal Nederlands · Belgium /.test(plainOf(bel)) && bot._test.state().langs.U84 === 'BE-nl', bel && plainOf(bel));
   const aut = await lgc('lgn11', 'auto', 'U81', 'ru');
-  ok('«Automatic» — выбор снимается, язык снова по Discord; запись человека из памяти удалена', aut && /^Язык Автоматически Бот следует языку вашего Discord: Русский\.$/.test(plainOf(aut)) && !('U81' in bot._test.state().langs), aut && plainOf(aut));
+  ok('«Automatic» — выбор снимается, язык снова по Discord; запись человека из памяти удалена', aut && /^Язык Автоматически Бот следует языку вашего Discord: Русский\. Чтобы прочитать старое сообщение бота на своём языке: нажмите на него правой кнопкой \(на телефоне — зажмите\), затем «Приложения» и «Перевести»\.$/.test(plainOf(aut)) && !('U81' in bot._test.state().langs), aut && plainOf(aut));
   const svBack = await srv1('lgn12', 'U81', 'ru');
   ok('и /servers снова по-русски', svBack && /^Серверы · онлайн: 0 /.test(plainOf(svBack)));
   const nf = await lgc('lgn13', 'qqqzzz', 'U83', 'pl');
@@ -1468,6 +1468,81 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const aliceCards = find(since(tAlice), 'POST', /^\/channels\/300\/messages$/).filter(x => x.body && /^Warning · \d of 3 Alice /.test(plainOf(x)));
   ok('у Alice два предупреждения — на второй карточке «2 из 3»', aliceCards.length === 2 && /^Warning · 1 of 3 Alice @alice_p .* Count: ●○○ /.test(plainOf(aliceCards[0])) &&
      /^Warning · 2 of 3 Alice @alice_p .* Count: ●●○ /.test(plainOf(aliceCards[1])) && bot._test.state().warns[G + ':70001'].length === 2);
+
+  console.log('\nпункт меню «Translate»: старые сообщения бота на своём языке:');
+  const V = require('./discordViews.js');
+  const trCmd = gcmds[0].body.find(c => c.name === 'Translate');
+  ok('«Translate» — команда сообщения (тип 3): без описания и полей, названия на языках Discord, английское — по умолчанию', trCmd && trCmd.type === 3 && !trCmd.options && !trCmd.description &&
+     JSON.stringify(trCmd.contexts) === '[0,1]' && trCmd.name_localizations.ru === 'Перевести' && trCmd.name_localizations.de === 'Übersetzen' && trCmd.name_localizations.ja === '翻訳' &&
+     Object.keys(trCmd.name_localizations).length === 30 && !('en-US' in trCmd.name_localizations) && Object.values(trCmd.name_localizations).every(n => n.length >= 1 && n.length <= 32), JSON.stringify(trCmd));
+  const trx = async (id, msg, uid, locale) => {
+    t = Date.now();
+    dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type: 2, guild_id: G, channel_id: CH.general, member: { user: { id: uid }, permissions: '1024' }, locale,
+      data: { id: '900', name: 'Translate', type: 3, target_id: msg.id, resolved: { messages: { [msg.id]: msg } } } });
+    await waitFor(() => cb(since(t), id).length, 5000);
+    return cb(since(t), id)[0];
+  };
+  const botMsg = (id, o) => Object.assign({ id, author: { id: BOT, bot: true, username: 'AIBROFIST' }, channel_id: CH.general, flags: 0, components: [], embeds: [] }, o);
+  const deS = PACKS.de.s;
+  const tr1 = await trx('trn1', { id: '5001', author: { id: 'U77', username: 'bob' }, content: 'hola', components: [], embeds: [] }, 'U91', 'de');
+  ok('сообщение человека не переводится (оно бы ушло стороннему сервису) — объяснение на языке спросившего, видно только ему', tr1 && tr1.body.type === 4 && tr1.body.data.flags === (32768 | 64) &&
+     plainOf(tr1) === deS.trNotMine && JSON.stringify(tr1.body).indexOf('hola') === -1, tr1 && plainOf(tr1));
+  const tr2 = await trx('trn2', botMsg('5002', { author: { id: '999', bot: true, username: 'OtherBot' } }), 'U91', 'ru');
+  ok('сообщение чужого бота — тоже нет', tr2 && /^Я перевожу только свои сообщения\./.test(plainOf(tr2)), tr2 && plainOf(tr2));
+  const rulesId = bot._test.state().guilds[G].rules.message;
+  const tr3 = await trx('trn3', botMsg(rulesId), 'U91', 'es-ES');
+  ok('пост с правилами — правила на языке спросившего (испанский), как /rules; видно только ему', tr3 && tr3.body.data.flags === (32768 | 64) && / 1 Sin spam SILENCIO 10 MINUTOS Más de 3 mensajes en 2 segundos\./.test(plainOf(tr3)) && !/ 1 No spam /.test(plainOf(tr3)), tr3 && plainOf(tr3).slice(0, 90));
+  const aboutImg = 'https://cdn.discordapp.com/attachments/1/2/menu.png?ex=1&is=2&hm=3';
+  const aboutMsg = botMsg('5003', { flags: 32768, components: [{ type: 17, accent_color: 0x1f2937, components: [{ type: 10, content: '## AIBROFIST' }, { type: 10, content: V.aboutText('en') },
+    { type: 12, items: [{ media: { url: aboutImg } }] }, { type: 14, divider: true, spacing: 1 },
+    { type: 1, components: [{ type: 2, style: 5, label: 'Play now', url: 'https://aibrofist.online' }] }] }] });
+  const tr4 = await trx('trn4', aboutMsg, 'U91', 'ja');
+  const tr4g = JSON.stringify(tr4 && tr4.body);
+  const tr4b = tr4 ? JSON.stringify(buttonsOf(tr4.body).map(b => [b.label, b.url])) : '';
+  ok('пост #about — тот же текст на японском, картинка и ссылка те же, кнопка по-японски; видно только спросившему', tr4 && tr4.body.data.flags === (32768 | 64) && /^AIBROFIST 無料のマルチプレイヤー対応ブラウザゲームです。/.test(plainOf(tr4)) &&
+     plainOf(tr4).indexOf('かくれんぼとレースのモード') > 0 && tr4g.indexOf(aboutImg) > 0 && tr4b === '[["プレイ","https://aibrofist.online"]]' && allGrey(tr4.body),
+     tr4 && plainOf(tr4).slice(0, 80) + ' / ' + tr4b);
+  const tr4r = await trx('trn4r', aboutMsg, 'U91', 'ru'), tr4e = await trx('trn4e', aboutMsg, 'U91', 'en-US');
+  ok('и по-русски, и по-английски (то же, что в посте)', /^AIBROFIST Бесплатная многопользовательская браузерная игра\./.test(plainOf(tr4r)) && /^AIBROFIST A free multiplayer browser game\. /.test(plainOf(tr4e)),
+     plainOf(tr4r).slice(0, 50) + ' / ' + plainOf(tr4e).slice(0, 50));
+  const aboutBad = botMsg('5004', { flags: 32768, components: [{ type: 17, components: [{ type: 10, content: '## AIBROFIST' }, { type: 10, content: 'Something else' }] }] });
+  const tr5 = await trx('trn5', aboutBad, 'U91', 'de');
+  ok('любое другое сообщение бота, которое не узнать, — «не могу перевести» на языке спросившего', tr5 && plainOf(tr5) === deS.trNone, tr5 && plainOf(tr5));
+  const postRec = bot._test.state().posts[aliceCards[1].resId];
+  ok('карточка наказания в канале запомнена (вид и данные), чтобы её можно было перевести позже', postRec && postRec.k === 'action' && postRec.d.name === 'Alice' && postRec.d.n === 2 && postRec.at > 0, JSON.stringify(postRec && postRec.k));
+  const tr6 = await trx('trn6', botMsg(aliceCards[1].resId, { flags: 32768 }), 'U91', 'de');
+  ok('карточка предупреждения Alice — на немецком: «Verwarnung · 2 von 3», ник и причина как были, видно только спросившему', tr6 && tr6.body.data.flags === (32768 | 64) &&
+     new RegExp('^' + deS.warn + ' · 2 von 3 Alice @alice_p ').test(plainOf(tr6)) && !/Warning/.test(plainOf(tr6)), tr6 && plainOf(tr6).slice(0, 80));
+  const logPost = find(since(tAlice), 'POST', /^\/channels\/303\/messages$/).filter(x => x.body && x.body.embeds && /^Case \d+ \| Warning 2 of 3/.test(x.body.embeds[0].title))[0];
+  const tr7 = logPost && await trx('trn7', botMsg('5007', { embeds: [Object.assign({}, logPost.body.embeds[0], { timestamp: new Date().toISOString() })] }), 'U91', 'de');
+  const caseNo = logPost && /^Case (\d+) \|/.exec(logPost.body.embeds[0].title)[1];
+  ok('запись журнала (#logs) — тоже: на немецком, номер случая, 2 из 3, правило и причина переведены, ник как есть', tr7 && plainOf(tr7).indexOf(deS.caseN.replace('{n}', caseNo)) >= 0 && plainOf(tr7).indexOf(deS.warn + ' · 2 von 3') >= 0 &&
+     plainOf(tr7).indexOf('Alice') >= 0 && !/Warning|Rule|Reason/.test(plainOf(tr7)), tr7 && plainOf(tr7).slice(0, 160));
+  const logBase = [{ name: 'User', value: 'Bob (123)', inline: true }, { name: 'By', value: 'Automod', inline: true }, { name: 'Rule', value: '4. No hate speech', inline: true }, { name: 'Reason', value: 'Slur or hate speech' }];
+  const logTitles = ['Warning 1 of 3', 'Warning 3 of 3: mute for 1 hour', 'Warning 3 of 3: mute for 1 hour (not applied: the server owner cannot be muted or banned)', 'Warning', 'Warning (failed: no permission)',
+    'Mute for 10 minutes', 'Mute for 2 days (failed: no permission)', 'Ban for 7 days', 'Permanent ban', 'Permanent ban (not applied: administrators cannot be muted)', 'No punishment',
+    'Mute lifted', 'Ban lifted', 'Temporary ban is over', 'Warnings removed (2)', 'All warnings removed (5)'];
+  const badLog = [];
+  for (const [n, title] of logTitles.entries()) {
+    const m = await trx('trl' + n, botMsg('55' + n, { embeds: [{ title: 'Case ' + (100 + n) + ' | ' + title, fields: logBase, timestamp: new Date().toISOString() }] }), 'U91', 'de');
+    const txt = m ? plainOf(m) : '';
+    if (!(m && txt !== deS.trNone && !/undefined|NaN|\[object/.test(txt) && txt.indexOf(deS.caseN.replace('{n}', String(100 + n))) >= 0 && !/\b(Warning|Mute|Ban|lifted|removed|Permanent)\b/.test(txt))) badLog.push(title + ' -> ' + txt.slice(0, 70));
+  }
+  ok('все виды записей журнала узнаются и переводятся (' + logTitles.length + ' заголовков), без английских слов и «undefined»', badLog.length === 0, badLog.slice(0, 3).join(' | '));
+  const trSlur = await trx('trl-s', botMsg('5600', { embeds: [{ title: 'Case 200 | Mute for 1 hour', fields: logBase, timestamp: new Date().toISOString() }] }), 'U91', 'de');
+  ok('правило, причина-находка автомода и срок переведены по-немецки', trSlur && plainOf(trSlur).indexOf(PACKS.de.rules[3]) >= 0 && plainOf(trSlur).indexOf(PACKS.de.notes.slur) >= 0 && /1 Stunde/.test(plainOf(trSlur)), trSlur && plainOf(trSlur));
+  const trDel = await trx('trl-d', botMsg('5601', { embeds: [{ title: 'Case 201 | Deleted 3 messages', fields: logBase, timestamp: new Date().toISOString() }] }), 'U91', 'de');
+  ok('запись, которую не узнать («Deleted 3 messages»), — «не могу перевести», а не ошибка', trDel && plainOf(trDel) === deS.trNone, trDel && plainOf(trDel));
+  const trFree = await trx('trl-f', botMsg('5602', { embeds: [{ title: 'Case 202 | Mute for 1 hour', fields: [{ name: 'User', value: '<@123> (123)' }, { name: 'By', value: 'qwied' }, { name: 'Reason', value: 'sold <@456> coins @everyone' }], timestamp: new Date().toISOString() }] }), 'U91', 'ru');
+  ok('причина, написанная владельцем, остаётся как написана, без упоминаний; «Case» и срок — по-русски', trFree && /Случай 202/.test(plainOf(trFree)) && /sold/.test(plainOf(trFree)) && trFree.body.data.allowed_mentions.parse.length === 0 &&
+     !/(^|[^\\])(<@|@everyone)/.test(textsOf(trFree.body).join('\n')), trFree && plainOf(trFree).slice(0, 120));
+  const trNo = await trx('trn8', { id: '5008', author: null }, 'U91', 'de');
+  ok('странный запрос (у сообщения нет автора) — «не могу перевести», не ошибка', trNo && plainOf(trNo) === deS.trNone);
+  bot._test.state().langs.U91 = 'JP-ja';
+  const trSaved = await trx('trn9', botMsg('5009'), 'U91', 'de');
+  delete bot._test.state().langs.U91;
+  ok('выбранный /language важнее языка Discord: у человека с японским выбором ответ японский, хотя Discord немецкий', trSaved && plainOf(trSaved) === PACKS.ja.s.trNone, trSaved && plainOf(trSaved));
+
   t = Date.now();
   say(OWNER, '!qawarns alice_p');
   await waitFor(() => panelOf(since(t)));

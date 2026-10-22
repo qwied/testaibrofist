@@ -58,7 +58,13 @@ const S = {
     gRaceMode: 'Race', gHnsMode: 'Hide and Seek', userWord: 'Player', tipDark: '', rulesTitle: 'AIBROFIST Server Rules',
     langTitle: 'Language', langNow: 'The bot now answers every command in this language.', langAutoName: 'Automatic',
     langAutoText: 'The bot follows your Discord language: {lang}.', langHow: 'To change it, type a country or a language after /language.',
-    langNone: 'Nothing found for “{q}”. Type a country or a language.'
+    langNone: 'Nothing found for “{q}”. Type a country or a language.',
+    trCmd: 'Translate', trNotMine: 'I can only translate my own messages. People’s messages are never sent to an outside translation service.',
+    trNone: 'I can’t translate this message.',
+    langTip: 'To read an older bot message in your language: right-click it (on a phone, press and hold), then Apps, then Translate.',
+    aboutIntro: 'A free multiplayer browser game. Jump into a shared server, play **Hide and Seek** or **Race** with other players, and build your own maps. No download needed.',
+    aboutB1: 'Hide and Seek and Race modes', aboutB2: 'Map Editor and Maps Browser: make maps and play maps made by players',
+    aboutB3: 'Quests, Daily Reward, Story Mode and Leaderboards', aboutB4: 'Avatar shop to customize your character', aboutB5: 'Works on desktop and phone'
   },
   ru: {
     moderation: 'Модерация', caseN: 'Случай {n}', warnings: 'Предупреждения', rulesTag: 'Правила сервера', helpTag: 'Команды владельца',
@@ -102,7 +108,13 @@ const S = {
     gRaceMode: 'Гонка', gHnsMode: 'Прятки', userWord: 'Игрок', tipDark: '', rulesTitle: 'Правила сервера AIBROFIST',
     langTitle: 'Язык', langNow: 'Теперь бот отвечает на все команды на этом языке.', langAutoName: 'Автоматически',
     langAutoText: 'Бот следует языку вашего Discord: {lang}.', langHow: 'Чтобы сменить, введите страну или язык после /language.',
-    langNone: 'По запросу «{q}» ничего не найдено. Введите страну или язык.'
+    langNone: 'По запросу «{q}» ничего не найдено. Введите страну или язык.',
+    trCmd: 'Перевести', trNotMine: 'Я перевожу только свои сообщения. Сообщения людей никуда не отправляются на сторонние сервисы перевода.',
+    trNone: 'Это сообщение я перевести не могу.',
+    langTip: 'Чтобы прочитать старое сообщение бота на своём языке: нажмите на него правой кнопкой (на телефоне — зажмите), затем «Приложения» и «Перевести».',
+    aboutIntro: 'Бесплатная многопользовательская браузерная игра. Заходите на общий сервер, играйте с другими в **Прятки** или **Гонку** и создавайте свои карты. Скачивать ничего не нужно.',
+    aboutB1: 'Режимы «Прятки» и «Гонка»', aboutB2: 'Редактор карт и каталог карт: создавайте карты и играйте в карты других игроков',
+    aboutB3: 'Задания, ежедневная награда, сюжетный режим и таблицы лидеров', aboutB4: 'Магазин аватаров для настройки персонажа', aboutB5: 'Работает на компьютере и телефоне'
   }
 };
 /* Язык ответа: en, ru или один из PACKS. Язык человека бот берёт у Discord (locale в нажатии или команде):
@@ -427,7 +439,15 @@ function language(d, lang) {
   const auto = d.mode === 'auto' || !d.label;
   return { color: R.COLORS.neutral, parts: [txt('### ' + L('langTitle')),
     txt('**' + (auto ? L('langAutoName') : esc(d.label)) + '**\n' + (auto ? L('langAutoText', { lang: esc(d.discord || '') }) : L('langNow'))),
-    d.mode === 'view' ? txt(small(L('langHow'))) : null].filter(Boolean) };
+    d.mode === 'view' ? txt(small(L('langHow') + '\n' + L('langTip'))) : txt(small(L('langTip')))].filter(Boolean) };
+}
+
+/* ---------- пост #about: тот же текст на любом языке ---------- */
+const aboutText = lang => say(lang, 'aboutIntro') + '\n\n' + [1, 2, 3, 4, 5].map(n => '- ' + say(lang, 'aboutB' + n)).join('\n');
+/* d: { imageUrl — картинка поста (ссылка на неё в самом сообщении), url — куда ведёт кнопка } */
+function about(d, lang) {
+  const gallery = d.imageUrl ? { type: 12, items: [{ media: { url: String(d.imageUrl) } }] } : null;
+  return { color: 0x1f2937, parts: [txt('## AIBROFIST'), txt(aboutText(lang)), gallery, { type: 14, divider: true, spacing: 1 }].filter(Boolean) };
 }
 
 /* ---------- /servers: комнаты обоих режимов ---------- */
@@ -498,11 +518,11 @@ function account(d, lang, page, period) {
     txt(about ? '**' + L('aboutL') + '**  ' + esc(about) : small(L('nothingWritten')))] };
 }
 
-const VIEWS = { action, warns, warnsAll, rules, help, stats, info, servers, account, language };
+const VIEWS = { action, warns, warnsAll, rules, help, stats, info, servers, account, language, about };
 function view(kind, data, lang, extra) {
   const fn = VIEWS[kind];
   if (!fn) throw new Error('unknown view ' + kind);
   return fn(data || {}, langOf(lang), extra && extra.page, extra && extra.period);
 }
 
-module.exports = { view, message, button, linkButton, row, tabs, say, langOf, fromLocale, duration, date, dshort, ruleText, reasonText, esc, code, small, txt, SHORT, HELP, NOTE_RU, VIEWS };
+module.exports = { view, message, button, linkButton, row, tabs, say, aboutText, langOf, fromLocale, duration, date, dshort, ruleText, reasonText, esc, code, small, txt, SHORT, HELP, NOTE_RU, VIEWS };

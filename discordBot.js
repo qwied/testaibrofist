@@ -62,8 +62,9 @@ const NOTICE_MS = 10 * 1000;     // короткое предупреждени�
 
 // banned — приметы забаненных (аватарка, имя): по ним ловим обход бана
 // warns — предупреждения участников («сервер:игрок» -> список), cards — карточки, которые можно показать на другом языке,
-// langs — язык, который человек выбрал командой /language («DE-de»: страна и язык; не выбрал — язык его Discord)
-let state = { feed: [], guilds: {}, cases: 0, banned: {}, unbans: {}, fixes: {}, watch: { last: {} }, warns: {}, cards: {}, langs: {} };
+// langs — язык, который человек выбрал командой /language («DE-de»: страна и язык; не выбрал — язык его Discord),
+// posts — карточки наказаний, выложенные в канал («id сообщения» -> вид и данные): по ним пункт меню «Translate» переводит старые сообщения
+let state = { feed: [], guilds: {}, cases: 0, banned: {}, unbans: {}, fixes: {}, watch: { last: {} }, warns: {}, cards: {}, langs: {}, posts: {} };
 let loaded = false, saveTimer = null;
 const guilds = new Map();        // id -> { id, name, owner, roles: Map, channels: Map }
 const setupDone = new Set();
@@ -99,7 +100,8 @@ function loadState() {
       watch: { last: s.watch && s.watch.last && typeof s.watch.last === 'object' ? s.watch.last : {} },  // канал -> последнее прочитанное сообщение
       warns: s.warns && typeof s.warns === 'object' ? s.warns : {},
       cards: s.cards && typeof s.cards === 'object' ? s.cards : {},
-      langs: s.langs && typeof s.langs === 'object' ? s.langs : {}       // человек -> «DE-de»: язык, выбранный командой /language
+      langs: s.langs && typeof s.langs === 'object' ? s.langs : {},      // человек -> «DE-de»: язык, выбранный командой /language
+      posts: s.posts && typeof s.posts === 'object' ? s.posts : {}       // сообщение-карточка в канале -> из чего собрана: пункт «Translate»
     };
   } catch (e) { /* первый запуск */ }
   // штрафных баллов больше нет — у каждого правила своё наказание; накопленные при загрузке не читаются
@@ -752,6 +754,16 @@ const OWNER_ONLY = new Set(['help', 'stats', 'warns', 'warnsAll']);
 function pruneCards() {
   const now = Date.now();
   for (const k of Object.keys(state.cards)) if (now - (state.cards[k].at || 0) > CARD_AGE) delete state.cards[k];
+  for (const k of Object.keys(state.posts)) if (!state.posts[k] || now - (state.posts[k].at || 0) > CARD_AGE) delete state.posts[k];
+}
+// карточку наказания в канале запоминаем, чтобы её можно было перевести позже (не больше 3000 последних)
+const POSTS_CAP = 3000;
+function rememberPost(id, rec) {
+  if (!/^\d+$/.test(String(id))) return;
+  state.posts[id] = { k: rec.k, d: rec.d, g: rec.g || null, at: Date.now() };
+  const all = Object.keys(state.posts);
+  for (let n = 0; n < all.length - POSTS_CAP; n++) delete state.posts[all[n]];
+  save();
 }
 
 /* Аватарка участника — настоящая, с CDN Discord: Discord сам показывает её
@@ -800,7 +812,7 @@ async function postCard(channel, kind, data, gid, fallback, dm, lang) {
   catch (e) { once('card:' + e.message, 'could not build the ' + kind + ' card, sending text instead:', e.message); }
   if (msg) {
     const r = await api('POST', '/channels/' + channel + '/messages', msg);
-    if (ok(r)) return r;
+    if (ok(r)) { if (!dm && kind === 'action' && r.body && r.body.id) rememberPost(r.body.id, rec); return r; }
     if (r.status === 403) {
       if (!dm) once('nowrite:' + channel, 'cannot write to channel ' + channel + ': allow View Channel and Send Messages for the bot there');
       return r;
@@ -1786,6 +1798,7 @@ async function onInteraction(i) {
   const cid = String((i.data && i.data.custom_id) || '');
   const rs = i.type === 3 && /^rules:(me|[a-z]{2})(?::(?:dark|light))?$/.exec(cid);       // «:тема» — кнопки поста прежней версии
   if (rs) return rulesSwitch(i, i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value, rs[1]);
+  if (i.type === 2 && i.data && i.data.type === 3) return i.data.name === 'Translate' ? onTranslate(i) : undefined;
   if (i.type === 2 && i.data && i.data.name === 'servers') return onServers(i);
   if (i.type === 2 && i.data && i.data.name === 'account') return onAccount(i);
   if (i.type === 2 && i.data && i.data.name === 'rules') return onRules(i);
@@ -1889,12 +1902,14 @@ function onServers(i) {
   return answerCommand(i, () => serversMessage(userLang(i)), 'servers');
 }
 // /rules: правила сервера на языке самого человека (по языку его Discord), видны только ему. Пост в канале один на всех и английский.
+function rulesFull(g) {
+  const r = gstate(g.id).rules || {};
+  return { title: r.title || RULES_TITLE, en: r.en || R.rulesText('en'), ru: r.ru === undefined ? R.rulesText('ru') : r.ru, at: r.at };
+}
 function onRules(i) {
   const g = i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value;
   if (!g) return reply(i, { content: 'The server rules are not available right now.' });
-  const r = gstate(g.id).rules || {};
-  const full = { title: r.title || RULES_TITLE, en: r.en || R.rulesText('en'), ru: r.ru === undefined ? R.rulesText('ru') : r.ru, at: r.at };
-  return answerCommand(i, () => rulesMessage(g, full, userLang(i)), 'rules', true);
+  return answerCommand(i, () => rulesMessage(g, rulesFull(g), userLang(i)), 'rules', true);
 }
 function onAccount(i) {
   const opt = ((i.data && i.data.options) || []).find(o => o.name === 'nick');
@@ -1937,6 +1952,97 @@ function onLanguageHint(i) {
   if (withAuto) choices.unshift({ name: autoName, value: 'auto' });
   return respond(i, { type: 8, data: { choices } });
 }
+/* «Translate» — пункт меню сообщения (правый клик или долгое нажатие -> Приложения). Бот присылает перевод СВОЕГО
+   сообщения на язык человека (выбранный /language или язык его Discord), видный только ему. Дискорд показывает любое
+   сообщение всем одинаково, поэтому старые сообщения сами не меняются — зато так их можно прочитать на своём языке.
+   Что переводится: правила сервера, пост #about, карточки наказаний в канале (по записи в state.posts) и записи
+   журнала (по их тексту). Сообщения людей не переводятся: для этого их пришлось бы отправлять сторонней службе. */
+const NOTE_OF = {};
+for (const k of require('./discordLang.js').NOTE_KEYS) { const f = A.finding(k); if (f && typeof f.note === 'string') NOTE_OF[f.note] = k; }
+const MS_OF = { minute: R.MIN, hour: R.HOUR, day: R.DAY };
+const msOf = t => { const x = /^(\d+) (minute|hour|day)s?$/.exec(String(t || '')); return x ? Number(x[1]) * MS_OF[x[2]] : 0; };
+// запись журнала (embed «Case N | …») -> данные карточки наказания; не узнали — null
+function parseLogEntry(m) {
+  const e = (m.embeds || [])[0], t0 = e && /^Case (\d+) \| (.+)$/.exec(String(e.title || ''));
+  if (!t0) return null;
+  const f = {};
+  for (const x of e.fields || []) f[String(x.name)] = String(x.value || '');
+  const d = { caseNo: Number(t0[1]), at: Date.parse(e.timestamp || m.timestamp) || Date.now() };
+  const um = /^(.*) \((\d+)\)$/.exec(f.User || '');
+  d.name = um ? um[1] : f.User || '';
+  if (/^<@!?\d+>$/.test(d.name)) d.name = '';
+  d.by = f.By && f.By !== 'Automod' ? f.By : '';
+  const rm = /^(\d+)\. /.exec(f.Rule || '');
+  d.rule = rm ? Number(rm[1]) : 0;
+  const reason = f.Reason || '';
+  const note = Object.keys(NOTE_OF).find(n => reason === n || reason.indexOf(n + ' (') === 0);
+  if (note) { d.kind = NOTE_OF[note]; if (reason.length > note.length + 3) d.detail = reason.slice(note.length + 2, -1); }
+  if (reason) d.reason = reason;
+  const t = t0[2], tail = '(?: \\(not applied: (.+?)\\))?( \\(failed: no permission\\))?$';
+  let x;
+  const blocked = w => !w ? '' : /owner/.test(w) ? 'owner' : 'admin';
+  if ((x = new RegExp('^Warning (\\d+) of (\\d+)(?:: mute for (.+?))?' + tail).exec(t))) Object.assign(d, { type: 'warn', n: Number(x[1]), limit: Number(x[2]), escalated: x[3] ? { ms: msOf(x[3]) } : null, blocked: blocked(x[4]), failed: !!x[5] });
+  else if ((x = new RegExp('^Mute for (.+?)' + tail).exec(t))) Object.assign(d, { type: 'mute', ms: msOf(x[1]), blocked: blocked(x[2]), failed: !!x[3] });
+  else if ((x = new RegExp('^Ban for (.+?)' + tail).exec(t))) Object.assign(d, { type: 'ban', ms: msOf(x[1]), blocked: blocked(x[2]), failed: !!x[3] });
+  else if ((x = new RegExp('^Permanent ban' + tail).exec(t))) Object.assign(d, { type: 'ban', ms: 0, blocked: blocked(x[1]), failed: !!x[2] });
+  else if ((x = new RegExp('^Warning' + tail).exec(t))) Object.assign(d, { type: 'warn', blocked: blocked(x[1]), failed: !!x[2] });
+  else if ((x = new RegExp('^No punishment' + tail).exec(t))) Object.assign(d, { type: 'none' });
+  else if (t === 'Mute lifted') d.type = 'unmute';
+  else if (t === 'Ban lifted' || t === 'Temporary ban is over') d.type = 'unban';
+  else if ((x = /^(?:All w|W)arnings removed \((\d+)\)$/.exec(t))) Object.assign(d, { type: 'unwarn', count: Number(x[1]) });
+  else return null;
+  if (d.type === 'unmute' || d.type === 'unban' || d.type === 'unwarn') { delete d.reason; delete d.kind; delete d.detail; d.rule = undefined; }
+  return d;
+}
+// тексты, ссылка картинки и ссылка кнопки из компонентов сообщения (новые компоненты вложены друг в друга)
+function partsOf(m) {
+  const out = { texts: [], image: '', link: '' };
+  const walk = list => { for (const c of list || []) {
+    if (c.type === 10) out.texts.push(String(c.content || ''));
+    else if (c.type === 12 && !out.image && c.items && c.items[0] && c.items[0].media) out.image = String(c.items[0].media.url || '');
+    else if (c.type === 2 && c.url && !out.link) out.link = String(c.url);
+    walk(c.components); if (c.accessory) walk([c.accessory]);
+  } };
+  walk(m.components);
+  return out;
+}
+// перевод сообщения бота на язык lang: готовое сообщение или null, если такого перевода нет
+function translateMessage(m, g, lang) {
+  if (g && gstate(g.id).rules && gstate(g.id).rules.message === m.id) return rulesMessage(g, rulesFull(g), lang);
+  const rec = state.posts[m.id];
+  if (rec && rec.k === 'action') return cardMessage({ k: rec.k, d: rec.d, g: rec.g }, lang, true);
+  const p = partsOf(m);
+  if (p.texts[0] === '## AIBROFIST' && p.texts[1] === V.aboutText('en')) {
+    const url = /^https:\/\/[^\s"]+$/.test(p.link) ? p.link : 'https://aibrofist.online';
+    return V.message(V.view('about', { imageUrl: /^https:\/\/[^\s"]+$/.test(p.image) ? p.image : '' }, lang), [V.row(V.linkButton(V.say(lang, 'playNow'), url))], { ephemeral: true });
+  }
+  const log = parseLogEntry(m);
+  if (log) return V.message(V.view('action', log, lang), [], { ephemeral: true });
+  return null;
+}
+async function onTranslate(i) {
+  const lang = userLang(i);
+  const m = i.data && i.data.resolved && i.data.resolved.messages && i.data.resolved.messages[i.data.target_id];
+  const note = key => V.message({ color: R.COLORS.neutral, parts: [V.txt(V.say(lang, key))] }, [], { ephemeral: true });
+  if (!m || !m.author) return respond(i, { type: 4, data: note('trNone') });
+  if (!me || m.author.id !== me.id) return respond(i, { type: 4, data: note('trNotMine') });
+  let msg = null;
+  const g = i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value;
+  try { msg = translateMessage(m, g, lang); }
+  catch (e) { once('translate:' + e.message, 'could not translate a message:', e.message); }
+  if (!msg) return respond(i, { type: 4, data: note('trNone') });
+  msg.flags |= 64;                                      // перевод видит только тот, кто попросил, а не весь канал
+  const r = await respond(i, { type: 4, data: msg });
+  if (r && r.status === 400) {                          // Discord не принял, скорее всего картинку поста: то же без неё
+    log('Discord did not take the translated message:', JSON.stringify(r.body).slice(0, 200));
+    const p = partsOf(m);
+    try {
+      const plain = p.texts[0] === '## AIBROFIST' ? V.message(V.view('about', {}, lang), [V.row(V.linkButton(V.say(lang, 'playNow'), 'https://aibrofist.online'))], { ephemeral: true }) : null;
+      return respond(i, { type: 4, data: plain || note('trNone') });
+    } catch (e) { return respond(i, { type: 4, data: note('trNone') }); }
+  }
+  return r;
+}
 // подсказки ников, пока игрок печатает /account
 function onAccountHint(i) {
   const opt = ((i.data && i.data.options) || []).find(o => o.focused) || {};
@@ -1959,6 +2065,13 @@ function onCardButton(i, cid) {
 
 /* Глобальные слэш-команды приложения: ровно этот список. Запись целиком
    заменяет прежний — так ушла и старая /say. Шлём один раз на версию. */
+// как называется пункт меню «Translate» на языках Discord (английский — сам «Translate»)
+function translateNames() {
+  const out = {};
+  for (const loc of ['id', 'da', 'de', 'es-ES', 'es-419', 'fr', 'hr', 'it', 'lt', 'hu', 'nl', 'no', 'pl', 'pt-BR', 'ro', 'fi', 'sv-SE', 'vi', 'tr', 'cs', 'el', 'bg',
+                     'ru', 'uk', 'hi', 'th', 'zh-CN', 'ja', 'zh-TW', 'ko']) out[loc] = V.say(V.fromLocale(loc), 'trCmd').slice(0, 32);
+  return out;
+}
 const GLOBAL_COMMANDS = [
   { name: 'servers', type: 1, description: 'AIBROFIST game rooms and players online right now',
     contexts: [0, 1], integration_types: [0] },
@@ -1967,19 +2080,20 @@ const GLOBAL_COMMANDS = [
   { name: 'language', type: 1, description: 'Choose the language the bot answers in: any country or language in the world',
     contexts: [0, 1], integration_types: [0],
     options: [{ type: 3, name: 'country', description: 'Type a country or a language, or pick Automatic', required: false, autocomplete: true, max_length: 60 }] },
+  { name: 'Translate', type: 3, contexts: [0, 1], integration_types: [0], name_localizations: translateNames() },
   { name: 'account', type: 1, description: 'Show an AIBROFIST player profile',
     contexts: [0, 1], integration_types: [0],
     options: [{ type: 3, name: 'nick', description: 'Player nickname on aibrofist.online', required: true, autocomplete: true,
                 min_length: 1, max_length: 20 }] }
 ];
-const GLOBAL_VER = 'servers-rules-account-language-1';
+const GLOBAL_VER = 'servers-rules-account-language-translate-1';
 async function syncGlobalCommands() {
   if (state.fixes.globalCommands === GLOBAL_VER) return;
   if (!appId) await loadApp().catch(() => null);
   if (!appId) return;
   const r = await api('PUT', '/applications/' + appId + '/commands', GLOBAL_COMMANDS);
   if (ok(r)) { state.fixes.globalCommands = GLOBAL_VER; save(); }
-  else log('could not set the /servers, /rules, /account and /language commands:', r.status);
+  else log('could not set the /servers, /rules, /account, /language and Translate commands:', r.status);
 }
 
 /* Слэш-команд на сервере у бота нет — все команды секретные, с «!». Если
