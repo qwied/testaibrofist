@@ -19,10 +19,11 @@
    - бот никого не пингует: предупреждения в канале и ответы на команды — обычным
      текстом с именем, без упоминаний; цель команды — имя (без @), id или упоминание;
    - «!warn» — кнопка с формой, где обязательны игрок, правило и причина; в канале
-     карточка-картинка: правило, причина, какое по счёту; предупреждения копятся —
+     сообщение-карточка: правило, причина, какое по счёту; предупреждения копятся —
      3-е за 30 дней даёт мьют на час; «!warns» показывает их, «!unwarn» снимает;
-   - ответы бота — картинки в стиле сайта с флагами English / Русский, в том числе
-     правила в #rules; не нарисовалось — прежний текст;
+   - ответы бота — настоящие сообщения Discord (рамка, текст, аватарка, серые кнопки)
+     с флагами English / Русский, в том числе правила в #rules; Discord сообщение
+     не принял — прежний текст;
    - секретные команды владельца (начало задаётся на хостинге, здесь «!qa»):
      news, updates, warn, mute, clear, help — сообщение с командой исчезает,
      без секретного начала не срабатывают, окно видит только
@@ -31,8 +32,8 @@
      не покажет;
    - новости и записи Logs уходят во все выбранные каналы, правка и удаление
      повторяются в Discord;
-   - /servers и /account ник — картинкой, с кнопками темы, листания и
-     ссылкой; команды и нажатия идут по живому подключению, не через сайт;
+   - /servers и /account ник — сообщением с кнопками (обновить, вкладки, период,
+     ссылка, язык); команды и нажатия идут по живому подключению, не через сайт;
    - после обрыва продолжает сессию (resume), после перезапуска ничего не
      постит заново, без Message Content Intent переподключается без него.
    Запуск: node test-discord-bot.js */
@@ -59,12 +60,18 @@ function multipartOf(c) {
 // тело запроса: JSON, а с файлами — payload_json из multipart
 const bodyOf = c => !c ? null : c.body || (multipartOf(c) || {}).body || null;
 const J = c => JSON.stringify(bodyOf(c));
-// подпись к картинке-карточке (alt): то, что на картинке написано, текстом
-const altOf = c => { const b = bodyOf(c), a = b && (b.attachments || (b.data && b.data.attachments)); return a && a[0] ? a[0].description || '' : ''; };
-// строки кнопок сообщения (обычного или ответа на нажатие) и кнопки с флагами
-const rowsOf = b => (b && (b.data ? b.data.components : b.components) || []).filter(x => x.type === 1);
+// все части сообщения (обычного, ответа на нажатие или правки) — рамка, текст, ряды кнопок, кнопки, аватарка
+const comps = b => (b && (b.data ? b.data.components : b.components)) || [];
+const walkAll = (n, fn) => { if (Array.isArray(n)) n.forEach(x => walkAll(x, fn)); else if (n && typeof n === 'object') { fn(n); walkAll(n.components, fn); if (n.accessory) walkAll(n.accessory, fn); } };
+const textsOf = b => { const out = []; walkAll(comps(b), n => { if (n.type === 10) out.push(n.content); }); return out; };
+// то, что в сообщении написано, одной строкой без разметки Discord (жирный, код, заголовки, мелкий шрифт, экранирование)
+const plain = s => String(s).replace(/\\([\\*_`~|>#\[\]()<@:-])/g, '$1').replace(/[*`]/g, '').replace(/^(#{1,3}|-#)\s+/gm, '').replace(/\s+/g, ' ').trim();
+const plainOf = c => plain(textsOf(bodyOf(c)).join('\n'));
+// строки кнопок сообщения, все кнопки, кнопки с флагами; аватарка (справа в заголовке)
+const rowsOf = b => { const r = []; walkAll(comps(b), n => { if (n.type === 1) r.push(n); }); return r; };
+const buttonsOf = b => rowsOf(b).flatMap(r => r.components);
 const flagsOf = b => { const r = rowsOf(b).find(x => x.components.some(c => c.emoji)); return r ? r.components : []; };
-const AVATAR_PNG = require('pngjs').PNG.sync.write(new (require('pngjs').PNG)({ width: 4, height: 4 }));
+const thumbOf = c => { let u = null; walkAll(comps(bodyOf(c)), n => { if (n.type === 11) u = n.media.url; }); return u; };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function waitFor(fn, ms) {
   const end = Date.now() + (ms || 3000);
@@ -79,6 +86,7 @@ const MOD_ROLE = '200';
 /* ---------- поддельный Discord ---------- */
 const calls = [];
 let msgId = 5000, rateLimitedOnce = false, rejectNewModal = false, rejectUpdate = false, amRules = [];
+let rejectV2Reply = false, rejectV2Post = false, rejectV2Edit = false;     // Discord не принимает новые сообщения: ответ на команду, пост в канал, правку «думаю…»
 const chatLog = new Map();           // канал -> сообщения, которые есть в Discord (их отдаёт GET), даже если подключение их не принесло
 let threadsActive = [];              // открытые ветки сервера
 let appUrl = 'https://aibrofist.online/discord/interactions';   // как было у настоящего бота: команды шли через сайт
@@ -107,14 +115,13 @@ const server = http.createServer((req, res) => {
     const send = (status, obj) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(obj === undefined ? '' : JSON.stringify(obj)); };
     let m;
     if (p === '/cdn/pic.png') { res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(Buffer.from('PNGDATA')); }
-    // аватарки Discord: стандартная (/embed/avatars/N.png) и своя (/avatars/id/хеш.png)
-    if (/^\/(embed\/avatars\/\d\.png|avatars\/\w+\/\w+\.png)/.test(p)) { res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(AVATAR_PNG); }
     if (p === '/ratelimit') {
       if (!rateLimitedOnce) { rateLimitedOnce = true; return send(429, { retry_after: 0.08, global: false }); }
       return send(200, { fine: true });
     }
     if (req.method === 'POST' && (m = /^\/channels\/(\w+)\/messages$/.exec(p))) {
       if (denied.has(m[1])) return send(403, { code: 50013, message: 'Missing Permissions' });
+      if (rejectV2Post && json && (json.flags & 32768)) return send(400, { code: 50035, message: 'Invalid Form Body' });
       const id = String(++msgId); known.add(id);
       calls[calls.length - 1].resId = id;
       return send(200, { id, channel_id: m[1] });
@@ -163,9 +170,13 @@ const server = http.createServer((req, res) => {
       const comps = json && json.type === 9 && json.data && json.data.components;
       if (rejectNewModal && comps && comps[0] && comps[0].type === 18) return send(400, { code: 50035, message: 'Invalid Form Body' });
       if (rejectUpdate && (json || pj) && (json || pj).type === 7) return send(400, { code: 50035, message: 'Invalid Form Body' });
+      if (rejectV2Reply && json && json.type === 4 && json.data && (json.data.flags & 32768)) return send(400, { code: 50035, message: 'Invalid Form Body' });
       return send(204);
     }
-    if (/^\/webhooks\//.test(p)) return send(200, {});
+    if (/^\/webhooks\//.test(p)) {
+      if (rejectV2Edit && req.method === 'PATCH' && json && (json.flags & 32768)) return send(400, { code: 50035, message: 'Invalid Form Body' });
+      return send(200, {});
+    }
     if (p === '/users/@me/guilds') return send(200, [{ id: G }]);
     send(404, { message: 'unknown route ' + p });
   });
@@ -228,9 +239,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     UPDATES_FEED_STATE: path.join(tmp, 'feed.json'), DISCORD_SCAN_IMAGES: '0', DISCORD_TEST_CDN: '127.0.0.1:' + port,
     DISCORD_CMD_PREFIX: 'qa', UPDATES_FILE: path.join(tmp, 'updates.json'), DISCORD_RULES_CHANNEL_ID: CH.rules,
     NEWS_DIR: path.join(tmp, 'news'), SERVERS_DATA_DIR: path.join(tmp, 'srv'),
-    DISCORD_THREADS_POLL_MS: '1000',     // ветки второй канал ищет раз в секунду, а не раз в 10
-    DISCORD_SHOTS: 'off',                // настоящего браузера здесь нет: снимок подменяем ниже
-    DISCORD_CARD_ALT: '1'                // описание картинок (alt) включено: по нему проверяем, что нарисовано (в жизни его нет)
+    DISCORD_THREADS_POLL_MS: '1000'      // ветки второй канал ищет раз в секунду, а не раз в 10
   });
   fs.mkdirSync(path.join(tmp, 'news'));
   fs.writeFileSync(path.join(tmp, 'news', 'shot.png'), 'PNG');
@@ -267,21 +276,21 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(calls, 'POST', /^\/channels\/301\/messages$/).length >= 1);
   await sleep(200);
   const rauto = find(calls, 'POST', /^\/channels\/301\/messages$/);
-  const rpost = rauto[0], rmp = multipartOf(rpost) || {}, rb = rmp.body || {};
-  const rimg = (rb.components || []).find(x => x.type === 12), rbtns = flagsOf(rb), ralt = altOf(rpost);
-  ok('правила сам выложил в #rules — один пост картинкой в стиле сайта, никого не пингуя; 7 правил, без политики, ников и расы', rauto.length === 1 && rmp.png &&
-     rb.flags === 32768 && rimg && rimg.items[0].media.url === 'attachment://aibrofist-rules-en.png' && rmp.files[0] === 'aibrofist-rules-en.png image/png' &&
-     /^AIBROFIST Server Rules\. 1\. No spam/.test(ralt) && /7\. No other people's IP addresses/.test(ralt) &&
-     !/8\.|politic|nickname|\brace\b|strike/i.test(ralt) && rb.allowed_mentions.parse.length === 0, ralt.slice(0, 80));
-  ok('предупреждения копятся — это тоже в правилах: 3-е за 30 дней даёт мьют на час', /Warnings add up: The 3rd warning within 30 days gives a 1-hour mute/.test(ralt));
-  ok('под правилами флаги English и Русский (картинка меняется в этом же посте), выбранный не нажимается, русского отдельного поста нет', rbtns.length === 2 &&
-     rbtns[0].custom_id === 'rules-lang' && rbtns[0].disabled && rbtns[0].emoji.name === '🇬🇧' && rbtns[0].style === 1 && rbtns[1].custom_id === 'rules:ru:dark' &&
-     rbtns[1].label === 'Русский' && rbtns[1].emoji.name === '🇷🇺' && rbtns[1].style === 2 && !/Без спама/.test(JSON.stringify(rb)));
-  const rth = rowsOf(rb)[1] && rowsOf(rb)[1].components;
-  ok('и второй ряд — тёмная и светлая тема (тёмная выбрана)', rth && rth.map(b => b.label + ':' + b.custom_id + ':' + !!b.disabled).join() === 'Dark theme:rules-theme:true,Light theme:rules:en:light:false');
+  const rpost = rauto[0], rb = bodyOf(rpost) || {}, rbtns = flagsOf(rb), rtxt = plainOf(rpost);
+  ok('правила сам выложил в #rules — один пост настоящим сообщением Discord (рамка и текст, не картинка), никого не пингуя; 7 правил, без политики, ников и расы',
+     rauto.length === 1 && !multipartOf(rpost) && rb.flags === 32768 && rb.components.length === 1 && rb.components[0].type === 17 && rb.components[0].accent_color > 0 &&
+     !rb.attachments && !rb.embeds && !rb.content && /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /.test(rtxt) && /7 No other people's IP addresses/.test(rtxt) &&
+     !/8 |politic|nickname|\brace\b|strike/i.test(rtxt) && rb.allowed_mentions.parse.length === 0, rtxt.slice(0, 80));
+  ok('у каждого правила своё наказание и короткая строка; никаких картинок, логотипа и описаний (alt)', /2 No invites to other Discord servers WARNING /.test(rtxt) &&
+     /5 No scams or dangerous links BAN 7 DAYS /.test(rtxt) && !/"type":12|"type":13|"description"|attachment:/.test(JSON.stringify(rb)));
+  ok('предупреждения копятся — это тоже в правилах: 3-е за 30 дней даёт мьют на час', /Warnings add up: the 3rd within 30 days gives a 1-hour mute/.test(rtxt));
+  ok('под правилами флаги English и Русский (текст меняется в этом же посте), кнопки серые, выбранный не нажимается, русского отдельного поста нет', rbtns.length === 2 &&
+     rbtns[0].custom_id === 'rules-lang' && rbtns[0].disabled && rbtns[0].emoji.name === '🇬🇧' && rbtns[0].style === 2 && rbtns[1].custom_id === 'rules:ru' &&
+     rbtns[1].label === 'Русский' && rbtns[1].emoji.name === '🇷🇺' && rbtns[1].style === 2 && !rbtns[1].disabled && !/Без спама/.test(JSON.stringify(rb)));
+  ok('кнопок темы больше нет — один ряд', rowsOf(rb).length === 1 && !/Dark theme|Light theme/.test(JSON.stringify(rb)));
   ok('пост запомнен (с временем выкладки, картинкой), разовая замена правил отмечена', bot._test.state().guilds[G].rules.message === rpost.resId &&
      bot._test.state().guilds[G].rules.ruMessage === undefined && bot._test.state().guilds[G].rules.at > 0 && bot._test.state().guilds[G].rules.pic === true &&
-     bot._test.state().fixes.rules7 === true);
+     bot._test.state().fixes.rules7 === true && bot._test.state().fixes.rulesCard === 4);
   const am = find(calls, 'POST', /auto-moderation\/rules$/).map(c => c.body.trigger_type).sort().join(',');
   ok('включает встроенную AutoMod только со списком слов вражды и 18+ (спама и упоминаний в правилах больше нет)', am === '4', am);
 
@@ -315,11 +324,11 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('правило 4 — мьют на час', until1 > 59 * 60000 && until1 <= 60 * 60000, Math.round(until1 / 1000) + ' с');
   ok('в журнале аудита есть причина', mute1 && /Case 1/.test(decodeURIComponent(mute1.reason || '')));
   const dmMsg = find(c, 'POST', /^\/channels\/dmU1\/messages$/)[0];
-  const dmAlt = altOf(dmMsg), dmp = multipartOf(dmMsg);
-  ok('игроку в личку — картинкой: правило, наказание, без баллов, как оспорить', dmp && dmp.png && dmp.files[0] === 'aibrofist-mute.png image/png' &&
-     /^Muted: playerU1\. Rule: 4\. No hate speech\./.test(dmAlt) && /Duration: 1 hour/.test(dmAlt) && !/strike/i.test(dmAlt) && /Message the owner/.test(dmAlt), dmAlt);
-  ok('и без эмодзи (флаги — только на кнопках языка)', dmMsg && !/\p{Extended_Pictographic}/u.test(J(dmMsg)) &&
-     flagsOf(bodyOf(dmMsg)).map(b => b.label).join() === 'English,Русский');
+  const dmText = plainOf(dmMsg), dmBody = bodyOf(dmMsg);
+  ok('игроку в личку — сообщением: правило, наказание, без баллов, как оспорить', dmBody && dmBody.flags === 32768 && !multipartOf(dmMsg) &&
+     /^Muted · 1 hour playerU1 Rule: 4\. No hate speech /.test(dmText) && /Until: /.test(dmText) && !/strike/i.test(dmText) && /Message the owner/.test(dmText), dmText);
+  ok('без эмодзи (флаги — только на кнопках языка), кнопки серые: English и Русский', dmMsg && !/\p{Extended_Pictographic}/u.test(JSON.stringify(textsOf(dmBody))) &&
+     flagsOf(dmBody).map(b => b.label + ':' + b.style).join() === 'English:2,Русский:2' && buttonsOf(dmBody).every(b => b.style === 2 || b.style === 5));
   const note = find(c, 'POST', /^\/channels\/300\/messages$/)[0];
   ok('короткое предупреждение в канале — с именем, но без упоминания и без пинга', note && /^\*\*playerU1\*\*, your message was removed: rule 4/.test(note.body.content) &&
      /Mute for 1 hour\.$/.test(note.body.content) && !/<@/.test(note.body.content) && note.body.allowed_mentions.parse.length === 0 &&
@@ -417,7 +426,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(since(t), 'POST', /^\/channels\/dmU4\/messages$/).length);
   ok('приглашение на чужой сервер — правило 2: удалено, предупреждение, без мьюта', find(since(t), 'DELETE', new RegExp(inv.id + '$')).length === 1 &&
      find(since(t), 'PATCH', /members\/U4$/).length === 0 && /2\. No invites to other Discord servers/.test(J(find(since(t), 'POST', /^\/channels\/dmU4\/messages$/)[0])) &&
-     /^Warning: playerU4\..*Warnings: 1 of 3\./.test(altOf(find(since(t), 'POST', /^\/channels\/dmU4\/messages$/)[0])));
+     /^Warning · 1 of 3 playerU4 Rule: 2\. /.test(plainOf(find(since(t), 'POST', /^\/channels\/dmU4\/messages$/)[0])));
   await waitFor(() => find(since(t), 'POST', /^\/channels\/300\/messages$/).length);
   const invNote = find(since(t), 'POST', /^\/channels\/300\/messages$/)[0];
   ok('в канале коротко: правило и какое это предупреждение по счёту', invNote && /no invites to other discord servers\. Warning 1 of 3\.$/.test(invNote.body.content), invNote && invNote.body.content);
@@ -599,7 +608,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('мошенничество (правило 5) — бан на 7 дней, бот запомнил, когда снять', rs.step.type === 'ban' && rs.step.ms === 7 * 86400000 &&
      bot._test.state().unbans[G + ':U8'] > Date.now() + 6 * 86400000);
   c = since(t);
-  const dmBan = c.findIndex(x => x.method === 'POST' && x.path === '/channels/dmU8/messages' && /^Banned: .*Duration: 7 days/.test(altOf(x)));
+  const dmBan = c.findIndex(x => x.method === 'POST' && x.path === '/channels/dmU8/messages' && /^Banned · 7 days /.test(plainOf(x)));
   const banCall = c.findIndex(x => x.method === 'PUT' && /bans\/U8$/.test(x.path));
   ok('сначала личное сообщение, потом бан (иначе не дойдёт)', dmBan !== -1 && banCall > dmBan);
   const steps = [];
@@ -627,9 +636,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const wmute = find(c, 'PATCH', /members\/WX1$/)[0], wleft = wmute && Date.parse(wmute.body.communication_disabled_until) - Date.now();
   ok('третье — мьют на час, счёт начинается заново', w3r.warned.n === 3 && w3r.esc && wleft > 59 * 60000 && wleft <= 60 * 60000 &&
      bot._test.state().warns[G + ':WX1'].every(w => w.used), Math.round(wleft / 1000) + ' с');
-  ok('в личку и в журнал — что это 3-е предупреждение и мьют', /Warning 3 of 3: muted for 1 hour/.test(altOf(find(c, 'POST', /^\/channels\/dmWX1\/messages$/)[0])) &&
+  ok('в личку и в журнал — что это 3-е предупреждение и мьют', /Warning 3 of 3: muted for 1 hour/.test(plainOf(find(c, 'POST', /^\/channels\/dmWX1\/messages$/)[0])) &&
      /Warning 3 of 3: mute for 1 hour/.test(JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/).map(x => x.body))),
-     altOf(find(c, 'POST', /^\/channels\/dmWX1\/messages$/)[0]) + ' / ' + JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/).map(x => x.body && x.body.embeds[0].title)));
+     plainOf(find(c, 'POST', /^\/channels\/dmWX1\/messages$/)[0]) + ' / ' + JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/).map(x => x.body && x.body.embeds[0].title)));
   const w4r = await bot._test.punish(g, { id: 'WX1', username: 'wx' }, A.finding('invite'), { silent: true });
   ok('после мьюта — снова 1 из 3', w4r.warned.n === 1 && !w4r.esc);
   bot._test.state().warns[G + ':WX2'] = [{ at: Date.now() - 31 * 86400000, rule: 2, reason: 'old' }, { at: Date.now() - 40 * 86400000, rule: 2, reason: 'older' }];
@@ -638,15 +647,16 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   for (let i = 0; i < 3; i++) await bot._test.punish(g, { id: OWNER, username: 'qwied' }, A.finding('invite'), { silent: true });
   ok('у владельца тоже считаются, но мьют Discord не даёт — не применяется', find(since(t), 'PATCH', new RegExp('members/' + OWNER + '$')).length === 0 &&
-     /Not applied: the server owner cannot be muted or banned/.test(altOf(find(since(t), 'POST', /^\/channels\/dm900\/messages$/).slice(-1)[0])));
+     /Not applied: the server owner cannot be muted or banned/.test(plainOf(find(since(t), 'POST', /^\/channels\/dm900\/messages$/).slice(-1)[0])));
 
   console.log('\nсекретные команды владельца:');
   const cb = (list, id) => find(list, 'POST', new RegExp('^/interactions/' + id + '/[^/]+/callback$'));
   let iid = 0;
-  const press = (uid, customId) => { const id = 'b' + (++iid);
+  // legacy — нажатие на сообщение прежней версии бота (картинка с кнопками, не из новых компонентов Discord)
+  const press = (uid, customId, legacy) => { const id = 'b' + (++iid);
     dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type: 3, guild_id: G, channel_id: CH.general,
       member: { user: { id: uid }, permissions: uid === OWNER ? String(1n << 3n) : '1024' },
-      message: { id: 'panelmsg' }, data: { custom_id: customId, component_type: 2 } });
+      message: { id: 'panelmsg', flags: legacy ? 0 : 32768 }, data: { custom_id: customId, component_type: 2 } });
     return id; };
   const submit = (customId, components, resolved) => { const id = 'm' + (++iid);
     dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type: 5, guild_id: G, channel_id: CH.general,
@@ -671,11 +681,14 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     { type: 18, component: { type: 4, custom_id: 'reason', value: reason } }],
     { users: user ? { [user.id]: user } : {}, members: user ? { [user.id]: { roles: user.roles || [], communication_disabled_until: user.until } } : {} });
   const cardOf = (list, id) => { const x = find(list, 'PATCH', new RegExp('tk' + id + '/messages/@original$'))[0]; return x ? J(x) : ''; };
-  // ответ картинкой на нажатие: сразу (callback) или после «думаю…» (правка @original)
-  const picAnswer = (list, id) => { const x = cb(list, id).find(y => multipartOf(y)) || find(list, 'PATCH', new RegExp('tk' + id + '/messages/@original$')).find(y => multipartOf(y));
-    return x ? Object.assign(multipartOf(x), { call: x, alt: altOf(x) }) : null; };
-  // карточка, выложенная ботом в канал (по началу подписи)
-  const cardIn = (list, re, ch) => find(list, 'POST', new RegExp('^/channels/' + (ch || CH.general) + '/messages$')).find(x => multipartOf(x) && re.test(altOf(x)));
+  // ответ сообщением на нажатие: сразу (callback), правкой «думаю…» (@original) или новым сообщением (followup)
+  const picAnswer = (list, id) => {
+    const isV2 = y => y.body && ((y.body.data || y.body).flags & 32768);
+    const x = cb(list, id).find(isV2) || find(list, 'PATCH', new RegExp('tk' + id + '/messages/@original$')).find(isV2) ||
+              find(list, 'POST', new RegExp('^/webhooks/700/tk' + id + '$')).find(isV2);
+    return x ? { call: x, body: x.body, data: x.body.data || x.body, alt: plainOf(x) } : null; };
+  // карточка, выложенная ботом в канал (по началу текста)
+  const cardIn = (list, re, ch) => find(list, 'POST', new RegExp('^/channels/' + (ch || CH.general) + '/messages$')).find(x => x.body && (x.body.flags & 32768) && re.test(plainOf(x)));
 
   t = Date.now();
   const cmd = say(OWNER, '!qanews');
@@ -738,10 +751,10 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const btn = (partsOf(payload, 1)[0] || { components: [] }).components[0];
   ok('кнопка-ссылка внизу карточки', btn && btn.style === 5 && btn.url === 'https://aibrofist.online/race' && btn.label === 'aibrofist.online' &&
      parts(payload).slice(-1)[0].type === 1);
-  const replyCall = find(c, 'PATCH', new RegExp('tk' + sid + '/messages/@original$'))[0], reply = altOf(replyCall);
+  const replyCall = find(c, 'PATCH', new RegExp('tk' + sid + '/messages/@original$'))[0], reply = plainOf(replyCall);
   const postBtn = rowsOf(bodyOf(replyCall))[0].components[0];
-  ok('владельцу — карточка «опубликовано» с кнопкой-ссылкой на пост', multipartOf(replyCall).png && /^Posted in #news/.test(reply) &&
-     /^https:\/\/discord\.com\/channels\/100\/306\/\d+$/.test(postBtn.url) && postBtn.label === 'Open the post', reply);
+  ok('владельцу — карточка «опубликовано» с кнопкой-ссылкой на пост (сообщение Discord, а не картинка)', !multipartOf(replyCall) && bodyOf(replyCall).flags === 32768 && /^Post Posted in #news/.test(reply) &&
+     /^https:\/\/discord\.com\/channels\/100\/306\/\d+$/.test(postBtn.url) && postBtn.label === 'Open the post' && postBtn.style === 5, reply);
   ok('картинку, которую не скачать, показывает по ссылке и говорит об этом владельцу', gallery[3] === 'http://127.0.0.1:' + port + '/cdn/missing.png' &&
      /four\.png: could not copy it/.test(reply), reply);
 
@@ -812,16 +825,16 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(since(t), 'POST', /^\/channels\/dmU2\/messages$/).length);
   await sleep(250);
   c = since(t);
-  const warnDm = altOf(find(c, 'POST', /^\/channels\/dmU2\/messages$/)[0]);
-  const warnCard = cardIn(c, /^Warning: playerU2\./), wcAlt = altOf(warnCard), wcBody = bodyOf(warnCard);
-  ok('форма отправлена — игроку в личку картинкой: правило, причина, кто выдал, какое по счёту; мьюта нет', /6\. No selling accounts or coins for real money/.test(warnDm) &&
-     /продавал монеты в чате за деньги/.test(warnDm) && /Issued by/.test(warnDm) && /Warnings: 1 of 3/.test(warnDm) && !/strike/i.test(warnDm) &&
+  const warnDm = plainOf(find(c, 'POST', /^\/channels\/dmU2\/messages$/)[0]);
+  const warnCard = cardIn(c, /^Warning · 1 of 3 playerU2 /), wcAlt = warnCard ? plainOf(warnCard) : '', wcBody = bodyOf(warnCard);
+  ok('форма отправлена — игроку в личку: правило, причина, кто выдал, какое по счёту; мьюта нет', /Rule: 6\. No selling accounts or coins for real money/.test(warnDm) &&
+     /продавал монеты в чате за деньги/.test(warnDm) && /Issued by/.test(warnDm) && /Count: ●○○/.test(warnDm) && !/strike/i.test(warnDm) &&
      find(c, 'PATCH', /members\/U2$/).length === 0, warnDm);
-  ok('в канале — карточка-картинка: кого, правило, причина, 1 из 3; без упоминаний', warnCard && multipartOf(warnCard).png &&
-     wcAlt === 'Warning: playerU2. Rule: 6. No selling accounts or coins for real money. Reason: продавал монеты в чате за деньги. ' +
-               'Warnings: 1 of 3. The 3rd warning within 30 days gives a 1-hour mute. Issued by 900. Case ' + bot._test.state().warns[G + ':U2'][0].caseNo + '.' &&
-     wcBody.allowed_mentions.parse.length === 0 && !/<@/.test(JSON.stringify(wcBody)), wcAlt);
-  ok('под карточкой — флаги English и Русский', flagsOf(wcBody).map(b => b.emoji.name + b.label + ':' + b.style).join() === '🇬🇧English:1,🇷🇺Русский:2');
+  ok('в канале — карточка-сообщение: кого, правило, причина, 1 из 3; без упоминаний, без картинок', warnCard && !multipartOf(warnCard) && wcBody.flags === 32768 &&
+     new RegExp('^Warning · 1 of 3 playerU2 Rule: 6\\. No selling accounts or coins for real money Reason: продавал монеты в чате за деньги Count: ●○○ ' +
+                'The 3rd warning within 30 days gives a 1-hour mute\\. Issued by 900 · Case ' + bot._test.state().warns[G + ':U2'][0].caseNo + ' · ').test(wcAlt) &&
+     wcBody.allowed_mentions.parse.length === 0 && !/<@/.test(JSON.stringify(wcBody)) && !/"description"|"type":12/.test(JSON.stringify(wcBody)), wcAlt);
+  ok('под карточкой — флаги English и Русский, обе серые, выбранный не нажимается', flagsOf(wcBody).map(b => b.emoji.name + b.label + ':' + b.style + ':' + !!b.disabled).join() === '🇬🇧English:2:true,🇷🇺Русский:2:false');
   ok('карточка в канале и есть ответ: «думаю…», видное только владельцу, убрано; старого текстового предупреждения нет',
      find(c, 'DELETE', new RegExp('^/webhooks/700/tk' + wsid + '/messages/@original$')).length === 1 &&
      !find(c, 'POST', /^\/channels\/300\/messages$/).some(x => /received a warning/.test((x.body && x.body.content) || '')));
@@ -833,9 +846,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const wsid2 = warnSend({ id: 'U3', username: 'playerU3', until: new Date(Date.now() + 7 * 86400000).toISOString() }, 0, 'грубил в чате');
   await waitFor(() => find(since(t), 'POST', /^\/channels\/dmU3\/messages$/).length);
   await sleep(250);
-  await waitFor(() => cardIn(since(t), /^Warning: playerU3\./));
-  const noteOther = altOf(cardIn(since(t), /^Warning: playerU3\./));
-  ok('«0. Other» — предупреждение без номера правила, только причина; уже действующий мьют не трогает', /^Warning: playerU3\. Rule: Other\. Reason: грубил в чате\./.test(noteOther) &&
+  await waitFor(() => cardIn(since(t), /^Warning · \d of 3 playerU3 /));
+  const noteOther = plainOf(cardIn(since(t), /^Warning · \d of 3 playerU3 /));
+  ok('«0. Other» — предупреждение без номера правила, только причина; уже действующий мьют не трогает', /^Warning · \d of 3 playerU3 Rule: Other Reason: грубил в чате /.test(noteOther) &&
      find(since(t), 'PATCH', /members\/U3$/).length === 0, noteOther);
   t = Date.now();
   const wsid3 = warnSend(null, null, '');
@@ -866,8 +879,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     { type: 1, components: [{ type: 4, custom_id: 'user', value: 'quitter' }] },
     { type: 1, components: [{ type: 4, custom_id: 'rule', value: '3' }] },
     { type: 1, components: [{ type: 4, custom_id: 'reason', value: 'картинка 18+ в чате' }] }]);
-  await waitFor(() => cardIn(since(t), /^Warning: quitter\./));
-  ok('простая форма: игрок по имени из списка сервера, правило цифрой, причина текстом', /Rule: 3\. No adult content\. Reason: картинка 18\+ в чате/.test(altOf(cardIn(since(t), /^Warning: quitter\./))) &&
+  await waitFor(() => cardIn(since(t), /^Warning · \d of 3 quitter /));
+  ok('простая форма: игрок по имени из списка сервера, правило цифрой, причина текстом', /Rule: 3\. No adult content Reason: картинка 18\+ в чате/.test(plainOf(cardIn(since(t), /^Warning · \d of 3 quitter /))) &&
      find(since(t), 'POST', /^\/channels\/dm70005\/messages$/).length === 1);
   t = Date.now();
   say(OWNER, '!qamute <@U5> 1h flooding', { mentions: [{ id: 'U5', member: { roles: [] } }] });
@@ -875,10 +888,10 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const m5 = find(since(t), 'PATCH', /members\/U5$/)[0];
   const u5 = Date.parse(m5.body.communication_disabled_until) - Date.now();
   ok('«!mute @игрок 1h» — мьют на час', u5 > 59 * 60000 && u5 <= 60 * 60000);
-  await waitFor(() => cardIn(since(t), /^Muted: U5\./));
-  const conf = cardIn(since(t), /^Muted: U5\./);
-  ok('итог в канале — карточка: кого, на сколько, за что, кто; без пинга', conf && /Reason: flooding\. Duration: 1 hour\. Issued by player900\./.test(altOf(conf)) &&
-     bodyOf(conf).allowed_mentions.parse.length === 0, altOf(conf));
+  await waitFor(() => cardIn(since(t), /^Muted · 1 hour U5 /));
+  const conf = cardIn(since(t), /^Muted · 1 hour U5 /);
+  ok('итог в канале — карточка: кого, на сколько, за что, кто; без пинга', conf && /^Muted · 1 hour U5 Reason: flooding Until: .* Issued by player900 · Case \d+ · /.test(plainOf(conf)) &&
+     bodyOf(conf).allowed_mentions.parse.length === 0, conf && plainOf(conf));
   t = Date.now();
   say(OWNER, '!qamute <@' + OWNER + '> 1h');
   await sleep(300);
@@ -897,96 +910,66 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => cb(since(t), bid).length);
   await waitFor(() => picAnswer(since(t), bid), 5000);
   const hp = picAnswer(since(t), bid);
-  ok('«!qa help» — карточка со списком команд (с секретным началом) только владельцу, без страйков', hp && hp.png && /!qanews - /.test(hp.alt) &&
-     /!qawarns \[name\]/.test(hp.alt) && /!qaunwarn name - Remove all warnings/.test(hp.alt) &&
-     (hp.body.data ? hp.body.data.flags : hp.body.flags) === 64 && !/strike|pardon/i.test(hp.alt), hp && hp.alt.slice(0, 120));
+  ok('«!qa help» — сообщение со списком команд (с секретным началом) только владельцу, без страйков', hp && /!qanews Write a post/.test(hp.alt) &&
+     /!qawarns \[name\] Warnings of a member or of all/.test(hp.alt) && /!qaunwarn name Remove warnings/.test(hp.alt) &&
+     hp.data.flags === (32768 | 64) && hp.body.type === 4 && !/strike|pardon/i.test(hp.alt), hp && hp.alt.slice(0, 120));
   t = Date.now();
   bid = press(OWNER, panel.id);
   await waitFor(() => cb(since(t), bid).length);
   ok('нажатая панель больше не работает', /expired/.test(JSON.stringify(cb(since(t), bid)[0].body)));
-  console.log('\n/servers и /account — снимком сайта:');
-  const cards = require('./discordCards.js');
-  const shots = require('./discordShots.js');
-  const { PNG } = require('pngjs');
-  const fakePng = (() => { const im = new PNG({ width: 4, height: 4 }); return PNG.sync.write(im); })();
-  const realShoot = shots.shoot, shotLog = [];
-  // «снимок» сайта: настоящий браузер проверяет test-shots.js, здесь — что и когда бот просит снять
-  const shotLang = [];
-  const fakeShoot = (where, theme, o) => { o = o || {}; shotLog.push([where, theme, [].concat(o.tab || []).join('+'), o.crop || ''].join(' ')); shotLang.push(o.lang); return Promise.resolve(fakePng); };
-  shots.shoot = fakeShoot;
-  const ix = (id, type, data, uid) => dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type, guild_id: G, channel_id: CH.general,
-    member: { user: { id: uid || 'U0' }, permissions: '1024' }, message: type === 3 ? { id: '1' } : undefined, data });
-  const labels = b => b && b.data.components.map(r => r.components.map(c => c.label + (c.disabled ? '(off)' : '') + (c.custom_id ? '=' + c.custom_id : '')).join(' | '));
+  console.log('\n/servers и /account — сообщения Discord:');
+  const cards = require('./discordData.js');
+  // legacy — нажатие на сообщение прежней версии бота (картинка с кнопками): оно в новое не превращается
+  const ix = (id, type, data, uid, legacy) => dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type, guild_id: G, channel_id: CH.general,
+    member: { user: { id: uid || 'U0' }, permissions: '1024' }, message: type === 3 ? { id: '1', flags: legacy ? 0 : 32768 } : undefined, data });
+  const labels = b => rowsOf(b).map(r => r.components.map(c => c.label + (c.disabled ? '(off)' : '') + (c.custom_id ? '=' + c.custom_id : '')).join(' | '));
+  const allGrey = b => buttonsOf(b).every(x => x.style === 2 || x.style === 5);
   t = Date.now();
   ix('sv1', 2, { name: 'servers', type: 1 });
   await waitFor(() => cb(since(t), 'sv1').length, 5000);
-  const sv = multipartOf(cb(since(t), 'sv1')[0]);
-  ok('/servers может любой: ответ виден всем и сразу снимком страницы Servers (только её блок, без меню сайта)', sv && sv.body.type === 4 &&
-     !(sv.body.data.flags & 64) && sv.png && sv.files[0] === 'aibrofist-servers.png image/png' && shotLog[0] === '/servers dark  #svShot', shotLog.join());
-  ok('и быстро: ' + (cb(since(t), 'sv1')[0] ? cb(since(t), 'sv1')[0].t - t : '?') + ' мс', cb(since(t), 'sv1')[0] && cb(since(t), 'sv1')[0].t - t < 1500);
-  const svl = labels(sv && sv.body);
-  ok('кнопки: светлая тема, «Refresh», ссылка «Play now» (страница одна — листать нечего), внизу флаги языка', svl && svl.length === 2 &&
-     svl[0] === 'Light theme=sv:light:0:en | Refresh=sv:dark:0:en | Play now' && svl[1] === 'English(off)=sv-lang | Русский=sv:dark:0:ru' &&
-     shotLang[0] === 'en' &&
-     /^https:\/\/aibrofist\.online/.test(sv.body.data.components[0].components[2].url), svl && svl.join(' || '));
+  const sv = cb(since(t), 'sv1')[0], svp = plainOf(sv), svl = labels(sv && sv.body), svBtns = buttonsOf(sv && sv.body);
+  ok('/servers может любой: ответ виден всем и сразу — сообщение Discord с комнатами обоих режимов, а не картинка', sv && sv.body.type === 4 &&
+     sv.body.data.flags === 32768 && !multipartOf(sv) && !sv.body.data.attachments && /^Servers · 0 online Race · 0 players · 0 rooms /.test(svp) &&
+     /Hide and Seek · 0 players · 0 rooms/.test(svp) && !/"type":12|"type":13|"description"/.test(JSON.stringify(sv.body)), svp);
+  ok('и быстро: ' + (sv ? sv.t - t : '?') + ' мс', sv && sv.t - t < 1500);
+  ok('кнопки в один ряд: «Refresh», ссылка «Play now», флаги языка; все серые (чёрных и синих в Discord нет), выбранный язык не нажимается', svl.length === 1 &&
+     svl[0] === 'Refresh=sv:r:en | Play now | English(off)=sv-lang | Русский=sv:r:ru' && allGrey(sv.body) && svBtns[1].style === 5 &&
+     /^https:\/\/aibrofist\.online/.test(svBtns[1].url) && sv.body.data.components[0].type === 17, svl.join(' || '));
   ok('в ответе /servers никого не пингует', sv && sv.body.data.allowed_mentions.parse.length === 0);
   t = Date.now();
-  ix('sv2', 3, { custom_id: 'sv:light:0', component_type: 2 }, 'U5');
+  ix('sv2', 3, { custom_id: 'sv:r:en', component_type: 2 }, 'U5');
   await waitFor(() => cb(since(t), 'sv2').length, 5000);
-  const sv2 = multipartOf(cb(since(t), 'sv2')[0]);
-  ok('кнопка темы — та же страница в светлой теме, в том же сообщении', sv2 && sv2.body.type === 7 && sv2.png &&
-     sv2.body.data.attachments.length === 1 && shotLog.slice(-1)[0] === '/servers light  #svShot' &&
-     labels(sv2.body)[0] === 'Dark theme=sv:dark:0:en | Refresh=sv:light:0:en | Play now', sv2 && labels(sv2.body)[0]);
+  const sv2 = cb(since(t), 'sv2')[0];
+  ok('«Refresh» — то же сообщение с новыми данными, прямо в нём (правка, не новое)', sv2 && sv2.body.type === 7 && sv2.body.data.flags === 32768 && /^Servers · 0 online /.test(plainOf(sv2)) &&
+     labels(sv2.body)[0] === svl[0]);
   t = Date.now();
-  ix('sv3', 3, { custom_id: 'sv:dark:0', component_type: 2 }, 'U5');
+  ix('sv3', 3, { custom_id: 'sv:r:en', component_type: 2 }, 'U5');
   await waitFor(() => cb(since(t), 'sv3').length);
-  ok('чаще раза в секунду от одного человека — не перерисовывает', cb(since(t), 'sv3')[0] && cb(since(t), 'sv3')[0].body.type === 6);
+  ok('чаще раза в секунду от одного человека — не обновляет', cb(since(t), 'sv3')[0] && cb(since(t), 'sv3')[0].body.type === 6);
   t = Date.now();
-  ix('sv3b', 3, { custom_id: 'sv:dark:0', component_type: 2 }, 'U9');
-  await waitFor(() => cb(since(t), 'sv3b').length, 5000);
-  ok('«Refresh» — новый снимок той же страницы', multipartOf(cb(since(t), 'sv3b')[0]) && shotLog.slice(-1)[0] === '/servers dark  #svShot');
-  t = Date.now();
-  ix('sv3c', 3, { custom_id: 'sv:light', component_type: 2 }, 'U10');
+  ix('sv3c', 3, { custom_id: 'sv:light', component_type: 2 }, 'U10', true);
   await waitFor(() => cb(since(t), 'sv3c').length, 5000);
-  ok('кнопки сообщений, отправленных раньше (старые номера страниц), тоже работают', multipartOf(cb(since(t), 'sv3c')[0]) &&
-     shotLog.slice(-1)[0] === '/servers light  #svShot');
+  const sv3c = cb(since(t), 'sv3c')[0];
+  ok('кнопки сообщений прежней версии (картинка, тема, страница) тоже работают: свежие данные новым сообщением, видным только нажавшему', sv3c && sv3c.body.type === 4 &&
+     sv3c.body.data.flags === (32768 | 64) && /^Servers · 0 online /.test(plainOf(sv3c)));
   t = Date.now();
-  ix('sv3d', 3, { custom_id: 'sv:dark:1', component_type: 2 }, 'U13');
+  ix('sv3d', 3, { custom_id: 'sv:dark:1:ru', component_type: 2 }, 'U13', true);
   await waitFor(() => cb(since(t), 'sv3d').length, 5000);
-  ok('…в том числе со страницей, которой больше нет', multipartOf(cb(since(t), 'sv3d')[0]) && shotLog.slice(-1)[0] === '/servers dark  #svShot');
+  ok('…в том числе со страницей, которой больше нет, и на русском', /^Серверы · онлайн: 0 /.test(plainOf(cb(since(t), 'sv3d')[0])));
   t = Date.now();
-  ix('sv3e', 3, { custom_id: 'sv:dark:0:ru', component_type: 2 }, 'U16');
+  ix('sv3e', 3, { custom_id: 'sv:r:ru', component_type: 2 }, 'U16');
   await waitFor(() => cb(since(t), 'sv3e').length, 5000);
-  const sv3e = multipartOf(cb(since(t), 'sv3e')[0]);
-  ok('флаг «Русский» — тот же снимок, но сайт по-русски, и кнопки тоже', sv3e && sv3e.body.type === 7 && shotLang.slice(-1)[0] === 'ru' &&
-     labels(sv3e.body)[0] === 'Светлая тема=sv:light:0:ru | Обновить=sv:dark:0:ru | Играть' &&
-     labels(sv3e.body)[1] === 'English=sv:dark:0:en | Русский(off)=sv-lang' && sv3e.body.data.components[1].components[1].style === 1, sv3e && labels(sv3e.body).join(' || '));
-
-  shots.shoot = (where) => { shotLog.push(where); return sleep(1700).then(() => fakePng); };
-  t = Date.now();
-  ix('sv4', 2, { name: 'servers', type: 1 }, 'U6');
-  await waitFor(() => find(since(t), 'PATCH', /^\/webhooks\/700\/tksv4\/messages\/@original$/).length, 8000);
-  const slow = cb(since(t), 'sv4')[0], slowEdit = multipartOf(find(since(t), 'PATCH', /^\/webhooks\/700\/tksv4\/messages\/@original$/)[0]);
-  ok('снимок дольше обычного — сначала «думаю…», потом снимок на его месте', slow && slow.body.type === 5 && slow.t - t < 2000 &&
-     slowEdit && slowEdit.png && slowEdit.body.components.length === 2);
-  shots.shoot = realShoot;             // DISCORD_SHOTS=off: браузера нет
-  await cards.warm();
-  t = Date.now();
-  ix('sv5', 2, { name: 'servers', type: 1 }, 'U11');
-  await waitFor(() => cb(since(t), 'sv5').length, 5000);
-  const drawn = multipartOf(cb(since(t), 'sv5')[0]);
-  ok('браузера нет (мало памяти и т.п.) — нарисованная картинка с теми же данными', drawn && drawn.body.type === 4 && drawn.png &&
-     labels(drawn.body)[0] === 'Light theme=sv:light:0:en | Refresh=sv:dark:0:en | Play now');
-  const realDraw = cards.draw;
-  cards.draw = () => Promise.reject(new Error('no renderer'));
+  const sv3e = cb(since(t), 'sv3e')[0];
+  ok('флаг «Русский» — то же сообщение по-русски, кнопки тоже', sv3e && sv3e.body.type === 7 && /^Серверы · онлайн: 0 Гонка · 0 игр\. · 0 комн\. /.test(plainOf(sv3e)) &&
+     labels(sv3e.body)[0] === 'Обновить=sv:r:ru | Играть | English=sv:r:en | Русский(off)=sv-lang' && allGrey(sv3e.body), labels(sv3e.body).join(' || '));
+  rejectV2Reply = true;
   t = Date.now();
   ix('sv6', 2, { name: 'servers', type: 1 }, 'U12');
-  await waitFor(() => cb(since(t), 'sv6').length);
-  const fb = cb(since(t), 'sv6')[0];
-  ok('ни снимка, ни картинки — /servers всё равно отвечает: карточкой-текстом', fb && fb.body.type === 4 && fb.body.data.flags === 32768 &&
-     partsOf(fb.body.data, 10)[0].content === '## AIBROFIST servers' && /Race/.test(partsOf(fb.body.data, 10)[1].content));
-  cards.draw = realDraw;
-  shots.shoot = fakeShoot;
+  await waitFor(() => cb(since(t), 'sv6').length >= 2);
+  rejectV2Reply = false;
+  const fb = cb(since(t), 'sv6');
+  ok('Discord не принял сообщение — /servers всё равно отвечает: коротким текстом, который видит только спросивший', fb.length === 2 && fb[1].body.type === 4 &&
+     (fb[1].body.data.flags & 64) && /Could not show this right now/.test(fb[1].body.data.content));
 
   const day = 24 * 3600 * 1000;
   cards.setSource({
@@ -999,47 +982,52 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   ix('ac1', 2, { name: 'account', type: 1, options: [{ name: 'nick', type: 3, value: 'QWIED' }] }, 'U7');
   await waitFor(() => cb(since(t), 'ac1').length, 5000);
-  const ac = multipartOf(cb(since(t), 'ac1')[0]), acl = labels(ac && ac.body);
-  ok('/account ник — снимок профиля игрока с сайта (только профиль, без меню; ник как в аккаунте), видят все', ac && ac.body.type === 4 && ac.png &&
-     !(ac.body.data.flags & 64) && ac.files[0] === 'aibrofist-profile.png image/png' && shotLog.slice(-1)[0] === '/users?name=qwied dark  #upBody',
-     shotLog.slice(-1)[0]);
-  ok('листание (профиль, потом карты), период монет и очков, тема, «Refresh» и ссылка на профиль', acl &&
-     acl[0] === 'Previous(off)=ac:dark:-1:all:en:qwied | Profile · 1 / 2(off)=ac-page | Next=ac:dark:1:all:en:qwied' &&
-     acl[1] === 'Today=ac:dark:0:day:en:qwied | This Week=ac:dark:0:week:en:qwied | All Time(off)=ac-per' &&
-     ac.body.data.components[1].components[2].style === 1 &&
-     acl[2] === 'Light theme=ac:light:0:all:en:qwied | Refresh=ac:dark:0:all:en:qwied | Open profile' &&
-     acl[3] === 'English(off)=ac-lang | Русский=ac:dark:0:all:ru:qwied' &&
-     /^https:\/\/aibrofist\.online\/users\?name=qwied$/.test(ac.body.data.components[2].components[2].url), acl && acl.join(' || '));
-  const ids = ac && ac.body.data.components.flatMap(r => r.components.map(c => c.custom_id).filter(Boolean));
-  ok('у всех кнопок разные id (иначе Discord не примет сообщение)', ids && new Set(ids).size === ids.length, ids && ids.join());
+  const ac = cb(since(t), 'ac1')[0], acl = labels(ac && ac.body), acp = plainOf(ac);
+  ok('/account ник — профиль игрока сообщением (ник как в аккаунте), видят все, без картинок и логотипа', ac && ac.body.type === 4 && ac.body.data.flags === 32768 && !multipartOf(ac) &&
+     /^qwied Joined .* · Race: S · Hide and Seek: no rank Coins 5 Race scores 3 Hide and Seek scores 0 Maps 1 · Friends 1 About Hi$/.test(acp) &&
+     !/"type":12|"type":13|"description"/.test(JSON.stringify(ac.body)), acp);
+  ok('вкладки (профиль, карты, друзья), период монет и очков, «Refresh», ссылка на профиль и флаги языка; выбранные не нажимаются, все кнопки серые', acl.length === 3 &&
+     acl[0] === 'Profile(off)=ac-page | Maps=ac:m:all:en:qwied | Friends=ac:f:all:en:qwied' &&
+     acl[1] === 'Today=ac:p:day:en:qwied | This week=ac:p:week:en:qwied | All time(off)=ac-per' &&
+     acl[2] === 'Refresh=ac:p:all:en:qwied | Open profile | English(off)=ac-lang | Русский=ac:p:all:ru:qwied' && allGrey(ac.body) &&
+     /^https:\/\/aibrofist\.online\/users\?name=qwied$/.test(buttonsOf(ac.body)[7].url), acl.join(' || '));
+  const ids = buttonsOf(ac && ac.body).map(c => c.custom_id).filter(Boolean);
+  ok('у всех кнопок разные id (иначе Discord не примет сообщение)', ids.length === 9 && new Set(ids).size === ids.length, ids.join());
   t = Date.now();
-  ix('ac2', 3, { custom_id: 'ac:dark:1:all:qwied', component_type: 2 }, 'U7');
+  ix('ac2', 3, { custom_id: 'ac:m:all:en:qwied', component_type: 2 }, 'U7');
   await waitFor(() => cb(since(t), 'ac2').length, 5000);
-  const ac2 = multipartOf(cb(since(t), 'ac2')[0]);
-  ok('«Next» — та же страница игрока на вкладке Maps', ac2 && ac2.body.type === 7 && ac2.png &&
-     shotLog.slice(-1)[0] === '/users?name=qwied dark #upTabs .bfTab[data-tab="maps"] #upBody' &&
-     labels(ac2.body)[0] === 'Previous=ac:dark:0:all:en:qwied | Maps · 2 / 2(off)=ac-page | Next(off)=ac:dark:2:all:en:qwied', shotLog.slice(-1)[0]);
+  const ac2 = cb(since(t), 'ac2')[0];
+  ok('вкладка Maps — в том же сообщении (правка): карта, режим, «in game», рейтинг, лайки; период тут не нужен', ac2 && ac2.body.type === 7 &&
+     /Forest RACE IN GAME \+2 Published .* · likes 3 · dislikes 1$/.test(plainOf(ac2)) && labels(ac2.body).length === 2 &&
+     labels(ac2.body)[0] === 'Profile=ac:p:all:en:qwied | Maps(off)=ac-page | Friends=ac:f:all:en:qwied', labels(ac2.body).join(' || '));
   t = Date.now();
-  ix('ac2b', 3, { custom_id: 'ac:dark:1:week:qwied', component_type: 2 }, 'U14');
+  ix('ac2f', 3, { custom_id: 'ac:f:all:en:qwied', component_type: 2 }, 'U18');
+  await waitFor(() => cb(since(t), 'ac2f').length, 5000);
+  ok('вкладка Friends — друзья и когда были в игре', /Ann · online now$/.test(plainOf(cb(since(t), 'ac2f')[0])));
+  t = Date.now();
+  ix('ac2b', 3, { custom_id: 'ac:p:week:en:qwied', component_type: 2 }, 'U14');
   await waitFor(() => cb(since(t), 'ac2b').length, 5000);
-  const ac2b = multipartOf(cb(since(t), 'ac2b')[0]);
-  ok('«This Week» — монеты и очки за неделю: бот нажимает вкладку периода, потом Maps', ac2b && ac2b.body.type === 7 &&
-     shotLog.slice(-1)[0] === '/users?name=qwied dark #upStatTabs .upStatTab[data-period="week"]+#upTabs .bfTab[data-tab="maps"] #upBody' &&
-     labels(ac2b.body)[1] === 'Today=ac:dark:1:day:en:qwied | This Week(off)=ac-per | All Time=ac:dark:1:all:en:qwied' &&
-     labels(ac2b.body)[2] === 'Light theme=ac:light:1:week:en:qwied | Refresh=ac:dark:1:week:en:qwied | Open profile', shotLog.slice(-1)[0]);
+  const ac2b = cb(since(t), 'ac2b')[0];
+  ok('«This week» — монеты и очки за неделю, выбранный период не нажимается', ac2b && ac2b.body.type === 7 && /Coins \+2 this week Race scores 0 this week/.test(plainOf(ac2b)) &&
+     labels(ac2b.body)[1] === 'Today=ac:p:day:en:qwied | This week(off)=ac-per | All time=ac:p:all:en:qwied', labels(ac2b.body).join(' || '));
   t = Date.now();
-  ix('ac2c', 3, { custom_id: 'ac:light:0:qwied', component_type: 2 }, 'U15');
+  ix('ac2c', 3, { custom_id: 'ac:light:0:qwied', component_type: 2 }, 'U15', true);
   await waitFor(() => cb(since(t), 'ac2c').length, 5000);
-  ok('кнопки сообщений, отправленных до выбора периода, тоже работают (All Time)', multipartOf(cb(since(t), 'ac2c')[0]) &&
-     shotLog.slice(-1)[0] === '/users?name=qwied light  #upBody');
+  const ac2c = cb(since(t), 'ac2c')[0];
+  ok('кнопки сообщений прежней версии (тема, страница, без периода) тоже работают: профиль новым сообщением, видным только нажавшему', ac2c && ac2c.body.type === 4 &&
+     ac2c.body.data.flags === (32768 | 64) && /^qwied Joined /.test(plainOf(ac2c)) && /Coins 5 /.test(plainOf(ac2c)));
   t = Date.now();
-  ix('ac2d', 3, { custom_id: 'ac:dark:1:week:ru:qwied', component_type: 2 }, 'U17');
+  ix('ac2e', 3, { custom_id: 'ac:dark:1:week:ru:qwied', component_type: 2 }, 'U19', true);
+  await waitFor(() => cb(since(t), 'ac2e').length, 5000);
+  ok('…и старая страница Maps на русском', /Forest ГОНКА В ИГРЕ \+2/.test(plainOf(cb(since(t), 'ac2e')[0])));
+  t = Date.now();
+  ix('ac2d', 3, { custom_id: 'ac:p:week:ru:qwied', component_type: 2 }, 'U17');
   await waitFor(() => cb(since(t), 'ac2d').length, 5000);
-  const ac2d = multipartOf(cb(since(t), 'ac2d')[0]);
-  ok('флаг «Русский» в профиле — сайт по-русски, страница, период и тема те же', ac2d && shotLang.slice(-1)[0] === 'ru' &&
-     shotLog.slice(-1)[0] === '/users?name=qwied dark #upStatTabs .upStatTab[data-period="week"]+#upTabs .bfTab[data-tab="maps"] #upBody' &&
-     labels(ac2d.body)[1] === 'Сегодня=ac:dark:1:day:ru:qwied | За неделю(off)=ac-per | За всё время=ac:dark:1:all:ru:qwied' &&
-     labels(ac2d.body)[3] === 'English=ac:dark:1:week:en:qwied | Русский(off)=ac-lang', ac2d && labels(ac2d.body).join(' || '));
+  const ac2d = cb(since(t), 'ac2d')[0];
+  ok('флаг «Русский» в профиле — то же по-русски, вкладка и период те же', ac2d && ac2d.body.type === 7 && /Монеты \+2 за неделю Очки гонки 0 за неделю/.test(plainOf(ac2d)) &&
+     labels(ac2d.body).join(' || ') === 'Профиль(off)=ac-page | Карты=ac:m:week:ru:qwied | Друзья=ac:f:week:ru:qwied || ' +
+       'Сегодня=ac:p:day:ru:qwied | За неделю(off)=ac-per | За всё время=ac:p:all:ru:qwied || ' +
+       'Обновить=ac:p:week:ru:qwied | Открыть профиль | English=ac:p:week:en:qwied | Русский(off)=ac-lang', labels(ac2d.body).join(' || '));
   t = Date.now();
   ix('ac3', 2, { name: 'account', type: 1, options: [{ name: 'nick', type: 3, value: 'qw' }] }, 'U8');
   await waitFor(() => cb(since(t), 'ac3').length);
@@ -1052,10 +1040,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const ac4 = cb(since(t), 'ac4')[0];
   ok('пока печатает ник — подсказки', ac4 && ac4.body.type === 8 && ac4.body.data.choices.map(c => c.value).join() === 'qwied,qwerty');
   cards.setSource(null);
-  shots.shoot = realShoot;
   const sst = await bot.status();
-  ok('на странице состояния видно, работают ли снимки', sst.screenshots && typeof sst.screenshots.state === 'string' && sst.screenshots.freeMb > 0,
-     JSON.stringify(sst.screenshots));
+  ok('картинок и браузера для ответов больше нет: на странице состояния про снимки ничего не осталось', !('screenshots' in sst));
 
   console.log('\nсекретная статистика:');
   t = Date.now();
@@ -1067,8 +1053,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => picAnswer(since(t), bid), 5000);
   const st1 = picAnswer(since(t), bid);
   const link1 = st1 && (/https:\/\/[^"\s]+\/stats\/[\w-]+/.exec(JSON.stringify(st1.body)) || [])[0];
-  ok('«!stats» — карточка с живой статистикой и кнопка с секретной ссылкой, видит только владелец', st1 && st1.png && /^Live stats: Online now 0/.test(st1.alt) &&
-     (st1.body.data ? st1.body.data.flags : st1.body.flags) === 64 && link1, link1 && link1.replace(/[\w-]+$/, '<key>'));
+  ok('«!stats» — сообщение с живой статистикой и кнопка с секретной ссылкой, видит только владелец', st1 && /^Live stats 0 players in the game · 0 rooms /.test(st1.alt) &&
+     st1.data.flags === (32768 | 64) && link1 && buttonsOf(st1.body).some(b => b.style === 5 && b.url === link1 && b.label === 'Open live stats'), link1 && link1.replace(/[\w-]+$/, '<key>'));
   t = Date.now();
   say(OWNER, '!qastats new');
   await waitFor(() => panelOf(since(t)));
@@ -1079,12 +1065,13 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const link2 = (/https:\/\/[^"\s]+\/stats\/[\w-]+/.exec(JSON.stringify(picAnswer(since(t), bid).body)) || [])[0];
   ok('«!stats new» — новая ссылка', link2 && link1 && link2 !== link1);
 
+  await sleep(2100);                   // ответы теперь мгновенные: пусть окно «больше 3 сообщений за 2 секунды» от прежних команд владельца закроется
   t = Date.now();
   say(OWNER, '!hello there');
   say(OWNER, '!news');
   say(OWNER, '!help');
   await sleep(250);
-  ok('без секретного начала и неизвестные команды — обычные сообщения, не трогаем', quietSince(t).length === 0);
+  ok('без секретного начала и неизвестные команды — обычные сообщения, не трогаем', quietSince(t).length === 0, since(t).map(x => x.method + ' ' + x.path).join(' | '));
 
   console.log('\nправила сервера и свои запрещённые слова:');
   t = Date.now();
@@ -1113,46 +1100,52 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const rid = submit('rules:' + CH.general, rulesForm('bananas, Free  Robux\nbananas', 'Server Rules'));
   await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + rid + '/messages/@original$')).length);
   const redit = find(since(t), 'PATCH', new RegExp('^/channels/301/messages/' + (rpost && rpost.resId) + '$'))[0];
-  ok('правила в #rules исправлены на месте: тот же пост картинкой, нового нет, флаги на месте', redit && multipartOf(redit).png && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 &&
-     /^Server Rules\. 1\. No spam/.test(altOf(redit)) && flagsOf(bodyOf(redit)).map(b => b.custom_id).join() === 'rules-lang,rules:ru:dark', altOf(redit).slice(0, 60));
+  ok('правила в #rules исправлены на месте: тот же пост, нового нет, прежних картинок в нём нет, флаги на месте', redit && bodyOf(redit).flags === 32768 && !multipartOf(redit) &&
+     Array.isArray(bodyOf(redit).attachments) && bodyOf(redit).attachments.length === 0 && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 &&
+     /^Server Rules 1 No spam /.test(plainOf(redit)) && flagsOf(bodyOf(redit)).map(b => b.custom_id).join() === 'rules-lang,rules:ru', plainOf(redit).slice(0, 60));
   ok('свои слова запомнены, без повторов', JSON.stringify(bot._test.state().guilds[G].words) === '["bananas","free robux"]',
      JSON.stringify(bot._test.state().guilds[G].words));
-  const textOf = body => partsOf(body, 10).map(x => x.content).join('\n');
   t = Date.now();
   bid = press('U0', 'rules:ru');
   await waitFor(() => picAnswer(since(t), bid), 5000);
-  const rru = picAnswer(since(t), bid), rruData = rru && (rru.body.data || rru.body);
-  ok('«Русский» — картинка в том же посте становится русской (правка самого поста), подсвечен флаг «Русский»',
-     rru && rru.png && (rru.body.type === 7 || find(since(t), 'PATCH', new RegExp('tk' + bid + '/messages/@original$')).length) && rruData.flags === 32768 &&
-     /^Правила сервера AIBROFIST\. 1\. Без спама/.test(rru.alt) && rru.files[0] === 'aibrofist-rules-ru.png image/png' &&
-     flagsOf(rruData).map(b => b.custom_id + ':' + b.style).join() === 'rules:en:dark:2,rules-lang:1' && !(rruData.flags & 64), rru && rru.alt.slice(0, 60));
-  ok('русский текст — тот же набор из 7 правил и про копящиеся предупреждения', /7\. Без чужих IP-адресов/.test(rru.alt) && !/8\./.test(rru.alt) && /Предупреждения копятся/.test(rru.alt));
+  const rru = picAnswer(since(t), bid);
+  ok('«Русский» — текст в том же посте становится русским (правка самого поста), подсвечен флаг «Русский»',
+     rru && rru.body.type === 7 && rru.data.flags === 32768 && /^Правила сервера AIBROFIST 1 Без спама /.test(rru.alt) &&
+     flagsOf(rru.data).map(b => b.custom_id + ':' + b.style + ':' + !!b.disabled).join() === 'rules:en:2:false,rules-lang:2:true' && !(rru.data.flags & 64) &&
+     Array.isArray(rru.data.attachments) && rru.data.attachments.length === 0, rru && rru.alt.slice(0, 60));
+  ok('русский текст — тот же набор из 7 правил и про копящиеся предупреждения', /7 Без чужих IP-адресов/.test(rru.alt) && !/8 /.test(rru.alt) && /Предупреждения копятся/.test(rru.alt));
   t = Date.now();
   bid = press('U0', 'rules:en');
   await waitFor(() => picAnswer(since(t), bid), 5000);
   const ren = picAnswer(since(t), bid);
-  ok('«English» — обратно английский в том же посте', ren && /^Server Rules\. 1\. No spam/.test(ren.alt) && ren.files[0] === 'aibrofist-rules-en.png image/png');
+  ok('«English» — обратно английский в том же посте', ren && ren.body.type === 7 && /^Server Rules 1 No spam /.test(ren.alt));
   t = Date.now();
   rejectUpdate = true;
   bid = press('U0', 'rules:ru');
-  await waitFor(() => cb(since(t), bid).length >= 3);
+  await waitFor(() => cb(since(t), bid).length >= 2);
   rejectUpdate = false;
   const cbs = cb(since(t), bid);
-  ok('если Discord не принял правку поста, русский текст получает только нажавший (запасной ответ)', multipartOf(cbs[0]).body.type === 7 &&
-     cbs[1].body.type === 7 && cbs[2].body.type === 4 && (cbs[2].body.data.flags & 64) && /1\. Без спама/.test(textOf(cbs[2].body.data)));
+  ok('если Discord не принял правку поста, русский текст получает только нажавший (запасной ответ)', cbs[0].body.type === 7 &&
+     cbs[1].body.type === 4 && cbs[1].body.data.flags === (32768 | 64) && /1 Без спама/.test(plainOf(cbs[1])));
+  t = Date.now();
+  bid = press('U32', 'rules:ru:light', true);
+  await waitFor(() => picAnswer(since(t), bid), 5000);
+  const rlt = picAnswer(since(t), bid);
+  ok('кнопки поста прежней версии (с темой) не ломаются: русский текст новым сообщением, видным только нажавшему; кнопок темы нет', rlt && rlt.body.type === 4 &&
+     rlt.data.flags === (32768 | 64) && /^Правила сервера AIBROFIST 1 Без спама /.test(rlt.alt) && !/Тёмная|Светлая|Dark|Light/.test(JSON.stringify(rlt.body)));
   t = Date.now();
   dispatch('INTERACTION_CREATE', { id: 'dm1', token: 'tkdm1', type: 3, channel_id: 'dmOWNER', user: { id: OWNER },
     data: { custom_id: 'rules:ru', component_type: 2 } });
   await waitFor(() => picAnswer(since(t), 'dm1'), 5000);
-  ok('и в личке (превью правил) флаг «Русский» тоже работает', /^Правила сервера AIBROFIST\./.test(picAnswer(since(t), 'dm1').alt));
+  ok('и в личке (превью правил) флаг «Русский» тоже работает', /^Правила сервера AIBROFIST /.test(picAnswer(since(t), 'dm1').alt));
   t = Date.now();
   const bw = say('U20', 'I really love bananas');
   await waitFor(() => find(since(t), 'DELETE', new RegExp('/messages/' + bw.id + '$')).length);
   await sleep(150);
   await waitFor(() => find(since(t), 'POST', /^\/channels\/dmU20\/messages$/).length);
   ok('сообщение со своим запрещённым словом удалено, автору — предупреждение по правилам сервера, без мьюта', find(since(t), 'PATCH', /members\/U20$/).length === 0 &&
-     /Rule: Words banned on this server/.test(altOf(find(since(t), 'POST', /^\/channels\/dmU20\/messages$/)[0])) &&
-     /^Warning: /.test(altOf(find(since(t), 'POST', /^\/channels\/dmU20\/messages$/)[0])));
+     /Rule: Words banned on this server/.test(plainOf(find(since(t), 'POST', /^\/channels\/dmU20\/messages$/)[0])) &&
+     /^Warning · /.test(plainOf(find(since(t), 'POST', /^\/channels\/dmU20\/messages$/)[0])));
   t = Date.now();
   const rid2 = submit('rules:' + CH.general, rulesForm('', 'Server Rules'));
   await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + rid2 + '/messages/@original$')).length);
@@ -1167,17 +1160,17 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   const cmdName = say(OWNER, '!qamute alice_p 1h being loud');
   await waitFor(() => find(since(t), 'PATCH', /members\/70001$/).length);
-  await waitFor(() => cardIn(since(t), /^Muted: Alice\./));
-  const confName = cardIn(since(t), /^Muted: Alice\./);
+  await waitFor(() => cardIn(since(t), /^Muted · 1 hour Alice /));
+  const confName = cardIn(since(t), /^Muted · 1 hour Alice /);
   ok('«!mute alice_p 1h» — игрок найден по логину, без @: мьют на час, команда удалена', find(since(t), 'DELETE', new RegExp('/messages/' + cmdName.id + '$')).length === 1 &&
      Math.abs(Date.parse(find(since(t), 'PATCH', /members\/70001$/)[0].body.communication_disabled_until) - Date.now() - 3600000) < 60000);
-  ok('итог — карточка с именем и без упоминания, никого не пингует', confName && /^Muted: Alice\. Reason: being loud\. Duration: 1 hour\./.test(altOf(confName)) &&
-     bodyOf(confName).allowed_mentions.parse.length === 0 && !/<@/.test(J(confName)), confName && altOf(confName));
+  ok('итог — карточка с именем и без упоминания, никого не пингует', confName && /^Muted · 1 hour Alice @alice_p Reason: being loud Until: /.test(plainOf(confName)) &&
+     bodyOf(confName).allowed_mentions.parse.length === 0 && !/<@/.test(J(confName)), confName && plainOf(confName));
   t = Date.now();
   say(OWNER, '!qamute "Big Bob" 6h');
   await waitFor(() => find(since(t), 'PATCH', /members\/70002$/).length);
-  await waitFor(() => cardIn(since(t), /^Muted: Big Bob\./));
-  ok('имя с пробелами — в кавычках, находится по нику на сервере', /Duration: 6 hours/.test(altOf(cardIn(since(t), /^Muted: Big Bob\./))));
+  await waitFor(() => cardIn(since(t), /^Muted · 6 hours Big Bob /));
+  ok('имя с пробелами — в кавычках, находится по нику на сервере', !!cardIn(since(t), /^Muted · 6 hours Big Bob @bigbob /));
   t = Date.now();
   say(OWNER, '!qamute ALICE 1h');
   await waitFor(() => find(since(t), 'PATCH', /members\/70001$/).length);
@@ -1207,19 +1200,19 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   say(OWNER, '!qaunmute 70005');
   await waitFor(() => find(since(t), 'PATCH', /members\/70005$/).length);
-  await waitFor(() => cardIn(since(t), /^Mute lifted: quitter\./));
+  await waitFor(() => cardIn(since(t), /^Mute lifted quitter /));
   ok('по id тоже: имя берётся с сервера, карточка с ним', find(since(t), 'PATCH', /members\/70005$/)[0].body.communication_disabled_until === null &&
-     !!cardIn(since(t), /^Mute lifted: quitter\./));
+     /Status: Can talk again/.test(plainOf(cardIn(since(t), /^Mute lifted quitter /))));
   t = Date.now();
   say(OWNER, '!qaban bigbob 7d spam');
   await waitFor(() => find(since(t), 'PUT', /bans\/70002$/).length);
-  await waitFor(() => cardIn(since(t), /^Banned: Big Bob\./));
-  ok('«!ban bigbob 7d spam» — бан на неделю, карточка с ником', /Reason: spam\. Duration: 7 days/.test(altOf(cardIn(since(t), /^Banned: Big Bob\./))));
+  await waitFor(() => cardIn(since(t), /^Banned · 7 days Big Bob /));
+  ok('«!ban bigbob 7d spam» — бан на неделю, карточка с ником', /^Banned · 7 days Big Bob @bigbob Reason: spam Lifts: /.test(plainOf(cardIn(since(t), /^Banned · 7 days Big Bob /))));
   t = Date.now();
   say(OWNER, '!qaunban banned_guy');
   await waitFor(() => find(since(t), 'DELETE', /bans\/71000$/).length);
-  await waitFor(() => cardIn(since(t), /^Ban lifted: Banned Guy\./));
-  ok('«!unban banned_guy» — находит в списке банов по имени, разбанивает', !!cardIn(since(t), /^Ban lifted: Banned Guy\./));
+  await waitFor(() => cardIn(since(t), /^Ban lifted Banned Guy /));
+  ok('«!unban banned_guy» — находит в списке банов по имени, разбанивает', /Status: Can join the server again/.test(plainOf(cardIn(since(t), /^Ban lifted Banned Guy /))));
   t = Date.now();
   say(OWNER, '!qaunban ghost');
   await waitFor(() => sayIn(since(t), /among the banned/));
@@ -1242,23 +1235,22 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bid = press(OWNER, panel.id);
   await waitFor(() => picAnswer(since(t), bid), 5000);
   const helpAlt = picAnswer(since(t), bid).alt;
-  ok('справка: «!warn» — форма с обязательными полями; цель команды — имя без @', /!qawarn \[name\] - Warning form: member, rule and reason are required/.test(helpAlt) &&
-     /!qamute name 1h reason/.test(helpAlt) && !/@user/.test(helpAlt), helpAlt.slice(0, 200));
-  // картинку нарисовать не вышло — справка текстом, как раньше
-  const realDraw2 = cards.draw;
-  cards.draw = () => Promise.reject(new Error('no renderer'));
+  ok('справка: «!warn» — форма с обязательными полями; цель команды — имя без @', /!qawarn \[name\] Warning form \(all fields required\)/.test(helpAlt) &&
+     /!qamute name 1h reason Mute: 10m, 1h, 6h, 1d, 3d, 7d/.test(helpAlt) && !/@user/.test(helpAlt), helpAlt.slice(0, 200));
+  // Discord сообщение не принял — справка текстом, как раньше
+  rejectV2Reply = true;
   t = Date.now();
   say(OWNER, '!qa help');
   await waitFor(() => panelOf(since(t)));
   panel = panelOf(since(t));
   t = Date.now();
   bid = press(OWNER, panel.id);
-  await waitFor(() => cb(since(t), bid).length);
-  const helpText = JSON.stringify(cb(since(t), bid)[0].body);
-  cards.draw = realDraw2;
-  ok('картинка не нарисовалась — справка текстом: объяснено, почему не упоминание, и про кавычки', /warn\*\* - open the warning form/.test(helpText) &&
+  await waitFor(() => cb(since(t), bid).length >= 2);
+  rejectV2Reply = false;
+  const helpText = JSON.stringify(cb(since(t), bid)[1].body);
+  ok('Discord не принял сообщение — справка текстом: объяснено, почему не упоминание, и про кавычки', /warn\*\* - open the warning form/.test(helpText) &&
      /unwarn name\*\* - remove all warnings/.test(helpText) && /pings the person before the bot can delete/.test(helpText) && /in quotes/.test(helpText) &&
-     cb(since(t), bid)[0].body.data.flags === 64);
+     cb(since(t), bid)[1].body.data.flags === 64);
 
   console.log('\nпредупреждения: список, снятие, флаги языка:');
   const alice = { id: '70001', username: 'alice_p', global_name: 'Alice' };
@@ -1266,11 +1258,11 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   for (const [k, why] of ['link to another server', 'sold coins'].entries()) {
     t = Date.now();
     warnSend(alice, 2, why);
-    await waitFor(() => find(since(tAlice), 'POST', /^\/channels\/300\/messages$/).filter(x => /^Warning: Alice\./.test(altOf(x))).length > k);
+    await waitFor(() => find(since(tAlice), 'POST', /^\/channels\/300\/messages$/).filter(x => x.body && /^Warning · \d of 3 Alice /.test(plainOf(x))).length > k);
   }
-  const aliceCards = find(since(tAlice), 'POST', /^\/channels\/300\/messages$/).filter(x => /^Warning: Alice\./.test(altOf(x)));
-  ok('у Alice два предупреждения — на второй карточке «2 из 3»', aliceCards.length === 2 && /Warnings: 1 of 3/.test(altOf(aliceCards[0])) && /Warnings: 2 of 3/.test(altOf(aliceCards[1])) &&
-     bot._test.state().warns[G + ':70001'].length === 2);
+  const aliceCards = find(since(tAlice), 'POST', /^\/channels\/300\/messages$/).filter(x => x.body && /^Warning · \d of 3 Alice /.test(plainOf(x)));
+  ok('у Alice два предупреждения — на второй карточке «2 из 3»', aliceCards.length === 2 && /^Warning · 1 of 3 Alice @alice_p .* Count: ●○○ /.test(plainOf(aliceCards[0])) &&
+     /^Warning · 2 of 3 Alice @alice_p .* Count: ●●○ /.test(plainOf(aliceCards[1])) && bot._test.state().warns[G + ':70001'].length === 2);
   t = Date.now();
   say(OWNER, '!qawarns alice_p');
   await waitFor(() => panelOf(since(t)));
@@ -1280,20 +1272,19 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bid = press(OWNER, panel.id);
   await waitFor(() => picAnswer(since(t), bid), 5000);
   const wl = picAnswer(since(t), bid), wlData = wl.body.data || wl.body;
-  ok('по кнопке — карточка: сколько действует, сколько всего, за что и кто выдал', wl.png && /^Warnings: Alice — 2 of 3, all time 2\./.test(wl.alt) &&
-     /Rule 2|2\. No invites/.test(wl.alt) && /sold coins/.test(wl.alt) && wlData.flags === 64, wl.alt);
+  ok('по кнопке — сообщение: сколько действует, сколько всего, за что и кто выдал', /^Warnings · 2 of 3 ●●○ Alice @alice_p /.test(wl.alt) && /All time: 2$/.test(wl.alt) &&
+     /2\. No invites to other Discord servers ACTIVE .* link to another server · 900/.test(wl.alt) && /sold coins/.test(wl.alt) && wlData.flags === (32768 | 64), wl.alt);
   const wlRu = flagsOf(wlData)[1].custom_id;
   t = Date.now();
   bid = press('U0', wlRu);
   await waitFor(() => cb(since(t), bid).length);
-  ok('чужой флаг на карточке владельца не нажмёт', /Only the server owner/.test(JSON.stringify(cb(since(t), bid)[0].body)) && !multipartOf(cb(since(t), bid)[0]));
+  ok('чужой флаг на карточке владельца не нажмёт', /Only the server owner/.test(JSON.stringify(cb(since(t), bid)[0].body)) && !picAnswer(since(t), bid));
   t = Date.now();
   bid = press(OWNER, wlRu);
   await waitFor(() => picAnswer(since(t), bid), 5000);
   const wlr = picAnswer(since(t), bid);
-  ok('флаг «Русский» — та же карточка по-русски, в том же сообщении', /^Предупреждения: Alice — 2 из 3/.test(wlr.alt) &&
-     (wlr.body.type === 7 || !!find(since(t), 'PATCH', new RegExp('tk' + bid + '/messages/@original$')).length) &&
-     flagsOf(wlr.body.data || wlr.body).map(b => b.style).join() === '2,1', wlr.alt);
+  ok('флаг «Русский» — та же карточка по-русски, в том же сообщении', /^Предупреждения · 2 из 3 ●●○ Alice /.test(wlr.alt) && wlr.body.type === 7 &&
+     flagsOf(wlr.data).map(b => !!b.disabled).join() === 'false,true', wlr.alt);
   t = Date.now();
   say(OWNER, '!qawarns');
   await waitFor(() => panelOf(since(t)));
@@ -1302,19 +1293,19 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bid = press(OWNER, panel.id);
   await waitFor(() => picAnswer(since(t), bid), 5000);
   const wall = picAnswer(since(t), bid).alt;
-  ok('«!warns» без имени — все, у кого есть предупреждения', /^Members with warnings: /.test(wall) && /Alice 2\/3/.test(wall) && /playerU2 \d\/3/.test(wall), wall);
+  ok('«!warns» без имени — все, у кого есть предупреждения', /^Members with warnings /.test(wall) && /Alice ●●○ 2\/3/.test(wall) && /playerU2 [●○]{3} \d\/3/.test(wall), wall);
   // флаг на карточке в канале — её может нажать любой: язык меняется у всех, в том же сообщении
   const pubRu = flagsOf(wcBody)[1].custom_id;
   t = Date.now();
   bid = press('U5', pubRu);
   await waitFor(() => picAnswer(since(t), bid), 5000);
-  ok('флаг под карточкой в канале — та же карточка по-русски', /^Предупреждение: playerU2\. Правило: 6\. Без продажи аккаунтов и монет за реальные деньги\./.test(picAnswer(since(t), bid).alt),
-     picAnswer(since(t), bid).alt);
+  ok('флаг под карточкой в канале — та же карточка по-русски, в том же сообщении', /^Предупреждение · 1 из 3 playerU2 Правило: 6\. Без продажи аккаунтов и монет за реальные деньги /.test(picAnswer(since(t), bid).alt) &&
+     picAnswer(since(t), bid).body.type === 7 && !(picAnswer(since(t), bid).data.flags & 64), picAnswer(since(t), bid).alt);
   t = Date.now();
   say(OWNER, '!qaunwarn alice_p');
-  await waitFor(() => cardIn(since(t), /^Warnings removed: Alice\./));
+  await waitFor(() => cardIn(since(t), /^Warnings removed · 2 Alice /));
   ok('«!unwarn alice_p» — все её предупреждения сняты, в канале карточка, в журнале запись', !bot._test.state().warns[G + ':70001'] &&
-     /All warnings removed: 2\./.test(altOf(cardIn(since(t), /^Warnings removed: Alice\./))) &&
+     /Status: Clean record now/.test(plainOf(cardIn(since(t), /^Warnings removed · 2 Alice /))) &&
      /Warnings removed \(2\)/.test(JSON.stringify(find(since(t), 'POST', /^\/channels\/303\/messages$/))));
   t = Date.now();
   say(OWNER, '!qaunwarn alice_p');
@@ -1329,70 +1320,49 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   t = Date.now();
   bid = press(OWNER, panel.id);
   await waitFor(() => picAnswer(since(t), bid), 5000);
-  ok('владелец нажал — сняты все предупреждения на сервере, карточка об этом', /^All warnings removed /.test(picAnswer(since(t), bid).alt) &&
+  ok('владелец нажал — сняты все предупреждения на сервере, карточка об этом', /^Warnings All warnings removed /.test(picAnswer(since(t), bid).alt) &&
      !Object.keys(bot._test.state().warns).some(k => k.indexOf(G + ':') === 0), picAnswer(since(t), bid).alt);
-  // картинку нарисовать не вышло — предупреждение всё равно уходит, в канале — текстом
-  const realDraw3 = cards.draw;
-  cards.draw = () => Promise.reject(new Error('no renderer'));
+  // Discord карточку в канале не принял — предупреждение всё равно уходит, в канале — текстом
+  rejectV2Post = true;
   t = Date.now();
   warnSend({ id: 'U3', username: 'playerU3' }, 2, 'invite again');
   await waitFor(() => sayIn(since(t), /received a warning/));
-  cards.draw = realDraw3;
-  ok('картинка не нарисовалась — в канале текстом: правило, причина, какое по счёту', sayIn(since(t), /received a warning/) ===
+  rejectV2Post = false;
+  ok('карточку Discord не принял — в канале текстом: правило, причина, какое по счёту', sayIn(since(t), /received a warning/) ===
      '**playerU3**, you received a warning for rule 2, no invites to other discord servers: invite again. Warning 1 of 3.', sayIn(since(t), /received a warning/));
 
-  console.log('\nтёмная и светлая тема карточек, аватарки Discord:');
-  const drawSeen = [], origDraw = cards.draw;
-  cards.draw = (k, d, th, pg) => { drawSeen.push({ k, th, lang: d.lang, av: !!d.avatar }); return origDraw(k, d, th, pg); };
+  console.log('\nаватарки Discord, серые кнопки, без описаний картинок:');
   t = Date.now();
   warnSend({ id: '70006', username: 'dave', global_name: 'Dave' }, 3, 'картинка 18+');
-  await waitFor(() => cardIn(since(t), /^Warning: Dave\./));
-  const dave = cardIn(since(t), /^Warning: Dave\./), daveBtns = rowsOf(bodyOf(dave));
-  ok('у кого нет своей аватарки — стандартная аватарка Discord (а не фигурка игрока)', find(calls, 'GET', /^\/embed\/avatars\/0\.png$/).length >= 1 &&
-     drawSeen.some(x => x.k === 'action' && x.av), JSON.stringify(drawSeen.slice(-2)));
-  ok('под карточкой два ряда: язык и тема; выбрана тёмная, светлая — кнопка', daveBtns.length === 2 &&
-     daveBtns[1].components.map(b => b.label + ':' + !!b.disabled).join() === 'Dark theme:true,Light theme:false' &&
-     /^cd:[0-9a-f]+:en:light$/.test(daveBtns[1].components[1].custom_id) && /^cd:[0-9a-f]+:ru:dark$/.test(daveBtns[0].components[1].custom_id), daveBtns[1].components.map(b => b.custom_id).join());
-  ok('у всех кнопок карточки разные id', new Set(daveBtns.flatMap(r => r.components.map(b => b.custom_id))).size === 4);
+  await waitFor(() => cardIn(since(t), /^Warning · \d of 3 Dave /));
+  const dave = cardIn(since(t), /^Warning · \d of 3 Dave /), daveBtns = buttonsOf(bodyOf(dave));
+  ok('у кого нет своей аватарки — стандартная аватарка Discord справа в заголовке (по ссылке на CDN, бот её не скачивает)',
+     thumbOf(dave) === 'http://127.0.0.1:' + port + '/embed/avatars/0.png' && find(calls, 'GET', /\/embed\/avatars\//).length === 0, thumbOf(dave));
+  ok('под карточкой один ряд: флаги языка, обе кнопки серые (secondary), кнопок темы нет; id разные', rowsOf(bodyOf(dave)).length === 1 &&
+     daveBtns.map(b => b.label + ':' + b.style + ':' + !!b.disabled).join() === 'English:2:true,Русский:2:false' && new Set(daveBtns.map(b => b.custom_id)).size === 2 &&
+     /^cd:[0-9a-f]+:ru$/.test(daveBtns[1].custom_id) && !/Dark theme|Light theme/.test(J(dave)), daveBtns.map(b => b.custom_id).join());
   t = Date.now();
-  bid = press('U30', daveBtns[1].components[1].custom_id);
+  bid = press('U30', daveBtns[1].custom_id);
   await waitFor(() => picAnswer(since(t), bid), 5000);
-  const light = picAnswer(since(t), bid), lightRows = rowsOf(light.body.data || light.body);
-  ok('«Light theme» — та же карточка в светлой теме, в том же сообщении, язык не меняется', light.png && /^Warning: Dave\./.test(light.alt) &&
-     drawSeen.slice(-1)[0].th === 'light' && drawSeen.slice(-1)[0].lang === 'en' &&
-     lightRows[1].components.map(b => b.label + ':' + !!b.disabled).join() === 'Dark theme:false,Light theme:true', JSON.stringify(drawSeen.slice(-1)));
+  const daveRu = picAnswer(since(t), bid);
+  ok('«Русский» — та же карточка по-русски в том же сообщении (аватарка и серые кнопки на месте), выбран русский', /^Предупреждение · \d из 3 Dave @dave /.test(daveRu.alt) && daveRu.body.type === 7 &&
+     daveRu.data.flags === 32768 && flagsOf(daveRu.data).map(b => b.label + ':' + !!b.disabled).join() === 'English:false,Русский:true' &&
+     (function () { let u = null; walkAll(daveRu.data.components, n => { if (n.type === 11) u = n.media.url; }); return u; })() === thumbOf(dave), daveRu.alt.slice(0, 60));
   t = Date.now();
-  bid = press('U31', lightRows[0].components[1].custom_id);
+  bid = press('U31', 'cd:' + /^cd:([0-9a-f]+):/.exec(daveBtns[1].custom_id)[1] + ':en:light', true);
   await waitFor(() => picAnswer(since(t), bid), 5000);
-  const lightRu = picAnswer(since(t), bid), lightRuRows = rowsOf(lightRu.body.data || lightRu.body);
-  ok('потом «Русский» — язык меняется, светлая тема остаётся', /^Предупреждение: Dave\./.test(lightRu.alt) && drawSeen.slice(-1)[0].th === 'light' &&
-     lightRuRows[1].components.map(b => b.label + ':' + !!b.disabled).join() === 'Тёмная тема:false,Светлая тема:true', lightRu.alt.slice(0, 50));
+  const daveOld = picAnswer(since(t), bid);
+  ok('кнопки карточек прежней версии (с темой) не ломаются: карточка новым сообщением, видным только нажавшему', daveOld && daveOld.body.type === 4 &&
+     daveOld.data.flags === (32768 | 64) && /^Warning · \d of 3 Dave /.test(daveOld.alt));
   t = Date.now();
   warnSend({ id: '70007', username: 'erin', avatar: 'abc123' }, 2, 'ссылка');
-  await waitFor(() => cardIn(since(t), /^Warning: erin\./));
-  ok('своя аватарка (хеш из Discord) — берётся она', find(calls, 'GET', /^\/avatars\/70007\/abc123\.png/).length >= 1);
-  t = Date.now();
-  bid = press('U32', 'rules:ru:light');
-  await waitFor(() => picAnswer(since(t), bid), 5000);
-  const rlt = picAnswer(since(t), bid), rlBody = rlt.body.data || rlt.body;
-  ok('в правилах то же: «Русский» + светлая тема — картинка светлая, обе пары кнопок на месте', /^Правила сервера AIBROFIST\./.test(rlt.alt) &&
-     drawSeen.slice(-1)[0].k === 'rules' && drawSeen.slice(-1)[0].th === 'light' &&
-     rowsOf(rlBody)[1].components.map(b => b.label + ':' + b.custom_id).join() === 'Тёмная тема:rules:ru:dark,Светлая тема:rules-theme' &&
-     rowsOf(rlBody)[0].components.map(b => b.custom_id).join() === 'rules:en:light,rules-lang');
-  cards.draw = origDraw;
-  // в жизни описания картинок (alt) нет: Discord показывает его плашкой «ALT» («ПОДСКАЗКА») поверх картинки
-  process.env.DISCORD_CARD_ALT = '';
+  await waitFor(() => cardIn(since(t), /^Warning · \d of 3 erin /));
+  ok('своя аватарка (хеш из Discord) — берётся она', thumbOf(cardIn(since(t), /^Warning · \d of 3 erin /)) === 'http://127.0.0.1:' + port + '/avatars/70007/abc123.png?size=128');
   t = Date.now();
   warnSend({ id: '70008', username: 'finn' }, 3, 'без плашки');
-  await waitFor(() => find(since(t), 'POST', /^\/channels\/300\/messages$/).some(x => multipartOf(x)));
-  const noAlt = find(since(t), 'POST', /^\/channels\/300\/messages$/).find(x => multipartOf(x));
-  t = Date.now();
-  bid = press('U33', 'rules:ru:dark');
-  await waitFor(() => cb(since(t), bid).length || find(since(t), 'PATCH', new RegExp('tk' + bid + '/messages/@original$')).length, 5000);
-  const noAltRules = cb(since(t), bid).concat(find(since(t), 'PATCH', new RegExp('tk' + bid + '/messages/@original$'))).find(x => multipartOf(x));
-  process.env.DISCORD_CARD_ALT = '1';
-  ok('картинки без описания (alt): на них нет плашки «ALT» / «ПОДСКАЗКА» ни у карточки, ни у правил', noAlt && noAltRules && multipartOf(noAlt).png &&
-     !/"description"/.test(JSON.stringify(bodyOf(noAlt))) && !/"description"/.test(JSON.stringify(bodyOf(noAltRules))), noAlt && JSON.stringify(bodyOf(noAlt)).slice(0, 120));
+  await waitFor(() => cardIn(since(t), /^Warning · \d of 3 finn /));
+  const noAlt = cardIn(since(t), /^Warning · \d of 3 finn /);
+  ok('у карточки нет описаний картинок (alt, «ПОДСКАЗКА»), вложений и картинок вообще', noAlt && !/"description"|"attachments"|"type":12|"type":13|attachment:/.test(J(noAlt)) && !multipartOf(noAlt));
 
   console.log('\nбан и разбан:');
   t = Date.now();
@@ -1402,7 +1372,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   c = since(t);
   const un21 = bot._test.state().unbans[G + ':U21'];
   ok('«!ban @игрок 7d причина» — бан на неделю, бот запомнил, когда снять', un21 && Math.abs(un21 - Date.now() - 7 * 86400000) < 60000);
-  const dm21 = c.findIndex(x => x.method === 'POST' && x.path === '/channels/dmU21/messages' && /^Banned: .*Duration: 7 days/.test(altOf(x)));
+  const dm21 = c.findIndex(x => x.method === 'POST' && x.path === '/channels/dmU21/messages' && /^Banned · 7 days /.test(plainOf(x)));
   ok('сначала личное сообщение со сроком, потом бан', dm21 !== -1 && c.findIndex(x => x.method === 'PUT' && /bans\/U21$/.test(x.path)) > dm21);
   t = Date.now();
   await bot._test.releaseBans(Date.now() + 8 * 86400000);
@@ -1429,7 +1399,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     const panelIn = (list, ch) => { const pm = find(list, 'POST', new RegExp('^/channels/' + ch + '/messages$')).find(x => x.body && x.body.components);
       return pm && { msg: pm, id: pm.body.components[0].components[0].custom_id }; };
     // итог чистки — карточкой (подпись), подсказки — текстом
-    const said = (list, ch, re) => find(list, 'POST', new RegExp('^/channels/' + ch + '/messages$')).some(x => re.test((x.body && x.body.content) || altOf(x)));
+    const said = (list, ch, re) => find(list, 'POST', new RegExp('^/channels/' + ch + '/messages$')).some(x => re.test((x.body && x.body.content) || plainOf(x)));
 
     t = Date.now();
     const c3 = say(OWNER, '!qaclear 3', { channel_id: H });
@@ -1595,15 +1565,44 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('битый updates.json — ничего не удаляется', !removed2.length && !find(since(t), 'DELETE', /^\/channels\/(302|306)\/messages\/\d+$/).length &&
      find(calls, 'DELETE', /^\/channels\/(302|306)\/messages\/\d+$/).length === deletedBefore + 1);
 
+  console.log('\nитог окна, когда Discord не даёт превратить «думаю…» в новую карточку:');
+  rejectV2Edit = true;
+  t = Date.now();
+  const sid4 = submit('updates:' + G, [{ type: 18, component: { type: 8, custom_id: 'channels', values: [CH.updates] } }]);
+  await waitFor(() => find(since(t), 'POST', new RegExp('^/webhooks/700/tk' + sid4 + '$')).length);
+  rejectV2Edit = false;
+  c = since(t);
+  const chain = c.filter(x => new RegExp('^/webhooks/700/tk' + sid4 + '(/messages/@original)?$').test(x.path)).map(x => x.method + ' ' + (x.path.indexOf('@original') !== -1 ? 'original' : 'followup'));
+  const follow = find(c, 'POST', new RegExp('^/webhooks/700/tk' + sid4 + '$'))[0];
+  ok('правка «думаю…» не принята — «думаю…» убрано, карточка пришла новым сообщением, видным только владельцу', chain.join() === 'PATCH original,DELETE original,POST followup' &&
+     follow.body.flags === (32768 | 64) && /^Game updates Game updates will be posted in #updates/.test(plainOf(follow)), chain.join() + ' / ' + plainOf(follow));
+  t = Date.now();
+  const sid5 = submit('updates:' + G, [{ type: 18, component: { type: 8, custom_id: 'channels', values: [CH.updates] } }]);
+  await waitFor(() => find(since(t), 'PATCH', new RegExp('^/webhooks/700/tk' + sid5 + '/messages/@original$')).length);
+  ok('и обычная правка «думаю…» снова работает: одной правкой, без лишнего', find(since(t), 'POST', new RegExp('^/webhooks/700/tk' + sid5 + '$')).length === 0 &&
+     find(since(t), 'DELETE', new RegExp('^/webhooks/700/tk' + sid5 + '/messages/@original$')).length === 0 &&
+     /^Game updates Game updates will be posted in #updates/.test(plainOf(find(since(t), 'PATCH', new RegExp('^/webhooks/700/tk' + sid5 + '/messages/@original$'))[0])));
+
   console.log('\nпроверка пингов за весь тест:');
   {
     const posts = calls.filter(c => c.method === 'POST' && /^\/channels\/[^/]+\/messages$/.test(c.path) && bodyOf(c) && c.path !== '/channels/306/messages');
     const pinging = posts.filter(c => { const a = bodyOf(c).allowed_mentions; return !a || (a.parse && a.parse.length) || (a.users && a.users.length) || (a.roles && a.roles.length) || a.replied_user; });
     ok('ни одно сообщение бота за весь тест — в каналах и в личку, текстом и картинкой — не пингует (кроме поста !news, где владелец сам написал @everyone)',
-       posts.length > 100 && posts.filter(c => multipartOf(c)).length > 20 && pinging.length === 0,
+       posts.length > 100 && posts.filter(c => bodyOf(c).flags & 32768).length > 20 && pinging.length === 0,
        posts.length + ' сообщений, с пингом: ' + pinging.map(c => c.path + ' ' + JSON.stringify(bodyOf(c).allowed_mentions)).slice(0, 3).join(' | '));
-    const texts = posts.filter(c => /^\/channels\/(300|dm\w+)\/messages$/.test(c.path)).map(c => (bodyOf(c).content || '') + altOf(c));
+    const texts = posts.filter(c => /^\/channels\/(300|dm\w+)\/messages$/.test(c.path)).map(c => (bodyOf(c).content || '') + textsOf(bodyOf(c)).join('\n'));
     ok('в коротких сообщениях бота в канале нет упоминаний людей вообще (<@...>)', !texts.some(x => /<@/.test(x)), texts.filter(x => /<@/.test(x)).slice(0, 2).join(' | '));
+  }
+
+  {
+    // все сообщения бота из новых компонентов Discord (кроме постов !news и новостей, где кнопку выбирает владелец): кнопки только серые и ссылки, id не повторяются
+    const v2 = calls.filter(x => x.body && (x.body.flags & 32768) && /^\/channels\/(300|301|303|dm\w+)\/messages$/.test(x.path) && x.method === 'POST');
+    const bad = v2.filter(x => buttonsOf(bodyOf(x)).some(b => !(b.style === 2 || b.style === 5)) ||
+      new Set(buttonsOf(bodyOf(x)).map(b => b.custom_id).filter(Boolean)).size !== buttonsOf(bodyOf(x)).map(b => b.custom_id).filter(Boolean).length);
+    ok('во всех сообщениях бота за весь тест кнопки только серые (secondary) и ссылки, id кнопок не повторяются', v2.length > 20 && bad.length === 0,
+       v2.length + ' сообщений' + (bad[0] ? ', плохое: ' + JSON.stringify(buttonsOf(bodyOf(bad[0]))).slice(0, 200) : ''));
+    const tooLong = calls.filter(x => x.body && (x.body.flags & 32768)).filter(x => textsOf(bodyOf(x)).join('').length > 4000);
+    ok('в одном сообщении не больше 4000 знаков текста (предел Discord)', tooLong.length === 0, tooLong.length);
   }
 
   console.log('\nподключение:');
@@ -1645,8 +1644,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('а давнее (30 минут назад) не трогает: после долгого простоя не наказываем за старое', find(c, 'DELETE', new RegExp('/messages/' + down2.id + '$')).length === 0 &&
      find(c, 'PUT', /bans\/R2$/).length === 0);
   const rfix = find(c, 'PATCH', new RegExp('^/channels/301/messages/' + (rpost && rpost.resId) + '$'))[0];
-  ok('один раз бот заменил и свой прежний текст: пост исправлен на месте — 7 правил картинкой и флаги, нового поста нет', rfix &&
-     /1\. No spam/.test(altOf(rfix)) && !/my own rules/.test(J(rfix)) && flagsOf(bodyOf(rfix)).map(b => b.label).join() === 'English,Русский' &&
+  ok('один раз бот заменил и свой прежний текст: пост исправлен на месте — 7 правил сообщением и флаги, нового поста нет', rfix &&
+     /1 No spam/.test(plainOf(rfix)) && !/my own rules/.test(J(rfix)) && flagsOf(bodyOf(rfix)).map(b => b.label).join() === 'English,Русский' &&
      find(c, 'POST', /^\/channels\/301\/messages$/).length === 0 && bot._test.state().guilds[G].rules.custom !== true && bot._test.state().fixes.rules7 === true);
   ok('прежний отдельный русский пост убран', find(c, 'DELETE', /^\/channels\/301\/messages\/9999$/).length === 1 && bot._test.state().guilds[G].rules.ruMessage === undefined);
   ok('пропавшие из правил встроенные правила AutoMod (упоминания) удалены, чужое («My own spam rule») не тронуто',
@@ -1674,8 +1673,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bot.stop();
   await sleep(200);
   const sf2 = JSON.parse(fs.readFileSync(process.env.DISCORD_BOT_STATE, 'utf8'));
-  ok('в состоянии отмечено: пост правил уже в нынешнем оформлении', sf2.fixes.rulesCard === 3);
-  sf2.fixes.rulesCard = 2;                // состояние от прежнего оформления карточек
+  ok('в состоянии отмечено: пост правил уже в нынешнем оформлении (сообщения Discord)', sf2.fixes.rulesCard === 4);
+  sf2.fixes.rulesCard = 3;                // состояние от прежнего оформления (картинки)
   fs.writeFileSync(process.env.DISCORD_BOT_STATE, JSON.stringify(sf2));
   t = Date.now();
   bot._test.reload();
@@ -1683,8 +1682,11 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(since(t), 'PATCH', /^\/channels\/301\/messages\/\d+$/).length, 8000);
   await sleep(500);
   const upg = find(since(t), 'PATCH', /^\/channels\/301\/messages\/\d+$/);
-  ok('после выкладки нового оформления бот один раз правит пост правил на месте: нового поста нет, картинка новая, ряд тем на месте', upg.length === 1 && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 &&
-     rowsOf(bodyOf(upg[0])).length === 2 && multipartOf(upg[0]).png && bot._test.state().fixes.rulesCard === 3);
+  ok('после выкладки нового оформления бот один раз правит пост правил на месте: нового поста нет, прежняя картинка убрана из поста, вместо неё текст и один ряд флагов',
+     upg.length === 1 && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 && bodyOf(upg[0]).flags === 32768 && !multipartOf(upg[0]) &&
+     Array.isArray(bodyOf(upg[0]).attachments) && bodyOf(upg[0]).attachments.length === 0 && rowsOf(bodyOf(upg[0])).length === 1 &&
+     /^AIBROFIST Server Rules 1 No spam /.test(plainOf(upg[0])) && bot._test.state().fixes.rulesCard === 4,
+     upg.length + ' ' + (upg[0] ? JSON.stringify(Object.keys(bodyOf(upg[0]))) + ' ' + plainOf(upg[0]).slice(0, 60) + ' rows ' + rowsOf(bodyOf(upg[0])).length : '') + ' card=' + bot._test.state().fixes.rulesCard);
 
   bot.stop();
   wss.close(); server.close();

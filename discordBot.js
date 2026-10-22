@@ -12,8 +12,8 @@
 //     слов вражды и 18+, которые она не даёт отправить вовсе;
 //   - пишет игроку в личку, за что и как он наказан, а в канал mod-log
 //     (если он есть) — запись о случае;
-//   - отвечает не текстом, а картинками-карточками в стиле сайта
-//     (discordPics.js) с флагами English / Русский под ними;
+//   - отвечает аккуратными сообщениями Discord (рамка, текст, аватарка,
+//     серые кнопки; discordViews.js) с флагами English / Русский под ними;
 //   - секретные команды владельца сервера прямо в канале (начало команд —
 //     DISCORD_CMD_PREFIX на хостинге): news (пост в любой канал с
 //     картинками и кнопкой-ссылкой — в окне, которое видит только он),
@@ -55,7 +55,7 @@ const RAID_MS = 10 * 60 * 1000;
 const NOTICE_MS = 10 * 1000;     // короткое предупреждение в канале исчезает само
 
 // banned — приметы забаненных (аватарка, имя): по ним ловим обход бана
-// warns — предупреждения участников («сервер:игрок» -> список), cards — карточки-картинки, которые можно перерисовать на другом языке
+// warns — предупреждения участников («сервер:игрок» -> список), cards — карточки, которые можно показать на другом языке
 let state = { feed: [], guilds: {}, cases: 0, banned: {}, unbans: {}, fixes: {}, watch: { last: {} }, warns: {}, cards: {} };
 let loaded = false, saveTimer = null;
 const guilds = new Map();        // id -> { id, name, owner, roles: Map, channels: Map }
@@ -211,7 +211,7 @@ async function dm(uid, body) {
   const r = await api('POST', '/channels/' + ch + '/messages', noPing(body));
   return ok(r);          // 403 — у игрока закрыты личные сообщения
 }
-// в личку — карточкой-картинкой (не вышло нарисовать — текстом fallback)
+// в личку — карточкой (не вышло собрать — текстом fallback)
 async function dmCard(uid, kind, data, gid, fallback) {
   const ch = await dmChannel(uid);
   if (!ch) return false;
@@ -724,38 +724,20 @@ async function ensureNativeAutomod(g) {
 }
 
 
-/* ---------- карточки-картинки ----------
-   Ответы бота — картинки в стиле сайта (discordPics.js), каждая рисуется
-   заново, со свежими данными. Под картинкой кнопки с флагами: English и
-   Русский — нажатие перерисовывает картинку в том же сообщении на
-   выбранном языке (видят все, кто видит сообщение); живые карточки
-   (справка, статистика, предупреждения) при этом снова берут данные.
-   Что нарисовано, бот помнит (state.cards) — кнопки работают и после
-   перезапуска. Нарисовать не вышло — бот отвечает прежним текстом. */
-const pics = require('./discordPics.js');
+/* ---------- ответы-сообщения ----------
+   Ответы бота — настоящие сообщения Discord (discordViews.js): рамка с
+   цветной полоской, текст, аватарка участника справа и серые кнопки. Под
+   ответом кнопки с флагами: English и Русский — нажатие меняет язык в том
+   же сообщении (видят все, кто видит сообщение); живые карточки (справка,
+   статистика, предупреждения) при этом снова берут свежие данные.
+   Что показано, бот помнит (state.cards) — кнопки работают и после
+   перезапуска. Discord не принял сообщение — бот отвечает прежним текстом. */
+const V = require('./discordViews.js');
 const CARD_KEEP = 400;
 const CARD_AGE = 60 * R.DAY;
 const FLASH_MS = 15 * 1000;          // итог команды в канале (журнал включён, канал почищен) гаснет сам
-/* Описание картинки (alt): Discord показывает его плашкой «ALT» («ПОДСКАЗКА») поверх картинки — она мешает и закрывает
-   подпись, поэтому к карточкам описание не прикладывается. В тестах (DISCORD_CARD_ALT=1) оно включено: по нему
-   проверяется, что именно нарисовано. */
-const withAlt = (obj, text) => process.env.DISCORD_CARD_ALT === '1' ? Object.assign(obj, { description: text().slice(0, 1000) }) : obj;
 const LIVE = new Set(['help', 'stats', 'warns', 'warnsAll']);
 const OWNER_ONLY = new Set(['help', 'stats', 'warns', 'warnsAll']);
-const LANGS = [{ key: 'en', label: 'English', flag: '🇬🇧' }, { key: 'ru', label: 'Русский', flag: '🇷🇺' }];
-// флаги внизу карточки: выбранный язык подсвечен, нажатие на него — просто перерисовать.
-// current — id для выбранного (тогда он не нажимается): если такой же id уже у «Refresh», Discord не примет два одинаковых
-const langRow = (idOf, lang, current) => ({ type: 1, components: LANGS.map(l => Object.assign({ type: 2, style: l.key === lang ? 1 : 2, label: l.label,
-  emoji: { name: l.flag }, custom_id: l.key === lang && current ? current : idOf(l.key) }, l.key === lang && current ? { disabled: true } : {})) });
-
-// тёмная и светлая тема карточки — вторым рядом кнопок (выбранная не нажимается)
-const THEME_BTN = { en: { dark: 'Dark theme', light: 'Light theme' }, ru: { dark: 'Тёмная тема', light: 'Светлая тема' } };
-const themeOfCard = t => t === 'light' ? 'light' : 'dark';
-/* Два ряда под картинкой: язык (флаги) и тема. idOf(язык, тема) — custom_id кнопки; у выбранных
-   кнопок id постоянный (prefix + '-lang' / '-theme'): они не нажимаются, а повторяться ids не могут. */
-const themeRow = (idOf, lang, theme, prefix) => ({ type: 1, components: ['dark', 'light'].map(x => Object.assign({ type: 2, style: x === theme ? 1 : 2,
-  label: THEME_BTN[lang][x], custom_id: x === theme ? prefix + '-theme' : idOf(lang, x) }, x === theme ? { disabled: true } : {})) });
-const picRows = (idOf, lang, theme, prefix) => [langRow(l => idOf(l, theme), lang, prefix + '-lang'), themeRow(idOf, lang, theme, prefix)];
 
 function keepCard(kind, data, gid) {
   const id = crypto.randomBytes(6).toString('hex'), now = Date.now();
@@ -767,48 +749,17 @@ function keepCard(kind, data, gid) {
   return id;
 }
 
-/* Аватарка участника — настоящая, с CDN Discord (через посредника, если он
-   есть). Не скачалась за 3 секунды или это не картинка — рисуется фигурка. */
+/* Аватарка участника — настоящая, с CDN Discord: Discord сам показывает её
+   справа в сообщении. Своей нет — стандартная, какую он показывает всем. */
 const cdnBase = () => TEST_CDN && !relayOn() ? 'http://' + TEST_CDN : 'https://cdn.discordapp.com';
 function avatarUrl(gid, user, member) {
   if (!user || !user.id) return null;
   if (member && member.avatar && gid) return cdnBase() + '/guilds/' + gid + '/users/' + user.id + '/avatars/' + member.avatar + '.png?size=128';
   if (user.avatar) return cdnBase() + '/avatars/' + user.id + '/' + user.avatar + '.png?size=128';
-  // своей аватарки нет — стандартная, какую Discord показывает всем: у новых имён по id, у старых по номеру после «#»
+  // своей аватарки нет — стандартная: у новых имён по id, у старых по номеру после «#»
   if (!/^\d+$/.test(String(user.id))) return null;
   const n = user.discriminator && user.discriminator !== '0' ? Number(user.discriminator) % 5 : Number((BigInt(user.id) >> 22n) % 6n);
   return cdnBase() + '/embed/avatars/' + n + '.png';
-}
-const avatars = new Map();           // ссылка -> { uri, until }
-async function avatarData(url) {
-  if (!url || cdn.ok === false) return null;
-  const c = avatars.get(url);
-  if (c && c.until > Date.now()) return c.uri;
-  let uri = null;
-  try {
-    const got = await Promise.race([download(url, 512 * 1024), sleep(3000).then(() => null)]);
-    const b = got && got.buf;
-    if (b && b.length > 8 && ((b[0] === 0x89 && b[1] === 0x50) || (b[0] === 0xFF && b[1] === 0xD8)))
-      uri = 'data:image/' + (b[0] === 0x89 ? 'png' : 'jpeg') + ';base64,' + b.toString('base64');
-  } catch (e) { uri = null; }
-  if (avatars.size > 300) avatars.clear();
-  avatars.set(url, { uri, until: Date.now() + (uri ? 30 : 5) * 60 * 1000 });
-  return uri;
-}
-
-async function renderCard(kind, data, lang, theme) {
-  theme = themeOfCard(theme);
-  const d = Object.assign({}, data, { lang });
-  if (d.avatarUrl) d.avatar = await avatarData(d.avatarUrl);
-  if (Array.isArray(d.list)) d.list = await Promise.all(d.list.map(async x => x && x.avatarUrl ? Object.assign({}, x, { avatar: await avatarData(x.avatarUrl) }) : x));
-  try { return await cards.draw(kind, d, theme); }
-  catch (e) {
-    if (!d.avatar && !(d.list || []).some(x => x && x.avatar)) throw e;
-    // испорченная аватарка не должна ломать карточку — рисуем без неё
-    delete d.avatar;
-    if (Array.isArray(d.list)) d.list = d.list.map(x => Object.assign({}, x, { avatar: null }));
-    return cards.draw(kind, d, theme);
-  }
 }
 
 function liveData(rec) {
@@ -820,39 +771,34 @@ function liveData(rec) {
   return rec.d;
 }
 
-function cardRows(rec, id, lang, theme) {
-  const rows = [];
-  if (rec.k === 'stats') rows.push({ type: 1, components: [linkButton(lang === 'ru' ? 'Открыть живую статистику' : 'Open live stats', require('./serversInfo.js').link())] });
+// один ряд под текстом: ссылки (если есть) и флаги языка
+function cardRows(rec, id, lang) {
+  const links = [];
+  if (rec.k === 'stats') links.push(V.linkButton(V.say(lang, 'openStats'), require('./serversInfo.js').link()));
   const link = rec.d && rec.d.link;
-  if (link && link.url) rows.push({ type: 1, components: [linkButton(String((lang === 'ru' ? link.ru : link.en) || link.en || 'Open').slice(0, 80), link.url)] });
-  return rows.concat(picRows((l, th) => 'cd:' + id + ':' + l + ':' + th, lang, theme, 'cd'));
+  if (link && link.url) links.push(V.linkButton(String((lang === 'ru' ? link.ru : link.en) || link.en || 'Open'), link.url));
+  return [V.row(...links, ...V.langButtons(l => 'cd:' + id + ':' + l, lang, 'cd-lang'))];
 }
 
-// картинка, подпись к ней (alt) и кнопки: { body, files } — для нового сообщения, ответа на нажатие или правки
-async function cardMessage(rec, id, lang, ephemeral, theme) {
-  theme = themeOfCard(theme);
+// готовое сообщение с карточкой: для нового сообщения, ответа на нажатие или правки
+function cardMessage(rec, id, lang, ephemeral) {
   const data = LIVE.has(rec.k) ? liveData(rec) : rec.d;
-  const png = await renderCard(rec.k, data, lang, theme);
-  const file = 'aibrofist-' + (rec.k === 'action' ? (rec.d.type || 'card') : rec.k.toLowerCase()) + '.png';
-  const body = { attachments: [withAlt({ id: 0, filename: file }, () => pics.alt(rec.k, data, lang))],
-                 components: cardRows(rec, id, lang, theme), allowed_mentions: { parse: [] } };
-  if (ephemeral) body.flags = 64;
-  return { body, files: [{ name: file, data: png, type: 'image/png' }] };
+  return V.message(V.view(rec.k, data, lang), cardRows(rec, id, lang), { ephemeral });
 }
 
 // новая карточка в канал или в личку (dm: закрытая личка — обычное дело, в журнал не пишем);
-// не нарисовалась или Discord её не взял — запасной текст
+// не собралась или Discord её не взял — запасной текст
 async function postCard(channel, kind, data, gid, fallback, dm) {
   const rec = { k: kind, d: data, g: gid || null };
   const id = keepCard(kind, data, gid);
   let msg = null;
-  try { msg = await cardMessage(rec, id, 'en'); }
-  catch (e) { once('card:' + e.message, 'could not draw the ' + kind + ' card, sending text instead:', e.message); }
+  try { msg = cardMessage(rec, id, 'en'); }
+  catch (e) { once('card:' + e.message, 'could not build the ' + kind + ' card, sending text instead:', e.message); }
   if (msg) {
-    const r = await api('POST', '/channels/' + channel + '/messages', msg.body, { files: msg.files });
+    const r = await api('POST', '/channels/' + channel + '/messages', msg);
     if (ok(r)) return r;
     if (r.status === 403) {
-      if (!dm) once('nowrite:' + channel, 'cannot write to channel ' + channel + ': allow View Channel, Send Messages and Attach Files for the bot there');
+      if (!dm) once('nowrite:' + channel, 'cannot write to channel ' + channel + ': allow View Channel and Send Messages for the bot there');
       return r;
     }
     log('Discord did not take the ' + kind + ' card:', r.status, JSON.stringify(r.body).slice(0, 200));
@@ -870,55 +816,48 @@ async function flashCard(channel, g, data, text) {
   return r;
 }
 
-/* Ответ на нажатие картинкой: сразу, если она готова за QUICK_MS, иначе
-   сначала «думаю…», а картинка подменяет его, когда готова. make() —
-   обещание { body, files }; fallback(deferred) — запасной ответ текстом. */
-async function sendPic(i, make, update, eph, fallback) {
-  const job = make();
-  let got = null, failed = false;
-  if (!i._http) got = await Promise.race([job, sleep(QUICK_MS).then(() => null)]).catch(() => { failed = true; return null; });
-  if (got) {
-    const r = await api('POST', '/interactions/' + i.id + '/' + i.token + '/callback', { type: update ? 7 : 4, data: got.body }, { files: got.files });
-    if (ok(r)) return r;
-    log('Discord did not take the card:', r.status, JSON.stringify(r.body).slice(0, 200));
-    return fallback(false);
+/* Ответ на нажатие кнопки в том же сообщении. Сообщение прежней версии бота
+   (картинка с кнопками) в новое не превратить — тогда новое сообщение, видное
+   только нажавшему. */
+async function updateMessage(i, msg) {
+  const legacy = i.message && !((i.message.flags || 0) & COMPONENTS_V2);
+  if (!legacy) {
+    const r = await respond(i, { type: 7, data: msg });
+    if (!r || r.status !== 400) return r;
+    log('Discord did not take the message update:', JSON.stringify(r.body).slice(0, 200));
   }
-  if (failed) return fallback(false);
-  await respond(i, update ? { type: 6 } : { type: 5, data: { flags: eph ? 64 : 0 } });
-  try { got = await job; } catch (e) { return fallback(true); }
-  const r = await api('PATCH', '/webhooks/' + (i.application_id || appId) + '/' + i.token + '/messages/@original', got.body, { files: got.files });
-  if (ok(r)) return r;
-  log('Discord did not take the card:', r.status, JSON.stringify(r.body).slice(0, 200));
-  return fallback(true);
+  return respond(i, { type: 4, data: Object.assign({}, msg, { flags: msg.flags | 64 }) });
 }
 // запасной ответ текстом (виден только нажавшему)
-const textAnswer = (i, data, update) => deferred => {
-  const d = Object.assign({ flags: 64, allowed_mentions: { parse: [] } }, data);
-  if (!deferred) return respond(i, { type: 4, data: d });
-  const hook = '/webhooks/' + (i.application_id || appId) + '/' + i.token;
-  if (update) return api('POST', hook, d);
-  return api('PATCH', hook + '/messages/@original', Object.assign({ allowed_mentions: { parse: [] } }, data));
-};
+const textAnswer = (i, data) => respond(i, { type: 4, data: Object.assign({ flags: 64, allowed_mentions: { parse: [] } }, data) });
 
-// карточка в ответ на нажатие (видит только нажавший); fallback — текст на случай, если не нарисуется
-function showCard(i, g, kind, data, fallback) {
+/* Ответ на команду или кнопку панели: новое сообщение, видное только владельцу.
+   fallback — текст на случай, если сообщение не соберётся или Discord его не возьмёт. */
+async function showCard(i, g, kind, data, fallback) {
   const rec = { k: kind, d: data, g: g ? g.id : null };
   const id = keepCard(kind, data, rec.g);
-  return sendPic(i, () => cardMessage(rec, id, 'en', true), false, true,
-                 textAnswer(i, fallback || { content: pics.alt(kind, LIVE.has(kind) ? liveData(rec) : data, 'en') }));
+  let msg = null;
+  try { msg = cardMessage(rec, id, 'en', true); }
+  catch (e) { once('card:' + e.message, 'could not build the ' + kind + ' card, sending text instead:', e.message); }
+  const r = msg ? await respond(i, { type: 4, data: msg }) : null;
+  if (r && ok(r)) return r;
+  if (r) log('Discord did not take the ' + kind + ' card:', r.status, JSON.stringify(r.body).slice(0, 200));
+  return textAnswer(i, fallback || card('Could not show this right now. Please try again.'));
 }
 
-// кнопка с флагом или темой: та же карточка на выбранном языке и в выбранной теме, в том же сообщении
+// кнопка с флагом: та же карточка на выбранном языке, в том же сообщении
 function onCardLang(i, cid) {
-  const m = /^cd:([0-9a-f]+):(en|ru)(?::(dark|light))?$/.exec(cid);
+  const m = /^cd:([0-9a-f]+):(en|ru)(?::(?:dark|light))?$/.exec(cid);       // «:тема» — кнопки сообщений прежней версии
   if (!m || pressedTooFast(i)) return respond(i, { type: 6 });
-  const rec = state.cards[m[1]], lang = m[2], theme = m[3] || 'dark';
+  const rec = state.cards[m[1]], lang = m[2];
   if (!rec) return reply(i, { content: lang === 'ru' ? 'Эта карточка слишком старая: вызовите команду снова.' : 'This card is too old: use the command again.' });
   // справка, статистика и предупреждения — только владельцу (их и видит только он)
   const g = rec.g && guilds.get(rec.g);
   if (OWNER_ONLY.has(rec.k) && !(g && userOf(i) === g.owner)) return reply(i, card('Only the server owner can use this.'));
-  return sendPic(i, () => cardMessage(rec, m[1], lang, false, theme), true, false,
-                 textAnswer(i, { content: lang === 'ru' ? 'Не получилось перерисовать карточку, попробуйте ещё раз.' : 'Could not redraw the card right now. Please try again.' }, true));
+  let msg;
+  try { msg = cardMessage(rec, m[1], lang, false); }
+  catch (e) { return textAnswer(i, { content: lang === 'ru' ? 'Не получилось обновить карточку, попробуйте ещё раз.' : 'Could not update the card right now. Please try again.' }); }
+  return updateMessage(i, msg);
 }
 
 /* ---------- предупреждения ----------
@@ -1492,20 +1431,36 @@ async function onWarnSubmit(i, g) {
     if (ok(pr)) { await api('DELETE', '/webhooks/' + (i.application_id || appId) + '/' + i.token + '/messages/@original').catch(() => {}); return pr; }
   }
   // в канал не вышло — карточку видит хотя бы владелец
-  return finishPic(i, g, 'action', res.card, count + ' sent to **' + plainName(who) + '**.\n' + (r ? 'Rule ' + r.id + ': ' + r.title : 'Rule: other') + '\nReason: ' + reason);
+  return finishCard(i, g, 'action', res.card, count + ' sent to **' + plainName(who) + '**.\n' + (r ? 'Rule ' + r.id + ': ' + r.title : 'Rule: other') + '\nReason: ' + reason);
 }
 
-// итог окна (пост, каналы, правила) — карточкой вместо «думаю…»; не вышло — текстом
-async function finishPic(i, g, kind, data, text) {
+/* Итог окна (пост, каналы, правила, предупреждение) — карточкой вместо «думаю…».
+   Окно уже ответило «думаю…» простым сообщением; Discord не всегда даёт превратить
+   его в новые компоненты, поэтому: правка на месте -> иначе «думаю…» убираем и шлём
+   новое сообщение (видит только владелец) -> иначе простой текст. Что из этого
+   сработало, помним: правку, которую Discord не берёт, повторно не пробуем. */
+const caps = { patchCard: null };
+async function finishMessage(i, msg) {
+  const hook = '/webhooks/' + (i.application_id || appId) + '/' + i.token;
+  if (caps.patchCard !== false) {
+    const r = await api('PATCH', hook + '/messages/@original', Object.assign({}, msg, { flags: msg.flags & ~64 }));
+    if (ok(r)) { caps.patchCard = true; return r; }
+    if (r.status === 400 && caps.patchCard === null) { caps.patchCard = false; log('Discord does not turn a "thinking" reply into a card; sending the card as a new message'); }
+    else if (r.status !== 400) return r;
+  }
+  await api('DELETE', hook + '/messages/@original').catch(() => {});
+  return api('POST', hook, msg);
+}
+async function finishCard(i, g, kind, data, text) {
   const rec = { k: kind, d: Object.assign({ at: Date.now() }, data), g: g ? g.id : null };
   const id = keepCard(kind, rec.d, rec.g);
   try {
-    const msg = await cardMessage(rec, id, 'en', true);
-    const r = await api('PATCH', '/webhooks/' + (i.application_id || appId) + '/' + i.token + '/messages/@original', msg.body, { files: msg.files });
+    const r = await finishMessage(i, cardMessage(rec, id, 'en', true));
     if (ok(r)) return r;
     log('Discord did not take the ' + kind + ' card:', r.status, JSON.stringify(r.body).slice(0, 200));
-  } catch (e) { once('card:' + e.message, 'could not draw the ' + kind + ' card, sending text instead:', e.message); }
-  return finish(i, card(text));
+  } catch (e) { once('card:' + e.message, 'could not build the ' + kind + ' card, sending text instead:', e.message); }
+  const r = await finish(i, card(text));
+  return ok(r) ? r : api('POST', '/webhooks/' + (i.application_id || appId) + '/' + i.token, Object.assign({ flags: 64, allowed_mentions: { parse: [] } }, card(text)));
 }
 const chName = (g, id) => { const c = g.channels.get(id); return '#' + (c ? c.name : id); };
 // «5 сообщений», «1 сообщение»
@@ -1559,56 +1514,44 @@ const rulesPost = (title, text, o) => {
     button: o.lang === 'en' ? { label: 'Русский', id: 'rules:ru' } : o.lang === 'ru' ? { label: 'English', id: 'rules:en' } : null });
 };
 
-/* Правила картинкой (discordPics.js): стандартные — с наказанием у каждого
-   правила, свой текст владельца — как он написан. Под картинкой флаги:
-   English и Русский (без русского текста флагов нет). Картинка одного и
-   того же текста рисуется один раз. */
-const rulesPics = new Map();         // язык, тема и текст -> картинка
-const CARD_DESIGN = 3;               // версия оформления карточек (1 — крупные, 2 — компактные, 3 — аккуратные, без плашки ALT): поменялось — пост правил один раз перерисуется
-function rulesData(r, lang) {
+/* Правила сообщением (discordViews.js): стандартные — с наказанием у каждого
+   правила, свой текст владельца — как он написан. Под текстом флаги: English и
+   Русский (без русского текста флагов нет). */
+const CARD_DESIGN = 4;               // версия оформления ответов бота (1-3 — картинки, 4 — сообщения Discord): поменялось — пост правил один раз перерисуется
+function rulesData(g, r, lang) {
   const ru = lang === 'ru' && !!r.ru;
   const std = r.en === R.rulesText('en') && (!r.ru || r.ru === R.rulesText('ru'));
-  return { std, title: ru ? RULES_TITLE_RU : (r.title || RULES_TITLE), text: ru ? r.ru : r.en, at: r.at };
+  const text = ru ? r.ru : r.en;
+  return { std, title: ru ? RULES_TITLE_RU : (r.title || RULES_TITLE), text: g ? linkify(g, text) : text, at: r.at };
 }
-async function rulesPic(r, lang, theme) {
-  theme = themeOfCard(theme);
-  const d = rulesData(r, lang);
-  const key = [lang, theme, d.std, d.title, d.text, d.at].join('|');
-  let png = rulesPics.get(key);
-  if (!png) {
-    png = await renderCard('rules', d, lang, theme);
-    if (rulesPics.size >= 12) rulesPics.clear();
-    rulesPics.set(key, png);
-  }
-  const file = 'aibrofist-rules-' + lang + '.png', alt = () => pics.alt('rules', d, lang);
-  return { body: { flags: COMPONENTS_V2, allowed_mentions: { parse: [] }, attachments: [withAlt({ id: 0, filename: file }, alt)],
-                   components: [{ type: 12, items: [withAlt({ media: { url: 'attachment://' + file } }, alt)] }]
-                     .concat(r.ru ? picRows((l, th) => 'rules:' + l + ':' + th, lang, theme, 'rules') : [themeRow((l, th) => 'rules:' + l + ':' + th, lang, theme, 'rules')]) },
-           files: [{ name: file, data: png, type: 'image/png' }] };
+function rulesMessage(g, r, lang) {
+  lang = lang === 'ru' && r.ru ? 'ru' : 'en';
+  const rows = r.ru ? [V.row(...V.langButtons(l => 'rules:' + l, lang, 'rules-lang'))] : [];
+  return V.message(V.view('rules', rulesData(g, r, lang), lang), rows);
 }
 
-/* Один пост: тот же канал — правим прежний на месте, иначе кладём новый, а
-   старый убираем. Прежний отдельный русский пост (если был) убирается.
-   Сначала картинкой; не нарисовалась или Discord её не взял — текстом.
+/* Один пост: тот же канал — правим прежний на месте (картинку прежней версии
+   убираем), иначе кладём новый, а старый убираем. Прежний отдельный русский
+   пост (если был) убирается. Сначала красивым сообщением; не собралось или
+   Discord его не взял — простой рамкой с текстом.
    Возвращает { message, at, pic } или { error: код ответа Discord }. */
 async function publishRules(g, chan, r, old) {
   old = old || {};
   const at = Date.now();
   const tries = [];
-  try { tries.push(await rulesPic(Object.assign({}, r, { at }), 'en')); }
-  catch (e) { once('rulespic:' + e.message, 'could not draw the rules, posting text instead:', e.message); }
+  try { tries.push({ body: rulesMessage(g, Object.assign({}, r, { at }), 'en'), nice: true }); }
+  catch (e) { once('rulespic:' + e.message, 'could not build the rules, posting plain text instead:', e.message); }
   tries.push({ body: rulesPost(r.title, linkify(g, r.en), { lang: r.ru ? 'en' : null, at }) });
   let res = null, used = null;
   for (const m of tries) {
-    const opts = m.files ? { files: m.files } : undefined;
     res = null;
-    if (old.message && old.channel === chan) res = await api('PATCH', '/channels/' + chan + '/messages/' + old.message, m.body, opts);
-    if (!res || !ok(res)) res = await api('POST', '/channels/' + chan + '/messages', m.body, opts);
+    if (old.message && old.channel === chan) res = await api('PATCH', '/channels/' + chan + '/messages/' + old.message, Object.assign({ attachments: [] }, m.body));
+    if (!res || !ok(res)) res = await api('POST', '/channels/' + chan + '/messages', m.body);
     if (ok(res) && res.body) { used = m; break; }
-    if (m.files) log('Discord did not take the rules picture:', res.status, JSON.stringify(res.body).slice(0, 200));
+    if (m.nice) log('Discord did not take the rules message:', res.status, JSON.stringify(res.body).slice(0, 200));
   }
   if (!used) return { error: res.status };
-  const out = { message: res.body.id, at, pic: !!used.files };
+  const out = { message: res.body.id, at, pic: !!used.nice };
   for (const id of [old.message, old.ruMessage])
     if (id && id !== out.message && old.channel) api('DELETE', '/channels/' + old.channel + '/messages/' + id).catch(() => {});
   return out;
@@ -1632,7 +1575,7 @@ async function onRulesSubmit(i, g) {
   st.words = words;
   save();
   const url = 'https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.message;
-  return finishPic(i, g, 'info', {
+  return finishCard(i, g, 'info', {
     tag: { en: 'Server rules', ru: 'Правила сервера' }, color: 'ok', link: { url, en: 'Open the rules', ru: 'Открыть правила' },
     title: { en: 'Rules are posted in ' + chName(g, chosen.id), ru: 'Правила выложены в ' + chName(g, chosen.id) },
     lines: [ru ? { en: 'The flag buttons under the post switch it between English and Russian.', ru: 'Кнопки с флагами под постом переключают английский и русский.' }
@@ -1649,7 +1592,7 @@ async function onRulesSubmit(i, g) {
    Поменялся стандартный текст (новая версия бота), а владелец свой не писал —
    бот правит тот же пост. Написал свой командой rules (custom) — не трогаем;
    удалил пост — бот выкладывает новый только когда текст правил меняется.
-   Пост текстом прежних версий бота один раз перерисовывается картинкой (pic),
+   Пост текстом прежних версий бота один раз перерисовывается красивым сообщением (pic),
    свой текст владельца при этом остаётся.
    Исключение — разовая замена на 7 правил с одним постом и кнопкой «Русский»
    (fixes.rules7): она перекрывает и свой текст, и убирает прежний отдельный
@@ -1661,7 +1604,7 @@ async function postDefaultRules(g) {
   const en = R.rulesText('en'), ru = R.rulesText('ru');
   const c = g.channels.get(RULES_CHANNEL);
   const toPic = !!(old && old.message && !old.pic);
-  const upgrade = state.fixes.rulesCard !== CARD_DESIGN;     // один раз на версию оформления карточек: пост перерисовывается
+  const upgrade = state.fixes.rulesCard !== CARD_DESIGN;     // один раз на версию оформления: пост перерисовывается
   if (old && old.message && !force && !toPic && !upgrade && (old.custom || (old.en === en && old.ru === ru && !old.ruMessage))) return;
   if (!old && !c) return;
   const chan = old && old.channel && g.channels.has(old.channel) ? old.channel : c && c.id;
@@ -1677,23 +1620,20 @@ async function postDefaultRules(g) {
   save();
 }
 
-/* Флаги под правилами: картинка в том же посте меняется на другой язык (это
-   правка самого поста, её видят все). Картинка не вышла — прежний текст;
+/* Флаги под правилами: текст в том же посте меняется на другой язык (это
+   правка самого поста, её видят все). Не собралось — прежняя рамка с текстом;
    Discord правку не примет — отвечаем только нажавшему. */
-async function rulesSwitch(i, g, lang, theme) {
+async function rulesSwitch(i, g, lang) {
   const r = g && gstate(g.id).rules || {};
   const full = { title: r.title || RULES_TITLE, en: r.en || R.rulesText('en'), ru: r.ru === undefined ? R.rulesText('ru') : r.ru, at: r.at };
   const showRu = lang === 'ru' && !!full.ru;
-  const text = showRu ? full.ru : full.en;
-  const title = showRu ? RULES_TITLE_RU : full.title;
-  const box = rulesPost(title, g ? linkify(g, text) : text, { lang: showRu ? 'ru' : full.ru ? 'en' : null, at: r.at });
-  return sendPic(i, () => rulesPic(full, showRu ? 'ru' : 'en', theme), true, false, async deferred => {
-    if (deferred) return api('PATCH', '/webhooks/' + (i.application_id || appId) + '/' + i.token + '/messages/@original', box);
-    const res = await respond(i, { type: 7, data: box });
-    if (res && !ok(res) && res.status === 400)
-      return respond(i, { type: 4, data: Object.assign({}, box, { flags: box.flags | 64 }) });
-    return res;
-  });
+  let msg;
+  try { msg = rulesMessage(g, full, showRu ? 'ru' : 'en'); }
+  catch (e) {
+    const text = showRu ? full.ru : full.en;
+    msg = rulesPost(showRu ? RULES_TITLE_RU : full.title, g ? linkify(g, text) : text, { lang: showRu ? 'ru' : full.ru ? 'en' : null, at: r.at });
+  }
+  return updateMessage(i, Object.assign({ attachments: [] }, msg));
 }
 
 async function showModal(i, modern, classic) {
@@ -1781,7 +1721,7 @@ async function onNewsSubmit(i, g) {
   const r = await api('POST', '/channels/' + chosen.id + '/messages', msg, files.length ? { files } : undefined);
   if (!ok(r) || !r.body) return finish(i, card('Could not post in <#' + chosen.id + '> (error ' + r.status + '). Check that I can send messages, embeds and files there.'));
   const url = 'https://discord.com/channels/' + g.id + '/' + chosen.id + '/' + r.body.id;
-  return finishPic(i, g, 'info', { tag: { en: 'Post', ru: 'Пост' }, color: notes.length ? 'warn' : 'ok', link: { url, en: 'Open the post', ru: 'Открыть пост' },
+  return finishCard(i, g, 'info', { tag: { en: 'Post', ru: 'Пост' }, color: notes.length ? 'warn' : 'ok', link: { url, en: 'Open the post', ru: 'Открыть пост' },
                                    title: { en: 'Posted in ' + chName(g, chosen.id), ru: 'Опубликовано в ' + chName(g, chosen.id) }, lines: notes },
     'Posted in <#' + chosen.id + '>: ' + url + (notes.length ? '\n\nImages:\n' + notes.map(n => '- ' + n.en).join('\n') : ''));
 }
@@ -1796,7 +1736,7 @@ async function onUpdatesSubmit(i, g) {
   state.feed = state.feed.filter(c => !g.channels.has(c)).concat([...new Set(list)]);
   save();
   const names = list.map(c => chName(g, c)).join(', ');
-  return finishPic(i, g, 'info', { tag: { en: 'Game updates', ru: 'Новости игры' }, color: 'ok',
+  return finishCard(i, g, 'info', { tag: { en: 'Game updates', ru: 'Новости игры' }, color: 'ok',
     title: list.length ? { en: 'Game updates will be posted in ' + names, ru: 'Новости игры будут в ' + names }
                        : { en: 'Game updates go to the #updates channel', ru: 'Новости игры идут в канал #updates' },
     lines: [{ en: 'New game updates appear there by themselves.', ru: 'Новые обновления игры появляются там сами.' }] },
@@ -1806,8 +1746,8 @@ async function onUpdatesSubmit(i, g) {
 async function onInteraction(i) {
   if (!i) return;
   const cid = String((i.data && i.data.custom_id) || '');
-  const rs = i.type === 3 && /^rules:(en|ru)(?::(dark|light))?$/.exec(cid);       // без темы — кнопки поста, выложенного раньше
-  if (rs) return rulesSwitch(i, i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value, rs[1], rs[2] || 'dark');
+  const rs = i.type === 3 && /^rules:(en|ru)(?::(?:dark|light))?$/.exec(cid);       // «:тема» — кнопки поста прежней версии
+  if (rs) return rulesSwitch(i, i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value, rs[1]);
   if (i.type === 2 && i.data && i.data.name === 'servers') return onServers(i);
   if (i.type === 2 && i.data && i.data.name === 'account') return onAccount(i);
   if (i.type === 4 && i.data && i.data.name === 'account') return onAccountHint(i);
@@ -1854,154 +1794,18 @@ async function onInteraction(i) {
   if (i.type === 5 && cid.indexOf('warn:') === 0) return onWarnSubmit(i, g);
 }
 
-/* ---------- /servers текстом: запасной ответ ----------
-   Обычно /servers отвечает картинкой (ниже, serversView); эта карточка
-   текстом — если картинку нарисовать не вышло. Ответ виден всем в
-   канале. Имена комнат и карт пишут игроки — экранируем, чтобы из них
-   не получились ссылки и разметка. */
-const md = s => String(s || '').replace(/[\\*_`~|>#\[\]()<@:-]/g, c => '\\' + c).slice(0, 60);
-const PHASE_NAME = { lobby: 'hiding', round: 'hunt', storyEnd: 'story ended' };
-const STATUS_NAME = { open: 'open', freeing: 'a spot is freeing up', full: 'full' };
-const mmss = n => Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0');
-function serversCard() {
-  const a = require('./serversInfo.js').summary().aibrofist;
-  const lines = ['**' + a.online + '** ' + (a.online === 1 ? 'player' : 'players') + ' online in **' + a.rooms + '** ' +
-                 (a.rooms === 1 ? 'room' : 'rooms') + '. Every room holds up to 40 players.'];
-  ['race', 'hideAndSeek'].forEach(mode => {
-    const info = a.modes[mode], rooms = a.list.filter(r => r.mode === mode);
-    lines.push('', '### ' + info.name + ' · ' + info.players + (info.players === 1 ? ' player' : ' players'));
-    if (!rooms.length) { lines.push('-# No rooms right now: press Play and start one.'); return; }
-    rooms.slice(0, 10).forEach(r => {
-      const bits = ['**' + md(r.room) + '**', r.players + '/' + r.limit, STATUS_NAME[r.status] || r.status];
-      if (r.phase) bits.push(PHASE_NAME[r.phase] + (r.secondsLeft !== null ? ' ' + mmss(r.secondsLeft) + ' left' : ''));
-      if (r.map) bits.push('map ' + md(r.map));
-      lines.push('- ' + bits.join(' · '));
-    });
-    if (rooms.length > 10) lines.push('-# and ' + (rooms.length - 10) + ' more rooms');
-  });
-  return frame({ color: 0x99A1AE, title: 'AIBROFIST servers', text: lines.join('\n'),
-                 footer: 'Live data · <t:' + Math.floor(Date.now() / 1000) + ':T>',
-                 button: { label: 'Play now', url: require('./discordApi.js').SITE } });
-}
-
-/* ---------- /servers и /account: настоящий снимок сайта ----------
-   Бот присылает снимок экрана самого сайта (discordShots.js) — каждый раз
-   свежий: /servers — страница Servers (комнаты обоих режимов, servers.html),
-   /account — страница игрока (друзья, потом вкладка Maps), без бокового
-   меню сайта. Под снимком кнопки: листание страниц, другая тема,
-   «Refresh» и ссылка на сайт. Кнопки работают у всех, кто видит
-   сообщение: снимок в нём просто заменяется.
-   Если браузер на хостинге не запустился (мало памяти и т.п.), вместо
-   снимка — нарисованная картинка с теми же данными (discordCards.js).
-   Discord ждёт ответа 3 секунды: снимок готов за QUICK_MS — уходит сразу,
-   иначе сначала «думаю…», а снимок подменяет его, когда готов. */
-const cards = require('./discordCards.js');
-const shots = require('./discordShots.js');
-const QUICK_MS = 1500;
-const PRESS_GAP_MS = 800;            // чаще одного нажатия от одного человека — не перерисовываем
-const THEME_NAME = { dark: 'Dark theme', light: 'Light theme' };
-const otherTheme = th => th === 'light' ? 'dark' : 'light';
-const button = (label, custom_id, disabled) => ({ type: 2, style: 2, label, custom_id, disabled: !!disabled });
-const linkButton = (label, url) => ({ type: 2, style: 5, label, url });
+/* ---------- /servers и /account ----------
+   Обычные сообщения Discord (discordViews.js) со свежими данными прямо с
+   сайта (discordData.js): /servers — комнаты обоих режимов, /account —
+   страница игрока (профиль, карты, друзья). Кнопки работают у всех, кто
+   видит сообщение: оно просто обновляется. Имена комнат и карт пишут
+   игроки — разметка в них экранируется (discordViews.js). */
+const cards = require('./discordData.js');
 const SITE_URL = require('./discordApi.js').SITE;
+const PRESS_GAP_MS = 800;            // чаще одного нажатия от одного человека — не обновляем
 const presses = new Map();           // кто -> когда нажимал в последний раз
 const userOf = i => ((i.member && i.member.user) || i.user || {}).id || '';
-const sleep = ms => new Promise(done => setTimeout(done, ms));
-const SHOT_WIDTH = 760;
-const MAPS_TAB = '#upTabs .bfTab[data-tab="maps"]';
-const SERVER_PAGES = [{ title: 'Servers', where: '/servers', crop: '#svShot', ready: 'body[data-ready]' }];
-const ACCOUNT_PAGES = [{ title: 'Profile', crop: '#upBody' }, { title: 'Maps', tab: MAPS_TAB, crop: '#upBody' }];
-// монеты и очки на странице игрока — за сегодня, неделю или всё время (вкладки над ними)
-const PERIODS = [{ key: 'day', label: 'Today' }, { key: 'week', label: 'This Week' }, { key: 'all', label: 'All Time' }];
-const periodOf = p => PERIODS.some(x => x.key === p) ? p : 'all';
-const PERIOD_TAB = p => '#upStatTabs .upStatTab[data-period="' + p + '"]';
-const pageOf = (n, of) => Math.max(0, Math.min(of - 1, Number(n) || 0));
-
-// подписи кнопок под снимком по-русски (снимок на русском — и кнопки тоже)
-const RU_LABEL = { 'Dark theme': 'Тёмная тема', 'Light theme': 'Светлая тема', Refresh: 'Обновить', Previous: 'Назад', Next: 'Дальше',
-                   Servers: 'Серверы', Profile: 'Профиль', Maps: 'Карты', 'Play now': 'Играть', 'Open profile': 'Открыть профиль',
-                   Today: 'Сегодня', 'This Week': 'За неделю', 'All Time': 'За всё время' };
-const tr = (lang, s) => lang === 'ru' && RU_LABEL[s] ? RU_LABEL[s] : s;
-const langOf = l => l === 'ru' ? 'ru' : 'en';
-
-// листание, тема, «Refresh» и ссылка; id(тема, страница) — custom_id кнопки
-function controls(id, pageId, th, n, of, title, link, lang) {
-  const rows = [{ type: 1, components: [button(tr(lang, THEME_NAME[otherTheme(th)]), id(otherTheme(th), n)), button(tr(lang, 'Refresh'), id(th, n)),
-                                        linkButton(tr(lang, link.label), link.url)] }];
-  if (of > 1) rows.unshift({ type: 1, components: [button(tr(lang, 'Previous'), id(th, n - 1), n === 0),
-                                                   button(tr(lang, title) + ' · ' + (n + 1) + ' / ' + of, pageId, true),
-                                                   button(tr(lang, 'Next'), id(th, n + 1), n >= of - 1)] });
-  return rows;
-}
-// снимок сайта на английском или русском: флаги внизу перерисовывают его на другом языке
-function serversView(th, page, lang) {
-  lang = langOf(lang);
-  const n = pageOf(page, SERVER_PAGES.length), p = SERVER_PAGES[n];
-  const id = (t, k, l) => 'sv:' + t + ':' + k + ':' + (l || lang);
-  const rows = controls((t, k) => id(t, k), 'sv-page', th, n, SERVER_PAGES.length, p.title, { label: 'Play now', url: SITE_URL }, lang);
-  rows.push(langRow(l => id(th, n, l), lang, 'sv-lang'));
-  return { kind: 'servers', theme: th, lang, where: p.where, crop: p.crop, ready: p.ready, file: 'aibrofist-servers.png',
-           backup: () => [cards.serversData(), 0], rows };
-}
-function accountView(name, th, page, period, lang) {
-  const d = cards.profileData(name);
-  if (!d) return null;
-  lang = langOf(lang);
-  const n = pageOf(page, ACCOUNT_PAGES.length), p = ACCOUNT_PAGES[n], per = periodOf(period);
-  const url = SITE_URL + '/users?name=' + encodeURIComponent(d.name);
-  const id = (t, k, q, l) => 'ac:' + t + ':' + k + ':' + (q || per) + ':' + (l || lang) + ':' + d.name;
-  const rows = controls((t, k) => id(t, k), 'ac-page', th, n, ACCOUNT_PAGES.length, p.title, { label: 'Open profile', url }, lang);
-  // выбранный период подсвечен (и нажимать его незачем), остальные — переключают
-  rows.splice(rows.length - 1, 0, { type: 1, components: PERIODS.map(x => x.key === per
-    ? Object.assign(button(tr(lang, x.label), 'ac-per', true), { style: 1 })
-    : button(tr(lang, x.label), id(th, n, x.key))) });
-  rows.push(langRow(l => id(th, n, per, l), lang, 'ac-lang'));
-  return { kind: 'account', theme: th, lang, where: '/users?name=' + encodeURIComponent(d.name), crop: p.crop,
-           tab: [per !== 'all' ? PERIOD_TAB(per) : null, p.tab].filter(Boolean),
-           file: 'aibrofist-profile.png', backup: () => [d, n], rows };
-}
-// снимок сайта, а не вышел — нарисованная картинка с теми же данными
-function picture(view) {
-  // окно уже обычного (760): страница перестраивается компактнее, текст крупнее; вдвое чётче
-  return shots.shoot(view.where, view.theme, { tab: view.tab, crop: view.crop, ready: view.ready, lang: view.lang, width: SHOT_WIDTH, scale: 2 }).catch(e => {
-    once('shot:' + e.message, 'real screenshot failed, sending a drawn picture instead:', e.message);
-    const [data, page] = view.backup();
-    return cards.draw(view.kind, data, view.theme, page);
-  });
-}
-
-/* Отправить снимок: новым ответом на команду (update=false) или вместо
-   снимка в том же сообщении (нажатие кнопки, update=true). */
-async function sendCard(i, view, update) {
-  const job = picture(view);
-  const body = { attachments: [{ id: 0, filename: view.file }], components: view.rows, allowed_mentions: { parse: [] } };
-  const files = png => [{ name: view.file, data: png, type: 'image/png' }];
-  // ответ по HTTP (режим запросов) файл не унесёт — тогда только через «думаю…»
-  let png = null, failed = false;
-  if (!i._http) png = await Promise.race([job, sleep(QUICK_MS).then(() => null)]).catch(() => { failed = true; return null; });
-  if (png) {
-    const r = await api('POST', '/interactions/' + i.id + '/' + i.token + '/callback', { type: update ? 7 : 4, data: body }, { files: files(png) });
-    if (ok(r)) return r;
-    log('Discord did not take the picture:', r.status, JSON.stringify(r.body).slice(0, 200));
-    return cardFailed(i, view, update, false);
-  }
-  if (failed) return cardFailed(i, view, update, false);
-  await respond(i, { type: update ? 6 : 5 });
-  try { png = await job; } catch (e) { return cardFailed(i, view, update, true); }
-  const r = await api('PATCH', '/webhooks/' + (i.application_id || appId) + '/' + i.token + '/messages/@original', body, { files: files(png) });
-  if (ok(r)) return r;
-  log('Discord did not take the picture:', r.status, JSON.stringify(r.body).slice(0, 200));
-  return cardFailed(i, view, update, true);
-}
-// ни снимка, ни картинки: /servers отвечает прежней карточкой-текстом
-async function cardFailed(i, view, update, deferred) {
-  log('could not make the ' + view.kind + ' picture');
-  const sorry = { content: 'Could not make the picture right now. Please try again in a moment.', flags: 64, allowed_mentions: { parse: [] } };
-  if (!deferred) return respond(i, view.kind === 'servers' && !update ? { type: 4, data: serversCard() } : { type: 4, data: sorry });
-  const hook = '/webhooks/' + (i.application_id || appId) + '/' + i.token;
-  if (update) return api('POST', hook, sorry);
-  return api('PATCH', hook + '/messages/@original', { content: sorry.content, allowed_mentions: { parse: [] } });
-}
+const md = s => String(s || '').replace(/[\\*_`~|>#\[\]()<@:-]/g, c => '\\' + c).slice(0, 60);
 const pressedTooFast = i => {
   const u = userOf(i), now = Date.now(), last = presses.get(u) || 0;
   presses.set(u, now);
@@ -2009,14 +1813,47 @@ const pressedTooFast = i => {
   return now - last < PRESS_GAP_MS;
 };
 
+// /servers: кнопки — обновить, играть, флаги языка; id «sv:r:язык»
+function serversMessage(lang) {
+  lang = V.langOf(lang);
+  const rows = [V.row(V.button(V.say(lang, 'refresh'), 'sv:r:' + lang), V.linkButton(V.say(lang, 'playNow'), SITE_URL),
+                      ...V.langButtons(l => 'sv:r:' + l, lang, 'sv-lang'))];
+  return V.message(V.view('servers', cards.serversData(), lang), rows);
+}
+// /account: вкладки (профиль, карты, друзья), период монет и очков (на профиле), ссылка, флаги; id «ac:вкладка:период:язык:ник»
+const ACCOUNT_PAGES = [{ key: 'p', label: 'tabProfile' }, { key: 'm', label: 'tabMaps' }, { key: 'f', label: 'tabFriends' }];
+const PERIODS = [{ key: 'day', label: 'perToday' }, { key: 'week', label: 'perWeek' }, { key: 'all', label: 'perAll' }];
+function accountMessage(d, lang, page, period) {
+  lang = V.langOf(lang);
+  page = ACCOUNT_PAGES.some(x => x.key === page) ? page : 'p';
+  period = PERIODS.some(x => x.key === period) ? period : 'all';
+  const id = (pg, per, l) => 'ac:' + pg + ':' + per + ':' + (l || lang) + ':' + d.name;
+  const rows = [V.row(...V.tabs(ACCOUNT_PAGES.map(x => ({ label: V.say(lang, x.label), id: id(x.key, period), on: x.key === page })), 'ac-page'))];
+  if (page === 'p') rows.push(V.row(...V.tabs(PERIODS.map(x => ({ label: V.say(lang, x.label), id: id('p', x.key), on: x.key === period })), 'ac-per')));
+  rows.push(V.row(V.button(V.say(lang, 'refresh'), id(page, period)), V.linkButton(V.say(lang, 'openProfile'), SITE_URL + '/users?name=' + encodeURIComponent(d.name)),
+                  ...V.langButtons(l => id(page, period, l), lang, 'ac-lang')));
+  return V.message(V.view('account', d, lang, { page, period }), rows);
+}
+
+const sorry = i => reply(i, { content: 'Could not show this right now. Please try again in a moment.' });
+// ответ на команду: новое сообщение (type 4); не собралось или Discord не взял — короткий текст
+async function answerCommand(i, make, what) {
+  let msg;
+  try { msg = make(); }
+  catch (e) { once('view:' + what + e.message, 'could not build the ' + what + ' message:', e.message); return sorry(i); }
+  const r = await respond(i, { type: 4, data: msg });
+  if (r && !ok(r)) { log('Discord did not take the ' + what + ' message:', r.status, JSON.stringify(r.body).slice(0, 200)); return sorry(i); }
+  return r;
+}
+
 function onServers(i) {
-  return sendCard(i, serversView('dark', 0), false);
+  return answerCommand(i, () => serversMessage('en'), 'servers');
 }
 function onAccount(i) {
   const opt = ((i.data && i.data.options) || []).find(o => o.name === 'nick');
   const nick = String((opt && opt.value) || '').trim().slice(0, 40);
-  const view = nick && accountView(nick, 'dark', 0);
-  if (view) return sendCard(i, view, false);
+  const d = nick && cards.profileData(nick);
+  if (d) return answerCommand(i, () => accountMessage(d, 'en', 'p', 'all'), 'account');
   const like = nick ? cards.searchNames(nick, 5) : [];
   return reply(i, { content: 'No player named **' + md(nick || '?') + '** on aibrofist.online.' +
                              (like.length ? ' Maybe: ' + like.map(n => '**' + md(n) + '**').join(', ') + '?' : '') });
@@ -2029,15 +1866,23 @@ function onAccountHint(i) {
 }
 function onCardButton(i, cid) {
   if (pressedTooFast(i)) return respond(i, { type: 6 });
-  // «sv:тема» без страницы — кнопки сообщений, отправленных до листания; без языка — до флагов
-  const sv = /^sv:(dark|light)(?::(-?\d+))?(?::(en|ru))?$/.exec(cid);
-  if (sv) return sendCard(i, serversView(sv[1], sv[2], sv[3]), true);
-  // ac:тема:страница:период:язык:ник; у сообщений, отправленных раньше, периода и языка нет
-  const m = /^ac:(dark|light):(-?\d+):(?:(day|week|all):)?(?:(en|ru):)?([^:]+)$/.exec(cid);
-  if (!m) return respond(i, { type: 6 });
-  const view = accountView(m[5], m[1], m[2], m[3], m[4]);
-  if (!view) return reply(i, { content: 'This player is no longer on aibrofist.online.' });
-  return sendCard(i, view, true);
+  // «sv:r:язык»; у сообщений прежних версий (картинки) — «sv:тема[:страница][:язык]»
+  const sv = /^sv:(?:r:(en|ru)|(?:dark|light)(?::-?\d+)?(?::(en|ru))?)$/.exec(cid);
+  if (sv) {
+    let msg;
+    try { msg = serversMessage(sv[1] || sv[2]); } catch (e) { return sorry(i); }
+    return updateMessage(i, msg);
+  }
+  // «ac:вкладка:период:язык:ник»; прежних версий — «ac:тема:страница[:период][:язык]:ник»
+  const m = /^ac:([pmf]):(day|week|all):(en|ru):(.+)$/.exec(cid);
+  const old = !m && /^ac:(?:dark|light):(-?\d+):(?:(day|week|all):)?(?:(en|ru):)?([^:]+)$/.exec(cid);
+  if (!m && !old) return respond(i, { type: 6 });
+  const d = cards.profileData(m ? m[4] : old[4]);
+  if (!d) return reply(i, { content: 'This player is no longer on aibrofist.online.' });
+  let msg;
+  try { msg = m ? accountMessage(d, m[3], m[1], m[2]) : accountMessage(d, old[3], Number(old[1]) === 1 ? 'm' : 'p', old[2]); }
+  catch (e) { return sorry(i); }
+  return updateMessage(i, msg);
 }
 
 /* Глобальные слэш-команды приложения: ровно этот список. Запись целиком
@@ -2556,20 +2401,12 @@ function start() {
   }, 60000);
   if (t1.unref) t1.unref();
   timers.push(t1);
-  // браузер для снимков: заранее распаковать и проверить (видно на /discord/status)
-  const t2 = setTimeout(() => {
-    shots.selfTest().then(good => log(good ? 'screenshots: the browser works' : 'screenshots are off, drawn pictures instead: ' + shots.info().reason));
-  }, 20000);
-  if (t2.unref) t2.unref();
-  timers.push(t2);
 }
 
 function stop() {
   if (gw) { gw.removeAllListeners(); gw.destroy(); gw = null; }
   timers.forEach(t => { clearInterval(t); clearTimeout(t); }); timers = [];
   stopRest();
-  cards.stop();
-  shots.close();
   flushWatch();
   saveNow();
   guilds.clear(); setupDone.clear(); lastHit.clear();
@@ -2609,7 +2446,6 @@ async function status() {
                    rounds: WATCH.rounds, every: Math.round(POLL_MS / 100) / 10 + 's' };
   if (!rest && guilds.size && WATCH.since && Date.now() - Math.max(WATCH.lastRound, WATCH.since) > 30000)
     out.problems.push('The second message reader has not run for ' + Math.round((Date.now() - Math.max(WATCH.lastRound, WATCH.since)) / 1000) + ' seconds.');
-  out.screenshots = shots.info();
   out.guilds = [...guilds.values()].map(g => ({ id: g.id, name: g.name }));
   const feed = require('./updatesFeed.js');
   out.updates = feed.status();
