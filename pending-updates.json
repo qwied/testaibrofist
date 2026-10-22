@@ -1,9 +1,4 @@
 {
-  "base": "1788a324c7365d21b964f61e278dd17b3c0515c4",
-  "updates": [
-    {
-      "title": "Discord bot in every language",
-      "text": "The Discord bot now answers in your own Discord language, any of the 30 languages Discord offers. The language buttons are gone, and the new /rules command shows the server rules in your language."
-    }
-  ]
+  "base": "b09523f0c63fd00f71cf59c23f473db1fa761f8c",
+  "updates": []
 }
