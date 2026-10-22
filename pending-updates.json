@@ -1,9 +1,4 @@
 {
-  "base": "1a00220c52b867ac6b316b7fc41daf6159750972",
-  "updates": [
-    {
-      "title": "Server rules refresh",
-      "text": "The server rules picture in Discord was redrawn in the new compact style."
-    }
-  ]
+  "base": "e2854f8db3d72cc6e50fb47e32ba8b6d87ed4dc9",
+  "updates": []
 }
