@@ -266,9 +266,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('слэш-команд на сервере нет (старые, если были, убраны)', cmds.length === 1 && Array.isArray(cmds[0].body) && cmds[0].body.length === 0);
   await waitFor(() => find(calls, 'PUT', /^\/applications\/700\/commands$/).length);
   const gcmds = find(calls, 'PUT', /^\/applications\/700\/commands$/);
-  const nick = gcmds[0] && gcmds[0].body[2] && (gcmds[0].body[2].options || [])[0];
-  ok('у приложения три команды для всех — /servers, /rules и /account (старая /say убрана: список заменяется целиком)', gcmds.length === 1 &&
-     gcmds[0].body.map(c => c.name).join() === 'servers,rules,account' && gcmds[0].body.every(c => !c.default_member_permissions),
+  const nick = gcmds[0] && (gcmds[0].body.find(c => c.name === 'account') || {}).options && gcmds[0].body.find(c => c.name === 'account').options[0];
+  ok('у приложения четыре команды для всех — /servers, /rules, /language и /account (старая /say убрана: список заменяется целиком)', gcmds.length === 1 &&
+     gcmds[0].body.map(c => c.name).join() === 'servers,rules,language,account' && gcmds[0].body.every(c => !c.default_member_permissions),
      gcmds[0] && JSON.stringify(gcmds[0].body.map(c => c.name)));
   ok('/account: обязательный ник с подсказками по мере ввода', nick && nick.name === 'nick' && nick.type === 3 && nick.required && nick.autocomplete);
   await waitFor(() => find(calls, 'PATCH', /^\/applications\/@me$/).length);
@@ -1070,11 +1070,11 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   }
   ok('все 32 locale Discord (30 разных языков): /servers сразу на языке человека, кнопки на нём же, ни флагов, ни глобуса', wrong.length === 0, wrong.join(' | '));
   const noTr = [];
-  for (const loc of ['ar', 'he', 'sw', 'fa', 'bn', 'xx-YY', '', undefined]) {
+  for (const loc of ['am', 'km', 'my', 'lo', 'mn', 'xx-YY', '', undefined]) {
     const m = await lang1('lgy' + (++n), loc);
     if (!(m && /^Servers · 0 online Race · 0 players /.test(plainOf(m)) && labels(m.body)[0] === 'Refresh=sv:r:en | Play now')) noTr.push(String(loc));
   }
-  ok('язык, которого нет среди языков Discord (арабский, иврит, суахили, пусто...) — английский, не ошибка', noTr.length === 0, noTr.join());
+  ok('язык, которого у бота нет (амхарский, кхмерский, бирманский, пусто...) — английский, не ошибка', noTr.length === 0, noTr.join());
   const ja = await lang1('lg2', 'ja', 'QWIED');
   ok('/account — тоже по языку Discord (японский): ник, дата по-японски, подписи; кнопки вкладок и период по-японски, без кнопок языка', ja && /^qwied 登録日 \d{4}年\d{1,2}月\d{1,2}日 · レース: S · かくれんぼ: ランクなし コイン 5 レースのスコア 3 /.test(plainOf(ja)) &&
      labels(ja.body)[0] === 'プロフィール(off)=ac-page | マップ=ac:m:all:ja:qwied | フレンド=ac:f:all:ja:qwied' &&
@@ -1099,7 +1099,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
     'es-ES': /^Reglas del servidor AIBROFIST 1 Sin spam SILENCIO 10 MINUTOS Más de 3 mensajes en 2 segundos\. Silencio a la 5\.ª vez\. 2 Sin invitaciones a otros servidores de Discord ADVERTENCIA /,
     ru: /^Правила сервера AIBROFIST 1 Без спама МЬЮТ 10 МИНУТ /, ko: /^AIBROFIST 서버 규칙 1 도배 금지 채팅 금지 10분 /, 'zh-TW': /^AIBROFIST 伺服器規則 1 禁止洗版 禁言 10分鐘 /,
     tr: /^AIBROFIST Sunucu Kuralları 1 Spam yok SUSTURMA 10 DAKİKA /, pl: /^Regulamin serwera AIBROFIST 1 Zakaz spamu WYCISZENIE 10 MINUT /,
-    'en-US': /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /, ar: /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /, undefined: /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /
+    'en-US': /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /, am: /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /, undefined: /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /
   };
   const badRules = [];
   for (const [loc, re] of Object.entries(rulesBy)) {
@@ -1111,6 +1111,98 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   dispatch('INTERACTION_CREATE', { id: 'lgdm', token: 'tklgdm', type: 2, user: { id: 'U71' }, locale: 'de', channel_id: 'dmU71', data: { name: 'rules', type: 1 } });
   await waitFor(() => cb(calls, 'lgdm').length);
   ok('/rules работает и в личке с ботом (берёт сервер бота)', /^Serverregeln von AIBROFIST 1 Kein Spam STUMM 10 MINUTEN /.test(plainOf(cb(calls, 'lgdm')[0])), plainOf(cb(calls, 'lgdm')[0]).slice(0, 80));
+  console.log('\nкоманда /language — все страны мира, выбор запоминается:');
+  const lgCmd = gcmds[0].body.find(c => c.name === 'language'), lgOpt = lgCmd && (lgCmd.options || [])[0];
+  ok('/language: необязательное поле «страна или язык» с подсказками по мере ввода, описание в пределах Discord, работает и в личке с ботом',
+     lgCmd && lgCmd.description.length <= 100 && lgOpt && lgOpt.name === 'country' && lgOpt.type === 3 && !lgOpt.required && lgOpt.autocomplete === true && lgOpt.max_length === 60 &&
+     lgOpt.description.length <= 100 && JSON.stringify(lgCmd.contexts) === '[0,1]', JSON.stringify(lgCmd));
+  // value === undefined — без поля; focused — Discord спрашивает подсказки (тип 4), иначе сама команда (тип 2)
+  const lgc = async (id, value, uid, locale, focused) => {
+    t = Date.now();
+    ix(id, focused ? 4 : 2, { name: 'language', type: 1, options: value === undefined ? [] : [{ name: 'country', type: 3, value, focused: !!focused }] }, uid, false, { locale });
+    await waitFor(() => cb(since(t), id).length, 5000);
+    return cb(since(t), id)[0];
+  };
+  const srv1 = async (id, uid, locale) => { t = Date.now(); ix(id, 2, { name: 'servers', type: 1 }, uid, false, { locale }); await waitFor(() => cb(since(t), id).length, 5000); return cb(since(t), id)[0]; };
+  const ch0 = ((await lgc('lgh0', '', 'U81', 'en-US', true)) || { body: {} }).body, chs0 = (ch0.data && ch0.data.choices) || [];
+  ok('пустое поле: «Automatic» и 24 самых распространённых языка, английский первым; значения уникальны, подписи до 100 знаков', ch0.type === 8 && chs0.length === 25 && chs0[0].value === 'auto' &&
+     chs0[0].name === 'Automatic · English' && chs0[1].value === 'US-en' && chs0[1].name === 'United States — English' && new Set(chs0.map(c => c.value)).size === 25 &&
+     chs0.every(c => c.name.length >= 1 && c.name.length <= 100 && c.value.length <= 100), JSON.stringify(chs0.slice(0, 3)));
+  const chg = ((await lgc('lgh1', 'ger', 'U81', 'ru', true)) || { body: {} }).body, chgs = (chg.data && chg.data.choices) || [];
+  ok('«ger» — Германия первой, страна названа на языке человека (русский), язык — на самом себе; «Automatic» не мешает', chgs[0] && chgs[0].value === 'DE-de' && chgs[0].name === 'Германия — Deutsch' &&
+     chgs.length <= 25 && !chgs.some(c => c.value === 'auto'), JSON.stringify(chgs.slice(0, 2)));
+  const cha = ((await lgc('lgh2', 'авто', 'U81', 'ru', true)) || { body: {} }).body, chas = (cha.data && cha.data.choices) || [];
+  ok('«авто» у русскоязычного — «Автоматически · Русский» первым', chas[0] && chas[0].value === 'auto' && chas[0].name === 'Автоматически · Русский', JSON.stringify(chas[0]));
+  const chn = ((await lgc('lgh3', 'qqqzzz', 'U81', 'en-US', true)) || { body: {} }).body;
+  ok('ничего не нашлось — пустой список подсказок, без ошибки', chn.type === 8 && chn.data.choices.length === 0);
+
+  const set1 = await lgc('lgn1', 'DE-de', 'U81', 'ru');
+  ok('выбрал Германию (из подсказки) — ответ сразу на немецком, хотя Discord у человека русский; виден только ему, без кнопок и упоминаний', set1 && set1.body.type === 4 &&
+     set1.body.data.flags === (32768 | 64) && /^Sprache Deutsch · Германия Der Bot antwortet jetzt bei jedem Befehl in dieser Sprache\.$/.test(plainOf(set1)) && buttonsOf(set1.body).length === 0 &&
+     set1.body.data.allowed_mentions.parse.length === 0, set1 && plainOf(set1));
+  ok('в памяти бота — только «страна-язык» у человека (ни ника, ни прочего)', bot._test.state().langs.U81 === 'DE-de' && Object.values(bot._test.state().langs).every(v => /^[A-Z]{2}-[a-z]{2,3}$/.test(v)));
+  await sleep(800);
+  ok('и в файле состояния (переживает перезапуск бота)', JSON.parse(fs.readFileSync(process.env.DISCORD_BOT_STATE, 'utf8')).langs.U81 === 'DE-de');
+  const de = PACKS.de.s;
+  const svDe = await srv1('lgn2', 'U81', 'ru');
+  ok('теперь /servers у него на немецком, хотя Discord русский; кнопка с немецкой надписью', svDe && plainOf(svDe).indexOf(de.serversTitle + ' · ' + de.onlineN.replace('{n}', '0')) === 0 &&
+     labels(svDe.body)[0] === de.refresh + '=sv:r:de | ' + de.playNow, svDe && plainOf(svDe).slice(0, 40) + ' / ' + labels(svDe.body)[0]);
+  const svRu = await srv1('lgn3', 'U82', 'ru');
+  ok('у другого человека (ничего не выбирал) — по его языку Discord, выбор первого на него не влияет', svRu && /^Серверы · онлайн: 0 /.test(plainOf(svRu)) && labels(svRu.body)[0] === 'Обновить=sv:r:ru | Играть');
+  t = Date.now();
+  bid = press('U81', 'sv:r:me', false, 'ru');
+  await waitFor(() => cb(since(t), bid).length, 5000);
+  const meDe = cb(since(t), bid)[0];
+  ok('кнопка «Обновить» с «sv:r:me» (сообщения прежних версий) тоже даёт выбранный язык', meDe && plainOf(meDe).indexOf(de.serversTitle + ' · ') === 0, meDe && plainOf(meDe).slice(0, 40));
+  const rulesDe = await lgc('lgn4', undefined, 'U81', 'ru');
+  ok('«/language» без поля — какой язык сейчас и как сменить, на этом же языке', rulesDe && /^Sprache Deutsch · Германия Der Bot antwortet jetzt bei jedem Befehl in dieser Sprache\. Zum Ändern gib nach \/language ein Land oder eine Sprache ein\.$/.test(plainOf(rulesDe)), rulesDe && plainOf(rulesDe));
+  const viewAuto = await lgc('lgn5', undefined, 'U82', 'ru');
+  ok('без выбора — «Автоматически» и язык его Discord', viewAuto && /^Язык Автоматически Бот следует языку вашего Discord: Русский\. Чтобы сменить, введите страну или язык после \/language\.$/.test(plainOf(viewAuto)), viewAuto && plainOf(viewAuto));
+  t = Date.now();
+  ix('lgn7', 2, { name: 'rules', type: 1 }, 'U81', false, { locale: 'ru' });
+  await waitFor(() => cb(since(t), 'lgn7').length, 5000);
+  ok('/rules у него — тоже на немецком (все команды следуют выбору)', /^Serverregeln von AIBROFIST 1 Kein Spam STUMM 10 MINUTEN /.test(plainOf(cb(since(t), 'lgn7')[0])), plainOf(cb(since(t), 'lgn7')[0]).slice(0, 60));
+  const jp = await lgc('lgn8', 'Japan', 'U81', 'ru');
+  ok('напечатал название вручную («Japan», не из подсказки) — нашлось, японский; прежний выбор заменён', jp && /^言語 日本語 · Япония ボットはすべてのコマンドにこの言語で返信します。$/.test(plainOf(jp)) && bot._test.state().langs.U81 === 'JP-ja', jp && plainOf(jp));
+  const frb = await lgc('lgn9', 'BE-fr', 'U81', 'ru');
+  ok('у страны несколько языков (Бельгия): выбранный язык, не основной — французский', frb && /^Langue Français · Бельгия /.test(plainOf(frb)) && bot._test.state().langs.U81 === 'BE-fr', frb && plainOf(frb));
+  const bel = await lgc('lgn10', 'Belgium', 'U84', 'en-US');
+  ok('просто «Belgium» — основной язык страны (нидерландский)', bel && /^Taal Nederlands · Belgium /.test(plainOf(bel)) && bot._test.state().langs.U84 === 'BE-nl', bel && plainOf(bel));
+  const aut = await lgc('lgn11', 'auto', 'U81', 'ru');
+  ok('«Automatic» — выбор снимается, язык снова по Discord; запись человека из памяти удалена', aut && /^Язык Автоматически Бот следует языку вашего Discord: Русский\.$/.test(plainOf(aut)) && !('U81' in bot._test.state().langs), aut && plainOf(aut));
+  const svBack = await srv1('lgn12', 'U81', 'ru');
+  ok('и /servers снова по-русски', svBack && /^Серверы · онлайн: 0 /.test(plainOf(svBack)));
+  const nf = await lgc('lgn13', 'qqqzzz', 'U83', 'pl');
+  ok('ничего не нашлось — ответ на языке человека (польский, по Discord), ничего не запомнено', nf && /^Język Nic nie znaleziono dla „qqqzzz”\. Wpisz kraj lub język\. Aby zmienić, wpisz kraj lub język po \/language\.$/.test(plainOf(nf)) &&
+     !('U83' in bot._test.state().langs), nf && plainOf(nf));
+  const inj = await lgc('lgn14', '@everyone <@1> `x` *a* [l](http://x.y)', 'U83', 'en-US');
+  ok('странный ввод — просто «не найдено»: без упоминаний и разметки, ничего не запомнено', inj && inj.body.data.allowed_mentions.parse.length === 0 && !/(^|[^\\])(<@|@everyone|\]\()/.test(textsOf(inj.body).join('\n')) && /\\<\\@1\\>/.test(textsOf(inj.body).join('\n')) &&
+     /^Language Nothing found for/.test(plainOf(inj)) && !('U83' in bot._test.state().langs), inj && plainOf(inj));
+  const longq = await lgc('lgn15', 'x'.repeat(5000), 'U83', 'en-US');
+  ok('очень длинный ввод не ломает (режется до 60 знаков)', longq && longq.body.type === 4 && plainOf(longq).length < 400, longq && String(plainOf(longq).length));
+
+  // язык выбран — и в личных сообщениях бота этому человеку (Discord язык получателя не сообщает, а здесь он известен)
+  await lgc('lgn16', 'DE-de', 'U85', 'en-US');
+  t = Date.now();
+  await bot._test.punish(g, { id: 'U85', username: 'u85' }, A.finding('invite'), { silent: true });
+  await bot._test.punish(g, { id: 'U86', username: 'u86' }, A.finding('invite'), { silent: true });
+  await sleep(300);
+  const dmDe = find(since(t), 'POST', /^\/channels\/dmU85\/messages$/).slice(-1)[0], dmEn = find(since(t), 'POST', /^\/channels\/dmU86\/messages$/).slice(-1)[0];
+  ok('личное сообщение о наказании: у выбравшего немецкий — на немецком, у остальных — по-английски', dmDe && dmEn && plainOf(dmDe).indexOf(de.warn) >= 0 && plainOf(dmDe).indexOf('1 von 3') >= 0 &&
+     !/Warning/.test(plainOf(dmDe)) && /Warning/.test(plainOf(dmEn)), (dmDe ? plainOf(dmDe).slice(0, 60) : 'нет') + ' / ' + (dmEn ? plainOf(dmEn).slice(0, 40) : 'нет'));
+  // порча записи в файле состояния не ломает ответы: берётся язык Discord
+  bot._test.state().langs.U88 = '__proto__'; bot._test.state().langs.U89 = 'XX-zz'; bot._test.state().langs.U90 = 123; bot._test.state().langs.U91 = 'germany';
+  const badSaved = [];
+  for (const uid of ['U88', 'U89', 'U90', 'U91']) { const m = await srv1('lgb' + uid, uid, 'ru'); if (!(m && /^Серверы · онлайн: 0 /.test(plainOf(m)))) badSaved.push(uid); delete bot._test.state().langs[uid]; }
+  ok('испорченные записи (чужое имя, неизвестная страна, число, название вместо кода) — язык берётся у Discord, без ошибок', badSaved.length === 0, badSaved.join());
+  // запоминаем не больше 50 000 человек: давние забываются
+  const langs = bot._test.state().langs;
+  for (let k = 0; k < 50000; k++) langs['F' + k] = 'DE-de';
+  await lgc('lgn17', 'FR-fr', 'U87', 'en-US');
+  ok('не больше 50 000 запомненных людей: самые давние забываются, новый выбор сохранён', Object.keys(langs).length === 50000 && !('F0' in langs) && langs.U87 === 'FR-fr', String(Object.keys(langs).length));
+  for (const k of Object.keys(langs)) if (/^F\d+$/.test(k)) delete langs[k];
+  for (const k of ['U85', 'U84', 'U87']) delete langs[k];
+
   // сообщения прежних версий бота: на них ещё остались кнопки языка (cd:…, rules:…, sv:…) — они продолжают работать и убирают кнопки
   bot._test.state().cards.aa11bb22cc01 = { k: 'action', d: { type: 'warn', name: 'Old', user: 'old', rule: 6, reason: 'x', n: 1, limit: 3, by: '', caseNo: 1, at: Date.now() }, g: G, at: Date.now() };
   bot._test.state().cards.aa11bb22cc02 = { k: 'warns', d: { uid: '70001', name: 'Alice', user: 'alice_p' }, g: G, at: Date.now() };

@@ -1,14 +1,16 @@
 // ============ ЯЗЫКИ ОТВЕТОВ БОТА (кроме английского и русского) ============
-// Язык человека бот берёт у самого Discord: в каждой команде и каждом нажатии
-// есть его язык (locale), а Discord знает ровно 32 locale (30 разных языков: en-US и en-GB — один
-// английский, es-ES и es-419 — один испанский) — все они здесь есть. Сюда вынесены
-// готовые переводы всего, что видят игроки: наказания и правила, /servers, /account, /rules. Что здесь не переведено
-// (команды владельца: справка, статистика, список предупреждений), показывается
-// по-английски. Переводы вшиты в код — никуда ничего не отправляется.
+// Язык человека бот берёт у самого Discord (в каждой команде и нажатии есть его locale: Discord знает
+// 32 locale — 30 разных языков, и все они здесь есть) либо у него самого: команда /language запоминает
+// выбранную страну или язык (список — discordWorld.js). Сюда вынесены готовые переводы всего, что видят
+// игроки: наказания и правила, /servers, /account, /rules, /language. Что здесь не переведено (команды
+// владельца: справка, статистика, список предупреждений), показывается по-английски. Переводы вшиты в код —
+// никуда ничего не отправляется.
+// Языки лежат в четырёх файлах: этот (28 языков — все языки Discord) и discordLangW1..W4.js (ещё 22 для /language).
+// Строки команды /language для всех языков — discordLangCmd.js (дописываются в «s» при загрузке).
 // Подстановки в фигурных скобках ({n}, {d}...) переводить нельзя: их ставит бот.
-// Добавить язык: новая запись ниже с теми же ключами (test-discord-views.js
-// проверяет, что ничего не забыто и подстановки на месте) + код языка Discord
-// в LOCALES (discordViews.js), если он отличается от двух букв.
+// Добавить язык: новая запись с теми же ключами (test-discord-views.js проверяет, что ничего не забыто и
+// подстановки на месте) + строки из discordLangCmd.js + страны в TABLE (discordWorld.js); если код языка
+// Discord не совпадает с двумя буквами — ещё и LOCALES (discordViews.js).
 'use strict';
 
 // ключи строк, которые обязаны быть в каждом языке (остальные — только английские/русские)
@@ -20,7 +22,8 @@ const KEYS = ['warn', 'mute', 'ban', 'unmute', 'unban', 'unwarn', 'removed', 'ru
   'refresh', 'playNow', 'gRaceMode', 'gHnsMode', 'playersN', 'playerN', 'roomsN', 'roomN', 'upTo40',
   'openProfile', 'tabProfile', 'tabMaps', 'tabFriends', 'perToday', 'perWeek', 'perAll', 'joined', 'coinsL', 'raceScores', 'hsScores', 'noRank',
   'aboutL', 'nothingWritten', 'todayWord', 'weekWord', 'noMapsYet', 'noFriendsYet', 'published', 'inGameTag', 'likesN', 'onlineNowTag',
-  'minAgo', 'hAgo', 'dAgo', 'longAgo', 'friendsL', 'mapsL', 'moreN2', 'race', 'hns', 'rulesTitle'];
+  'minAgo', 'hAgo', 'dAgo', 'longAgo', 'friendsL', 'mapsL', 'moreN2', 'race', 'hns', 'rulesTitle',
+  'langTitle', 'langNow', 'langAutoName', 'langAutoText', 'langHow', 'langNone'];
 // что нашёл автомод (kind находки)
 const NOTE_KEYS = ['flood', 'invite', 'nsfw-link', 'nsfw-image', 'slur', 'selfharm', 'scam-text', 'everyone-link', 'badfile', 'scam', 'grabber', 'cheat',
   'custom', 'native-word', 'warns'];
@@ -1054,5 +1057,10 @@ const PACKS = {
     units: { plural: 'none', sep: '', min: ['分鐘'], hour: ['小時'], day: ['天'] }
   }
 };
+
+// остальные языки и строки команды /language
+for (const f of ['./discordLangW1.js', './discordLangW2.js', './discordLangW3.js', './discordLangW4.js']) Object.assign(PACKS, require(f).PACKS);
+const CMD = require('./discordLangCmd.js');
+for (const l of Object.keys(CMD)) if (PACKS[l]) Object.assign(PACKS[l].s, CMD[l]);
 
 module.exports = { PACKS, KEYS, NOTE_KEYS };

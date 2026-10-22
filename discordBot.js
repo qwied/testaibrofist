@@ -15,9 +15,11 @@
 //   - отвечает аккуратными сообщениями Discord (рамка, текст, аватарка,
 //     серые кнопки; discordViews.js). Язык берёт у самого Discord (locale в
 //     команде или нажатии): английский, русский и ещё 28 языков из
-//     discordLang.js — все языки Discord; кнопок выбора языка нет. Карточки в
-//     канале и в личке английские (язык получателя Discord не сообщает),
-//     правила на своём языке — команда /rules;
+//     discordLang.js — все языки Discord; кнопок выбора языка нет. Команда
+//     /language (discordWorld.js) даёт выбрать любую из 200 стран мира или
+//     один из 52 языков: выбор помнится, и дальше бот отвечает на нём во
+//     всех командах и в личных сообщениях человеку. Карточки в канале
+//     английские (общие для всех), правила на своём языке — команда /rules;
 //   - секретные команды владельца сервера прямо в канале (начало команд —
 //     DISCORD_CMD_PREFIX на хостинге): news (пост в любой канал с
 //     картинками и кнопкой-ссылкой — в окне, которое видит только он),
@@ -59,8 +61,9 @@ const RAID_MS = 10 * 60 * 1000;
 const NOTICE_MS = 10 * 1000;     // короткое предупреждение в канале исчезает само
 
 // banned — приметы забаненных (аватарка, имя): по ним ловим обход бана
-// warns — предупреждения участников («сервер:игрок» -> список), cards — карточки, которые можно показать на другом языке
-let state = { feed: [], guilds: {}, cases: 0, banned: {}, unbans: {}, fixes: {}, watch: { last: {} }, warns: {}, cards: {} };
+// warns — предупреждения участников («сервер:игрок» -> список), cards — карточки, которые можно показать на другом языке,
+// langs — язык, который человек выбрал командой /language («DE-de»: страна и язык; не выбрал — язык его Discord)
+let state = { feed: [], guilds: {}, cases: 0, banned: {}, unbans: {}, fixes: {}, watch: { last: {} }, warns: {}, cards: {}, langs: {} };
 let loaded = false, saveTimer = null;
 const guilds = new Map();        // id -> { id, name, owner, roles: Map, channels: Map }
 const setupDone = new Set();
@@ -95,7 +98,8 @@ function loadState() {
       fixes: s.fixes && typeof s.fixes === 'object' ? s.fixes : {},        // разовые исправления, уже сделанные
       watch: { last: s.watch && s.watch.last && typeof s.watch.last === 'object' ? s.watch.last : {} },  // канал -> последнее прочитанное сообщение
       warns: s.warns && typeof s.warns === 'object' ? s.warns : {},
-      cards: s.cards && typeof s.cards === 'object' ? s.cards : {}
+      cards: s.cards && typeof s.cards === 'object' ? s.cards : {},
+      langs: s.langs && typeof s.langs === 'object' ? s.langs : {}       // человек -> «DE-de»: язык, выбранный командой /language
     };
   } catch (e) { /* первый запуск */ }
   // штрафных баллов больше нет — у каждого правила своё наказание; накопленные при загрузке не читаются
@@ -219,7 +223,7 @@ async function dm(uid, body) {
 async function dmCard(uid, kind, data, gid, fallback) {
   const ch = await dmChannel(uid);
   if (!ch) return false;
-  return ok(await postCard(ch, kind, data, gid, fallback, true));
+  return ok(await postCard(ch, kind, data, gid, fallback, true, savedLang(uid) || 'en'));      // язык — тот, что человек выбрал командой /language
 }
 
 async function notice(channel, name, text) {
@@ -737,6 +741,7 @@ async function ensureNativeAutomod(g) {
    Что показано, бот помнит (state.cards) — кнопки работают и после
    перезапуска. Discord не принял сообщение — бот отвечает прежним текстом. */
 const V = require('./discordViews.js');
+const W = require('./discordWorld.js');
 const CARD_AGE = 60 * R.DAY;
 const FLASH_MS = 15 * 1000;          // итог команды в канале (журнал включён, канал почищен) гаснет сам
 const LIVE = new Set(['help', 'stats', 'warns', 'warnsAll']);
@@ -788,10 +793,10 @@ function cardMessage(rec, lang, ephemeral) {
 
 // новая карточка в канал или в личку (dm: закрытая личка — обычное дело, в журнал не пишем);
 // не собралась или Discord её не взял — запасной текст
-async function postCard(channel, kind, data, gid, fallback, dm) {
+async function postCard(channel, kind, data, gid, fallback, dm, lang) {
   const rec = { k: kind, d: data, g: gid || null };
   let msg = null;
-  try { msg = cardMessage(rec, 'en'); }
+  try { msg = cardMessage(rec, lang || 'en'); }
   catch (e) { once('card:' + e.message, 'could not build the ' + kind + ' card, sending text instead:', e.message); }
   if (msg) {
     const r = await api('POST', '/channels/' + channel + '/messages', msg);
@@ -833,7 +838,22 @@ const textAnswer = (i, data) => respond(i, { type: 4, data: Object.assign({ flag
 /* Язык человека — по языку его Discord (locale есть в каждой команде и каждом нажатии): ru, de, pt-BR... ->
    свой перевод из discordLang.js, чего там нет — английский. В публичных карточках канала и в личке язык
    получателя Discord не сообщает — там английский, а глобус под текстом («Мой язык») показывает карточку на языке нажавшего. */
-const userLang = i => V.fromLocale(i && i.locale);
+/* Язык, выбранный человеком командой /language (страна и язык — «DE-de»), важнее языка его Discord: так бот отвечает
+   на выбранном языке во всех командах и в личных сообщениях. Не выбирал — по языку Discord, как раньше. */
+const LANG_CAP = 50000;                   // сколько людей помним: больше — самые давние забываются
+const savedEntry = uid => { const v = uid && Object.prototype.hasOwnProperty.call(state.langs, uid) ? state.langs[uid] : null; return typeof v === 'string' && /^[A-Z]{2}-[a-z]{2,3}$/.test(v) ? W.find(v) : null; };
+const savedLang = uid => { const e = savedEntry(uid); return e ? V.langOf(e.lang) : null; };
+function saveLang(uid, e) {
+  if (!uid) return;
+  delete state.langs[uid];
+  if (e) {
+    state.langs[uid] = e.value;
+    const all = Object.keys(state.langs);
+    for (let n = 0; n < all.length - LANG_CAP; n++) delete state.langs[all[n]];
+  }
+  save();
+}
+const userLang = i => savedLang(userOf(i)) || V.fromLocale(i && i.locale);
 /* Ответ на кнопку (новые сообщения кнопок языка не имеют; они остались у сообщений прежних версий): code — язык кнопки
    (en, ru, другой) или «me» — язык самого нажавшего. make(язык) собирает сообщение. Кнопка «me» на общем сообщении в
    канале даёт личную копию, видную только нажавшему; во всех остальных случаях сообщение правится на месте. Язык
@@ -989,7 +1009,8 @@ const HELP = [
     'an @mention in your command pings the person before the bot can delete the message. A user ID works too (a mention as well, but it pings). ' +
     'A name with spaces goes in quotes: ' + PREFIX + 'mute "Big Bob" 1h.',
   '',
-  'For everyone: **/servers** - game rooms and players online right now, **/rules** - the server rules in your language, **/account nick** - a player profile.',
+  'For everyone: **/servers** - game rooms and players online right now, **/rules** - the server rules in your language, **/account nick** - a player profile, ' +
+    '**/language** - choose the language the bot answers in: any country in the world (it is remembered per person).',
   'Only you can use these commands. The message with a command is removed at once.'
 ].join('\n');
 
@@ -1769,6 +1790,8 @@ async function onInteraction(i) {
   if (i.type === 2 && i.data && i.data.name === 'account') return onAccount(i);
   if (i.type === 2 && i.data && i.data.name === 'rules') return onRules(i);
   if (i.type === 4 && i.data && i.data.name === 'account') return onAccountHint(i);
+  if (i.type === 2 && i.data && i.data.name === 'language') return onLanguage(i);
+  if (i.type === 4 && i.data && i.data.name === 'language') return onLanguageHint(i);
   if (i.type === 3 && /^(sv|ac):/.test(cid)) return onCardButton(i, cid);
   if (i.type === 3 && cid.indexOf('cd:') === 0) return onCardLang(i, cid);
   if (!i.guild_id) return;
@@ -1882,6 +1905,38 @@ function onAccount(i) {
   return reply(i, { content: 'No player named **' + md(nick || '?') + '** on aibrofist.online.' +
                              (like.length ? ' Maybe: ' + like.map(n => '**' + md(n) + '**').join(', ') + '?' : '') });
 }
+/* /language: человек вводит страну или язык (Discord сам подсказывает варианты из discordWorld.js), бот запоминает
+   выбор и дальше отвечает на этом языке во всех командах. «Automatic» (значение auto) — снова по языку его Discord.
+   Без значения — показывает, какой язык сейчас. Ответ виден только ему, уже на выбранном языке. */
+function onLanguage(i) {
+  const uid = userOf(i), locale = i.locale;
+  const opt = ((i.data && i.data.options) || []).find(o => o.name === 'country');
+  const q = String((opt && opt.value) || '').trim().slice(0, 60);
+  const discord = W.nativeOf(V.fromLocale(locale));
+  const answer = (data, lang) => answerCommand(i, () => V.message(V.view('language', data, lang), [], {}), 'language', true);
+  if (!q) {
+    const cur = savedEntry(uid);
+    return answer({ mode: 'view', label: cur ? W.describe(cur, locale) : '', discord }, userLang(i));
+  }
+  if (W.norm(q) === 'auto' || W.norm(q) === W.norm(V.say(userLang(i), 'langAutoName'))) {
+    saveLang(uid, null);
+    return answer({ mode: 'auto', discord }, V.fromLocale(locale));
+  }
+  const e = W.find(q, locale);
+  if (!e) return answer({ mode: 'none', q, suggest: W.search(q, locale, 5).map(x => W.label(x, locale)) }, userLang(i));
+  saveLang(uid, e);
+  return answer({ mode: 'set', label: W.describe(e, locale) }, V.langOf(e.lang));
+}
+// подсказки, пока человек печатает страну или язык: до 25 вариантов; пустое поле — самые распространённые языки и «Automatic»
+function onLanguageHint(i) {
+  const opt = ((i.data && i.data.options) || []).find(o => o.focused) || {};
+  const q = String(opt.value || ''), nq = W.norm(q), locale = i.locale;
+  const autoName = (V.say(userLang(i), 'langAutoName') + ' · ' + W.nativeOf(V.fromLocale(locale))).slice(0, 100);
+  const withAuto = !nq || W.norm(autoName).indexOf(nq) === 0 || nq === 'auto';
+  const choices = W.search(q, locale, withAuto ? 24 : 25).map(e => ({ name: W.label(e, locale), value: e.value }));
+  if (withAuto) choices.unshift({ name: autoName, value: 'auto' });
+  return respond(i, { type: 8, data: { choices } });
+}
 // подсказки ников, пока игрок печатает /account
 function onAccountHint(i) {
   const opt = ((i.data && i.data.options) || []).find(o => o.focused) || {};
@@ -1909,19 +1964,22 @@ const GLOBAL_COMMANDS = [
     contexts: [0, 1], integration_types: [0] },
   { name: 'rules', type: 1, description: 'The server rules in your language',
     contexts: [0, 1], integration_types: [0] },
+  { name: 'language', type: 1, description: 'Choose the language the bot answers in: any country or language in the world',
+    contexts: [0, 1], integration_types: [0],
+    options: [{ type: 3, name: 'country', description: 'Type a country or a language, or pick Automatic', required: false, autocomplete: true, max_length: 60 }] },
   { name: 'account', type: 1, description: 'Show an AIBROFIST player profile',
     contexts: [0, 1], integration_types: [0],
     options: [{ type: 3, name: 'nick', description: 'Player nickname on aibrofist.online', required: true, autocomplete: true,
                 min_length: 1, max_length: 20 }] }
 ];
-const GLOBAL_VER = 'servers-rules-account-1';
+const GLOBAL_VER = 'servers-rules-account-language-1';
 async function syncGlobalCommands() {
   if (state.fixes.globalCommands === GLOBAL_VER) return;
   if (!appId) await loadApp().catch(() => null);
   if (!appId) return;
   const r = await api('PUT', '/applications/' + appId + '/commands', GLOBAL_COMMANDS);
   if (ok(r)) { state.fixes.globalCommands = GLOBAL_VER; save(); }
-  else log('could not set the /servers, /rules and /account commands:', r.status);
+  else log('could not set the /servers, /rules, /account and /language commands:', r.status);
 }
 
 /* Слэш-команд на сервере у бота нет — все команды секретные, с «!». Если

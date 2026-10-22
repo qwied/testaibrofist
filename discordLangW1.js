@@ -1,0 +1,230 @@
+// ============ ЯЗЫКИ ОТВЕТОВ БОТА, ЧАСТЬ 1: العربية, עברית, فارسی, اردو, বাংলা, Bahasa Melayu ============
+// Те же ключи, что в discordLang.js; подстановки в фигурных скобках не переводятся.
+// Даты — по locale с латинскими цифрами (u-nu-latn) и григорианским календарём, чтобы цифры в карточке не путались.
+'use strict';
+
+const PACKS = {
+  /* ---------- العربية ---------- */
+  ar: {
+    name: 'العربية', locale: 'ar-u-nu-latn',
+    s: {
+      warn: 'تحذير', mute: 'كتم', ban: 'حظر', unmute: 'رُفع الكتم', unban: 'رُفع الحظر', unwarn: 'أُزيلت التحذيرات',
+      removed: 'حُذفت الرسالة', rule: 'القاعدة', reason: 'السبب', other: 'أخرى', customWords: 'كلمات محظورة في هذا الخادم',
+      nativeWord: 'قاعدة AutoMod الخاصة بالخادم', noReason: 'لم يُذكر سبب', by: 'بواسطة {who}', byBot: 'تلقائيًا بواسطة البوت', caseN: 'الحالة {n}',
+      ofLimit: '{n} من {limit}', forever: 'إلى الأبد', permanent: 'حظر دائم', nextMute: 'عند {limit} تحذيرات خلال 30 يومًا: كتم لمدة ساعة.',
+      escalated: 'التحذير {n} من {n}: كتم لمدة {d}. يبدأ العدّ من جديد.', escalatedBlocked: 'التحذير {n} من {n}. يبدأ العدّ من جديد.',
+      tally: 'العدّ', untilLabel: 'حتى', lifts: 'ينتهي', banWord: 'حظر', status: 'الحالة', notApplied: 'لم يُطبَّق: {why}',
+      ownerBlocked: 'لا يمكن كتم مالك الخادم أو حظره', adminBlocked: 'لا يمكن كتم المشرفين',
+      failed: 'فشل: ليس لدى البوت صلاحية', canTalk: 'يمكنه التحدث مجددًا', backIn: 'يمكنه الانضمام إلى الخادم مجددًا', clean: 'السجل نظيف الآن',
+      mistake: 'تعتقد أن البوت أخطأ؟ راسل المالك.', warnsAddShort: 'التحذيرات تتراكم: الثالث خلال 30 يومًا يعني كتمًا لمدة ساعة.',
+      updated: 'تم التحديث {d}', actNone: 'حُذفت', actWarn: 'تحذير', actMute: 'كتم {d}', actBan: 'حظر {d}',
+      serversTitle: 'الخوادم', onlineN: '{n} متصل', noRoomsNow: 'لا توجد غرف الآن. اضغط «العب» وستُفتح غرفة جديدة.', stOpen: 'مفتوحة', stFull: 'ممتلئة',
+      stFreeing: 'سيتوفر مكان قريبًا', phHiding: 'الاختباء', phHunt: 'البحث', phStory: 'انتهت القصة', leftT: 'متبقٍ {t}', mapN: 'الخريطة {m}',
+      moreRooms: '+ {n} غرف أخرى', refresh: 'تحديث', playNow: 'العب الآن', gRaceMode: 'سباق', gHnsMode: 'الغميضة', playersN: '{n} لاعبين',
+      playerN: 'لاعب واحد', roomsN: '{n} غرف', roomN: 'غرفة واحدة', upTo40: 'حتى 40 لاعبًا في كل غرفة',
+      openProfile: 'فتح الملف الشخصي', tabProfile: 'الملف الشخصي', tabMaps: 'الخرائط', tabFriends: 'الأصدقاء', perToday: 'اليوم', perWeek: 'هذا الأسبوع', perAll: 'كل الوقت',
+      joined: 'انضم في {d}', coinsL: 'العملات', raceScores: 'نقاط السباق', hsScores: 'نقاط الغميضة', noRank: 'بلا رتبة', aboutL: 'نبذة',
+      nothingWritten: 'لم يُكتب شيء بعد', todayWord: 'اليوم', weekWord: 'هذا الأسبوع', noMapsYet: 'لم تُنشر خرائط بعد', noFriendsYet: 'لا أصدقاء بعد',
+      published: 'نُشرت في {d}', inGameTag: 'في اللعبة', likesN: 'إعجاب {a} · عدم إعجاب {b}', onlineNowTag: 'متصل الآن', minAgo: 'قبل {n} د',
+      hAgo: 'قبل {n} س', dAgo: 'قبل {n} أيام', longAgo: 'منذ زمن', friendsL: 'الأصدقاء', mapsL: 'الخرائط', moreN2: '+ {n} أخرى', race: 'سباق', hns: 'الغميضة',
+      rulesTitle: 'قواعد خادم AIBROFIST'
+    },
+    rules: ['ممنوع السبام', 'ممنوع دعوات خوادم Discord الأخرى', 'ممنوع المحتوى للبالغين', 'ممنوع خطاب الكراهية', 'ممنوع الاحتيال والروابط الخطرة',
+            'ممنوع بيع الحسابات أو العملات مقابل مال حقيقي', 'ممنوع نشر عناوين IP الخاصة بالآخرين'],
+    short: ['أكثر من 3 رسائل خلال ثانيتين. كتم في المرة الخامسة.', 'تُحذف الرسالة وتحصل على تحذير.', 'صور وروابط ونصوص.',
+            'الشتائم، وحثّ أي شخص على إيذاء نفسه.', 'التصيّد، Nitro المزيف، سارقو IP، ملفات .exe. القاعدة الوحيدة التي تؤدي إلى الحظر.',
+            'تُحذف الرسالة وتحصل على تحذير.', 'تُحذف الرسالة دون عقوبة.'],
+    notes: { flood: 'أكثر من 3 رسائل خلال ثانيتين', invite: 'دعوة إلى خادم آخر', 'nsfw-link': 'رابط موقع +18', 'nsfw-image': 'صورة +18',
+             slur: 'شتيمة أو خطاب كراهية', selfharm: 'حثّ على إيذاء النفس', 'scam-text': 'رسالة احتيال معروفة', 'everyone-link': 'إشارة جماعية مع رابط',
+             badfile: 'ملف تنفيذي', scam: 'رابط احتيالي أو تصيّد', grabber: 'رابط يسرق عنوان IP', cheat: 'بيع مقابل مال حقيقي',
+             custom: 'كلمة محظورة في هذا الخادم', 'native-word': 'محظور بقاعدة AutoMod الخاصة بالخادم', warns: '3 تحذيرات خلال 30 يومًا' },
+    units: { plural: 'ar', min: ['دقيقة', 'دقيقتان', 'دقائق', 'دقيقة'], hour: ['ساعة', 'ساعتان', 'ساعات', 'ساعة'], day: ['يوم', 'يومان', 'أيام', 'يومًا'] }
+  },
+
+  /* ---------- עברית ---------- */
+  he: {
+    name: 'עברית', locale: 'he',
+    s: {
+      warn: 'אזהרה', mute: 'הושתק', ban: 'נחסם', unmute: 'ההשתקה הוסרה', unban: 'החסימה הוסרה', unwarn: 'האזהרות הוסרו',
+      removed: 'ההודעה נמחקה', rule: 'כלל', reason: 'סיבה', other: 'אחר', customWords: 'מילים אסורות בשרת הזה',
+      nativeWord: 'כלל AutoMod של השרת', noReason: 'לא צוינה סיבה', by: 'הוענש על ידי {who}', byBot: 'אוטומטי, על ידי הבוט', caseN: 'מקרה {n}',
+      ofLimit: '{n} מתוך {limit}', forever: 'לתמיד', permanent: 'חסימה לצמיתות', nextMute: 'אחרי {limit} אזהרות תוך 30 יום: השתקה לשעה.',
+      escalated: 'אזהרה {n} מתוך {n}: הושתק ל-{d}. הספירה מתחילה מחדש.', escalatedBlocked: 'אזהרה {n} מתוך {n}. הספירה מתחילה מחדש.',
+      tally: 'ספירה', untilLabel: 'עד', lifts: 'מסתיים', banWord: 'חסימה', status: 'סטטוס', notApplied: 'לא בוצע: {why}',
+      ownerBlocked: 'אי אפשר להשתיק או לחסום את בעל השרת', adminBlocked: 'אי אפשר להשתיק מנהלים',
+      failed: 'נכשל: לבוט אין הרשאה', canTalk: 'יכול לדבר שוב', backIn: 'יכול להצטרף לשרת שוב', clean: 'הרשומה נקייה עכשיו',
+      mistake: 'חושב שהבוט טעה? כתוב לבעל השרת.', warnsAddShort: 'אזהרות מצטברות: השלישית תוך 30 יום גוררת השתקה לשעה.',
+      updated: 'עודכן {d}', actNone: 'הוסרה', actWarn: 'אזהרה', actMute: 'השתקה {d}', actBan: 'חסימה {d}',
+      serversTitle: 'שרתים', onlineN: '{n} מחוברים', noRoomsNow: 'אין חדרים כרגע. לחץ על «שחק» ויפתח חדר חדש.', stOpen: 'פתוח', stFull: 'מלא',
+      stFreeing: 'מקום מתפנה', phHiding: 'מסתתרים', phHunt: 'חיפוש', phStory: 'הסיפור הסתיים', leftT: 'נותרו {t}', mapN: 'מפה {m}',
+      moreRooms: '+ עוד {n} חדרים', refresh: 'רענון', playNow: 'שחק עכשיו', gRaceMode: 'מרוץ', gHnsMode: 'מחבואים', playersN: '{n} שחקנים',
+      playerN: 'שחקן אחד', roomsN: '{n} חדרים', roomN: 'חדר אחד', upTo40: 'עד 40 שחקנים בכל חדר',
+      openProfile: 'פתח פרופיל', tabProfile: 'פרופיל', tabMaps: 'מפות', tabFriends: 'חברים', perToday: 'היום', perWeek: 'השבוע', perAll: 'כל הזמנים',
+      joined: 'הצטרף ב-{d}', coinsL: 'מטבעות', raceScores: 'ניקוד מרוץ', hsScores: 'ניקוד מחבואים', noRank: 'ללא דרגה', aboutL: 'אודות',
+      nothingWritten: 'עדיין לא נכתב דבר', todayWord: 'היום', weekWord: 'השבוע', noMapsYet: 'עדיין לא פורסמו מפות', noFriendsYet: 'עדיין אין חברים',
+      published: 'פורסם ב-{d}', inGameTag: 'במשחק', likesN: 'לייקים {a} · דיסלייקים {b}', onlineNowTag: 'מחובר עכשיו', minAgo: 'לפני {n} דק׳',
+      hAgo: 'לפני {n} שע׳', dAgo: 'לפני {n} ימים', longAgo: 'לפני זמן רב', friendsL: 'חברים', mapsL: 'מפות', moreN2: '+ עוד {n}', race: 'מרוץ', hns: 'מחבואים',
+      rulesTitle: 'חוקי השרת של AIBROFIST'
+    },
+    rules: ['אין ספאם', 'אין הזמנות לשרתי Discord אחרים', 'אין תוכן למבוגרים', 'אין דברי שנאה', 'אין הונאות או קישורים מסוכנים',
+            'אסור למכור חשבונות או מטבעות תמורת כסף אמיתי', 'אין כתובות IP של אחרים'],
+    short: ['יותר מ-3 הודעות ב-2 שניות. השתקה בפעם החמישית.', 'ההודעה נמחקת ומתקבלת אזהרה.', 'תמונות, קישורים וטקסט.',
+            'קללות, ועידוד אדם לפגוע בעצמו.', 'פישינג, Nitro מזויף, גנבי IP, קובצי exe. הכלל היחיד שגורר חסימה.',
+            'ההודעה נמחקת ומתקבלת אזהרה.', 'ההודעה נמחקת, ללא עונש.'],
+    notes: { flood: 'יותר מ-3 הודעות ב-2 שניות', invite: 'הזמנה לשרת אחר', 'nsfw-link': 'קישור לאתר 18+', 'nsfw-image': 'תמונה 18+',
+             slur: 'קללה או דברי שנאה', selfharm: 'עידוד לפגיעה עצמית', 'scam-text': 'הודעת הונאה מוכרת', 'everyone-link': 'תיוג המוני עם קישור',
+             badfile: 'קובץ הפעלה', scam: 'קישור הונאה או פישינג', grabber: 'קישור שגונב כתובת IP', cheat: 'מכירה תמורת כסף אמיתי',
+             custom: 'מילה אסורה בשרת הזה', 'native-word': 'נחסם בכלל AutoMod של השרת', warns: '3 אזהרות תוך 30 יום' },
+    units: { plural: 'one', min: ['דקה', 'דקות'], hour: ['שעה', 'שעות'], day: ['יום', 'ימים'] }
+  },
+
+  /* ---------- فارسی ---------- */
+  fa: {
+    name: 'فارسی', locale: 'fa-u-ca-gregory-nu-latn',
+    s: {
+      warn: 'هشدار', mute: 'بی‌صدا شد', ban: 'مسدود شد', unmute: 'بی‌صدایی برداشته شد', unban: 'مسدودی برداشته شد', unwarn: 'هشدارها حذف شد',
+      removed: 'پیام حذف شد', rule: 'قانون', reason: 'دلیل', other: 'سایر', customWords: 'کلمات ممنوع در این سرور',
+      nativeWord: 'قانون AutoMod سرور', noReason: 'دلیلی ذکر نشده', by: 'صادر شده توسط {who}', byBot: 'خودکار، توسط ربات', caseN: 'مورد {n}',
+      ofLimit: '{n} از {limit}', forever: 'برای همیشه', permanent: 'مسدودی دائمی', nextMute: 'با {limit} هشدار در 30 روز: یک ساعت بی‌صدایی.',
+      escalated: 'هشدار {n} از {n}: بی‌صدا برای {d}. شمارش از نو شروع می‌شود.', escalatedBlocked: 'هشدار {n} از {n}. شمارش از نو شروع می‌شود.',
+      tally: 'شمارش', untilLabel: 'تا', lifts: 'پایان', banWord: 'مسدودی', status: 'وضعیت', notApplied: 'اعمال نشد: {why}',
+      ownerBlocked: 'مالک سرور را نمی‌توان بی‌صدا یا مسدود کرد', adminBlocked: 'مدیران را نمی‌توان بی‌صدا کرد',
+      failed: 'ناموفق: ربات دسترسی ندارد', canTalk: 'دوباره می‌تواند صحبت کند', backIn: 'دوباره می‌تواند به سرور بپیوندد', clean: 'سابقه اکنون پاک است',
+      mistake: 'فکر می‌کنید ربات اشتباه کرده؟ به مالک پیام دهید.', warnsAddShort: 'هشدارها جمع می‌شوند: سومی در 30 روز یعنی یک ساعت بی‌صدایی.',
+      updated: 'به‌روزرسانی {d}', actNone: 'حذف شد', actWarn: 'هشدار', actMute: 'بی‌صدایی {d}', actBan: 'مسدودی {d}',
+      serversTitle: 'سرورها', onlineN: '{n} آنلاین', noRoomsNow: 'اکنون اتاقی نیست. «بازی» را بزنید تا اتاق جدیدی باز شود.', stOpen: 'باز', stFull: 'پر',
+      stFreeing: 'جایی در حال خالی شدن است', phHiding: 'مخفی شدن', phHunt: 'شکار', phStory: 'داستان تمام شد', leftT: '{t} مانده', mapN: 'نقشه {m}',
+      moreRooms: '+ {n} اتاق دیگر', refresh: 'تازه‌سازی', playNow: 'همین حالا بازی کن', gRaceMode: 'مسابقه', gHnsMode: 'قایم‌باشک', playersN: '{n} بازیکن',
+      playerN: '1 بازیکن', roomsN: '{n} اتاق', roomN: '1 اتاق', upTo40: 'تا 40 بازیکن در هر اتاق',
+      openProfile: 'باز کردن نمایه', tabProfile: 'نمایه', tabMaps: 'نقشه‌ها', tabFriends: 'دوستان', perToday: 'امروز', perWeek: 'این هفته', perAll: 'کل زمان',
+      joined: 'عضویت: {d}', coinsL: 'سکه‌ها', raceScores: 'امتیاز مسابقه', hsScores: 'امتیاز قایم‌باشک', noRank: 'بدون رتبه', aboutL: 'درباره',
+      nothingWritten: 'هنوز چیزی نوشته نشده', todayWord: 'امروز', weekWord: 'این هفته', noMapsYet: 'هنوز نقشه‌ای منتشر نشده', noFriendsYet: 'هنوز دوستی نیست',
+      published: 'منتشر شده: {d}', inGameTag: 'در بازی', likesN: 'پسند {a} · ناپسند {b}', onlineNowTag: 'اکنون آنلاین', minAgo: '{n} دقیقه پیش',
+      hAgo: '{n} ساعت پیش', dAgo: '{n} روز پیش', longAgo: 'مدت‌ها پیش', friendsL: 'دوستان', mapsL: 'نقشه‌ها', moreN2: '+ {n} مورد دیگر', race: 'مسابقه', hns: 'قایم‌باشک',
+      rulesTitle: 'قوانین سرور AIBROFIST'
+    },
+    rules: ['اسپم ممنوع', 'دعوت به سرورهای دیگر دیسکورد ممنوع', 'محتوای مخصوص بزرگسالان ممنوع', 'سخنان نفرت‌پراکن ممنوع', 'کلاهبرداری و پیوندهای خطرناک ممنوع',
+            'فروش حساب یا سکه با پول واقعی ممنوع', 'انتشار نشانی IP دیگران ممنوع'],
+    short: ['بیش از 3 پیام در 2 ثانیه. بی‌صدایی در بار پنجم.', 'پیام حذف می‌شود و هشدار می‌گیرید.', 'تصاویر، پیوندها و متن.',
+            'توهین، و تشویق دیگران به آسیب زدن به خود.', 'فیشینگ، نایترو جعلی، سارقان IP، فایل exe. تنها قانونی که به مسدودی می‌انجامد.',
+            'پیام حذف می‌شود و هشدار می‌گیرید.', 'پیام حذف می‌شود، بدون مجازات.'],
+    notes: { flood: 'بیش از 3 پیام در 2 ثانیه', invite: 'دعوت به سرور دیگر', 'nsfw-link': 'پیوند سایت +18', 'nsfw-image': 'تصویر +18',
+             slur: 'توهین یا سخن نفرت‌پراکن', selfharm: 'تشویق به آسیب زدن به خود', 'scam-text': 'پیام کلاهبرداری شناخته‌شده', 'everyone-link': 'منشن گروهی همراه با پیوند',
+             badfile: 'فایل اجرایی', scam: 'پیوند کلاهبرداری یا فیشینگ', grabber: 'پیوند سرقت نشانی IP', cheat: 'فروش با پول واقعی',
+             custom: 'کلمه ممنوع در این سرور', 'native-word': 'مسدود شده با قانون AutoMod سرور', warns: '3 هشدار در 30 روز' },
+    units: { plural: 'none', min: ['دقیقه'], hour: ['ساعت'], day: ['روز'] }
+  },
+
+  /* ---------- اردو ---------- */
+  ur: {
+    name: 'اردو', locale: 'ur-u-nu-latn',
+    s: {
+      warn: 'انتباہ', mute: 'خاموش', ban: 'پابندی', unmute: 'خاموشی ہٹا دی گئی', unban: 'پابندی ہٹا دی گئی', unwarn: 'انتباہات ہٹا دیے گئے',
+      removed: 'پیغام حذف', rule: 'اصول', reason: 'وجہ', other: 'دیگر', customWords: 'اس سرور پر ممنوعہ الفاظ',
+      nativeWord: 'سرور کا AutoMod اصول', noReason: 'کوئی وجہ نہیں بتائی گئی', by: 'جاری کنندہ: {who}', byBot: 'خودکار، بوٹ کی طرف سے', caseN: 'کیس {n}',
+      ofLimit: '{n} از {limit}', forever: 'ہمیشہ کے لیے', permanent: 'مستقل پابندی', nextMute: '30 دن میں {limit} انتباہات پر: 1 گھنٹے کی خاموشی۔',
+      escalated: 'انتباہ {n} از {n}: {d} کے لیے خاموش۔ گنتی دوبارہ شروع۔', escalatedBlocked: 'انتباہ {n} از {n}۔ گنتی دوبارہ شروع۔',
+      tally: 'گنتی', untilLabel: 'تک', lifts: 'ختم', banWord: 'پابندی', status: 'حالت', notApplied: 'نافذ نہیں ہوا: {why}',
+      ownerBlocked: 'سرور کے مالک کو خاموش یا پابند نہیں کیا جا سکتا', adminBlocked: 'ایڈمنز کو خاموش نہیں کیا جا سکتا',
+      failed: 'ناکام: بوٹ کے پاس اجازت نہیں', canTalk: 'دوبارہ بات کر سکتے ہیں', backIn: 'دوبارہ سرور میں شامل ہو سکتے ہیں', clean: 'ریکارڈ اب صاف ہے',
+      mistake: 'لگتا ہے بوٹ سے غلطی ہوئی؟ مالک کو پیغام بھیجیں۔', warnsAddShort: 'انتباہات جمع ہوتے ہیں: 30 دن میں تیسرے پر 1 گھنٹے کی خاموشی۔',
+      updated: 'تازہ کاری {d}', actNone: 'حذف', actWarn: 'انتباہ', actMute: 'خاموشی {d}', actBan: 'پابندی {d}',
+      serversTitle: 'سرورز', onlineN: '{n} آن لائن', noRoomsNow: 'ابھی کوئی کمرہ نہیں۔ «کھیلیں» دبائیں تو نیا کمرہ کھل جائے گا۔', stOpen: 'کھلا', stFull: 'بھرا ہوا',
+      stFreeing: 'جگہ خالی ہو رہی ہے', phHiding: 'چھپنا', phHunt: 'تلاش', phStory: 'کہانی ختم', leftT: '{t} باقی', mapN: 'نقشہ {m}',
+      moreRooms: '+ {n} مزید کمرے', refresh: 'تازہ کریں', playNow: 'ابھی کھیلیں', gRaceMode: 'ریس', gHnsMode: 'آنکھ مچولی', playersN: '{n} کھلاڑی',
+      playerN: '1 کھلاڑی', roomsN: '{n} کمرے', roomN: '1 کمرہ', upTo40: 'ہر کمرے میں 40 تک کھلاڑی',
+      openProfile: 'پروفائل کھولیں', tabProfile: 'پروفائل', tabMaps: 'نقشے', tabFriends: 'دوست', perToday: 'آج', perWeek: 'اس ہفتے', perAll: 'کل وقت',
+      joined: 'شمولیت: {d}', coinsL: 'سکے', raceScores: 'ریس کے پوائنٹس', hsScores: 'آنکھ مچولی کے پوائنٹس', noRank: 'کوئی رینک نہیں', aboutL: 'تعارف',
+      nothingWritten: 'ابھی کچھ نہیں لکھا', todayWord: 'آج', weekWord: 'اس ہفتے', noMapsYet: 'ابھی کوئی نقشہ شائع نہیں ہوا', noFriendsYet: 'ابھی کوئی دوست نہیں',
+      published: 'شائع: {d}', inGameTag: 'گیم میں', likesN: 'پسند {a} · ناپسند {b}', onlineNowTag: 'ابھی آن لائن', minAgo: '{n} منٹ پہلے',
+      hAgo: '{n} گھنٹے پہلے', dAgo: '{n} دن پہلے', longAgo: 'بہت پہلے', friendsL: 'دوست', mapsL: 'نقشے', moreN2: '+ {n} مزید', race: 'ریس', hns: 'آنکھ مچولی',
+      rulesTitle: 'AIBROFIST سرور کے اصول'
+    },
+    rules: ['سپیم ممنوع', 'دوسرے Discord سرورز کی دعوتیں ممنوع', 'بالغوں کا مواد ممنوع', 'نفرت انگیز گفتگو ممنوع', 'فراڈ اور خطرناک لنکس ممنوع',
+            'اکاؤنٹس یا سکے اصل رقم کے بدلے بیچنا ممنوع', 'دوسروں کے IP ایڈریس ظاہر کرنا ممنوع'],
+    short: ['2 سیکنڈ میں 3 سے زیادہ پیغامات۔ پانچویں بار خاموشی۔', 'پیغام حذف ہو جاتا ہے اور انتباہ ملتا ہے۔', 'تصاویر، لنکس اور متن۔',
+            'گالی گلوچ، اور کسی کو خود کو نقصان پہنچانے پر اکسانا۔', 'فشنگ، جعلی Nitro، IP چور، exe فائلیں۔ واحد اصول جس پر پابندی لگتی ہے۔',
+            'پیغام حذف ہو جاتا ہے اور انتباہ ملتا ہے۔', 'پیغام حذف ہو جاتا ہے، کوئی سزا نہیں۔'],
+    notes: { flood: '2 سیکنڈ میں 3 سے زیادہ پیغامات', invite: 'دوسرے سرور کی دعوت', 'nsfw-link': '+18 ویب سائٹ کا لنک', 'nsfw-image': '+18 تصویر',
+             slur: 'گالی یا نفرت انگیز گفتگو', selfharm: 'خود کو نقصان پہنچانے پر اکسانا', 'scam-text': 'معروف فراڈ پیغام', 'everyone-link': 'لنک کے ساتھ اجتماعی ذکر',
+             badfile: 'قابلِ عمل فائل', scam: 'فراڈ یا فشنگ لنک', grabber: 'IP ایڈریس چرانے والا لنک', cheat: 'اصل رقم کے بدلے فروخت',
+             custom: 'اس سرور پر ممنوعہ لفظ', 'native-word': 'سرور کے AutoMod اصول نے روکا', warns: '30 دن میں 3 انتباہات' },
+    units: { plural: 'one', min: ['منٹ', 'منٹ'], hour: ['گھنٹہ', 'گھنٹے'], day: ['دن', 'دن'] }
+  },
+
+  /* ---------- বাংলা ---------- */
+  bn: {
+    name: 'বাংলা', locale: 'bn-u-nu-latn',
+    s: {
+      warn: 'সতর্কতা', mute: 'নিঃশব্দ', ban: 'নিষিদ্ধ', unmute: 'নিঃশব্দ তুলে নেওয়া হয়েছে', unban: 'নিষেধাজ্ঞা তুলে নেওয়া হয়েছে', unwarn: 'সতর্কতা সরানো হয়েছে',
+      removed: 'বার্তা মুছে ফেলা হয়েছে', rule: 'নিয়ম', reason: 'কারণ', other: 'অন্যান্য', customWords: 'এই সার্ভারে নিষিদ্ধ শব্দ',
+      nativeWord: 'সার্ভারের AutoMod নিয়ম', noReason: 'কোনো কারণ দেওয়া হয়নি', by: 'প্রদানকারী: {who}', byBot: 'স্বয়ংক্রিয়, বটের মাধ্যমে', caseN: 'কেস {n}',
+      ofLimit: '{n}/{limit}', forever: 'চিরতরে', permanent: 'স্থায়ী নিষেধাজ্ঞা', nextMute: '30 দিনে {limit}টি সতর্কতা হলে: 1 ঘণ্টার নিঃশব্দ।',
+      escalated: 'সতর্কতা {n}/{n}: {d} নিঃশব্দ। গণনা আবার শুরু হবে।', escalatedBlocked: 'সতর্কতা {n}/{n}। গণনা আবার শুরু হবে।',
+      tally: 'গণনা', untilLabel: 'পর্যন্ত', lifts: 'শেষ হবে', banWord: 'নিষেধাজ্ঞা', status: 'অবস্থা', notApplied: 'প্রয়োগ হয়নি: {why}',
+      ownerBlocked: 'সার্ভারের মালিককে নিঃশব্দ বা নিষিদ্ধ করা যায় না', adminBlocked: 'অ্যাডমিনদের নিঃশব্দ করা যায় না',
+      failed: 'ব্যর্থ: বটের অনুমতি নেই', canTalk: 'আবার কথা বলতে পারবে', backIn: 'আবার সার্ভারে যোগ দিতে পারবে', clean: 'রেকর্ড এখন পরিষ্কার',
+      mistake: 'মনে হচ্ছে বট ভুল করেছে? মালিককে বার্তা পাঠান।', warnsAddShort: 'সতর্কতা জমা হয়: 30 দিনে তৃতীয়টিতে 1 ঘণ্টার নিঃশব্দ।',
+      updated: 'হালনাগাদ {d}', actNone: 'মুছে ফেলা', actWarn: 'সতর্কতা', actMute: 'নিঃশব্দ {d}', actBan: 'নিষেধাজ্ঞা {d}',
+      serversTitle: 'সার্ভার', onlineN: '{n} অনলাইন', noRoomsNow: 'এখন কোনো রুম নেই। «খেলুন» চাপলে নতুন রুম খুলবে।', stOpen: 'খোলা', stFull: 'পূর্ণ',
+      stFreeing: 'একটি জায়গা খালি হচ্ছে', phHiding: 'লুকানো', phHunt: 'খোঁজা', phStory: 'গল্প শেষ', leftT: '{t} বাকি', mapN: 'ম্যাপ {m}',
+      moreRooms: '+ আরও {n}টি রুম', refresh: 'রিফ্রেশ', playNow: 'এখনই খেলুন', gRaceMode: 'রেস', gHnsMode: 'লুকোচুরি', playersN: '{n} জন খেলোয়াড়',
+      playerN: '1 জন খেলোয়াড়', roomsN: '{n}টি রুম', roomN: '1টি রুম', upTo40: 'প্রতিটিতে 40 জন পর্যন্ত খেলোয়াড়',
+      openProfile: 'প্রোফাইল খুলুন', tabProfile: 'প্রোফাইল', tabMaps: 'ম্যাপ', tabFriends: 'বন্ধু', perToday: 'আজ', perWeek: 'এই সপ্তাহ', perAll: 'সব সময়',
+      joined: 'যোগ দিয়েছেন {d}', coinsL: 'কয়েন', raceScores: 'রেসের স্কোর', hsScores: 'লুকোচুরির স্কোর', noRank: 'র‍্যাংক নেই', aboutL: 'পরিচিতি',
+      nothingWritten: 'এখনও কিছু লেখা হয়নি', todayWord: 'আজ', weekWord: 'এই সপ্তাহ', noMapsYet: 'এখনও কোনো ম্যাপ প্রকাশিত হয়নি', noFriendsYet: 'এখনও কোনো বন্ধু নেই',
+      published: 'প্রকাশিত {d}', inGameTag: 'গেমে', likesN: 'লাইক {a} · ডিসলাইক {b}', onlineNowTag: 'এখন অনলাইনে', minAgo: '{n} মিনিট আগে',
+      hAgo: '{n} ঘণ্টা আগে', dAgo: '{n} দিন আগে', longAgo: 'অনেক আগে', friendsL: 'বন্ধু', mapsL: 'ম্যাপ', moreN2: '+ আরও {n}', race: 'রেস', hns: 'লুকোচুরি',
+      rulesTitle: 'AIBROFIST সার্ভারের নিয়ম'
+    },
+    rules: ['স্প্যাম নয়', 'অন্য Discord সার্ভারের আমন্ত্রণ নয়', 'প্রাপ্তবয়স্ক বিষয়বস্তু নয়', 'ঘৃণাত্মক বক্তব্য নয়', 'প্রতারণা বা বিপজ্জনক লিংক নয়',
+            'প্রকৃত টাকার বিনিময়ে অ্যাকাউন্ট বা কয়েন বিক্রি নিষিদ্ধ', 'অন্যের IP ঠিকানা প্রকাশ নয়'],
+    short: ['2 সেকেন্ডে 3টির বেশি বার্তা। পঞ্চমবারে নিঃশব্দ।', 'বার্তা মুছে যায় এবং আপনি সতর্কতা পান।', 'ছবি, লিংক ও লেখা।',
+            'গালিগালাজ, এবং কাউকে নিজের ক্ষতি করতে বলা।', 'ফিশিং, নকল Nitro, IP চোর, .exe। একমাত্র যে নিয়মে নিষেধাজ্ঞা হয়।',
+            'বার্তা মুছে যায় এবং আপনি সতর্কতা পান।', 'বার্তা মুছে যায়, কোনো শাস্তি নেই।'],
+    notes: { flood: '2 সেকেন্ডে 3টির বেশি বার্তা', invite: 'অন্য সার্ভারের আমন্ত্রণ', 'nsfw-link': '+18 সাইটের লিংক', 'nsfw-image': '+18 ছবি',
+             slur: 'গালি বা ঘৃণাত্মক বক্তব্য', selfharm: 'নিজের ক্ষতি করতে উসকানি', 'scam-text': 'পরিচিত প্রতারণার বার্তা', 'everyone-link': 'লিংকসহ গণ-উল্লেখ',
+             badfile: 'এক্সিকিউটেবল ফাইল', scam: 'প্রতারণা বা ফিশিং লিংক', grabber: 'IP ঠিকানা চুরির লিংক', cheat: 'প্রকৃত টাকায় বিক্রি',
+             custom: 'এই সার্ভারে নিষিদ্ধ শব্দ', 'native-word': 'সার্ভারের AutoMod নিয়মে আটকানো', warns: '30 দিনে 3টি সতর্কতা' },
+    units: { plural: 'none', min: ['মিনিট'], hour: ['ঘণ্টা'], day: ['দিন'] }
+  },
+
+  /* ---------- Bahasa Melayu ---------- */
+  ms: {
+    name: 'Bahasa Melayu', locale: 'ms',
+    s: {
+      warn: 'Amaran', mute: 'Dibisukan', ban: 'Dilarang', unmute: 'Pembisuan ditamatkan', unban: 'Larangan ditamatkan', unwarn: 'Amaran dipadam',
+      removed: 'Mesej dipadam', rule: 'Peraturan', reason: 'Sebab', other: 'Lain-lain', customWords: 'Perkataan dilarang di pelayan ini',
+      nativeWord: 'Peraturan AutoMod pelayan', noReason: 'Tiada sebab diberikan', by: 'Dikeluarkan oleh {who}', byBot: 'Automatik, oleh bot', caseN: 'Kes {n}',
+      ofLimit: '{n} daripada {limit}', forever: 'Selama-lamanya', permanent: 'Larangan kekal', nextMute: 'Pada {limit} amaran dalam 30 hari: dibisukan selama 1 jam.',
+      escalated: 'Amaran {n} daripada {n}: dibisukan selama {d}. Kiraan bermula semula.', escalatedBlocked: 'Amaran {n} daripada {n}. Kiraan bermula semula.',
+      tally: 'Kiraan', untilLabel: 'Hingga', lifts: 'Tamat', banWord: 'larangan', status: 'Status', notApplied: 'Tidak dilaksanakan: {why}',
+      ownerBlocked: 'pemilik pelayan tidak boleh dibisukan atau dilarang', adminBlocked: 'pentadbir tidak boleh dibisukan',
+      failed: 'Gagal: bot tiada kebenaran', canTalk: 'Boleh bercakap semula', backIn: 'Boleh menyertai pelayan semula', clean: 'Rekod bersih sekarang',
+      mistake: 'Rasa bot tersilap? Mesej pemilik.', warnsAddShort: 'Amaran terkumpul: yang ke-3 dalam 30 hari membawa pembisuan 1 jam.',
+      updated: 'Dikemas kini {d}', actNone: 'DIPADAM', actWarn: 'AMARAN', actMute: 'BISU {d}', actBan: 'LARANGAN {d}',
+      serversTitle: 'Pelayan', onlineN: '{n} dalam talian', noRoomsNow: 'Tiada bilik sekarang. Tekan Main dan bilik baharu akan dibuka.', stOpen: 'dibuka', stFull: 'penuh',
+      stFreeing: 'ada tempat akan kosong', phHiding: 'Bersembunyi', phHunt: 'Pemburuan', phStory: 'Cerita tamat', leftT: '{t} lagi', mapN: 'peta {m}',
+      moreRooms: '+ {n} bilik lagi', refresh: 'Muat semula', playNow: 'Main sekarang', gRaceMode: 'Lumba', gHnsMode: 'Sorok-sorok', playersN: '{n} pemain',
+      playerN: '1 pemain', roomsN: '{n} bilik', roomN: '1 bilik', upTo40: 'sehingga 40 pemain setiap bilik',
+      openProfile: 'Buka profil', tabProfile: 'Profil', tabMaps: 'Peta', tabFriends: 'Rakan', perToday: 'Hari ini', perWeek: 'Minggu ini', perAll: 'Sepanjang masa',
+      joined: 'Menyertai {d}', coinsL: 'Syiling', raceScores: 'Skor lumba', hsScores: 'Skor sorok-sorok', noRank: 'tiada pangkat', aboutL: 'Tentang',
+      nothingWritten: 'Belum ada apa-apa ditulis', todayWord: 'hari ini', weekWord: 'minggu ini', noMapsYet: 'Belum ada peta diterbitkan', noFriendsYet: 'Belum ada rakan',
+      published: 'Diterbitkan {d}', inGameTag: 'dalam permainan', likesN: 'suka {a} · tidak suka {b}', onlineNowTag: 'dalam talian sekarang', minAgo: '{n} min lalu',
+      hAgo: '{n} j lalu', dAgo: '{n} hari lalu', longAgo: 'lama dahulu', friendsL: 'Rakan', mapsL: 'Peta', moreN2: '+ {n} lagi', race: 'Lumba', hns: 'Sorok-sorok',
+      rulesTitle: 'Peraturan Pelayan AIBROFIST'
+    },
+    rules: ['Tiada spam', 'Tiada jemputan ke pelayan Discord lain', 'Tiada kandungan dewasa', 'Tiada ucapan kebencian', 'Tiada penipuan atau pautan berbahaya',
+            'Dilarang menjual akaun atau syiling dengan wang sebenar', 'Tiada alamat IP orang lain'],
+    short: ['Lebih 3 mesej dalam 2 saat. Dibisukan pada kali ke-5.', 'Mesej dipadam dan anda mendapat amaran.', 'Imej, pautan dan teks.',
+            'Cacian, dan menyuruh sesiapa mencederakan diri.', 'Pancingan data, Nitro palsu, pencuri IP, .exe. Satu-satunya yang membawa larangan.',
+            'Mesej dipadam dan anda mendapat amaran.', 'Mesej dipadam, tanpa hukuman.'],
+    notes: { flood: 'Lebih 3 mesej dalam 2 saat', invite: 'Jemputan ke pelayan lain', 'nsfw-link': 'Pautan ke laman 18+', 'nsfw-image': 'Imej 18+',
+             slur: 'Cacian atau ucapan kebencian', selfharm: 'Menggalakkan mencederakan diri', 'scam-text': 'Mesej penipuan yang dikenali', 'everyone-link': 'Sebutan beramai-ramai dengan pautan',
+             badfile: 'Fail boleh laku', scam: 'Pautan penipuan atau pancingan data', grabber: 'Pautan yang mencuri alamat IP', cheat: 'Jualan dengan wang sebenar',
+             custom: 'Perkataan dilarang di pelayan ini', 'native-word': 'Disekat oleh peraturan AutoMod pelayan', warns: '3 amaran dalam 30 hari' },
+    units: { plural: 'none', min: ['minit'], hour: ['jam'], day: ['hari'] }
+  }
+};
+
+module.exports = { PACKS };

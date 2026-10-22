@@ -3,7 +3,8 @@
 // сообщений): рамка-контейнер с цветной полоской, текст, аватарка участника
 // справа, кнопки. Минималистично и компактно: без логотипа, без шапок.
 // Язык — английский, русский или один из discordLang.js: его бот берёт у самого
-// Discord (язык человека в команде или нажатии), кнопок выбора языка нет.
+// Discord (язык человека в команде или нажатии) или тот, что человек выбрал
+// командой /language; кнопок выбора языка нет.
 // Кнопки у Discord бывают синие, серые, зелёные, красные и ссылки;
 // чёрных нет, ближе всего серая («secondary», тёмная в тёмной теме) — все
 // кнопки бота только такие, выбранная показывается неактивной.
@@ -54,7 +55,10 @@ const S = {
     nothingWritten: 'Nothing written yet', todayWord: 'today', weekWord: 'this week', noMapsYet: 'No maps published yet', noFriendsYet: 'No friends yet',
     published: 'Published {d}', inGameTag: 'in game', likesN: 'likes {a} · dislikes {b}', onlineNowTag: 'online now', minAgo: '{n} min ago', hAgo: '{n} h ago',
     dAgo: '{n} days ago', longAgo: 'long ago', friendsL: 'Friends', mapsL: 'Maps', moreN2: '+ {n} more',
-    gRaceMode: 'Race', gHnsMode: 'Hide and Seek', userWord: 'Player', tipDark: '', rulesTitle: 'AIBROFIST Server Rules'
+    gRaceMode: 'Race', gHnsMode: 'Hide and Seek', userWord: 'Player', tipDark: '', rulesTitle: 'AIBROFIST Server Rules',
+    langTitle: 'Language', langNow: 'The bot now answers every command in this language.', langAutoName: 'Automatic',
+    langAutoText: 'The bot follows your Discord language: {lang}.', langHow: 'To change it, type a country or a language after /language.',
+    langNone: 'Nothing found for “{q}”. Type a country or a language.'
   },
   ru: {
     moderation: 'Модерация', caseN: 'Случай {n}', warnings: 'Предупреждения', rulesTag: 'Правила сервера', helpTag: 'Команды владельца',
@@ -95,7 +99,10 @@ const S = {
     nothingWritten: 'Ничего не написано', todayWord: 'сегодня', weekWord: 'за неделю', noMapsYet: 'Карт пока нет', noFriendsYet: 'Друзей пока нет',
     published: 'Опубликована {d}', inGameTag: 'в игре', likesN: 'нравится {a} · не нравится {b}', onlineNowTag: 'в сети', minAgo: '{n} мин назад', hAgo: '{n} ч назад',
     dAgo: '{n} дн. назад', longAgo: 'давно', friendsL: 'Друзья', mapsL: 'Карты', moreN2: '+ ещё {n}',
-    gRaceMode: 'Гонка', gHnsMode: 'Прятки', userWord: 'Игрок', tipDark: '', rulesTitle: 'Правила сервера AIBROFIST'
+    gRaceMode: 'Гонка', gHnsMode: 'Прятки', userWord: 'Игрок', tipDark: '', rulesTitle: 'Правила сервера AIBROFIST',
+    langTitle: 'Язык', langNow: 'Теперь бот отвечает на все команды на этом языке.', langAutoName: 'Автоматически',
+    langAutoText: 'Бот следует языку вашего Discord: {lang}.', langHow: 'Чтобы сменить, введите страну или язык после /language.',
+    langNone: 'По запросу «{q}» ничего не найдено. Введите страну или язык.'
   }
 };
 /* Язык ответа: en, ru или один из PACKS. Язык человека бот берёт у Discord (locale в нажатии или команде):
@@ -124,7 +131,8 @@ const plural = (n, one, few, many) => {
   return a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many;
 };
 // слово в нужной форме по правилу языка: one — «1 / много», slavic — русское, pl — польское, cs — чешское, lt — литовское,
-// ro — румынское (после 19 — «de»), none — без форм
+// ro — румынское (после 19 — «de»), ends1 — латышское и исландское (1, 21, 31, но не 11), sl — словенское (1, 2, 3–4, остальное),
+// ar — арабское (1, 2, 3–10, остальное), one — «1 / много», none — без форм
 function pluralForm(kind, n, forms) {
   if (kind === 'none') return forms[0];
   if (kind === 'one') return n === 1 ? forms[0] : forms[1];
@@ -133,6 +141,9 @@ function pluralForm(kind, n, forms) {
     const a = n % 100, b = n % 10, teen = a >= 11 && a <= 19;
     return b === 1 && !teen ? forms[0] : b >= 2 && b <= 9 && !teen ? forms[1] : forms[2];
   }
+  if (kind === 'ends1') return n % 10 === 1 && n % 100 !== 11 ? forms[0] : forms[1];             // латышский, исландский
+  if (kind === 'sl') { const a = n % 100; return a === 1 ? forms[0] : a === 2 ? forms[1] : a === 3 || a === 4 ? forms[2] : forms[3]; }
+  if (kind === 'ar') { const a = n % 100; return n === 1 ? forms[0] : n === 2 ? forms[1] : a >= 3 && a <= 10 ? forms[2] : forms[3]; }
   if (kind === 'ro') return n === 1 ? forms[0] : n === 0 || (n % 100 >= 1 && n % 100 <= 19) ? forms[1] : forms[2];
   if (kind === 'pl') {
     const a = n % 100, b = n % 10;
@@ -405,6 +416,20 @@ function info(d, lang) {
     txt(small(date(d.at || Date.now(), lang)))].filter(Boolean) };
 }
 
+/* ---------- /language: выбранный язык ----------
+   d: { mode: 'set' | 'auto' | 'view' | 'none', label — «Deutsch · Германия», discord — язык Discord человека, q — что искали, suggest — подсказки } */
+function language(d, lang) {
+  const L = (k, v) => say(lang, k, v);
+  if (d.mode === 'none') {
+    const alt = (d.suggest || []).slice(0, 5).map(x => '• ' + esc(x)).join('\n');
+    return { color: R.COLORS.neutral, parts: [txt('### ' + L('langTitle')), txt(L('langNone', { q: esc(String(d.q || '').slice(0, 60)) }) + (alt ? '\n' + alt : '')), txt(small(L('langHow')))] };
+  }
+  const auto = d.mode === 'auto' || !d.label;
+  return { color: R.COLORS.neutral, parts: [txt('### ' + L('langTitle')),
+    txt('**' + (auto ? L('langAutoName') : esc(d.label)) + '**\n' + (auto ? L('langAutoText', { lang: esc(d.discord || '') }) : L('langNow'))),
+    d.mode === 'view' ? txt(small(L('langHow'))) : null].filter(Boolean) };
+}
+
 /* ---------- /servers: комнаты обоих режимов ---------- */
 const PHASE_KEY = { lobby: 'phHiding', round: 'phHunt', storyEnd: 'phStory' };
 const STATUS_KEY = { open: 'stOpen', full: 'stFull', freeing: 'stFreeing' };
@@ -473,7 +498,7 @@ function account(d, lang, page, period) {
     txt(about ? '**' + L('aboutL') + '**  ' + esc(about) : small(L('nothingWritten')))] };
 }
 
-const VIEWS = { action, warns, warnsAll, rules, help, stats, info, servers, account };
+const VIEWS = { action, warns, warnsAll, rules, help, stats, info, servers, account, language };
 function view(kind, data, lang, extra) {
   const fn = VIEWS[kind];
   if (!fn) throw new Error('unknown view ' + kind);

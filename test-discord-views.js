@@ -107,14 +107,15 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
   ok('перевод не копия английского (не больше 12 общих строк с английским у языка)', sameAsEn.length === 0, JSON.stringify(sameAsEn));
   ok('язык Discord -> язык ответа: de, pt-BR, es-ES и es-419, zh-CN (упрощённый) и zh-TW (традиционный), no/nb/nn, регион после дефиса не важен', [['de', 'de'], ['de-AT', 'de'], ['pt-BR', 'pt'], ['es-ES', 'es'], ['es-419', 'es'],
      ['zh-CN', 'zh'], ['zh-TW', 'zt'], ['zh-HK', 'zt'], ['zh', 'zh'], ['no', 'no'], ['nb', 'no'], ['nn-NO', 'no'], ['sv-SE', 'sv'], ['pt_BR', 'pt'], ['EN-us', 'en'], ['uk', 'uk'], ['ru', 'ru'], ['ja', 'ja'], ['fr', 'fr'], ['tr', 'tr'], ['pl', 'pl'], ['it', 'it'], ['en-US', 'en'], ['en-GB', 'en']].every(([l, w]) => V.fromLocale(l) === w));
-  ok('неизвестный или пустой язык — английский (арабский, иврит, суахили, пусто, мусор)', ['ar', 'he', 'sw', '', undefined, null, 'zz-ZZ', '123', 'constructor', '__proto__'].every(l => V.fromLocale(l) === 'en'));
+  ok('неизвестный или пустой язык — английский (амхарский, кхмерский, бирманский, пусто, мусор)', ['am', 'km', 'my', 'lo', '', undefined, null, 'zz-ZZ', '123', 'constructor', '__proto__'].every(l => V.fromLocale(l) === 'en'));
+  ok('языки /language тоже понимаются, если их когда-нибудь пришлёт Discord: арабский, иврит, суахили', V.fromLocale('ar') === 'ar' && V.fromLocale('he-IL') === 'he' && V.fromLocale('sw') === 'sw' && V.fromLocale('fil') === 'fil');
   ok('langOf не принимает чужие ключи (constructor и т. п.) — иначе из имени языка в кнопке получилось бы что угодно', ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'de ', 'DE'].every(l => V.langOf(l) === 'en'));
   const DISCORD_LOCALES = { id: 'id', da: 'da', de: 'de', 'en-GB': 'en', 'en-US': 'en', 'es-ES': 'es', 'es-419': 'es', fr: 'fr', hr: 'hr', it: 'it', lt: 'lt', hu: 'hu', nl: 'nl',
     no: 'no', pl: 'pl', 'pt-BR': 'pt', ro: 'ro', fi: 'fi', 'sv-SE': 'sv', vi: 'vi', tr: 'tr', cs: 'cs', el: 'el', bg: 'bg', ru: 'ru', uk: 'uk', hi: 'hi', th: 'th', 'zh-CN': 'zh',
     ja: 'ja', 'zh-TW': 'zt', ko: 'ko' };
   ok('все 32 locale, которые умеет присылать Discord, определяются и ведёт к своему языку ответа (' + Object.keys(DISCORD_LOCALES).length + ' locale, ' + new Set(Object.values(DISCORD_LOCALES)).size + ' языков)',
-     Object.keys(DISCORD_LOCALES).length === 32 && Object.entries(DISCORD_LOCALES).every(([l, w]) => V.fromLocale(l) === w) && ALL.length === new Set(Object.values(DISCORD_LOCALES)).size &&
-     ALL.every(l => Object.values(DISCORD_LOCALES).indexOf(l) !== -1), Object.entries(DISCORD_LOCALES).filter(([l, w]) => V.fromLocale(l) !== w).join());
+     Object.keys(DISCORD_LOCALES).length === 32 && Object.entries(DISCORD_LOCALES).every(([l, w]) => V.fromLocale(l) === w) && new Set(Object.values(DISCORD_LOCALES)).size === 30 &&
+     [...new Set(Object.values(DISCORD_LOCALES))].every(l => ALL.indexOf(l) !== -1), Object.entries(DISCORD_LOCALES).filter(([l, w]) => V.fromLocale(l) !== w).join());
   const dur = (ms, l) => V.duration(ms, l), H = 3600000, D = 86400000;
   ok('длительности по правилам языка: польский 1 godzina / 2 dni / 5 dni / 22 dni, украинский 2 дні / 5 днів, немецкий 1 Stunde / 6 Stunden, китайский 1小时, турецкий 1 saat',
      dur(H, 'pl') === '1 godzina' && dur(2 * D, 'pl') === '2 dni' && dur(5 * D, 'pl') === '5 dni' && dur(22 * D, 'pl') === '22 dni' && dur(2 * H, 'pl') === '2 godziny' && dur(5 * H, 'pl') === '5 godzin' &&
@@ -134,6 +135,15 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
   const own = allText(V.message(V.view('action', { type: 'warn', name: 'Bob', rule: 0, reason: 'свой текст человека', n: 1, limit: 3, by: 'owner', at: now }, 'es'), []));
   ok('причина, написанная владельцем, не переводится (её нет в переводах) — показана как написана', /Motivo:\*\* свой текст человека/.test(own) && /Regla:\*\* Otro/.test(own));
 
+  ok('длительности новых языков: арабский (1, 2, 5, 11), словенский (1, 2, 3, 5), латышский (1, 2, 21, 11), исландский 21 dagur, иврит, персидский, эстонский',
+     dur(H, 'ar') === '1 ساعة' && dur(2 * H, 'ar') === '2 ساعتان' && dur(5 * H, 'ar') === '5 ساعات' && dur(11 * H, 'ar') === '11 ساعة' && dur(3 * D, 'ar') === '3 أيام' &&
+     dur(H, 'sl') === '1 ura' && dur(2 * H, 'sl') === '2 uri' && dur(3 * H, 'sl') === '3 ure' && dur(5 * H, 'sl') === '5 ur' && dur(5 * D, 'sl') === '5 dni' &&
+     dur(H, 'lv') === '1 stunda' && dur(2 * H, 'lv') === '2 stundas' && dur(21 * H, 'lv') === '21 stunda' && dur(11 * H, 'lv') === '11 stundas' &&
+     dur(21 * D, 'is') === '21 dagur' && dur(5 * D, 'is') === '5 dagar' && dur(2 * H, 'he') === '2 שעות' && dur(H, 'he') === '1 שעה' && dur(2 * H, 'fa') === '2 ساعت' &&
+     dur(2 * H, 'et') === '2 tundi' && dur(H, 'et') === '1 tund' && dur(2 * H, 'sr') === '2 сата' && dur(5 * H, 'sr') === '5 сати' && dur(2 * H, 'sk') === '2 hodiny' && dur(5 * H, 'sk') === '5 hodín' &&
+     dur(5 * D, 'ms') === '5 hari' && dur(5 * D, 'fil') === '5 araw' && dur(5 * D, 'sw') === '5 siku' && dur(2 * H, 'af') === '2 ure' && dur(2 * D, 'mk') === '2 дена',
+     [dur(2 * H, 'ar'), dur(3 * H, 'sl'), dur(21 * H, 'lv'), dur(2 * H, 'sr')].join(' / '));
+
   console.log('\nвсе виды на всех языках:');
   const samples = {
     action: [{ type: 'warn', name: 'Alice', user: 'alice', rule: 6, reason: 'sold coins', n: 1, limit: 3, by: 'owner', caseNo: 7, at: now, avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' },
@@ -149,7 +159,9 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
     stats: [{ online: 5, rooms: 2, modes: { race: { players: 3, rooms: 1 }, hideAndSeek: { players: 2, rooms: 1 } }, peak: 40, accounts: 1200, maps: 300, uptime: 90000, botOnline: true, checked: 99, memory: 120, at: now }, {}],
     info: [{ tag: { en: 'Post', ru: 'Пост' }, color: 'ok', title: { en: 'Posted', ru: 'Опубликовано' }, lines: [{ en: 'a', ru: 'б' }], at: now }, { tag: 'x', title: 'y' }],
     servers: [servers, { at: now, online: 0, rooms: 0, modes: {}, list: [] }],
-    account: [p1, empty]
+    account: [p1, empty],
+    language: [{ mode: 'set', label: 'Deutsch · Germany' }, { mode: 'auto', discord: 'Русский' }, { mode: 'view', label: '' }, { mode: 'view', label: 'Español · Spain' },
+               { mode: 'none', q: 'xyz', suggest: ['Germany — Deutsch', 'Austria — Deutsch'] }, { mode: 'none', q: '*_`@everyone', suggest: [] }]
   };
   const bad = [];
   for (const kind of Object.keys(samples)) for (const lang of ALL) for (const [i, d] of samples[kind].entries()) {
@@ -203,6 +215,38 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
      TC.searchNames('e', 5).indexOf('Tester') !== -1 && TC.searchNames('', 2).length === 2);
   const sd = TC.serversData();
   ok('сводка серверов — без имён игроков', sd && Array.isArray(sd.list) && !/"names"/.test(JSON.stringify(sd)));
+
+  console.log('\nстраны мира и языки (/language):');
+  const W = require('./discordWorld.js');
+  const ccs = new Set(W.ENTRIES.map(e => e.cc)), vals = W.ENTRIES.map(e => e.value);
+  ok('стран не меньше 195 (все страны ООН и ещё несколько), пар «страна + язык» больше стран (' + ccs.size + ' стран, ' + W.ENTRIES.length + ' пар)', ccs.size >= 195 && W.ENTRIES.length > ccs.size, ccs.size + '/' + W.ENTRIES.length);
+  ok('у каждой пары есть язык ответа (en, ru или из discordLang.js); ни одной пропущенной', W.SKIPPED.length === 0 && W.ENTRIES.every(e => ALL.indexOf(e.lang) !== -1), W.SKIPPED.join());
+  ok('значения пар уникальны и вида «DE-de»', new Set(vals).size === vals.length && vals.every(v => /^[A-Z]{2}-[a-z]{2,3}$/.test(v)));
+  ok('у каждой страны ровно один основной язык', [...ccs].every(cc => W.ENTRIES.filter(e => e.cc === cc && e.primary).length === 1));
+  const unused = ALL.filter(l => !W.ENTRIES.some(e => e.lang === l));
+  ok('каждый язык (' + ALL.length + ') доступен хотя бы в одной стране', unused.length === 0, unused.join());
+  const names = [];
+  for (const loc of ['en', 'ru', 'ja', 'ar', 'de-AT', 'zh-TW', 'xx-YY', undefined]) for (const e of W.ENTRIES) {
+    const l = W.label(e, loc);
+    if (!l || l.length > 100 || /undefined|null|NaN/.test(l) || l.indexOf(' — ') < 1) names.push(String(loc) + '/' + e.value + ': ' + l);
+  }
+  ok('подписи пунктов (страна на языке человека — язык на нём самом) непустые и не длиннее 100 знаков, на любом языке Discord', names.length === 0, names.slice(0, 3).join(' | '));
+  const wsv = (q, loc) => W.search(q, loc).map(e => e.value);
+  ok('пустой запрос — самые распространённые языки (24), начиная с английского', wsv('').length === 24 && wsv('')[0] === 'US-en' && wsv('').indexOf('RU-ru') !== -1);
+  ok('поиск по стране и языку: Germany, German, Deutsch, de -> Германия первой', ['germany', 'German', 'deutsch', 'Deu', 'de'].every(q => wsv(q)[0] === 'DE-de'), ['germany', 'German', 'deutsch', 'de'].map(q => wsv(q)[0]).join());
+  ok('поиск на языке человека и без диакритики: Германия (ru), Türkiye, turkiye, 日本, हिन्दी, Ελλάδα', wsv('Германия', 'ru')[0] === 'DE-de' && wsv('Türkiye')[0] === 'TR-tr' && wsv('turkiye')[0] === 'TR-tr' &&
+     wsv('日本')[0] === 'JP-ja' && wsv('हिन्दी')[0] === 'IN-hi' && wsv('Ελλάδα')[0] === 'GR-el', [wsv('Германия', 'ru')[0], wsv('turkiye')[0], wsv('日本')[0], wsv('हिन्दी')[0], wsv('Ελλάδα')[0]].join());
+  ok('несколько языков в стране — все в подсказках: Бельгия — nl, fr, de; Швейцария — de, fr, it', ['BE-nl', 'BE-fr', 'BE-de'].every(v => wsv('belg').indexOf(v) !== -1) && ['CH-de', 'CH-fr', 'CH-it'].every(v => wsv('switz').indexOf(v) !== -1));
+  ok('не больше 25 подсказок, мусор и пустышки — пусто, без ошибок', W.search('a', 'en').length <= 25 && W.search('a', 'en', 100).length <= 25 && wsv('zzzzqqq').length === 0 &&
+     ['__proto__', 'constructor', '<@123>', '\u0000', '  ', 'x'.repeat(500)].every(q => Array.isArray(W.search(q, 'en'))));
+  const f = (q, loc) => { const e = W.find(q, loc); return e ? e.value : null; };
+  ok('напечатанное вручную: «DE-de», Deutsch, Germany, English, Spain, Belgium (основной язык), 日本語', f('DE-de') === 'DE-de' && f('at-DE') === 'AT-de' && f('AT-de') === 'AT-de' && f('AT-xx') === null && f('AT-fr') === null && f('Deutsch') === 'DE-de' &&
+     f('Germany') === 'DE-de' && f('English') === 'US-en' && f('Spain') === 'ES-es' && f('Belgium') === 'BE-nl' && f('日本語') === 'JP-ja' && f('Русский') === 'RU-ru' && f('Россия', 'ru') === 'RU-ru',
+     [f('Deutsch'), f('English'), f('Belgium'), f('Россия', 'ru')].join());
+  ok('напечатанное вручную, но неоднозначное или чужое — null (бот предложит варианты)', f('xyz') === null && f('') === null && f('__proto__') === null && f('us') === 'US-en' && f('qq-QQ') === null && f('z') === null, [f('xyz'), f('z')].join());
+  const t0 = Date.now();
+  for (let k = 0; k < 2000; k++) W.search(['ger', 'пол', 'sp', 'ja', 'tür'][k % 5], ['en', 'ru', 'de', 'ja'][k % 4]);
+  ok('поиск быстрый: 2000 запросов быстрее двух секунд (Discord ждёт подсказки не дольше 3 секунд, а одна нужна за миллисекунды)', Date.now() - t0 < 2000, (Date.now() - t0) + ' мс');
 
   await new Promise(r => setTimeout(r, 500));          // maps.js/accounts.js сохраняют с задержкой
   fs.rmSync(TMP, { recursive: true, force: true });
