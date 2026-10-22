@@ -1,9 +1,4 @@
 {
-  "base": "71faaba6c75deb82818000f67212567d5d373337",
-  "updates": [
-    {
-      "title": "Discord card themes",
-      "text": "Discord bot cards can now be switched between a dark and a light theme with a button under the picture, and show the real Discord profile picture of the member (or the default Discord one)."
-    }
-  ]
+  "base": "8a494b8dbd283c2edc57e0d30662f078b2d0dc9b",
+  "updates": []
 }
