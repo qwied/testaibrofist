@@ -1,4 +1,9 @@
 {
   "base": "e02e6ec51de5e4585ad05f1f515f7379303041ed",
-  "updates": []
+  "updates": [
+    {
+      "title": "Rules in your language",
+      "text": "The rules post in Discord now has a globe button that shows the rules in your own Discord language."
+    }
+  ]
 }

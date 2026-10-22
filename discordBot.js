@@ -1534,7 +1534,7 @@ const rulesPost = (title, text, o) => {
 /* Правила сообщением (discordViews.js): стандартные — с наказанием у каждого
    правила, свой текст владельца — как он написан. Под текстом флаги: English и
    Русский (без русского текста флагов нет). */
-const CARD_DESIGN = 4;               // версия оформления ответов бота (1-3 — картинки, 4 — сообщения Discord): поменялось — пост правил один раз перерисуется
+const CARD_DESIGN = 5;               // версия оформления ответов бота (1-3 — картинки, 4 — сообщения Discord, 5 — с глобусом «мой язык»): поменялось — пост правил один раз перерисуется
 const rulesAreStd = r => r.en === R.rulesText('en') && (!r.ru || r.ru === R.rulesText('ru'));
 function rulesData(g, r, lang) {
   const ru = lang === 'ru' && !!r.ru, std = rulesAreStd(r), title = r.title || RULES_TITLE;

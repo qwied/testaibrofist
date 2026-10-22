@@ -291,7 +291,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('кнопок темы больше нет — один ряд', rowsOf(rb).length === 1 && !/Dark theme|Light theme/.test(JSON.stringify(rb)));
   ok('пост запомнен (с временем выкладки, картинкой), разовая замена правил отмечена', bot._test.state().guilds[G].rules.message === rpost.resId &&
      bot._test.state().guilds[G].rules.ruMessage === undefined && bot._test.state().guilds[G].rules.at > 0 && bot._test.state().guilds[G].rules.pic === true &&
-     bot._test.state().fixes.rules7 === true && bot._test.state().fixes.rulesCard === 4);
+     bot._test.state().fixes.rules7 === true && bot._test.state().fixes.rulesCard === 5);
   const am = find(calls, 'POST', /auto-moderation\/rules$/).map(c => c.body.trigger_type).sort().join(',');
   ok('включает встроенную AutoMod только со списком слов вражды и 18+ (спама и упоминаний в правилах больше нет)', am === '4', am);
 
@@ -1758,8 +1758,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bot.stop();
   await sleep(200);
   const sf2 = JSON.parse(fs.readFileSync(process.env.DISCORD_BOT_STATE, 'utf8'));
-  ok('в состоянии отмечено: пост правил уже в нынешнем оформлении (сообщения Discord)', sf2.fixes.rulesCard === 4);
-  sf2.fixes.rulesCard = 3;                // состояние от прежнего оформления (картинки)
+  ok('в состоянии отмечено: пост правил уже в нынешнем оформлении (сообщения Discord с глобусом)', sf2.fixes.rulesCard === 5);
+  sf2.fixes.rulesCard = 4;                // состояние от прежнего оформления (сообщения без глобуса)
   fs.writeFileSync(process.env.DISCORD_BOT_STATE, JSON.stringify(sf2));
   t = Date.now();
   bot._test.reload();
@@ -1770,7 +1770,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('после выкладки нового оформления бот один раз правит пост правил на месте: нового поста нет, прежняя картинка убрана из поста, вместо неё текст и один ряд флагов',
      upg.length === 1 && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 && bodyOf(upg[0]).flags === 32768 && !multipartOf(upg[0]) &&
      Array.isArray(bodyOf(upg[0]).attachments) && bodyOf(upg[0]).attachments.length === 0 && rowsOf(bodyOf(upg[0])).length === 1 &&
-     /^AIBROFIST Server Rules 1 No spam /.test(plainOf(upg[0])) && bot._test.state().fixes.rulesCard === 4,
+     /^AIBROFIST Server Rules 1 No spam /.test(plainOf(upg[0])) && bot._test.state().fixes.rulesCard === 5 &&
+     flagsOf(bodyOf(upg[0])).map(b => b.label).join() === 'English,Русский,My language',
      upg.length + ' ' + (upg[0] ? JSON.stringify(Object.keys(bodyOf(upg[0]))) + ' ' + plainOf(upg[0]).slice(0, 60) + ' rows ' + rowsOf(bodyOf(upg[0])).length : '') + ' card=' + bot._test.state().fixes.rulesCard);
 
   bot.stop();
