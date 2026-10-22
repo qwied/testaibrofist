@@ -22,7 +22,8 @@
      сообщение-карточка: правило, причина, какое по счёту; предупреждения копятся —
      3-е за 30 дней даёт мьют на час; «!warns» показывает их, «!unwarn» снимает;
    - ответы бота — настоящие сообщения Discord (рамка, текст, аватарка, серые кнопки)
-     с флагами English / Русский, в том числе правила в #rules; Discord сообщение
+     без кнопок выбора языка: язык берётся у самого Discord (30 языков, все языки
+     Discord), правила на своём языке — команда /rules; Discord сообщение
      не принял — прежний текст;
    - секретные команды владельца (начало задаётся на хостинге, здесь «!qa»):
      news, updates, warn, mute, clear, help — сообщение с командой исчезает,
@@ -32,8 +33,8 @@
      не покажет;
    - новости и записи Logs уходят во все выбранные каналы, правка и удаление
      повторяются в Discord;
-   - /servers и /account ник — сообщением с кнопками (обновить, вкладки, период,
-     ссылка, язык); команды и нажатия идут по живому подключению, не через сайт;
+   - /servers, /rules и /account ник — сообщением с кнопками (обновить, вкладки, период,
+     ссылка); команды и нажатия идут по живому подключению, не через сайт;
    - после обрыва продолжает сессию (resume), после перезапуска ничего не
      постит заново, без Message Content Intent переподключается без него.
    Запуск: node test-discord-bot.js */
@@ -265,9 +266,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('слэш-команд на сервере нет (старые, если были, убраны)', cmds.length === 1 && Array.isArray(cmds[0].body) && cmds[0].body.length === 0);
   await waitFor(() => find(calls, 'PUT', /^\/applications\/700\/commands$/).length);
   const gcmds = find(calls, 'PUT', /^\/applications\/700\/commands$/);
-  const nick = gcmds[0] && gcmds[0].body[1] && (gcmds[0].body[1].options || [])[0];
-  ok('у приложения две команды для всех — /servers и /account (старая /say убрана: список заменяется целиком)', gcmds.length === 1 &&
-     gcmds[0].body.map(c => c.name).join() === 'servers,account' && gcmds[0].body.every(c => !c.default_member_permissions),
+  const nick = gcmds[0] && gcmds[0].body[2] && (gcmds[0].body[2].options || [])[0];
+  ok('у приложения три команды для всех — /servers, /rules и /account (старая /say убрана: список заменяется целиком)', gcmds.length === 1 &&
+     gcmds[0].body.map(c => c.name).join() === 'servers,rules,account' && gcmds[0].body.every(c => !c.default_member_permissions),
      gcmds[0] && JSON.stringify(gcmds[0].body.map(c => c.name)));
   ok('/account: обязательный ник с подсказками по мере ввода', nick && nick.name === 'nick' && nick.type === 3 && nick.required && nick.autocomplete);
   await waitFor(() => find(calls, 'PATCH', /^\/applications\/@me$/).length);
@@ -284,14 +285,11 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('у каждого правила своё наказание и короткая строка; никаких картинок, логотипа и описаний (alt)', /2 No invites to other Discord servers WARNING /.test(rtxt) &&
      /5 No scams or dangerous links BAN 7 DAYS /.test(rtxt) && !/"type":12|"type":13|"description"|attachment:/.test(JSON.stringify(rb)));
   ok('предупреждения копятся — это тоже в правилах: 3-е за 30 дней даёт мьют на час', /Warnings add up: the 3rd within 30 days gives a 1-hour mute/.test(rtxt));
-  ok('под правилами флаги English и Русский (текст меняется в этом же посте) и глобус «My language» (правила на языке самого нажавшего); кнопки серые, выбранный не нажимается, русского отдельного поста нет', rbtns.length === 3 &&
-     rbtns[0].custom_id === 'rules-lang' && rbtns[0].disabled && rbtns[0].emoji.name === '🇬🇧' && rbtns[0].style === 2 && rbtns[1].custom_id === 'rules:ru' &&
-     rbtns[1].label === 'Русский' && rbtns[1].emoji.name === '🇷🇺' && rbtns[1].style === 2 && !rbtns[1].disabled && rbtns[2].custom_id === 'rules:me' &&
-     rbtns[2].label === 'My language' && rbtns[2].emoji.name === '🌐' && rbtns[2].style === 2 && !/Без спама/.test(JSON.stringify(rb)));
-  ok('кнопок темы больше нет — один ряд', rowsOf(rb).length === 1 && !/Dark theme|Light theme/.test(JSON.stringify(rb)));
+  ok('под правилами никаких кнопок: ни выбора языка (ни флагов, ни глобуса), ни темы — язык определяется по Discord человека, правила на своём языке даёт /rules', rbtns.length === 0 &&
+     rowsOf(rb).length === 0 && !/English|Русский|My language|Мой язык|Dark theme|Light theme|🌐|🇬🇧|🇷🇺/.test(JSON.stringify(rb)) && !/Без спама/.test(JSON.stringify(rb)));
   ok('пост запомнен (с временем выкладки, картинкой), разовая замена правил отмечена', bot._test.state().guilds[G].rules.message === rpost.resId &&
      bot._test.state().guilds[G].rules.ruMessage === undefined && bot._test.state().guilds[G].rules.at > 0 && bot._test.state().guilds[G].rules.pic === true &&
-     bot._test.state().fixes.rules7 === true && bot._test.state().fixes.rulesCard === 5);
+     bot._test.state().fixes.rules7 === true && bot._test.state().fixes.rulesCard === 6);
   const am = find(calls, 'POST', /auto-moderation\/rules$/).map(c => c.body.trigger_type).sort().join(',');
   ok('включает встроенную AutoMod только со списком слов вражды и 18+ (спама и упоминаний в правилах больше нет)', am === '4', am);
 
@@ -328,8 +326,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const dmText = plainOf(dmMsg), dmBody = bodyOf(dmMsg);
   ok('игроку в личку — сообщением: правило, наказание, без баллов, как оспорить', dmBody && dmBody.flags === 32768 && !multipartOf(dmMsg) &&
      /^Muted · 1 hour playerU1 Rule: 4\. No hate speech /.test(dmText) && /Until: /.test(dmText) && !/strike/i.test(dmText) && /Message the owner/.test(dmText), dmText);
-  ok('без эмодзи (флаги — только на кнопках языка), кнопки серые: English и Русский', dmMsg && !/\p{Extended_Pictographic}/u.test(JSON.stringify(textsOf(dmBody))) &&
-     flagsOf(dmBody).map(b => b.label + ':' + b.style).join() === 'English:2,Русский:2,My language:2' && buttonsOf(dmBody).every(b => b.style === 2 || b.style === 5));
+  ok('без эмодзи и без кнопок: язык получателя Discord не сообщает, поэтому личное сообщение английское, а кнопок выбора языка нет', dmMsg &&
+     !/\p{Extended_Pictographic}/u.test(JSON.stringify(textsOf(dmBody))) && buttonsOf(dmBody).length === 0 && !/"emoji"/.test(J(dmMsg)));
   const note = find(c, 'POST', /^\/channels\/300\/messages$/)[0];
   ok('короткое предупреждение в канале — с именем, но без упоминания и без пинга', note && /^\*\*playerU1\*\*, your message was removed: rule 4/.test(note.body.content) &&
      /Mute for 1 hour\.$/.test(note.body.content) && !/<@/.test(note.body.content) && note.body.allowed_mentions.parse.length === 0 &&
@@ -637,9 +635,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const wmute = find(c, 'PATCH', /members\/WX1$/)[0], wleft = wmute && Date.parse(wmute.body.communication_disabled_until) - Date.now();
   ok('третье — мьют на час, счёт начинается заново', w3r.warned.n === 3 && w3r.esc && wleft > 59 * 60000 && wleft <= 60 * 60000 &&
      bot._test.state().warns[G + ':WX1'].every(w => w.used), Math.round(wleft / 1000) + ' с');
-  ok('в личку и в журнал — что это 3-е предупреждение и мьют', /Warning 3 of 3: muted for 1 hour/.test(plainOf(find(c, 'POST', /^\/channels\/dmWX1\/messages$/)[0])) &&
+  ok('в личку и в журнал — что это 3-е предупреждение и мьют', /Warning 3 of 3: muted for 1 hour/.test(plainOf(find(c, 'POST', /^\/channels\/dmWX1\/messages$/).slice(-1)[0])) &&
      /Warning 3 of 3: mute for 1 hour/.test(JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/).map(x => x.body))),
-     plainOf(find(c, 'POST', /^\/channels\/dmWX1\/messages$/)[0]) + ' / ' + JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/).map(x => x.body && x.body.embeds[0].title)));
+     plainOf(find(c, 'POST', /^\/channels\/dmWX1\/messages$/).slice(-1)[0]) + ' / ' + JSON.stringify(find(c, 'POST', /^\/channels\/303\/messages$/).map(x => x.body && x.body.embeds[0].title)));
   const w4r = await bot._test.punish(g, { id: 'WX1', username: 'wx' }, A.finding('invite'), { silent: true });
   ok('после мьюта — снова 1 из 3', w4r.warned.n === 1 && !w4r.esc);
   bot._test.state().warns[G + ':WX2'] = [{ at: Date.now() - 31 * 86400000, rule: 2, reason: 'old' }, { at: Date.now() - 40 * 86400000, rule: 2, reason: 'older' }];
@@ -654,8 +652,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const cb = (list, id) => find(list, 'POST', new RegExp('^/interactions/' + id + '/[^/]+/callback$'));
   let iid = 0;
   // legacy — нажатие на сообщение прежней версии бота (картинка с кнопками, не из новых компонентов Discord)
-  const press = (uid, customId, legacy) => { const id = 'b' + (++iid);
-    dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type: 3, guild_id: G, channel_id: CH.general,
+  const press = (uid, customId, legacy, locale) => { const id = 'b' + (++iid);
+    dispatch('INTERACTION_CREATE', { id, token: 'tk' + id, type: 3, guild_id: G, channel_id: CH.general, locale,
       member: { user: { id: uid }, permissions: uid === OWNER ? String(1n << 3n) : '1024' },
       message: { id: 'panelmsg', flags: legacy ? 0 : 32768 }, data: { custom_id: customId, component_type: 2 } });
     return id; };
@@ -835,7 +833,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      new RegExp('^Warning · 1 of 3 playerU2 Rule: 6\\. No selling accounts or coins for real money Reason: продавал монеты в чате за деньги Count: ●○○ ' +
                 'The 3rd warning within 30 days gives a 1-hour mute\\. Issued by 900 · Case ' + bot._test.state().warns[G + ':U2'][0].caseNo + ' · ').test(wcAlt) &&
      wcBody.allowed_mentions.parse.length === 0 && !/<@/.test(JSON.stringify(wcBody)) && !/"description"|"type":12/.test(JSON.stringify(wcBody)), wcAlt);
-  ok('под карточкой — флаги English и Русский, обе серые, выбранный не нажимается', flagsOf(wcBody).map(b => b.emoji.name + b.label + ':' + b.style + ':' + !!b.disabled).join() === '🇬🇧English:2:true,🇷🇺Русский:2:false,🌐My language:2:false');
+  ok('под карточкой в канале кнопок нет (ни языка, ни других)', buttonsOf(wcBody).length === 0 && rowsOf(wcBody).length === 0);
   ok('карточка в канале и есть ответ: «думаю…», видное только владельцу, убрано; старого текстового предупреждения нет',
      find(c, 'DELETE', new RegExp('^/webhooks/700/tk' + wsid + '/messages/@original$')).length === 1 &&
      !find(c, 'POST', /^\/channels\/300\/messages$/).some(x => /received a warning/.test((x.body && x.body.content) || '')));
@@ -935,8 +933,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      sv.body.data.flags === 32768 && !multipartOf(sv) && !sv.body.data.attachments && /^Servers · 0 online Race · 0 players · 0 rooms /.test(svp) &&
      /Hide and Seek · 0 players · 0 rooms/.test(svp) && !/"type":12|"type":13|"description"/.test(JSON.stringify(sv.body)), svp);
   ok('и быстро: ' + (sv ? sv.t - t : '?') + ' мс', sv && sv.t - t < 1500);
-  ok('кнопки в один ряд: «Refresh», ссылка «Play now», флаги языка; все серые (чёрных и синих в Discord нет), выбранный язык не нажимается', svl.length === 1 &&
-     svl[0] === 'Refresh=sv:r:en | Play now | English(off)=sv-lang | Русский=sv:r:ru | My language=sv:r:me' && allGrey(sv.body) && svBtns[1].style === 5 &&
+  ok('кнопки в один ряд: «Refresh» и ссылка «Play now» — выбора языка нет; все серые (чёрных и синих в Discord нет)', svl.length === 1 &&
+     svl[0] === 'Refresh=sv:r:en | Play now' && allGrey(sv.body) && svBtns[1].style === 5 &&
      /^https:\/\/aibrofist\.online/.test(svBtns[1].url) && sv.body.data.components[0].type === 17, svl.join(' || '));
   ok('в ответе /servers никого не пингует', sv && sv.body.data.allowed_mentions.parse.length === 0);
   t = Date.now();
@@ -960,11 +958,11 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => cb(since(t), 'sv3d').length, 5000);
   ok('…в том числе со страницей, которой больше нет, и на русском', /^Серверы · онлайн: 0 /.test(plainOf(cb(since(t), 'sv3d')[0])));
   t = Date.now();
-  ix('sv3e', 3, { custom_id: 'sv:r:ru', component_type: 2 }, 'U16');
+  ix('sv3e', 3, { custom_id: 'sv:r:ru', component_type: 2 }, 'U16', false, { locale: 'en-US' });
   await waitFor(() => cb(since(t), 'sv3e').length, 5000);
   const sv3e = cb(since(t), 'sv3e')[0];
-  ok('флаг «Русский» — то же сообщение по-русски, кнопки тоже', sv3e && sv3e.body.type === 7 && /^Серверы · онлайн: 0 Гонка · 0 игр\. · 0 комн\. /.test(plainOf(sv3e)) &&
-     labels(sv3e.body)[0] === 'Обновить=sv:r:ru | Играть | English=sv:r:en | Русский(off)=sv-lang | Мой язык=sv:r:me' && allGrey(sv3e.body), labels(sv3e.body).join(' || '));
+  ok('«Refresh» на русском сообщении остаётся русским (язык хранится в самой кнопке), кнопки тоже русские', sv3e && sv3e.body.type === 7 && /^Серверы · онлайн: 0 Гонка · 0 игр\. · 0 комн\. /.test(plainOf(sv3e)) &&
+     labels(sv3e.body)[0] === 'Обновить=sv:r:ru | Играть' && allGrey(sv3e.body), labels(sv3e.body).join(' || '));
   rejectV2Reply = true;
   t = Date.now();
   ix('sv6', 2, { name: 'servers', type: 1 }, 'U12');
@@ -990,13 +988,13 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('/account ник — профиль игрока сообщением (ник как в аккаунте), видят все, без картинок и логотипа', ac && ac.body.type === 4 && ac.body.data.flags === 32768 && !multipartOf(ac) &&
      /^qwied Joined .* · Race: S · Hide and Seek: no rank Coins 5 Race scores 3 Hide and Seek scores 0 Maps 1 · Friends 1 About Hi$/.test(acp) &&
      !/"type":12|"type":13|"description"/.test(JSON.stringify(ac.body)), acp);
-  ok('вкладки (профиль, карты, друзья), период монет и очков, «Refresh», ссылка на профиль и флаги языка; выбранные не нажимаются, все кнопки серые', acl.length === 3 &&
+  ok('вкладки (профиль, карты, друзья), период монет и очков, «Refresh» и ссылка на профиль; выбранные не нажимаются, все кнопки серые, выбора языка нет', acl.length === 3 &&
      acl[0] === 'Profile(off)=ac-page | Maps=ac:m:all:en:qwied | Friends=ac:f:all:en:qwied' &&
      acl[1] === 'Today=ac:p:day:en:qwied | This week=ac:p:week:en:qwied | All time(off)=ac-per' &&
-     acl[2] === 'Refresh=ac:p:all:en:qwied | Open profile | English(off)=ac-lang | Русский=ac:p:all:ru:qwied | My language=ac:p:all:me:qwied' && allGrey(ac.body) &&
+     acl[2] === 'Refresh=ac:p:all:en:qwied | Open profile' && allGrey(ac.body) &&
      /^https:\/\/aibrofist\.online\/users\?name=qwied$/.test(buttonsOf(ac.body)[7].url), acl.join(' || '));
   const ids = buttonsOf(ac && ac.body).map(c => c.custom_id).filter(Boolean);
-  ok('у всех кнопок разные id (иначе Discord не примет сообщение)', ids.length === 10 && new Set(ids).size === ids.length, ids.join());
+  ok('у всех кнопок разные id (иначе Discord не примет сообщение)', ids.length === 7 && new Set(ids).size === ids.length, ids.join());
   t = Date.now();
   ix('ac2', 3, { custom_id: 'ac:m:all:en:qwied', component_type: 2 }, 'U7');
   await waitFor(() => cb(since(t), 'ac2').length, 5000);
@@ -1028,10 +1026,10 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ix('ac2d', 3, { custom_id: 'ac:p:week:ru:qwied', component_type: 2 }, 'U17');
   await waitFor(() => cb(since(t), 'ac2d').length, 5000);
   const ac2d = cb(since(t), 'ac2d')[0];
-  ok('флаг «Русский» в профиле — то же по-русски, вкладка и период те же', ac2d && ac2d.body.type === 7 && /Монеты \+2 за неделю Очки гонки 0 за неделю/.test(plainOf(ac2d)) &&
+  ok('русский id в профиле (вкладка, период и язык хранятся в самой кнопке) — то же по-русски, вкладка и период те же', ac2d && ac2d.body.type === 7 && /Монеты \+2 за неделю Очки гонки 0 за неделю/.test(plainOf(ac2d)) &&
      labels(ac2d.body).join(' || ') === 'Профиль(off)=ac-page | Карты=ac:m:week:ru:qwied | Друзья=ac:f:week:ru:qwied || ' +
        'Сегодня=ac:p:day:ru:qwied | За неделю(off)=ac-per | За всё время=ac:p:all:ru:qwied || ' +
-       'Обновить=ac:p:week:ru:qwied | Открыть профиль | English=ac:p:week:en:qwied | Русский(off)=ac-lang | Мой язык=ac:p:week:me:qwied', labels(ac2d.body).join(' || '));
+       'Обновить=ac:p:week:ru:qwied | Открыть профиль', labels(ac2d.body).join(' || '));
   t = Date.now();
   ix('ac3', 2, { name: 'account', type: 1, options: [{ name: 'nick', type: 3, value: 'qw' }] }, 'U8');
   await waitFor(() => cb(since(t), 'ac3').length);
@@ -1047,87 +1045,106 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const sst = await bot.status();
   ok('картинок и браузера для ответов больше нет: на странице состояния про снимки ничего не осталось', !('screenshots' in sst));
 
-  console.log('\nязык — по языку Discord у человека (и глобус «My language»):');
+  console.log('\nязык — по языку Discord у человека; кнопок выбора языка нет:');
   cards.setSource(accountSource);
-  const lang1 = async (id, locale, nick) => {
+  const { PACKS } = require('./discordLang.js');
+  const lang1 = async (id, locale, nick, name) => {
     t = Date.now();
-    ix(id, 2, nick ? { name: 'account', type: 1, options: [{ name: 'nick', type: 3, value: nick }] } : { name: 'servers', type: 1 }, 'U' + id, false, { locale });
+    ix(id, 2, nick ? { name: 'account', type: 1, options: [{ name: 'nick', type: 3, value: nick }] } : { name: name || 'servers', type: 1 }, 'U' + id, false, { locale });
     await waitFor(() => cb(since(t), id).length, 5000);
     return cb(since(t), id)[0];
   };
-  const de = await lang1('lg1', 'de');
-  ok('/servers у человека с немецким Discord — сразу по-немецки: заголовок, режимы, кнопки; английский и русский рядом, немецкий выбран', de && de.body.type === 4 &&
-     /^Server · 0 online Rennen · 0 Spieler · 0 Räume Gerade keine Räume\. /.test(plainOf(de)) &&
-     labels(de.body)[0] === 'Aktualisieren=sv:r:de | Spielen | English=sv:r:en | Русский=sv:r:ru | Deutsch(off)=sv-lang' && allGrey(de.body), de && labels(de.body).join(' || '));
-  const langs = { 'pt-BR': /^Servidores · 0 online Corrida · 0 jogadores /, 'es-ES': /^Servidores · 0 en línea Carrera · 0 jugadores /, 'es-419': /^Servidores/, fr: /^Serveurs · 0 en ligne Course · 0 joueurs /,
-                  tr: /^Sunucular · 0 çevrimiçi Yarış · 0 oyuncu /, pl: /^Serwery · online: 0 Wyścig · graczy: 0 /, uk: /^Сервери · онлайн: 0 Перегони · 0 грав\. /,
-                  it: /^Server · 0 online Corsa · 0 giocatori /, 'zh-CN': /^服务器 · 0 人在线 竞速 · 0 名玩家 /, 'zh-TW': /^服务器/, ja: /^サーバー · オンライン 0人 レース · 0人 /,
-                  ru: /^Серверы · онлайн: 0 /, 'en-GB': /^Servers · 0 online /, ar: /^Servers · 0 online /, ko: /^Servers · 0 online /, '': /^Servers · 0 online /, undefined: /^Servers · 0 online / };
+  // все языки Discord (32 locale: en-US и en-GB — один английский, es-ES и es-419 — один испанский) -> язык ответа; таблица написана вручную, не из кода бота
+  const DISCORD_LOCALES = { id: 'id', da: 'da', de: 'de', 'en-GB': 'en', 'en-US': 'en', 'es-ES': 'es', 'es-419': 'es', fr: 'fr', hr: 'hr', it: 'it', lt: 'lt', hu: 'hu', nl: 'nl',
+    no: 'no', pl: 'pl', 'pt-BR': 'pt', ro: 'ro', fi: 'fi', 'sv-SE': 'sv', vi: 'vi', tr: 'tr', cs: 'cs', el: 'el', bg: 'bg', ru: 'ru', uk: 'uk', hi: 'hi', th: 'th', 'zh-CN': 'zh',
+    ja: 'ja', 'zh-TW': 'zt', ko: 'ko' };
+  const wrong = [];
   let n = 0;
-  for (const [loc, re] of Object.entries(langs)) {
-    const m = await lang1('lgx' + (++n), loc === 'undefined' ? undefined : loc);
-    ok('язык Discord «' + (loc || 'нет') + '» -> ' + re.source.slice(0, 28), m && re.test(plainOf(m)) && allGrey(m.body), m && plainOf(m).slice(0, 60));
+  for (const [loc, code] of Object.entries(DISCORD_LOCALES)) {
+    const m = await lang1('lgx' + (++n), loc);
+    const tr = (k, en, ru) => code === 'en' ? en : code === 'ru' ? ru : PACKS[code].s[k];
+    const want = tr('serversTitle', 'Servers', 'Серверы') + ' · ' + (code === 'en' ? '0 online' : code === 'ru' ? 'онлайн: 0' : PACKS[code].s.onlineN.replace('{n}', '0'));
+    const btn = tr('refresh', 'Refresh', 'Обновить') + '=sv:r:' + code + ' | ' + tr('playNow', 'Play now', 'Играть');
+    if (!(m && plainOf(m).indexOf(want) === 0 && labels(m.body)[0] === btn && buttonsOf(m.body).length === 2 && buttonsOf(m.body).every(b => !b.emoji)))
+      wrong.push(loc + ' -> ' + (m ? plainOf(m).slice(0, 36) + ' / ' + labels(m.body)[0] : 'нет ответа'));
   }
+  ok('все 32 locale Discord (30 разных языков): /servers сразу на языке человека, кнопки на нём же, ни флагов, ни глобуса', wrong.length === 0, wrong.join(' | '));
+  const noTr = [];
+  for (const loc of ['ar', 'he', 'sw', 'fa', 'bn', 'xx-YY', '', undefined]) {
+    const m = await lang1('lgy' + (++n), loc);
+    if (!(m && /^Servers · 0 online Race · 0 players /.test(plainOf(m)) && labels(m.body)[0] === 'Refresh=sv:r:en | Play now')) noTr.push(String(loc));
+  }
+  ok('язык, которого нет среди языков Discord (арабский, иврит, суахили, пусто...) — английский, не ошибка', noTr.length === 0, noTr.join());
   const ja = await lang1('lg2', 'ja', 'QWIED');
-  ok('/account — тоже по языку Discord (японский): ник, дата по-японски, подписи; кнопки вкладок и период по-японски', ja && /^qwied 登録日 \d{4}年\d{1,2}月\d{1,2}日 · レース: S · かくれんぼ: ランクなし コイン 5 レースのスコア 3 /.test(plainOf(ja)) &&
+  ok('/account — тоже по языку Discord (японский): ник, дата по-японски, подписи; кнопки вкладок и период по-японски, без кнопок языка', ja && /^qwied 登録日 \d{4}年\d{1,2}月\d{1,2}日 · レース: S · かくれんぼ: ランクなし コイン 5 レースのスコア 3 /.test(plainOf(ja)) &&
      labels(ja.body)[0] === 'プロフィール(off)=ac-page | マップ=ac:m:all:ja:qwied | フレンド=ac:f:all:ja:qwied' &&
-     labels(ja.body)[1] === '今日=ac:p:day:ja:qwied | 今週=ac:p:week:ja:qwied | 通算(off)=ac-per', ja && labels(ja.body).join(' || '));
+     labels(ja.body)[1] === '今日=ac:p:day:ja:qwied | 今週=ac:p:week:ja:qwied | 通算(off)=ac-per' &&
+     labels(ja.body)[2] === '更新=ac:p:all:ja:qwied | プロフィールを開く', ja && labels(ja.body).join(' || '));
   const frm = await lang1('lg3', 'fr', 'qwied');
-  ok('/account по-французски: подписи, «пока ничего нет» и т. д.', /^qwied Inscrit le .* · Course: S · Cache-cache: sans rang Pièces 5 Points de course 3 /.test(plainOf(frm)), plainOf(frm).slice(0, 90));
-  // глобус на общем сообщении — личная копия на языке нажавшего, остальные ничего не видят
+  ok('/account по-французски: подписи, сроки, даты', /^qwied Inscrit le .* · Course: S · Cache-cache: sans rang Pièces 5 Points de course 3 /.test(plainOf(frm)), plainOf(frm).slice(0, 90));
+  // «Обновить» обновляет сообщение на ТОМ ЖЕ языке, на каком оно показано (даже если нажал человек с другим языком Discord)
   t = Date.now();
-  ix('lg4', 3, { custom_id: 'sv:r:me', component_type: 2 }, 'U61', false, { locale: 'pl' });
+  ix('lg4', 3, { custom_id: 'sv:r:pl', component_type: 2 }, 'U61', false, { locale: 'de' });
   await waitFor(() => cb(since(t), 'lg4').length);
   const pl = cb(since(t), 'lg4')[0];
-  ok('глобус под общим сообщением /servers: человек с польским Discord получает свою копию по-польски, видную только ему; общее сообщение не тронуто', pl && pl.body.type === 4 &&
-     pl.body.data.flags === (32768 | 64) && /^Serwery · online: 0 /.test(plainOf(pl)) &&
-     labels(pl.body)[0] === 'Odśwież=sv:r:pl | Graj | English=sv:r:en | Русский=sv:r:ru | Polski(off)=sv-lang', pl && labels(pl.body).join(' || '));
+  ok('«Refresh» под сообщением на польском остаётся польским, даже если нажал человек с немецким Discord (кнопка хранит язык сообщения)', pl && pl.body.type === 7 && /^Serwery · online: 0 /.test(plainOf(pl)) &&
+     labels(pl.body)[0] === 'Odśwież=sv:r:pl | Graj', pl && labels(pl.body).join(' || '));
   t = Date.now();
-  ix('lg5', 3, { custom_id: 'sv:r:ru', component_type: 2 }, 'U62', false, { locale: 'pl', msgFlags: 32768 | 64 });
-  await waitFor(() => cb(since(t), 'lg5').length);
-  ok('кнопка «Русский» в такой личной копии правит её же на месте (type 7), а не шлёт ещё одну', cb(since(t), 'lg5')[0].body.type === 7 && /^Серверы · онлайн: 0 /.test(plainOf(cb(since(t), 'lg5')[0])));
-  t = Date.now();
-  ix('lg6', 3, { custom_id: 'sv:r:me', component_type: 2 }, 'U63', false, { locale: 'tr', msgFlags: 32768 | 64 });
-  await waitFor(() => cb(since(t), 'lg6').length);
-  ok('глобус внутри личной копии — она же меняется на месте (на язык нажавшего)', cb(since(t), 'lg6')[0].body.type === 7 && /^Sunucular · /.test(plainOf(cb(since(t), 'lg6')[0])) &&
-     (cb(since(t), 'lg6')[0].body.data.flags & 64) === 0);
-  t = Date.now();
-  ix('lg7', 3, { custom_id: 'ac:p:all:me:qwied', component_type: 2 }, 'U64', false, { locale: 'it' });
+  ix('lg7', 3, { custom_id: 'ac:m:all:it:qwied', component_type: 2 }, 'U64', false, { locale: 'ja' });
   await waitFor(() => cb(since(t), 'lg7').length);
-  ok('глобус в /account — личная копия на языке нажавшего (итальянский), на той же вкладке и с тем же периодом', cb(since(t), 'lg7')[0].body.type === 4 &&
-     cb(since(t), 'lg7')[0].body.data.flags === (32768 | 64) && /^qwied Iscritto il .* · Corsa: S · Nascondino: nessun rango Monete 5 /.test(plainOf(cb(since(t), 'lg7')[0])) &&
-     labels(cb(since(t), 'lg7')[0].body)[2] === 'Aggiorna=ac:p:all:it:qwied | Apri profilo | English=ac:p:all:en:qwied | Русский=ac:p:all:ru:qwied | Italiano(off)=ac-lang', labels(cb(since(t), 'lg7')[0].body).join(' || '));
-  // карточка наказания в канале и в личке
-  const pubMe = flagsOf(wcBody)[2].custom_id;
+  ok('то же в /account: вкладка «Карты» остаётся итальянской', cb(since(t), 'lg7')[0].body.type === 7 && /^qwied Iscritto il .* Forest CORSA IN GIOCO /.test(plainOf(cb(since(t), 'lg7')[0])) &&
+     labels(cb(since(t), 'lg7')[0].body)[0] === 'Profilo=ac:p:all:it:qwied | Mappe(off)=ac-page | Amici=ac:f:all:it:qwied', labels(cb(since(t), 'lg7')[0].body).join(' || '));
+  // /rules — правила на языке человека, видны только ему; пост в канале один на всех (английский)
+  const rulesBy = {
+    'es-ES': /^Reglas del servidor AIBROFIST 1 Sin spam SILENCIO 10 MINUTOS Más de 3 mensajes en 2 segundos\. Silencio a la 5\.ª vez\. 2 Sin invitaciones a otros servidores de Discord ADVERTENCIA /,
+    ru: /^Правила сервера AIBROFIST 1 Без спама МЬЮТ 10 МИНУТ /, ko: /^AIBROFIST 서버 규칙 1 도배 금지 채팅 금지 10분 /, 'zh-TW': /^AIBROFIST 伺服器規則 1 禁止洗版 禁言 10分鐘 /,
+    tr: /^AIBROFIST Sunucu Kuralları 1 Spam yok SUSTURMA 10 DAKİKA /, pl: /^Regulamin serwera AIBROFIST 1 Zakaz spamu WYCISZENIE 10 MINUT /,
+    'en-US': /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /, ar: /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /, undefined: /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /
+  };
+  const badRules = [];
+  for (const [loc, re] of Object.entries(rulesBy)) {
+    const m = await lang1('lgr' + (++n), loc === 'undefined' ? undefined : loc, null, 'rules');
+    if (!(m && m.body.type === 4 && m.body.data.flags === (32768 | 64) && re.test(plainOf(m)) && buttonsOf(m.body).length === 0 && m.body.data.allowed_mentions.parse.length === 0))
+      badRules.push(loc + ' -> ' + (m ? plainOf(m).slice(0, 70) : 'нет ответа'));
+  }
+  ok('/rules: правила на языке Discord человека (испанский, русский, корейский, китайский традиционный, турецкий, польский; английский, если языка нет), видны только ему, без кнопок', badRules.length === 0, badRules.join(' | '));
+  dispatch('INTERACTION_CREATE', { id: 'lgdm', token: 'tklgdm', type: 2, user: { id: 'U71' }, locale: 'de', channel_id: 'dmU71', data: { name: 'rules', type: 1 } });
+  await waitFor(() => cb(calls, 'lgdm').length);
+  ok('/rules работает и в личке с ботом (берёт сервер бота)', /^Serverregeln von AIBROFIST 1 Kein Spam STUMM 10 MINUTEN /.test(plainOf(cb(calls, 'lgdm')[0])), plainOf(cb(calls, 'lgdm')[0]).slice(0, 80));
+  // сообщения прежних версий бота: на них ещё остались кнопки языка (cd:…, rules:…, sv:…) — они продолжают работать и убирают кнопки
+  bot._test.state().cards.aa11bb22cc01 = { k: 'action', d: { type: 'warn', name: 'Old', user: 'old', rule: 6, reason: 'x', n: 1, limit: 3, by: '', caseNo: 1, at: Date.now() }, g: G, at: Date.now() };
+  bot._test.state().cards.aa11bb22cc02 = { k: 'warns', d: { uid: '70001', name: 'Alice', user: 'alice_p' }, g: G, at: Date.now() };
   t = Date.now();
-  dispatch('INTERACTION_CREATE', { id: 'lg8', token: 'tklg8', type: 3, guild_id: G, channel_id: CH.general, member: { user: { id: 'U66' }, permissions: '1024' }, locale: 'de',
-    message: { id: '1', flags: 32768 }, data: { custom_id: pubMe, component_type: 2 } });
-  await waitFor(() => cb(since(t), 'lg8').length);
-  const cardDe = cb(since(t), 'lg8')[0];
-  ok('глобус под карточкой наказания в канале — карточка по-немецки личной копией (ник игрока, правило, причина, счёт), канал не тронут', cardDe && cardDe.body.type === 4 &&
-     cardDe.body.data.flags === (32768 | 64) && /^Verwarnung · 1 von 3 playerU2 Regel: 6\. Kein Verkauf von Konten oder Münzen für echtes Geld Grund: продавал монеты в чате за деньги Zähler: ●○○ /.test(plainOf(cardDe)) &&
-     flagsOf(cardDe.body.data).map(b => b.label + ':' + !!b.disabled).join() === 'English:false,Русский:false,Deutsch:true', cardDe && plainOf(cardDe));
-  dispatch('INTERACTION_CREATE', { id: 'lg9', token: 'tklg9', type: 3, channel_id: 'dmU2', user: { id: 'U2' }, locale: 'ja',
-    message: { id: '2', flags: 32768 }, data: { custom_id: pubMe, component_type: 2 } });
-  await waitFor(() => cb(since(t), 'lg9').length);
-  const cardJa = cb(since(t), 'lg9')[0];
-  ok('в личке (получатель — сам нажавший) глобус меняет то же сообщение на месте, по-японски', cardJa && cardJa.body.type === 7 && /^警告 · 1 / .test(plainOf(cardJa)) && /ルール: 6\. /.test(plainOf(cardJa)));
-  // правила
+  bid = press('U65', 'cd:aa11bb22cc01:ru');
+  await waitFor(() => cb(since(t), bid).length);
+  const oldRu = cb(since(t), bid)[0];
+  ok('старая кнопка «Русский» на карточке прежней версии: та же карточка по-русски правкой на месте, уже без кнопок', oldRu.body.type === 7 && /^Предупреждение · 1 из 3 Old @old Правило: 6\. /.test(plainOf(oldRu)) && buttonsOf(oldRu.body).length === 0);
   t = Date.now();
-  ix('lg10', 3, { custom_id: 'rules:me', component_type: 2 }, 'U67', false, { locale: 'es-ES' });
-  await waitFor(() => cb(since(t), 'lg10').length);
-  const rEs = cb(since(t), 'lg10')[0];
-  ok('глобус под правилами: стандартные правила по-испански личной копией (с переведённым названием), пост не тронут', rEs && rEs.body.type === 4 && rEs.body.data.flags === (32768 | 64) &&
-     /^Reglas del servidor AIBROFIST 1 Sin spam SILENCIO 10 MINUTOS Más de 3 mensajes en 2 segundos\. Silencio a la 5\.ª vez\. 2 Sin invitaciones a otros servidores de Discord ADVERTENCIA /.test(plainOf(rEs)) &&
-     /Las advertencias se acumulan: 3 en 30 días dan un silencio de 1 hora\./.test(plainOf(rEs)) && flagsOf(rEs.body.data).map(b => b.label + ':' + !!b.disabled).join() === 'English:false,Русский:false,Español:true',
-     rEs && plainOf(rEs).slice(0, 160));
+  bid = press('U66', 'cd:aa11bb22cc01:me', false, 'de');
+  await waitFor(() => cb(since(t), bid).length);
+  const oldMe = cb(since(t), bid)[0];
+  ok('старая кнопка-глобус на общей карточке: личная копия на языке нажавшего (немецкий), карточка в канале не тронута', oldMe.body.type === 4 && oldMe.body.data.flags === (32768 | 64) &&
+     /^Verwarnung · 1 von 3 Old @old Regel: 6\. Kein Verkauf von Konten oder Münzen für echtes Geld /.test(plainOf(oldMe)));
   t = Date.now();
-  ix('lg11', 3, { custom_id: 'rules:me', component_type: 2 }, 'U68', false, { locale: 'ko' });
-  await waitFor(() => cb(since(t), 'lg11').length);
-  ok('язык Discord без перевода (корейский) — правила по-английски, без выбранного языка', /^AIBROFIST Server Rules 1 No spam MUTE 10 MINUTES /.test(plainOf(cb(since(t), 'lg11')[0])) &&
-     flagsOf(cb(since(t), 'lg11')[0].body.data).map(b => b.label + ':' + !!b.disabled).join() === 'English:true,Русский:false,My language:false');
-
+  bid = press('U67', 'cd:aa11bb22cc02:en');
+  await waitFor(() => cb(since(t), bid).length);
+  ok('старая карточка владельца: чужой нажать не может', /Only the server owner/.test(JSON.stringify(cb(since(t), bid)[0].body)));
+  t = Date.now();
+  bid = press('U68', 'cd:aa11bb22cc99:ru');
+  await waitFor(() => cb(since(t), bid).length);
+  ok('записи карточки уже нет — понятный ответ, а не ошибка', /too old|слишком старая/.test(JSON.stringify(cb(since(t), bid)[0].body)));
+  t = Date.now();
+  bid = press('U69', 'sv:r:me', false, 'pl');
+  await waitFor(() => cb(since(t), bid).length);
+  ok('старая кнопка-глобус под /servers: личная копия по-польски, видная только нажавшему', cb(since(t), bid)[0].body.type === 4 && cb(since(t), bid)[0].body.data.flags === (32768 | 64) &&
+     labels(cb(since(t), bid)[0].body)[0] === 'Odśwież=sv:r:pl | Graj');
+  t = Date.now();
+  bid = press('U70', 'rules:me', false, 'es-ES');
+  await waitFor(() => cb(since(t), bid).length);
+  ok('старая кнопка-глобус под постом правил: личная копия по-испански', cb(since(t), bid)[0].body.type === 4 && /^Reglas del servidor AIBROFIST 1 Sin spam /.test(plainOf(cb(since(t), bid)[0])) &&
+     buttonsOf(cb(since(t), bid)[0].body).length === 0);
   cards.setSource(null);
+
   console.log('\nсекретная статистика:');
   t = Date.now();
   say(OWNER, '!qastats');
@@ -1185,25 +1202,25 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const rid = submit('rules:' + CH.general, rulesForm('bananas, Free  Robux\nbananas', 'Server Rules'));
   await waitFor(() => find(since(t), 'PATCH', new RegExp('tk' + rid + '/messages/@original$')).length);
   const redit = find(since(t), 'PATCH', new RegExp('^/channels/301/messages/' + (rpost && rpost.resId) + '$'))[0];
-  ok('правила в #rules исправлены на месте: тот же пост, нового нет, прежних картинок в нём нет, флаги на месте', redit && bodyOf(redit).flags === 32768 && !multipartOf(redit) &&
+  ok('правила в #rules исправлены на месте: тот же пост, нового нет, прежних картинок в нём нет, кнопок нет', redit && bodyOf(redit).flags === 32768 && !multipartOf(redit) &&
      Array.isArray(bodyOf(redit).attachments) && bodyOf(redit).attachments.length === 0 && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 &&
-     /^Server Rules 1 No spam /.test(plainOf(redit)) && flagsOf(bodyOf(redit)).map(b => b.custom_id).join() === 'rules-lang,rules:ru,rules:me', plainOf(redit).slice(0, 60));
+     /^Server Rules 1 No spam /.test(plainOf(redit)) && buttonsOf(bodyOf(redit)).length === 0, plainOf(redit).slice(0, 60));
   ok('свои слова запомнены, без повторов', JSON.stringify(bot._test.state().guilds[G].words) === '["bananas","free robux"]',
      JSON.stringify(bot._test.state().guilds[G].words));
   t = Date.now();
   bid = press('U0', 'rules:ru');
   await waitFor(() => picAnswer(since(t), bid), 5000);
   const rru = picAnswer(since(t), bid);
-  ok('«Русский» — текст в том же посте становится русским (правка самого поста), подсвечен флаг «Русский»',
+  ok('старая кнопка «Русский» на посте прежней версии — текст в том же посте становится русским (правка самого поста), новых кнопок нет',
      rru && rru.body.type === 7 && rru.data.flags === 32768 && /^Правила сервера AIBROFIST 1 Без спама /.test(rru.alt) &&
-     flagsOf(rru.data).map(b => b.custom_id + ':' + b.style + ':' + !!b.disabled).join() === 'rules:en:2:false,rules-lang:2:true,rules:me:2:false' && !(rru.data.flags & 64) &&
+     buttonsOf(rru.data).length === 0 && !(rru.data.flags & 64) &&
      Array.isArray(rru.data.attachments) && rru.data.attachments.length === 0, rru && rru.alt.slice(0, 60));
   ok('русский текст — тот же набор из 7 правил и про копящиеся предупреждения', /7 Без чужих IP-адресов/.test(rru.alt) && !/8 /.test(rru.alt) && /Предупреждения копятся/.test(rru.alt));
   t = Date.now();
   bid = press('U0', 'rules:en');
   await waitFor(() => picAnswer(since(t), bid), 5000);
   const ren = picAnswer(since(t), bid);
-  ok('«English» — обратно английский в том же посте', ren && ren.body.type === 7 && /^Server Rules 1 No spam /.test(ren.alt));
+  ok('старая кнопка «English» — обратно английский в том же посте', ren && ren.body.type === 7 && /^Server Rules 1 No spam /.test(ren.alt));
   t = Date.now();
   rejectUpdate = true;
   bid = press('U0', 'rules:ru');
@@ -1222,7 +1239,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   dispatch('INTERACTION_CREATE', { id: 'dm1', token: 'tkdm1', type: 3, channel_id: 'dmOWNER', user: { id: OWNER },
     data: { custom_id: 'rules:ru', component_type: 2 } });
   await waitFor(() => picAnswer(since(t), 'dm1'), 5000);
-  ok('и в личке (превью правил) флаг «Русский» тоже работает', /^Правила сервера AIBROFIST /.test(picAnswer(since(t), 'dm1').alt));
+  ok('и в личке (превью правил) старая кнопка «Русский» тоже работает', /^Правила сервера AIBROFIST /.test(picAnswer(since(t), 'dm1').alt));
   t = Date.now();
   const bw = say('U20', 'I really love bananas');
   await waitFor(() => find(since(t), 'DELETE', new RegExp('/messages/' + bw.id + '$')).length);
@@ -1239,6 +1256,16 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0);
   ok('слова можно убрать', bot._test.state().guilds[G].words.length === 0);
   ok('свой текст правил бот потом сам не меняет', bot._test.state().guilds[G].rules.custom === true);
+  {
+    // свой текст владельца есть только по-английски и по-русски: /rules на другом языке показывает английский, на русском — русский, кнопок нет
+    const rr = bot._test.state().guilds[G].rules, keep = { en: rr.en, ru: rr.ru };
+    rr.en = 'my own rules'; rr.ru = 'мои правила';
+    const mDe = await lang1('lgc1', 'de', null, 'rules'), mRu = await lang1('lgc2', 'ru', null, 'rules'), mJa = await lang1('lgc3', 'ja', null, 'rules');
+    rr.en = keep.en; rr.ru = keep.ru;
+    ok('/rules со своим текстом владельца: немецкий и японский — английский текст, русский — русский; переводить чужой текст бот не берётся; кнопок нет',
+       /^Server Rules my own rules /.test(plainOf(mDe)) && /^Server Rules my own rules /.test(plainOf(mJa)) && /^Правила сервера AIBROFIST мои правила /.test(plainOf(mRu)) &&
+       [mDe, mRu, mJa].every(m => buttonsOf(m.body).length === 0 && m.body.data.flags === (32768 | 64)), [mDe, mRu, mJa].map(m => plainOf(m).slice(0, 40)).join(' | '));
+  }
 
   console.log('\nкоманды по имени — без упоминаний и без пингов:');
   const sayIn = (list, re) => find(list, 'POST', /^\/channels\/300\/messages$/).map(x => x.body && x.body.content || '').find(x => re.test(x));
@@ -1312,6 +1339,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const cpName = panelOf(since(t));
   ok('«!clear all alice_p» — красная кнопка с именем (не с упоминанием)', cpName && cpName.msg.body.components[0].components[0].label === 'Delete all messages of Alice here' &&
      !/<@/.test(JSON.stringify(cpName.msg.body)));
+  await sleep(2100);                   // команды идут быстро: окно «больше 3 сообщений за 2 секунды» от прежних команд владельца должно закрыться
   t = Date.now();
   say(OWNER, '!qa help');
   await waitFor(() => panelOf(since(t)));
@@ -1359,17 +1387,17 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const wl = picAnswer(since(t), bid), wlData = wl.body.data || wl.body;
   ok('по кнопке — сообщение: сколько действует, сколько всего, за что и кто выдал', /^Warnings · 2 of 3 ●●○ Alice @alice_p /.test(wl.alt) && /All time: 2$/.test(wl.alt) &&
      /2\. No invites to other Discord servers ACTIVE .* link to another server · 900/.test(wl.alt) && /sold coins/.test(wl.alt) && wlData.flags === (32768 | 64), wl.alt);
-  const wlRu = flagsOf(wlData)[1].custom_id;
+  ok('на списке предупреждений нет кнопок языка', buttonsOf(wlData).length === 0);
   t = Date.now();
-  bid = press('U0', wlRu);
-  await waitFor(() => cb(since(t), bid).length);
-  ok('чужой флаг на карточке владельца не нажмёт', /Only the server owner/.test(JSON.stringify(cb(since(t), bid)[0].body)) && !picAnswer(since(t), bid));
+  say(OWNER, '!qawarns alice_p');
+  await waitFor(() => panelOf(since(t)));
+  panel = panelOf(since(t));
   t = Date.now();
-  bid = press(OWNER, wlRu);
+  bid = press(OWNER, panel.id, false, 'ru');
   await waitFor(() => picAnswer(since(t), bid), 5000);
   const wlr = picAnswer(since(t), bid);
-  ok('флаг «Русский» — та же карточка по-русски, в том же сообщении', /^Предупреждения · 2 из 3 ●●○ Alice /.test(wlr.alt) && wlr.body.type === 7 &&
-     flagsOf(wlr.data).map(b => !!b.disabled).join() === 'false,true,false', wlr.alt);
+  ok('у владельца русский Discord — список предупреждений сразу по-русски, без всякой кнопки', /^Предупреждения · 2 из 3 ●●○ Alice /.test(wlr.alt) && wlr.body.type === 4 &&
+     buttonsOf(wlr.data).length === 0 && wlr.data.flags === (32768 | 64), wlr.alt);
   t = Date.now();
   say(OWNER, '!qawarns');
   await waitFor(() => panelOf(since(t)));
@@ -1379,13 +1407,6 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => picAnswer(since(t), bid), 5000);
   const wall = picAnswer(since(t), bid).alt;
   ok('«!warns» без имени — все, у кого есть предупреждения', /^Members with warnings /.test(wall) && /Alice ●●○ 2\/3/.test(wall) && /playerU2 [●○]{3} \d\/3/.test(wall), wall);
-  // флаг на карточке в канале — её может нажать любой: язык меняется у всех, в том же сообщении
-  const pubRu = flagsOf(wcBody)[1].custom_id;
-  t = Date.now();
-  bid = press('U5', pubRu);
-  await waitFor(() => picAnswer(since(t), bid), 5000);
-  ok('флаг под карточкой в канале — та же карточка по-русски, в том же сообщении', /^Предупреждение · 1 из 3 playerU2 Правило: 6\. Без продажи аккаунтов и монет за реальные деньги /.test(picAnswer(since(t), bid).alt) &&
-     picAnswer(since(t), bid).body.type === 7 && !(picAnswer(since(t), bid).data.flags & 64), picAnswer(since(t), bid).alt);
   t = Date.now();
   say(OWNER, '!qaunwarn alice_p');
   await waitFor(() => cardIn(since(t), /^Warnings removed · 2 Alice /));
@@ -1423,22 +1444,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   const dave = cardIn(since(t), /^Warning · \d of 3 Dave /), daveBtns = buttonsOf(bodyOf(dave));
   ok('у кого нет своей аватарки — стандартная аватарка Discord справа в заголовке (по ссылке на CDN, бот её не скачивает)',
      thumbOf(dave) === 'http://127.0.0.1:' + port + '/embed/avatars/0.png' && find(calls, 'GET', /\/embed\/avatars\//).length === 0, thumbOf(dave));
-  ok('под карточкой один ряд: флаги языка, обе кнопки серые (secondary), кнопок темы нет; id разные', rowsOf(bodyOf(dave)).length === 1 &&
-     daveBtns.map(b => b.label + ':' + b.style + ':' + !!b.disabled).join() === 'English:2:true,Русский:2:false,My language:2:false' && new Set(daveBtns.map(b => b.custom_id)).size === 3 &&
-     /^cd:[0-9a-f]+:ru$/.test(daveBtns[1].custom_id) && !/Dark theme|Light theme/.test(J(dave)), daveBtns.map(b => b.custom_id).join());
-  t = Date.now();
-  bid = press('U30', daveBtns[1].custom_id);
-  await waitFor(() => picAnswer(since(t), bid), 5000);
-  const daveRu = picAnswer(since(t), bid);
-  ok('«Русский» — та же карточка по-русски в том же сообщении (аватарка и серые кнопки на месте), выбран русский', /^Предупреждение · \d из 3 Dave @dave /.test(daveRu.alt) && daveRu.body.type === 7 &&
-     daveRu.data.flags === 32768 && flagsOf(daveRu.data).map(b => b.label + ':' + !!b.disabled).join() === 'English:false,Русский:true,Мой язык:false' &&
-     (function () { let u = null; walkAll(daveRu.data.components, n => { if (n.type === 11) u = n.media.url; }); return u; })() === thumbOf(dave), daveRu.alt.slice(0, 60));
-  t = Date.now();
-  bid = press('U31', 'cd:' + /^cd:([0-9a-f]+):/.exec(daveBtns[1].custom_id)[1] + ':en:light', true);
-  await waitFor(() => picAnswer(since(t), bid), 5000);
-  const daveOld = picAnswer(since(t), bid);
-  ok('кнопки карточек прежней версии (с темой) не ломаются: карточка новым сообщением, видным только нажавшему', daveOld && daveOld.body.type === 4 &&
-     daveOld.data.flags === (32768 | 64) && /^Warning · \d of 3 Dave /.test(daveOld.alt));
+  ok('под карточкой нет кнопок вообще: ни языка, ни темы', rowsOf(bodyOf(dave)).length === 0 && daveBtns.length === 0 && !/Dark theme|Light theme|English|Русский|🌐/.test(J(dave)));
   t = Date.now();
   warnSend({ id: '70007', username: 'erin', avatar: 'abc123' }, 2, 'ссылка');
   await waitFor(() => cardIn(since(t), /^Warning · \d of 3 erin /));
@@ -1686,6 +1692,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
       new Set(buttonsOf(bodyOf(x)).map(b => b.custom_id).filter(Boolean)).size !== buttonsOf(bodyOf(x)).map(b => b.custom_id).filter(Boolean).length);
     ok('во всех сообщениях бота за весь тест кнопки только серые (secondary) и ссылки, id кнопок не повторяются', v2.length > 20 && bad.length === 0,
        v2.length + ' сообщений' + (bad[0] ? ', плохое: ' + JSON.stringify(buttonsOf(bodyOf(bad[0]))).slice(0, 200) : ''));
+    const withEmoji = calls.filter(x => x.body && buttonsOf(x.body).some(b => b.emoji));
+    ok('нигде за весь тест — ни в канале, ни в личке, ни в ответах на команды и нажатия — нет кнопок с флагом или глобусом (выбора языка нет)', withEmoji.length === 0,
+       withEmoji.slice(0, 2).map(x => x.path + ' ' + JSON.stringify(buttonsOf(x.body).filter(b => b.emoji).map(b => b.label))).join(' | '));
     const tooLong = calls.filter(x => x.body && (x.body.flags & 32768)).filter(x => textsOf(bodyOf(x)).join('').length > 4000);
     ok('в одном сообщении не больше 4000 знаков текста (предел Discord)', tooLong.length === 0, tooLong.length);
   }
@@ -1705,6 +1714,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('бот запомнил, на каком сообщении остановился в каждом канале (после остановки это уже в файле состояния)',
      sf.watch && sf.watch.last && /^\d+$/.test(sf.watch.last[CH.general] || '') && Object.keys(sf.watch.last).length >= 3, JSON.stringify(sf.watch && Object.keys(sf.watch.last)));
   Object.assign(sf.guilds[G].rules, { custom: true, en: 'my own rules', ru: 'мои правила', ruMessage: '9999' });
+  sf.cards = Object.assign(sf.cards || {}, { stale_old: { k: 'info', d: {}, g: G, at: 1 } });       // запись карточки старше 60 дней
   delete sf.fixes.rules7;
   sf.strikes = { [G + ':U1']: [{ t: Date.now(), p: 2, r: 1, k: 'slur', by: 'auto' }], [G + ':U2']: [{ t: Date.now(), p: 1, r: 2, k: 'caps', by: 'auto' }] };
   Object.assign(sf.guilds[G].automod, { mentions: '123', spam: '456' });
@@ -1721,6 +1731,7 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bot.start();
   const ident2 = await waitFor(() => gwLog.slice(before).filter(m => m.op === 2).length >= 2 && gwLog.slice(before).filter(m => m.op === 2)[1], 8000);
   ok('без привилегированных intents переподключается без них', ident2 && ident2.d.intents === (1 | 4 | 512 | 2097152), ident2 && ident2.d.intents);
+  ok('старые записи карточек (нужны были только кнопкам языка прежних версий) при запуске стираются, свежие остаются', !bot._test.state().cards.stale_old && !!bot._test.state().cards.aa11bb22cc01);
   await waitFor(() => find(since(t), 'PUT', /bans\/R1$/).length, 8000);
   await sleep(1500);
   c = since(t);
@@ -1729,8 +1740,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   ok('а давнее (30 минут назад) не трогает: после долгого простоя не наказываем за старое', find(c, 'DELETE', new RegExp('/messages/' + down2.id + '$')).length === 0 &&
      find(c, 'PUT', /bans\/R2$/).length === 0);
   const rfix = find(c, 'PATCH', new RegExp('^/channels/301/messages/' + (rpost && rpost.resId) + '$'))[0];
-  ok('один раз бот заменил и свой прежний текст: пост исправлен на месте — 7 правил сообщением и флаги, нового поста нет', rfix &&
-     /1 No spam/.test(plainOf(rfix)) && !/my own rules/.test(J(rfix)) && flagsOf(bodyOf(rfix)).map(b => b.label).join() === 'English,Русский,My language' &&
+  ok('один раз бот заменил и свой прежний текст: пост исправлен на месте — 7 правил сообщением без кнопок, нового поста нет', rfix &&
+     /1 No spam/.test(plainOf(rfix)) && !/my own rules/.test(J(rfix)) && buttonsOf(bodyOf(rfix)).length === 0 &&
      find(c, 'POST', /^\/channels\/301\/messages$/).length === 0 && bot._test.state().guilds[G].rules.custom !== true && bot._test.state().fixes.rules7 === true);
   ok('прежний отдельный русский пост убран', find(c, 'DELETE', /^\/channels\/301\/messages\/9999$/).length === 1 && bot._test.state().guilds[G].rules.ruMessage === undefined);
   ok('пропавшие из правил встроенные правила AutoMod (упоминания) удалены, чужое («My own spam rule») не тронуто',
@@ -1758,8 +1769,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bot.stop();
   await sleep(200);
   const sf2 = JSON.parse(fs.readFileSync(process.env.DISCORD_BOT_STATE, 'utf8'));
-  ok('в состоянии отмечено: пост правил уже в нынешнем оформлении (сообщения Discord с глобусом)', sf2.fixes.rulesCard === 5);
-  sf2.fixes.rulesCard = 4;                // состояние от прежнего оформления (сообщения без глобуса)
+  ok('в состоянии отмечено: пост правил уже в нынешнем оформлении (сообщения Discord без кнопок)', sf2.fixes.rulesCard === 6);
+  sf2.fixes.rulesCard = 5;                // состояние от прежнего оформления (с кнопками языка)
   fs.writeFileSync(process.env.DISCORD_BOT_STATE, JSON.stringify(sf2));
   t = Date.now();
   bot._test.reload();
@@ -1767,11 +1778,11 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(since(t), 'PATCH', /^\/channels\/301\/messages\/\d+$/).length, 8000);
   await sleep(500);
   const upg = find(since(t), 'PATCH', /^\/channels\/301\/messages\/\d+$/);
-  ok('после выкладки нового оформления бот один раз правит пост правил на месте: нового поста нет, прежняя картинка убрана из поста, вместо неё текст и один ряд флагов',
+  ok('после выкладки нового оформления бот один раз правит пост правил на месте: нового поста нет, прежняя картинка убрана из поста, вместо неё текст, кнопок нет',
      upg.length === 1 && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 && bodyOf(upg[0]).flags === 32768 && !multipartOf(upg[0]) &&
-     Array.isArray(bodyOf(upg[0]).attachments) && bodyOf(upg[0]).attachments.length === 0 && rowsOf(bodyOf(upg[0])).length === 1 &&
-     /^AIBROFIST Server Rules 1 No spam /.test(plainOf(upg[0])) && bot._test.state().fixes.rulesCard === 5 &&
-     flagsOf(bodyOf(upg[0])).map(b => b.label).join() === 'English,Русский,My language',
+     Array.isArray(bodyOf(upg[0]).attachments) && bodyOf(upg[0]).attachments.length === 0 && rowsOf(bodyOf(upg[0])).length === 0 &&
+     /^AIBROFIST Server Rules 1 No spam /.test(plainOf(upg[0])) && bot._test.state().fixes.rulesCard === 6 &&
+     buttonsOf(bodyOf(upg[0])).length === 0,
      upg.length + ' ' + (upg[0] ? JSON.stringify(Object.keys(bodyOf(upg[0]))) + ' ' + plainOf(upg[0]).slice(0, 60) + ' rows ' + rowsOf(bodyOf(upg[0])).length : '') + ' card=' + bot._test.state().fixes.rulesCard);
 
   bot.stop();

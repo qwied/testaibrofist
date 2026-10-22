@@ -81,14 +81,8 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
   ok('пустой текст Discord не принимает — такие куски не попадают в сообщение', texts(V.message({ color: 5, parts: [V.txt(''), V.txt('  '), V.txt('ok')] }, [])).join('|') === 'ok');
   const rl = V.message(V.view('rules', { std: false, title: 'T'.repeat(300), text: 'x'.repeat(3900), at: now }, 'en'), []);
   ok('свои правила на 3900 знаков с длинным заголовком — вмещаются в 4000', texts(rl).join('').length <= 4000, texts(rl).join('').length);
-  const ru = V.view('rules', { std: true, title: 'AIBROFIST Server Rules', text: '', at: now }, 'en');
-  const rm = V.message(ru, [V.row(...V.langButtons(l => 'rules:' + l, 'en', 'rules-lang'))]);
-  const rb = buttons(rm);
-  ok('кнопки языка: выбранная неактивна, с постоянным id; все серые; флаги и глобус «My language»', rb.length === 3 && rb[0].disabled && rb[0].custom_id === 'rules-lang' && rb[1].custom_id === 'rules:ru' &&
-     rb[2].custom_id === 'rules:me' && rb[2].label === 'My language' && rb.every(b => b.style === 2) && rb[0].emoji.name === '🇬🇧' && rb[1].emoji.name === '🇷🇺' && rb[2].emoji.name === '🌐');
-  const rd = buttons(V.message(ru, [V.row(...V.langButtons(l => 'rules:' + l, 'de', 'rules-lang'))]));
-  ok('показан другой язык (немецкий): English и Русский нажимаются, глобус стоит выбранным и подписан «Deutsch»; id не повторяются', rd.map(b => b.label + ':' + !!b.disabled).join() === 'English:false,Русский:false,Deutsch:true' &&
-     new Set(rd.map(b => b.custom_id)).size === 3 && rd[2].custom_id === 'rules-lang');
+  ok('кнопок выбора языка нет вообще: в модуле нет langButtons, а кнопки вкладок выбранная — неактивная, с постоянным id, серые', typeof V.langButtons === 'undefined' &&
+     (function () { const b = V.tabs([{ label: 'A', id: 'x:a', on: true }, { label: 'B', id: 'x:b', on: false }], 'x-cur'); return b.length === 2 && b[0].disabled && b[0].custom_id === 'x-cur' && b[1].custom_id === 'x:b' && b.every(x => x.style === 2); })());
   ok('ссылка — кнопка со ссылкой без id; надпись длиннее 80 знаков обрезается', V.linkButton('x'.repeat(100), 'https://aibrofist.online').label.length === 80 && !('custom_id' in V.linkButton('a', 'https://aibrofist.online')));
 
   console.log('\nпереводы (discordLang.js):');
@@ -111,21 +105,32 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
   ok('подстановки в переводах те же, что в английском ({n}, {d}, {limit}...): бот ставит их по имени', marks.length === 0, marks.slice(0, 5).join(' | '));
   const sameAsEn = Object.entries(PACKS).map(([c, p]) => [c, KEYS.filter(k => p.s[k] === V.say('en', k)).length]).filter(([, n]) => n > 12);
   ok('перевод не копия английского (не больше 12 общих строк с английским у языка)', sameAsEn.length === 0, JSON.stringify(sameAsEn));
-  ok('язык Discord -> язык ответа: de, pt-BR, es-ES и es-419, zh-CN и zh-TW, uk, ru-RU, регион после дефиса не важен', [['de', 'de'], ['de-AT', 'de'], ['pt-BR', 'pt'], ['es-ES', 'es'], ['es-419', 'es'],
-     ['zh-CN', 'zh'], ['zh-TW', 'zh'], ['uk', 'uk'], ['ru', 'ru'], ['ja', 'ja'], ['fr', 'fr'], ['tr', 'tr'], ['pl', 'pl'], ['it', 'it'], ['en-US', 'en'], ['en-GB', 'en']].every(([l, w]) => V.fromLocale(l) === w));
-  ok('неизвестный или пустой язык — английский (корейский, арабский, hi, пусто, мусор)', ['ko', 'ar', 'hi', '', undefined, null, 'zz-ZZ', '123', 'constructor', '__proto__'].every(l => V.fromLocale(l) === 'en'));
+  ok('язык Discord -> язык ответа: de, pt-BR, es-ES и es-419, zh-CN (упрощённый) и zh-TW (традиционный), no/nb/nn, регион после дефиса не важен', [['de', 'de'], ['de-AT', 'de'], ['pt-BR', 'pt'], ['es-ES', 'es'], ['es-419', 'es'],
+     ['zh-CN', 'zh'], ['zh-TW', 'zt'], ['zh-HK', 'zt'], ['zh', 'zh'], ['no', 'no'], ['nb', 'no'], ['nn-NO', 'no'], ['sv-SE', 'sv'], ['pt_BR', 'pt'], ['EN-us', 'en'], ['uk', 'uk'], ['ru', 'ru'], ['ja', 'ja'], ['fr', 'fr'], ['tr', 'tr'], ['pl', 'pl'], ['it', 'it'], ['en-US', 'en'], ['en-GB', 'en']].every(([l, w]) => V.fromLocale(l) === w));
+  ok('неизвестный или пустой язык — английский (арабский, иврит, суахили, пусто, мусор)', ['ar', 'he', 'sw', '', undefined, null, 'zz-ZZ', '123', 'constructor', '__proto__'].every(l => V.fromLocale(l) === 'en'));
   ok('langOf не принимает чужие ключи (constructor и т. п.) — иначе из имени языка в кнопке получилось бы что угодно', ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'de ', 'DE'].every(l => V.langOf(l) === 'en'));
+  const DISCORD_LOCALES = { id: 'id', da: 'da', de: 'de', 'en-GB': 'en', 'en-US': 'en', 'es-ES': 'es', 'es-419': 'es', fr: 'fr', hr: 'hr', it: 'it', lt: 'lt', hu: 'hu', nl: 'nl',
+    no: 'no', pl: 'pl', 'pt-BR': 'pt', ro: 'ro', fi: 'fi', 'sv-SE': 'sv', vi: 'vi', tr: 'tr', cs: 'cs', el: 'el', bg: 'bg', ru: 'ru', uk: 'uk', hi: 'hi', th: 'th', 'zh-CN': 'zh',
+    ja: 'ja', 'zh-TW': 'zt', ko: 'ko' };
+  ok('все 32 locale, которые умеет присылать Discord, определяются и ведёт к своему языку ответа (' + Object.keys(DISCORD_LOCALES).length + ' locale, ' + new Set(Object.values(DISCORD_LOCALES)).size + ' языков)',
+     Object.keys(DISCORD_LOCALES).length === 32 && Object.entries(DISCORD_LOCALES).every(([l, w]) => V.fromLocale(l) === w) && ALL.length === new Set(Object.values(DISCORD_LOCALES)).size &&
+     ALL.every(l => Object.values(DISCORD_LOCALES).indexOf(l) !== -1), Object.entries(DISCORD_LOCALES).filter(([l, w]) => V.fromLocale(l) !== w).join());
   const dur = (ms, l) => V.duration(ms, l), H = 3600000, D = 86400000;
   ok('длительности по правилам языка: польский 1 godzina / 2 dni / 5 dni / 22 dni, украинский 2 дні / 5 днів, немецкий 1 Stunde / 6 Stunden, китайский 1小时, турецкий 1 saat',
      dur(H, 'pl') === '1 godzina' && dur(2 * D, 'pl') === '2 dni' && dur(5 * D, 'pl') === '5 dni' && dur(22 * D, 'pl') === '22 dni' && dur(2 * H, 'pl') === '2 godziny' && dur(5 * H, 'pl') === '5 godzin' &&
      dur(2 * D, 'uk') === '2 дні' && dur(5 * D, 'uk') === '5 днів' && dur(H, 'de') === '1 Stunde' && dur(6 * H, 'de') === '6 Stunden' && dur(H, 'zh') === '1小时' && dur(H, 'tr') === '1 saat' &&
-     dur(600000, 'es') === '10 minutos' && dur(7 * D, 'fr') === '7 jours' && dur(H, 'ja') === '1時間', [dur(H, 'pl'), dur(22 * D, 'pl'), dur(5 * D, 'uk')].join(' / '));
+     dur(600000, 'es') === '10 minutos' && dur(7 * D, 'fr') === '7 jours' && dur(H, 'ja') === '1時間' &&
+     dur(2 * H, 'lt') === '2 valandos' && dur(11 * H, 'lt') === '11 valandų' && dur(21 * H, 'lt') === '21 valanda' && dur(2 * H, 'cs') === '2 hodiny' && dur(5 * H, 'cs') === '5 hodin' &&
+     dur(20 * H, 'ro') === '20 de ore' && dur(5 * H, 'ro') === '5 ore' && dur(1 * H, 'ro') === '1 oră' && dur(2 * D, 'hr') === '2 dana' && dur(5 * D, 'hr') === '5 dana' &&
+     dur(H, 'zt') === '1小時' && dur(7 * D, 'ko') === '7일' && dur(H, 'th') === '1 ชั่วโมง' && dur(3 * D, 'nl') === '3 dagen' && dur(2 * H, 'hi') === '2 घंटे' && dur(2 * D, 'bg') === '2 дни', [dur(H, 'pl'), dur(22 * D, 'pl'), dur(5 * D, 'uk')].join(' / '));
   ok('даты делает сама система по языку (Intl): немецкая, японская, русская и английская', /^\d{1,2}\. .* 2026$/.test(V.date(Date.UTC(2026, 1, 3), 'de')) && /^2026年2月3日$/.test(V.date(Date.UTC(2026, 1, 3), 'ja')) &&
      V.date(Date.UTC(2026, 1, 3), 'ru') === '3 фев 2026' && V.date(Date.UTC(2026, 1, 3), 'en') === 'Feb 3, 2026' && /07:05 UTC$/.test(V.date(Date.UTC(2026, 1, 3, 7, 5), 'fr', true)), V.date(Date.UTC(2026, 1, 3), 'de'));
   const warn = lang => allText(V.message(V.view('action', { type: 'warn', name: 'Bob', rule: 6, kind: 'cheat', reason: 'x', n: 1, limit: 3, by: '', caseNo: 4, at: now }, lang), []));
   ok('наказание на другом языке: правило, причина-находка автомода (kind) и «обычная» причина переводятся; ник и написанный человеком текст — как есть',
      /Regel:\*\* 6\. Kein Verkauf von Konten/.test(warn('de')) && /Grund:\*\* Verkauf für echtes Geld/.test(warn('de')) && /Raison:\*\* Vente contre de l’argent réel/.test(warn('fr')) &&
      /\*\*Bob\*\*/.test(warn('ja')) && /Auto/.test(warn('en')));
+  const up = (r, l) => allText(V.message(V.view('rules', { std: true, title: 'x', text: '', at: now }, l), [])).match(r) ? 1 : 0;
+  ok('ПРОПИСНЫЕ по правилам языка: турецкое «DAKİKA» с точкой, греческое без ударений', up(/SUSTURMA 10 DAKİKA/, 'tr') && up(/ΣΙΓΑΣΗ 10 ΛΕΠΤΑ/, 'el') && up(/MUTE 10 MINUTES/, 'en') && up(/МЬЮТ 10 МИНУТ/, 'ru'));
   const own = allText(V.message(V.view('action', { type: 'warn', name: 'Bob', rule: 0, reason: 'свой текст человека', n: 1, limit: 3, by: 'owner', at: now }, 'es'), []));
   ok('причина, написанная владельцем, не переводится (её нет в переводах) — показана как написана', /Motivo:\*\* свой текст человека/.test(own) && /Regla:\*\* Otro/.test(own));
 
@@ -151,7 +156,7 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
     const pages = kind === 'account' ? [['p', 'all'], ['p', 'day'], ['p', 'week'], ['m'], ['f']] : [[]];
     for (const [page, period] of pages) {
       let m;
-      try { m = V.message(V.view(kind, d, lang, { page, period }), [V.row(...V.langButtons(l => 'x:' + l, lang, 'x-lang'))]); } catch (e) { bad.push(kind + '/' + lang + '/' + i + ': ' + e.message); continue; }
+      try { m = V.message(V.view(kind, d, lang, { page, period }), [V.row(V.button('x', 'x:1'))]); } catch (e) { bad.push(kind + '/' + lang + '/' + i + ': ' + e.message); continue; }
       const all = allText(m);
       if (/undefined|NaN|\[object|null|\{[a-zA-Z0-9]+\}/.test(all) || !all.trim()) bad.push(kind + '/' + lang + '/' + i + ': ' + all.replace(/\s+/g, ' ').slice(0, 100));
       if (all.length > 4000 || count(m) > 40 || m.components[0].components.some(c => c.type === 10 && !c.content.trim())) bad.push(kind + '/' + lang + '/' + i + ': пределы');

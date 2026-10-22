@@ -14,9 +14,10 @@
 //     (если он есть) — запись о случае;
 //   - отвечает аккуратными сообщениями Discord (рамка, текст, аватарка,
 //     серые кнопки; discordViews.js). Язык берёт у самого Discord (locale в
-//     команде или нажатии): английский, русский и ещё 10 языков из
-//     discordLang.js, остальным — английский. Под сообщением кнопки English /
-//     Русский и глобус «My language» (то же на языке нажавшего);
+//     команде или нажатии): английский, русский и ещё 28 языков из
+//     discordLang.js — все языки Discord; кнопок выбора языка нет. Карточки в
+//     канале и в личке английские (язык получателя Discord не сообщает),
+//     правила на своём языке — команда /rules;
 //   - секретные команды владельца сервера прямо в канале (начало команд —
 //     DISCORD_CMD_PREFIX на хостинге): news (пост в любой канал с
 //     картинками и кнопкой-ссылкой — в окне, которое видит только он),
@@ -736,20 +737,16 @@ async function ensureNativeAutomod(g) {
    Что показано, бот помнит (state.cards) — кнопки работают и после
    перезапуска. Discord не принял сообщение — бот отвечает прежним текстом. */
 const V = require('./discordViews.js');
-const CARD_KEEP = 400;
 const CARD_AGE = 60 * R.DAY;
 const FLASH_MS = 15 * 1000;          // итог команды в канале (журнал включён, канал почищен) гаснет сам
 const LIVE = new Set(['help', 'stats', 'warns', 'warnsAll']);
 const OWNER_ONLY = new Set(['help', 'stats', 'warns', 'warnsAll']);
 
-function keepCard(kind, data, gid) {
-  const id = crypto.randomBytes(6).toString('hex'), now = Date.now();
-  state.cards[id] = { k: kind, d: data, g: gid || null, at: now };
+// Записи карточек нужны только кнопкам языка у сообщений прежних версий бота: у новых сообщений таких кнопок нет, язык определяется сам.
+// Старые записи со временем стираются.
+function pruneCards() {
+  const now = Date.now();
   for (const k of Object.keys(state.cards)) if (now - (state.cards[k].at || 0) > CARD_AGE) delete state.cards[k];
-  const left = Object.keys(state.cards);
-  if (left.length > CARD_KEEP) left.sort((a, b) => state.cards[a].at - state.cards[b].at).slice(0, left.length - CARD_KEEP).forEach(k => delete state.cards[k]);
-  save();
-  return id;
 }
 
 /* Аватарка участника — настоящая, с CDN Discord: Discord сам показывает её
@@ -774,28 +771,27 @@ function liveData(rec) {
   return rec.d;
 }
 
-// один ряд под текстом: ссылки (если есть) и флаги языка
-function cardRows(rec, id, lang) {
+// ряд под текстом — только кнопки-ссылки (если они есть); кнопок выбора языка нет
+function cardRows(rec, lang) {
   const links = [];
   if (rec.k === 'stats') links.push(V.linkButton(V.say(lang, 'openStats'), require('./serversInfo.js').link()));
   const link = rec.d && rec.d.link;
   if (link && link.url) links.push(V.linkButton(String((lang === 'ru' ? link.ru : link.en) || link.en || 'Open'), link.url));
-  return [V.row(...links, ...V.langButtons(l => 'cd:' + id + ':' + l, lang, 'cd-lang'))];
+  return links.length ? [V.row(...links)] : [];
 }
 
-// готовое сообщение с карточкой: для нового сообщения, ответа на нажатие или правки
-function cardMessage(rec, id, lang, ephemeral) {
+// готовое сообщение с карточкой: для нового сообщения, ответа на команду или правки
+function cardMessage(rec, lang, ephemeral) {
   const data = LIVE.has(rec.k) ? liveData(rec) : rec.d;
-  return V.message(V.view(rec.k, data, lang), cardRows(rec, id, lang), { ephemeral });
+  return V.message(V.view(rec.k, data, lang), cardRows(rec, lang), { ephemeral });
 }
 
 // новая карточка в канал или в личку (dm: закрытая личка — обычное дело, в журнал не пишем);
 // не собралась или Discord её не взял — запасной текст
 async function postCard(channel, kind, data, gid, fallback, dm) {
   const rec = { k: kind, d: data, g: gid || null };
-  const id = keepCard(kind, data, gid);
   let msg = null;
-  try { msg = cardMessage(rec, id, 'en'); }
+  try { msg = cardMessage(rec, 'en'); }
   catch (e) { once('card:' + e.message, 'could not build the ' + kind + ' card, sending text instead:', e.message); }
   if (msg) {
     const r = await api('POST', '/channels/' + channel + '/messages', msg);
@@ -838,9 +834,10 @@ const textAnswer = (i, data) => respond(i, { type: 4, data: Object.assign({ flag
    свой перевод из discordLang.js, чего там нет — английский. В публичных карточках канала и в личке язык
    получателя Discord не сообщает — там английский, а глобус под текстом («Мой язык») показывает карточку на языке нажавшего. */
 const userLang = i => V.fromLocale(i && i.locale);
-/* Кнопка языка: code — en, ru, другой язык или «me» (глобус: язык самого нажавшего). make(язык) собирает сообщение.
-   Сообщение общее (в канале) и нажат глобус — человек получает личную копию, видную только ему, остальным ничего
-   не меняется; в личке, в личной копии и при выборе English/Русский — то же сообщение правится на месте. */
+/* Ответ на кнопку (новые сообщения кнопок языка не имеют; они остались у сообщений прежних версий): code — язык кнопки
+   (en, ru, другой) или «me» — язык самого нажавшего. make(язык) собирает сообщение. Кнопка «me» на общем сообщении в
+   канале даёт личную копию, видную только нажавшему; во всех остальных случаях сообщение правится на месте. Язык
+   в кнопках /servers и /account сохраняется: «Обновить» не меняет язык сообщения. */
 function langAnswer(i, code, make) {
   const me = code === 'me', lang = me ? userLang(i) : V.langOf(code);
   let msg;
@@ -855,9 +852,8 @@ function langAnswer(i, code, make) {
    fallback — текст на случай, если сообщение не соберётся или Discord его не возьмёт. */
 async function showCard(i, g, kind, data, fallback) {
   const rec = { k: kind, d: data, g: g ? g.id : null };
-  const id = keepCard(kind, data, rec.g);
   let msg = null;
-  try { msg = cardMessage(rec, id, userLang(i), true); }
+  try { msg = cardMessage(rec, userLang(i), true); }
   catch (e) { once('card:' + e.message, 'could not build the ' + kind + ' card, sending text instead:', e.message); }
   const r = msg ? await respond(i, { type: 4, data: msg }) : null;
   if (r && ok(r)) return r;
@@ -865,7 +861,7 @@ async function showCard(i, g, kind, data, fallback) {
   return textAnswer(i, fallback || card('Could not show this right now. Please try again.'));
 }
 
-// кнопка языка (флаг или глобус): та же карточка на выбранном языке
+// кнопки языка у сообщений прежних версий бота (новые такие кнопки не получают): та же карточка на выбранном языке, уже без кнопок
 function onCardLang(i, cid) {
   const m = /^cd:([0-9a-f]+):(me|[a-z]{2})(?::(?:dark|light))?$/.exec(cid);       // «:тема» — кнопки сообщений прежней версии
   if (!m || pressedTooFast(i)) return respond(i, { type: 6 });
@@ -874,7 +870,7 @@ function onCardLang(i, cid) {
   // справка, статистика и предупреждения — только владельцу (их и видит только он)
   const g = rec.g && guilds.get(rec.g);
   if (OWNER_ONLY.has(rec.k) && !(g && userOf(i) === g.owner)) return reply(i, card('Only the server owner can use this.'));
-  return langAnswer(i, m[2], lang => cardMessage(rec, m[1], lang, false));
+  return langAnswer(i, m[2], lang => cardMessage(rec, lang, false));
 }
 
 /* ---------- предупреждения ----------
@@ -993,7 +989,7 @@ const HELP = [
     'an @mention in your command pings the person before the bot can delete the message. A user ID works too (a mention as well, but it pings). ' +
     'A name with spaces goes in quotes: ' + PREFIX + 'mute "Big Bob" 1h.',
   '',
-  'For everyone: **/servers** - game rooms and players online right now, **/account nick** - a player profile.',
+  'For everyone: **/servers** - game rooms and players online right now, **/rules** - the server rules in your language, **/account nick** - a player profile.',
   'Only you can use these commands. The message with a command is removed at once.'
 ].join('\n');
 
@@ -1470,9 +1466,8 @@ async function finishMessage(i, msg) {
 }
 async function finishCard(i, g, kind, data, text) {
   const rec = { k: kind, d: Object.assign({ at: Date.now() }, data), g: g ? g.id : null };
-  const id = keepCard(kind, rec.d, rec.g);
   try {
-    const r = await finishMessage(i, cardMessage(rec, id, userLang(i), true));
+    const r = await finishMessage(i, cardMessage(rec, userLang(i), true));
     if (ok(r)) return r;
     log('Discord did not take the ' + kind + ' card:', r.status, JSON.stringify(r.body).slice(0, 200));
   } catch (e) { once('card:' + e.message, 'could not build the ' + kind + ' card, sending text instead:', e.message); }
@@ -1532,9 +1527,10 @@ const rulesPost = (title, text, o) => {
 };
 
 /* Правила сообщением (discordViews.js): стандартные — с наказанием у каждого
-   правила, свой текст владельца — как он написан. Под текстом флаги: English и
-   Русский (без русского текста флагов нет). */
-const CARD_DESIGN = 5;               // версия оформления ответов бота (1-3 — картинки, 4 — сообщения Discord, 5 — с глобусом «мой язык»): поменялось — пост правил один раз перерисуется
+   правила и на любом языке Discord (discordLang.js), свой текст владельца — как он
+   написан (только английский и русский). Кнопок под текстом нет. Пост в канале
+   один на всех — он английский; на своём языке каждый читает правила командой /rules. */
+const CARD_DESIGN = 6;               // версия оформления ответов бота (1-3 — картинки, 4 — сообщения Discord, 5 — с кнопками языка, 6 — без них): поменялось — пост правил один раз перерисуется
 const rulesAreStd = r => r.en === R.rulesText('en') && (!r.ru || r.ru === R.rulesText('ru'));
 function rulesData(g, r, lang) {
   const ru = lang === 'ru' && !!r.ru, std = rulesAreStd(r), title = r.title || RULES_TITLE;
@@ -1547,9 +1543,7 @@ function rulesMessage(g, r, lang) {
   lang = V.langOf(lang);
   const std = rulesAreStd(r);
   if ((lang === 'ru' && !r.ru) || (!std && lang !== 'en' && lang !== 'ru')) lang = 'en';
-  // свой текст владельца переводится только на русский (если он его написал): глобуса у него нет
-  const btns = V.langButtons(l => 'rules:' + l, lang, 'rules-lang').slice(0, std ? 3 : 2);
-  return V.message(V.view('rules', rulesData(g, r, lang), lang), r.ru ? [V.row(...btns)] : []);
+  return V.message(V.view('rules', rulesData(g, r, lang), lang), []);
 }
 
 /* Один пост: тот же канал — правим прежний на месте (картинку прежней версии
@@ -1773,6 +1767,7 @@ async function onInteraction(i) {
   if (rs) return rulesSwitch(i, i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value, rs[1]);
   if (i.type === 2 && i.data && i.data.name === 'servers') return onServers(i);
   if (i.type === 2 && i.data && i.data.name === 'account') return onAccount(i);
+  if (i.type === 2 && i.data && i.data.name === 'rules') return onRules(i);
   if (i.type === 4 && i.data && i.data.name === 'account') return onAccountHint(i);
   if (i.type === 3 && /^(sv|ac):/.test(cid)) return onCardButton(i, cid);
   if (i.type === 3 && cid.indexOf('cd:') === 0) return onCardLang(i, cid);
@@ -1836,14 +1831,13 @@ const pressedTooFast = i => {
   return now - last < PRESS_GAP_MS;
 };
 
-// /servers: кнопки — обновить, играть, язык (английский, русский, глобус); id «sv:r:язык»
+// /servers: кнопки — обновить и играть; язык сообщения (по Discord того, кто вызвал команду) хранится в id «sv:r:язык»
 function serversMessage(lang) {
   lang = V.langOf(lang);
-  const rows = [V.row(V.button(V.say(lang, 'refresh'), 'sv:r:' + lang), V.linkButton(V.say(lang, 'playNow'), SITE_URL),
-                      ...V.langButtons(l => 'sv:r:' + l, lang, 'sv-lang'))];
+  const rows = [V.row(V.button(V.say(lang, 'refresh'), 'sv:r:' + lang), V.linkButton(V.say(lang, 'playNow'), SITE_URL))];
   return V.message(V.view('servers', cards.serversData(), lang), rows);
 }
-// /account: вкладки (профиль, карты, друзья), период монет и очков (на профиле), ссылка, флаги; id «ac:вкладка:период:язык:ник»
+// /account: вкладки (профиль, карты, друзья), период монет и очков (на профиле), обновить, ссылка; id «ac:вкладка:период:язык:ник»
 const ACCOUNT_PAGES = [{ key: 'p', label: 'tabProfile' }, { key: 'm', label: 'tabMaps' }, { key: 'f', label: 'tabFriends' }];
 const PERIODS = [{ key: 'day', label: 'perToday' }, { key: 'week', label: 'perWeek' }, { key: 'all', label: 'perAll' }];
 function accountMessage(d, lang, page, period) {
@@ -1853,24 +1847,31 @@ function accountMessage(d, lang, page, period) {
   const id = (pg, per, l) => 'ac:' + pg + ':' + per + ':' + (l || lang) + ':' + d.name;
   const rows = [V.row(...V.tabs(ACCOUNT_PAGES.map(x => ({ label: V.say(lang, x.label), id: id(x.key, period), on: x.key === page })), 'ac-page'))];
   if (page === 'p') rows.push(V.row(...V.tabs(PERIODS.map(x => ({ label: V.say(lang, x.label), id: id('p', x.key), on: x.key === period })), 'ac-per')));
-  rows.push(V.row(V.button(V.say(lang, 'refresh'), id(page, period)), V.linkButton(V.say(lang, 'openProfile'), SITE_URL + '/users?name=' + encodeURIComponent(d.name)),
-                  ...V.langButtons(l => id(page, period, l), lang, 'ac-lang')));
+  rows.push(V.row(V.button(V.say(lang, 'refresh'), id(page, period)), V.linkButton(V.say(lang, 'openProfile'), SITE_URL + '/users?name=' + encodeURIComponent(d.name))));
   return V.message(V.view('account', d, lang, { page, period }), rows);
 }
 
 const sorry = i => reply(i, { content: 'Could not show this right now. Please try again in a moment.' });
-// ответ на команду: новое сообщение (type 4); не собралось или Discord не взял — короткий текст
-async function answerCommand(i, make, what) {
+// ответ на команду: новое сообщение (type 4; ephemeral — видное только вызвавшему); не собралось или Discord не взял — короткий текст
+async function answerCommand(i, make, what, ephemeral) {
   let msg;
   try { msg = make(); }
   catch (e) { once('view:' + what + e.message, 'could not build the ' + what + ' message:', e.message); return sorry(i); }
-  const r = await respond(i, { type: 4, data: msg });
+  const r = await respond(i, { type: 4, data: ephemeral ? Object.assign({}, msg, { flags: msg.flags | 64 }) : msg });
   if (r && !ok(r)) { log('Discord did not take the ' + what + ' message:', r.status, JSON.stringify(r.body).slice(0, 200)); return sorry(i); }
   return r;
 }
 
 function onServers(i) {
   return answerCommand(i, () => serversMessage(userLang(i)), 'servers');
+}
+// /rules: правила сервера на языке самого человека (по языку его Discord), видны только ему. Пост в канале один на всех и английский.
+function onRules(i) {
+  const g = i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value;
+  if (!g) return reply(i, { content: 'The server rules are not available right now.' });
+  const r = gstate(g.id).rules || {};
+  const full = { title: r.title || RULES_TITLE, en: r.en || R.rulesText('en'), ru: r.ru === undefined ? R.rulesText('ru') : r.ru, at: r.at };
+  return answerCommand(i, () => rulesMessage(g, full, userLang(i)), 'rules', true);
 }
 function onAccount(i) {
   const opt = ((i.data && i.data.options) || []).find(o => o.name === 'nick');
@@ -1906,19 +1907,21 @@ function onCardButton(i, cid) {
 const GLOBAL_COMMANDS = [
   { name: 'servers', type: 1, description: 'AIBROFIST game rooms and players online right now',
     contexts: [0, 1], integration_types: [0] },
+  { name: 'rules', type: 1, description: 'The server rules in your language',
+    contexts: [0, 1], integration_types: [0] },
   { name: 'account', type: 1, description: 'Show an AIBROFIST player profile',
     contexts: [0, 1], integration_types: [0],
     options: [{ type: 3, name: 'nick', description: 'Player nickname on aibrofist.online', required: true, autocomplete: true,
                 min_length: 1, max_length: 20 }] }
 ];
-const GLOBAL_VER = 'servers-account-1';
+const GLOBAL_VER = 'servers-rules-account-1';
 async function syncGlobalCommands() {
   if (state.fixes.globalCommands === GLOBAL_VER) return;
   if (!appId) await loadApp().catch(() => null);
   if (!appId) return;
   const r = await api('PUT', '/applications/' + appId + '/commands', GLOBAL_COMMANDS);
   if (ok(r)) { state.fixes.globalCommands = GLOBAL_VER; save(); }
-  else log('could not set the /servers and /account commands:', r.status);
+  else log('could not set the /servers, /rules and /account commands:', r.status);
 }
 
 /* Слэш-команд на сервере у бота нет — все команды секретные, с «!». Если
@@ -2397,6 +2400,7 @@ function start() {
   if (!token() || gw) return;
   log('starting the bot');
   loadState();
+  pruneCards();
   watchStart();
   checkCdn();                        // заранее знать, можно ли скачивать картинки с CDN Discord
   connect(ALL_INTENTS);

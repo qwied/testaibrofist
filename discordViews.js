@@ -3,8 +3,8 @@
 // сообщений): рамка-контейнер с цветной полоской, текст, аватарка участника
 // справа, кнопки. Минималистично и компактно: без логотипа, без шапок.
 // Язык — английский, русский или один из discordLang.js: его бот берёт у самого
-// Discord (язык человека в команде или нажатии). Кнопки English / Русский и
-// глобус «мой язык» меняют язык в том же сообщении. Кнопки у Discord бывают синие, серые, зелёные, красные и ссылки;
+// Discord (язык человека в команде или нажатии), кнопок выбора языка нет.
+// Кнопки у Discord бывают синие, серые, зелёные, красные и ссылки;
 // чёрных нет, ближе всего серая («secondary», тёмная в тёмной теме) — все
 // кнопки бота только такие, выбранная показывается неактивной.
 // Здесь только разметка: данные собирает бот (discordBot.js).
@@ -54,7 +54,7 @@ const S = {
     nothingWritten: 'Nothing written yet', todayWord: 'today', weekWord: 'this week', noMapsYet: 'No maps published yet', noFriendsYet: 'No friends yet',
     published: 'Published {d}', inGameTag: 'in game', likesN: 'likes {a} · dislikes {b}', onlineNowTag: 'online now', minAgo: '{n} min ago', hAgo: '{n} h ago',
     dAgo: '{n} days ago', longAgo: 'long ago', friendsL: 'Friends', mapsL: 'Maps', moreN2: '+ {n} more',
-    gRaceMode: 'Race', gHnsMode: 'Hide and Seek', userWord: 'Player', tipDark: '', myLang: 'My language', rulesTitle: 'AIBROFIST Server Rules'
+    gRaceMode: 'Race', gHnsMode: 'Hide and Seek', userWord: 'Player', tipDark: '', rulesTitle: 'AIBROFIST Server Rules'
   },
   ru: {
     moderation: 'Модерация', caseN: 'Случай {n}', warnings: 'Предупреждения', rulesTag: 'Правила сервера', helpTag: 'Команды владельца',
@@ -95,20 +95,21 @@ const S = {
     nothingWritten: 'Ничего не написано', todayWord: 'сегодня', weekWord: 'за неделю', noMapsYet: 'Карт пока нет', noFriendsYet: 'Друзей пока нет',
     published: 'Опубликована {d}', inGameTag: 'в игре', likesN: 'нравится {a} · не нравится {b}', onlineNowTag: 'в сети', minAgo: '{n} мин назад', hAgo: '{n} ч назад',
     dAgo: '{n} дн. назад', longAgo: 'давно', friendsL: 'Друзья', mapsL: 'Карты', moreN2: '+ ещё {n}',
-    gRaceMode: 'Гонка', gHnsMode: 'Прятки', userWord: 'Игрок', tipDark: '', myLang: 'Мой язык', rulesTitle: 'Правила сервера AIBROFIST'
+    gRaceMode: 'Гонка', gHnsMode: 'Прятки', userWord: 'Игрок', tipDark: '', rulesTitle: 'Правила сервера AIBROFIST'
   }
 };
 /* Язык ответа: en, ru или один из PACKS. Язык человека бот берёт у Discord (locale в нажатии или команде):
    ru-… -> ru, de -> de, pt-BR -> pt, zh-CN и zh-TW -> zh; чего нет в списке — английский. */
 const has = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);     // только свои ключи: не «constructor», не «__proto__»
 const langOf = l => l === 'ru' ? 'ru' : has(PACKS, l) ? l : 'en';
-const LOCALES = { 'es-es': 'es', 'es-419': 'es', 'pt-br': 'pt', 'zh-cn': 'zh', 'zh-tw': 'zh' };
+/* Языки Discord (locale): id, da, de, en-GB, en-US, es-ES, es-419, fr, hr, it, lt, hu, nl, no, pl, pt-BR, ro, fi, sv-SE, vi, tr, cs,
+   el, bg, ru, uk, hi, th, zh-CN, ja, zh-TW, ko — других он не присылает. Код языка — первые буквы до дефиса; исключения ниже:
+   китайский традиционный (zh-TW и Гонконг) — отдельный перевод «zt», норвежские nb и nn — «no». */
+const LOCALES = { 'zh-tw': 'zt', 'zh-hk': 'zt', 'zh-mo': 'zt', 'zh-hant': 'zt', nb: 'no', nn: 'no' };
 function fromLocale(locale) {
-  const l = String(locale || '').toLowerCase();
-  return langOf(has(LOCALES, l) ? LOCALES[l] : l.split('-')[0]);
+  const l = String(locale || '').toLowerCase().replace(/_/g, '-'), first = l.split('-')[0];
+  return langOf(has(LOCALES, l) ? LOCALES[l] : has(LOCALES, first) && first !== 'zh' ? LOCALES[first] : first);
 }
-const NAMES = { en: 'English', ru: 'Русский' };
-Object.keys(PACKS).forEach(k => { NAMES[k] = PACKS[k].name; });
 // строки языка; чего в переводе нет — английская (так владельцу достаются его английские карточки на любом языке)
 function say(lang, key, vars) {
   const l = langOf(lang), own = l === 'en' || l === 'ru' ? S[l] : PACKS[l].s;
@@ -122,10 +123,17 @@ const plural = (n, one, few, many) => {
   const a = Math.abs(n) % 100, b = a % 10;
   return a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many;
 };
-// слово в нужной форме по правилу языка: one — «1 / много», slavic — русское, pl — польское, none — без форм
+// слово в нужной форме по правилу языка: one — «1 / много», slavic — русское, pl — польское, cs — чешское, lt — литовское,
+// ro — румынское (после 19 — «de»), none — без форм
 function pluralForm(kind, n, forms) {
   if (kind === 'none') return forms[0];
   if (kind === 'one') return n === 1 ? forms[0] : forms[1];
+  if (kind === 'cs') return n === 1 ? forms[0] : n >= 2 && n <= 4 ? forms[1] : forms[2];
+  if (kind === 'lt') {
+    const a = n % 100, b = n % 10, teen = a >= 11 && a <= 19;
+    return b === 1 && !teen ? forms[0] : b >= 2 && b <= 9 && !teen ? forms[1] : forms[2];
+  }
+  if (kind === 'ro') return n === 1 ? forms[0] : n === 0 || (n % 100 >= 1 && n % 100 <= 19) ? forms[1] : forms[2];
   if (kind === 'pl') {
     const a = n % 100, b = n % 10;
     return n === 1 ? forms[0] : b >= 2 && b <= 4 && !(a >= 12 && a <= 14) ? forms[1] : forms[2];
@@ -252,20 +260,6 @@ function message(view, rows, o) {
 const button = (label, id, o) => Object.assign({ type: 2, style: 2, label: String(label).slice(0, 80), custom_id: id }, o || {});
 const linkButton = (label, url) => ({ type: 2, style: 5, label: String(label).slice(0, 80), url });
 const row = (...b) => ({ type: 1, components: b.filter(Boolean) });
-const LANGS = [{ key: 'en', label: 'English', flag: '🇬🇧' }, { key: 'ru', label: 'Русский', flag: '🇷🇺' }];
-/* Кнопки языка: English, Русский и глобус. idOf(язык) — id кнопки; у выбранного — current (постоянный), он неактивен.
-   Глобус — «мой язык»: id idOf('me'), бот сам берёт язык Discord того, кто нажал (так читают и публичные карточки,
-   и личные сообщения, где язык получателя заранее не известен). Показан другой язык (не en и не ru) — глобус
-   стоит выбранным и подписан названием этого языка. */
-const langButtons = (idOf, lang, current) => {
-  lang = langOf(lang);
-  const out = LANGS.map(l => l.key === lang
-    ? button(l.label, current, { emoji: { name: l.flag }, disabled: true })
-    : button(l.label, idOf(l.key), { emoji: { name: l.flag } }));
-  out.push(lang === 'en' || lang === 'ru' ? button(say(lang, 'myLang'), idOf('me'), { emoji: { name: '🌐' } })
-                                           : button(NAMES[lang], current, { emoji: { name: '🌐' }, disabled: true }));
-  return out;
-};
 // набор кнопок-вкладок: items [{ label, id, on }] — выбранная неактивная
 const tabs = (items, current) => items.map(x => x.on ? button(x.label, current, { disabled: true }) : button(x.label, x.id));
 
@@ -486,4 +480,4 @@ function view(kind, data, lang, extra) {
   return fn(data || {}, langOf(lang), extra && extra.page, extra && extra.period);
 }
 
-module.exports = { view, message, button, linkButton, row, langButtons, tabs, LANGS, NAMES, say, langOf, fromLocale, duration, date, dshort, ruleText, reasonText, esc, code, small, txt, SHORT, HELP, NOTE_RU, VIEWS };
+module.exports = { view, message, button, linkButton, row, tabs, say, langOf, fromLocale, duration, date, dshort, ruleText, reasonText, esc, code, small, txt, SHORT, HELP, NOTE_RU, VIEWS };

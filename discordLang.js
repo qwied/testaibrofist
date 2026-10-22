@@ -1,7 +1,8 @@
 // ============ ЯЗЫКИ ОТВЕТОВ БОТА (кроме английского и русского) ============
-// Язык человека бот берёт у самого Discord: в каждом нажатии и каждой команде
-// есть его язык (locale). Сюда вынесены готовые переводы всего, что видят
-// игроки: наказания и правила, /servers, /account. Что здесь не переведено
+// Язык человека бот берёт у самого Discord: в каждой команде и каждом нажатии
+// есть его язык (locale), а Discord знает ровно 32 locale (30 разных языков: en-US и en-GB — один
+// английский, es-ES и es-419 — один испанский) — все они здесь есть. Сюда вынесены
+// готовые переводы всего, что видят игроки: наказания и правила, /servers, /account, /rules. Что здесь не переведено
 // (команды владельца: справка, статистика, список предупреждений), показывается
 // по-английски. Переводы вшиты в код — никуда ничего не отправляется.
 // Подстановки в фигурных скобках ({n}, {d}...) переводить нельзя: их ставит бот.
@@ -19,7 +20,7 @@ const KEYS = ['warn', 'mute', 'ban', 'unmute', 'unban', 'unwarn', 'removed', 'ru
   'refresh', 'playNow', 'gRaceMode', 'gHnsMode', 'playersN', 'playerN', 'roomsN', 'roomN', 'upTo40',
   'openProfile', 'tabProfile', 'tabMaps', 'tabFriends', 'perToday', 'perWeek', 'perAll', 'joined', 'coinsL', 'raceScores', 'hsScores', 'noRank',
   'aboutL', 'nothingWritten', 'todayWord', 'weekWord', 'noMapsYet', 'noFriendsYet', 'published', 'inGameTag', 'likesN', 'onlineNowTag',
-  'minAgo', 'hAgo', 'dAgo', 'longAgo', 'friendsL', 'mapsL', 'moreN2', 'race', 'hns', 'myLang', 'rulesTitle'];
+  'minAgo', 'hAgo', 'dAgo', 'longAgo', 'friendsL', 'mapsL', 'moreN2', 'race', 'hns', 'rulesTitle'];
 // что нашёл автомод (kind находки)
 const NOTE_KEYS = ['flood', 'invite', 'nsfw-link', 'nsfw-image', 'slur', 'selfharm', 'scam-text', 'everyone-link', 'badfile', 'scam', 'grabber', 'cheat',
   'custom', 'native-word', 'warns'];
@@ -47,8 +48,7 @@ const PACKS = {
       joined: 'Se unió el {d}', coinsL: 'Monedas', raceScores: 'Puntos de carrera', hsScores: 'Puntos de escondite', noRank: 'sin rango', aboutL: 'Sobre mí',
       nothingWritten: 'Aún no hay nada escrito', todayWord: 'hoy', weekWord: 'esta semana', noMapsYet: 'Aún no hay mapas publicados', noFriendsYet: 'Aún no hay amigos',
       published: 'Publicado el {d}', inGameTag: 'en el juego', likesN: 'me gusta {a} · no me gusta {b}', onlineNowTag: 'en línea ahora', minAgo: 'hace {n} min',
-      hAgo: 'hace {n} h', dAgo: 'hace {n} días', longAgo: 'hace mucho', friendsL: 'Amigos', mapsL: 'Mapas', moreN2: '+ {n} más', race: 'Carrera', hns: 'Escondite',
-      myLang: 'Mi idioma', rulesTitle: 'Reglas del servidor AIBROFIST'
+      hAgo: 'hace {n} h', dAgo: 'hace {n} días', longAgo: 'hace mucho', friendsL: 'Amigos', mapsL: 'Mapas', moreN2: '+ {n} más', race: 'Carrera', hns: 'Escondite', rulesTitle: 'Reglas del servidor AIBROFIST'
     },
     rules: ['Sin spam', 'Sin invitaciones a otros servidores de Discord', 'Sin contenido para adultos', 'Sin discurso de odio', 'Sin estafas ni enlaces peligrosos',
             'No vender cuentas ni monedas por dinero real', 'Sin direcciones IP de otras personas'],
@@ -84,8 +84,7 @@ const PACKS = {
       joined: 'Entrou em {d}', coinsL: 'Moedas', raceScores: 'Pontos de corrida', hsScores: 'Pontos de esconde-esconde', noRank: 'sem rank', aboutL: 'Sobre',
       nothingWritten: 'Nada escrito ainda', todayWord: 'hoje', weekWord: 'esta semana', noMapsYet: 'Nenhum mapa publicado ainda', noFriendsYet: 'Nenhum amigo ainda',
       published: 'Publicado em {d}', inGameTag: 'no jogo', likesN: 'curtidas {a} · descurtidas {b}', onlineNowTag: 'online agora', minAgo: 'há {n} min',
-      hAgo: 'há {n} h', dAgo: 'há {n} dias', longAgo: 'há muito tempo', friendsL: 'Amigos', mapsL: 'Mapas', moreN2: '+ {n}', race: 'Corrida', hns: 'Esconde-esconde',
-      myLang: 'Meu idioma', rulesTitle: 'Regras do servidor AIBROFIST'
+      hAgo: 'há {n} h', dAgo: 'há {n} dias', longAgo: 'há muito tempo', friendsL: 'Amigos', mapsL: 'Mapas', moreN2: '+ {n}', race: 'Corrida', hns: 'Esconde-esconde', rulesTitle: 'Regras do servidor AIBROFIST'
     },
     rules: ['Sem spam', 'Sem convites para outros servidores do Discord', 'Sem conteúdo adulto', 'Sem discurso de ódio', 'Sem golpes nem links perigosos',
             'Não venda contas nem moedas por dinheiro real', 'Sem endereços IP de outras pessoas'],
@@ -123,7 +122,7 @@ const PACKS = {
       nothingWritten: 'Noch nichts geschrieben', todayWord: 'heute', weekWord: 'diese Woche', noMapsYet: 'Noch keine Karten veröffentlicht', noFriendsYet: 'Noch keine Freunde',
       published: 'Veröffentlicht am {d}', inGameTag: 'im Spiel', likesN: 'Likes {a} · Dislikes {b}', onlineNowTag: 'gerade online', minAgo: 'vor {n} Min.',
       hAgo: 'vor {n} Std.', dAgo: 'vor {n} Tagen', longAgo: 'vor langer Zeit', friendsL: 'Freunde', mapsL: 'Karten', moreN2: '+ {n} weitere', race: 'Rennen',
-      hns: 'Verstecken', myLang: 'Meine Sprache', rulesTitle: 'Serverregeln von AIBROFIST'
+      hns: 'Verstecken', rulesTitle: 'Serverregeln von AIBROFIST'
     },
     rules: ['Kein Spam', 'Keine Einladungen zu anderen Discord-Servern', 'Keine Inhalte für Erwachsene', 'Keine Hassrede', 'Kein Betrug und keine gefährlichen Links',
             'Kein Verkauf von Konten oder Münzen für echtes Geld', 'Keine fremden IP-Adressen'],
@@ -160,7 +159,7 @@ const PACKS = {
       nothingWritten: 'Rien d’écrit pour l’instant', todayWord: 'aujourd’hui', weekWord: 'cette semaine', noMapsYet: 'Aucune carte publiée', noFriendsYet: 'Pas encore d’amis',
       published: 'Publiée le {d}', inGameTag: 'en jeu', likesN: 'j’aime {a} · je n’aime pas {b}', onlineNowTag: 'en ligne', minAgo: 'il y a {n} min',
       hAgo: 'il y a {n} h', dAgo: 'il y a {n} j', longAgo: 'il y a longtemps', friendsL: 'Amis', mapsL: 'Cartes', moreN2: '+ {n} de plus', race: 'Course',
-      hns: 'Cache-cache', myLang: 'Ma langue', rulesTitle: 'Règles du serveur AIBROFIST'
+      hns: 'Cache-cache', rulesTitle: 'Règles du serveur AIBROFIST'
     },
     rules: ['Pas de spam', 'Pas d’invitations vers d’autres serveurs Discord', 'Pas de contenu adulte', 'Pas de discours haineux', 'Pas d’arnaques ni de liens dangereux',
             'Pas de vente de comptes ou de pièces contre de l’argent réel', 'Pas d’adresses IP d’autres personnes'],
@@ -197,7 +196,7 @@ const PACKS = {
       nothingWritten: 'Henüz bir şey yazılmamış', todayWord: 'bugün', weekWord: 'bu hafta', noMapsYet: 'Henüz yayınlanmış harita yok', noFriendsYet: 'Henüz arkadaş yok',
       published: 'Yayın: {d}', inGameTag: 'oyunda', likesN: 'beğeni {a} · beğenmeme {b}', onlineNowTag: 'şu an çevrimiçi', minAgo: '{n} dk önce',
       hAgo: '{n} sa önce', dAgo: '{n} gün önce', longAgo: 'uzun zaman önce', friendsL: 'Arkadaşlar', mapsL: 'Haritalar', moreN2: '+ {n} daha', race: 'Yarış',
-      hns: 'Saklambaç', myLang: 'Dilim', rulesTitle: 'AIBROFIST Sunucu Kuralları'
+      hns: 'Saklambaç', rulesTitle: 'AIBROFIST Sunucu Kuralları'
     },
     rules: ['Spam yok', 'Başka Discord sunucularına davet yok', 'Yetişkin içerik yok', 'Nefret söylemi yok', 'Dolandırıcılık ve tehlikeli bağlantı yok',
             'Hesap veya jetonları gerçek paraya satmak yasak', 'Başkalarının IP adresleri yok'],
@@ -219,7 +218,7 @@ const PACKS = {
       removed: 'Wiadomość usunięta', rule: 'Zasada', reason: 'Powód', other: 'Inne', customWords: 'Słowa zakazane na tym serwerze',
       nativeWord: 'Reguła AutoMod serwera', noReason: 'Nie podano powodu', by: 'Wystawione przez {who}', byBot: 'Automatycznie, przez bota', caseN: 'Sprawa {n}',
       ofLimit: '{n} z {limit}', forever: 'Na zawsze', permanent: 'Ban permanentny', nextMute: 'Przy {limit} ostrzeżeniach w ciągu 30 dni: wyciszenie na 1 godzinę.',
-      escalated: 'Ostrzeżenie {n} z {n}: wyciszenie na {d}. Licznik zaczyna się od nowa.', escalatedBlocked: 'Ostrzeżenie {n} z {n}. Licznik zaczyna się od nowa.',
+      escalated: 'Ostrzeżenie {n} z {n}. Wyciszenie: {d}. Licznik zaczyna się od nowa.', escalatedBlocked: 'Ostrzeżenie {n} z {n}. Licznik zaczyna się od nowa.',
       tally: 'Licznik', untilLabel: 'Do', lifts: 'Kończy się', banWord: 'ban', status: 'Status', notApplied: 'Nie zastosowano: {why}',
       ownerBlocked: 'właściciela serwera nie można wyciszyć ani zbanować', adminBlocked: 'administratorów nie można wyciszyć',
       failed: 'Niepowodzenie: bot nie ma uprawnień', canTalk: 'Może znowu pisać', backIn: 'Może znowu dołączyć do serwera', clean: 'Czysta historia',
@@ -234,7 +233,7 @@ const PACKS = {
       nothingWritten: 'Jeszcze nic nie napisano', todayWord: 'dziś', weekWord: 'w tym tygodniu', noMapsYet: 'Brak opublikowanych map', noFriendsYet: 'Brak znajomych',
       published: 'Opublikowano {d}', inGameTag: 'w grze', likesN: 'polubienia {a} · niepolubienia {b}', onlineNowTag: 'teraz online', minAgo: '{n} min temu',
       hAgo: '{n} godz. temu', dAgo: '{n} dni temu', longAgo: 'dawno temu', friendsL: 'Znajomi', mapsL: 'Mapy', moreN2: '+ {n} więcej', race: 'Wyścig',
-      hns: 'Chowany', myLang: 'Mój język', rulesTitle: 'Regulamin serwera AIBROFIST'
+      hns: 'Chowany', rulesTitle: 'Regulamin serwera AIBROFIST'
     },
     rules: ['Zakaz spamu', 'Zakaz zaproszeń na inne serwery Discord', 'Zakaz treści dla dorosłych', 'Zakaz mowy nienawiści', 'Zakaz oszustw i niebezpiecznych linków',
             'Zakaz sprzedaży kont i monet za prawdziwe pieniądze', 'Zakaz podawania cudzych adresów IP'],
@@ -256,7 +255,7 @@ const PACKS = {
       removed: 'Повідомлення видалено', rule: 'Правило', reason: 'Причина', other: 'Інше', customWords: 'Слова, заборонені на сервері',
       nativeWord: 'Правило AutoMod сервера', noReason: 'Причину не вказано', by: 'Видав {who}', byBot: 'Автоматично, ботом', caseN: 'Випадок {n}',
       ofLimit: '{n} з {limit}', forever: 'Назавжди', permanent: 'Бан назавжди', nextMute: '{limit} попередження за 30 днів — м’ют на 1 годину.',
-      escalated: 'Попередження {n} з {n}: м’ют на {d}. Лічильник починається заново.', escalatedBlocked: 'Попередження {n} з {n}. Лічильник починається заново.',
+      escalated: 'Попередження {n} з {n}. М’ют: {d}. Лічильник починається заново.', escalatedBlocked: 'Попередження {n} з {n}. Лічильник починається заново.',
       tally: 'Лічильник', untilLabel: 'До', lifts: 'Закінчиться', banWord: 'бан', status: 'Статус', notApplied: 'Не застосовано: {why}',
       ownerBlocked: 'власника сервера не можна замʼютити чи забанити', adminBlocked: 'адміністраторів не можна замʼютити',
       failed: 'Не вийшло: у бота немає прав', canTalk: 'Знову може писати', backIn: 'Знову може зайти на сервер', clean: 'Тепер без попереджень',
@@ -271,7 +270,7 @@ const PACKS = {
       nothingWritten: 'Нічого не написано', todayWord: 'сьогодні', weekWord: 'за тиждень', noMapsYet: 'Мап поки немає', noFriendsYet: 'Друзів поки немає',
       published: 'Опубліковано {d}', inGameTag: 'у грі', likesN: 'подобається {a} · не подобається {b}', onlineNowTag: 'зараз онлайн', minAgo: '{n} хв тому',
       hAgo: '{n} год тому', dAgo: '{n} дн. тому', longAgo: 'давно', friendsL: 'Друзі', mapsL: 'Мапи', moreN2: '+ ще {n}', race: 'Перегони',
-      hns: 'Хованки', myLang: 'Моя мова', rulesTitle: 'Правила сервера AIBROFIST'
+      hns: 'Хованки', rulesTitle: 'Правила сервера AIBROFIST'
     },
     rules: ['Без спаму', 'Без запрошень на інші Discord-сервери', 'Без контенту 18+', 'Без мови ворожнечі', 'Без шахрайства та небезпечних посилань',
             'Без продажу акаунтів і монет за реальні гроші', 'Без чужих IP-адрес'],
@@ -308,7 +307,7 @@ const PACKS = {
       nothingWritten: 'Ancora nulla di scritto', todayWord: 'oggi', weekWord: 'questa settimana', noMapsYet: 'Nessuna mappa pubblicata', noFriendsYet: 'Ancora nessun amico',
       published: 'Pubblicata il {d}', inGameTag: 'in gioco', likesN: 'mi piace {a} · non mi piace {b}', onlineNowTag: 'online ora', minAgo: '{n} min fa',
       hAgo: '{n} h fa', dAgo: '{n} giorni fa', longAgo: 'tempo fa', friendsL: 'Amici', mapsL: 'Mappe', moreN2: '+ altri {n}', race: 'Corsa',
-      hns: 'Nascondino', myLang: 'La mia lingua', rulesTitle: 'Regole del server AIBROFIST'
+      hns: 'Nascondino', rulesTitle: 'Regole del server AIBROFIST'
     },
     rules: ['Niente spam', 'Niente inviti ad altri server Discord', 'Niente contenuti per adulti', 'Niente discorsi d’odio', 'Niente truffe o link pericolosi',
             'Vietato vendere account o monete per soldi veri', 'Niente indirizzi IP di altre persone'],
@@ -345,7 +344,7 @@ const PACKS = {
       nothingWritten: '还没有填写', todayWord: '今日', weekWord: '本周', noMapsYet: '还没有发布地图', noFriendsYet: '还没有好友',
       published: '发布于 {d}', inGameTag: '已入游戏', likesN: '点赞 {a} · 点踩 {b}', onlineNowTag: '在线', minAgo: '{n} 分钟前',
       hAgo: '{n} 小时前', dAgo: '{n} 天前', longAgo: '很久以前', friendsL: '好友', mapsL: '地图', moreN2: '另有 {n} 个', race: '竞速',
-      hns: '捉迷藏', myLang: '我的语言', rulesTitle: 'AIBROFIST 服务器规则'
+      hns: '捉迷藏', rulesTitle: 'AIBROFIST 服务器规则'
     },
     rules: ['禁止刷屏', '禁止邀请到其他 Discord 服务器', '禁止成人内容', '禁止仇恨言论', '禁止诈骗和危险链接', '禁止用真实货币出售账号或金币', '禁止发布他人的 IP 地址'],
     short: ['2 秒内发送超过 3 条消息。第 5 次将被禁言。', '消息会被删除，并收到一次警告。', '图片、链接和文字。', '辱骂，以及叫别人伤害自己。',
@@ -380,7 +379,7 @@ const PACKS = {
       nothingWritten: 'まだ何も書かれていません', todayWord: '今日', weekWord: '今週', noMapsYet: '公開されたマップはまだありません', noFriendsYet: 'フレンドはまだいません',
       published: '{d} 公開', inGameTag: 'ゲーム内', likesN: '高評価 {a} · 低評価 {b}', onlineNowTag: 'オンライン', minAgo: '{n}分前',
       hAgo: '{n}時間前', dAgo: '{n}日前', longAgo: 'ずっと前', friendsL: 'フレンド', mapsL: 'マップ', moreN2: 'ほか {n}', race: 'レース',
-      hns: 'かくれんぼ', myLang: '自分の言語', rulesTitle: 'AIBROFIST サーバールール'
+      hns: 'かくれんぼ', rulesTitle: 'AIBROFIST サーバールール'
     },
     rules: ['スパム禁止', '他のDiscordサーバーへの招待禁止', 'アダルトコンテンツ禁止', 'ヘイトスピーチ禁止', '詐欺・危険なリンク禁止', 'アカウントやコインの現金取引禁止',
             '他人のIPアドレスの投稿禁止'],
@@ -391,6 +390,668 @@ const PACKS = {
              badfile: '実行ファイル', scam: '詐欺・フィッシングのリンク', grabber: 'IPアドレスを盗むリンク', cheat: '現金での取引',
              custom: 'このサーバーの禁止ワード', 'native-word': 'サーバーのAutoModルールでブロック', warns: '30日間で警告3回' },
     units: { plural: 'none', sep: '', min: ['分'], hour: ['時間'], day: ['日'] }
+  },
+
+  /* ---------- Bahasa Indonesia ---------- */
+  id: {
+    name: 'Bahasa Indonesia', locale: 'id',
+    s: {
+      warn: 'Peringatan', mute: 'Dibisukan', ban: 'Diblokir', unmute: 'Bisu dicabut', unban: 'Blokir dicabut', unwarn: 'Peringatan dihapus',
+      removed: 'Pesan dihapus', rule: 'Aturan', reason: 'Alasan', other: 'Lainnya', customWords: 'Kata terlarang di server ini',
+      nativeWord: 'Aturan AutoMod server', noReason: 'Tanpa alasan', by: 'Diberikan oleh {who}', byBot: 'Otomatis, oleh bot', caseN: 'Kasus {n}',
+      ofLimit: '{n} dari {limit}', forever: 'Selamanya', permanent: 'Blokir permanen', nextMute: '{limit} peringatan dalam 30 hari = bisu 1 jam.',
+      escalated: 'Peringatan {n} dari {n}: dibisukan {d}. Hitungan mulai dari awal.', escalatedBlocked: 'Peringatan {n} dari {n}. Hitungan mulai dari awal.',
+      tally: 'Hitungan', untilLabel: 'Sampai', lifts: 'Berakhir', banWord: 'blokir', status: 'Status', notApplied: 'Tidak diterapkan: {why}',
+      ownerBlocked: 'pemilik server tidak bisa dibisukan atau diblokir', adminBlocked: 'admin tidak bisa dibisukan',
+      failed: 'Gagal: bot tidak punya izin', canTalk: 'Bisa bicara lagi', backIn: 'Bisa bergabung lagi ke server', clean: 'Riwayat bersih',
+      mistake: 'Merasa bot salah? Hubungi pemilik.', warnsAddShort: 'Peringatan menumpuk: 3 dalam 30 hari = bisu 1 jam.',
+      updated: 'Diperbarui {d}', actNone: 'DIHAPUS', actWarn: 'PERINGATAN', actMute: 'BISU {d}', actBan: 'BLOKIR {d}',
+      serversTitle: 'Server', onlineN: '{n} online', noRoomsNow: 'Belum ada ruangan. Tekan Main dan ruangan baru akan dibuat.', stOpen: 'terbuka', stFull: 'penuh',
+      stFreeing: 'ada slot kosong sebentar lagi', phHiding: 'Bersembunyi', phHunt: 'Berburu', phStory: 'Cerita selesai', leftT: 'sisa {t}', mapN: 'peta {m}',
+      moreRooms: '+ {n} ruangan lagi', refresh: 'Segarkan', playNow: 'Main', gRaceMode: 'Balapan', gHnsMode: 'Petak Umpet', playersN: '{n} pemain',
+      playerN: '1 pemain', roomsN: '{n} ruangan', roomN: '1 ruangan', upTo40: 'hingga 40 pemain per ruangan',
+      openProfile: 'Buka profil', tabProfile: 'Profil', tabMaps: 'Peta', tabFriends: 'Teman', perToday: 'Hari ini', perWeek: 'Minggu ini', perAll: 'Semua waktu',
+      joined: 'Bergabung {d}', coinsL: 'Koin', raceScores: 'Skor balapan', hsScores: 'Skor petak umpet', noRank: 'belum ada peringkat', aboutL: 'Tentang',
+      nothingWritten: 'Belum ada tulisan', todayWord: 'hari ini', weekWord: 'minggu ini', noMapsYet: 'Belum ada peta yang diterbitkan', noFriendsYet: 'Belum ada teman',
+      published: 'Diterbitkan {d}', inGameTag: 'di game', likesN: 'suka {a} · tidak suka {b}', onlineNowTag: 'online sekarang', minAgo: '{n} mnt lalu',
+      hAgo: '{n} jam lalu', dAgo: '{n} hari lalu', longAgo: 'lama sekali', friendsL: 'Teman', mapsL: 'Peta', moreN2: '+ {n} lagi', race: 'Balapan', hns: 'Petak Umpet',
+      rulesTitle: 'Aturan Server AIBROFIST'
+    },
+    rules: ['Dilarang spam', 'Dilarang mengundang ke server Discord lain', 'Dilarang konten dewasa', 'Dilarang ujaran kebencian', 'Dilarang penipuan dan tautan berbahaya',
+            'Dilarang menjual akun atau koin dengan uang asli', 'Dilarang membagikan alamat IP orang lain'],
+    short: ['Lebih dari 3 pesan dalam 2 detik. Dibisukan pada kali ke-5.', 'Pesan dihapus dan kamu mendapat peringatan.', 'Gambar, tautan, dan teks.',
+            'Hinaan dan menyuruh orang menyakiti diri sendiri.', 'Phishing, Nitro palsu, pencuri IP, .exe. Satu-satunya blokir.',
+            'Pesan dihapus dan kamu mendapat peringatan.', 'Pesan dihapus, tanpa hukuman.'],
+    notes: { flood: 'Lebih dari 3 pesan dalam 2 detik', invite: 'Undangan ke server lain', 'nsfw-link': 'Tautan ke situs 18+', 'nsfw-image': 'Gambar 18+',
+             slur: 'Hinaan atau ujaran kebencian', selfharm: 'Ajakan menyakiti diri sendiri', 'scam-text': 'Pesan penipuan yang dikenal', 'everyone-link': 'Mention massal dengan tautan',
+             badfile: 'File yang bisa dijalankan', scam: 'Tautan penipuan atau phishing', grabber: 'Tautan pencuri alamat IP', cheat: 'Jual-beli dengan uang asli',
+             custom: 'Kata terlarang di server ini', 'native-word': 'Diblokir oleh aturan AutoMod server', warns: '3 peringatan dalam 30 hari' },
+    units: { plural: 'none', min: ['menit'], hour: ['jam'], day: ['hari'] }
+  },
+
+  /* ---------- dansk ---------- */
+  da: {
+    name: 'Dansk', locale: 'da',
+    s: {
+      warn: 'Advarsel', mute: 'Gjort tavs', ban: 'Udelukket', unmute: 'Tavshed ophævet', unban: 'Udelukkelse ophævet', unwarn: 'Advarsler fjernet',
+      removed: 'Besked fjernet', rule: 'Regel', reason: 'Årsag', other: 'Andet', customWords: 'Ord, der er forbudt på denne server',
+      nativeWord: 'Serverens AutoMod-regel', noReason: 'Ingen årsag angivet', by: 'Givet af {who}', byBot: 'Automatisk, af botten', caseN: 'Sag {n}',
+      ofLimit: '{n} af {limit}', forever: 'For altid', permanent: 'Permanent udelukkelse', nextMute: 'Ved {limit} advarsler inden for 30 dage: 1 times tavshed.',
+      escalated: 'Advarsel {n} af {n}: gjort tavs i {d}. Tælleren starter forfra.', escalatedBlocked: 'Advarsel {n} af {n}. Tælleren starter forfra.',
+      tally: 'Tæller', untilLabel: 'Til', lifts: 'Slutter', banWord: 'udelukkelse', status: 'Status', notApplied: 'Ikke udført: {why}',
+      ownerBlocked: 'serverens ejer kan ikke gøres tavs eller udelukkes', adminBlocked: 'administratorer kan ikke gøres tavse',
+      failed: 'Mislykkedes: botten har ikke tilladelse', canTalk: 'Kan skrive igen', backIn: 'Kan melde sig ind på serveren igen', clean: 'Rent register nu',
+      mistake: 'Tror du, botten tog fejl? Skriv til ejeren.', warnsAddShort: 'Advarsler lægges sammen: 3 inden for 30 dage giver 1 times tavshed.',
+      updated: 'Opdateret {d}', actNone: 'FJERNET', actWarn: 'ADVARSEL', actMute: 'TAVS {d}', actBan: 'UDELUKKET {d}',
+      serversTitle: 'Servere', onlineN: '{n} online', noRoomsNow: 'Ingen rum lige nu. Tryk Spil, så åbnes et nyt.', stOpen: 'åbent', stFull: 'fuldt',
+      stFreeing: 'en plads bliver ledig', phHiding: 'Gemmer sig', phHunt: 'Jagt', phStory: 'Historien er slut', leftT: '{t} tilbage', mapN: 'bane {m}',
+      moreRooms: '+ {n} rum mere', refresh: 'Opdater', playNow: 'Spil', gRaceMode: 'Løb', gHnsMode: 'Skjul og find', playersN: '{n} spillere',
+      playerN: '1 spiller', roomsN: '{n} rum', roomN: '1 rum', upTo40: 'op til 40 spillere pr. rum',
+      openProfile: 'Åbn profil', tabProfile: 'Profil', tabMaps: 'Baner', tabFriends: 'Venner', perToday: 'I dag', perWeek: 'Denne uge', perAll: 'Hele tiden',
+      joined: 'Oprettet {d}', coinsL: 'Mønter', raceScores: 'Løbspoint', hsScores: 'Skjul-og-find-point', noRank: 'ingen rang', aboutL: 'Om',
+      nothingWritten: 'Intet skrevet endnu', todayWord: 'i dag', weekWord: 'denne uge', noMapsYet: 'Ingen baner udgivet endnu', noFriendsYet: 'Ingen venner endnu',
+      published: 'Udgivet {d}', inGameTag: 'i spillet', likesN: 'synes godt om {a} · synes ikke om {b}', onlineNowTag: 'online nu', minAgo: '{n} min. siden',
+      hAgo: '{n} t. siden', dAgo: '{n} dage siden', longAgo: 'for længe siden', friendsL: 'Venner', mapsL: 'Baner', moreN2: '+ {n} mere', race: 'Løb',
+      hns: 'Skjul og find', rulesTitle: 'AIBROFIST-serverregler'
+    },
+    rules: ['Ingen spam', 'Ingen invitationer til andre Discord-servere', 'Intet indhold for voksne', 'Ingen hadtale', 'Ingen svindel eller farlige links',
+            'Ingen salg af konti eller mønter for rigtige penge', 'Ingen andres IP-adresser'],
+    short: ['Mere end 3 beskeder på 2 sekunder. Tavshed 5. gang.', 'Beskeden slettes, og du får en advarsel.', 'Billeder, links og tekst.',
+            'Grove ord og at sige til nogen, at de skal gøre skade på sig selv.', 'Phishing, falsk Nitro, IP-fangere, .exe. Den eneste udelukkelse.',
+            'Beskeden slettes, og du får en advarsel.', 'Beskeden slettes, ingen straf.'],
+    notes: { flood: 'Mere end 3 beskeder på 2 sekunder', invite: 'Invitation til en anden server', 'nsfw-link': 'Link til et 18+-websted', 'nsfw-image': '18+-billede',
+             slur: 'Grove ord eller hadtale', selfharm: 'Opfordring til selvskade', 'scam-text': 'Kendt svindelbesked', 'everyone-link': 'Masseomtale med link',
+             badfile: 'Kørbar fil', scam: 'Svindel- eller phishing-link', grabber: 'Link, der stjæler IP-adressen', cheat: 'Salg for rigtige penge',
+             custom: 'Forbudt ord på denne server', 'native-word': 'Blokeret af serverens AutoMod-regel', warns: '3 advarsler på 30 dage' },
+    units: { plural: 'one', min: ['minut', 'minutter'], hour: ['time', 'timer'], day: ['dag', 'dage'] }
+  },
+
+  /* ---------- hrvatski ---------- */
+  hr: {
+    name: 'Hrvatski', locale: 'hr',
+    s: {
+      warn: 'Upozorenje', mute: 'Utišan', ban: 'Zabranjen', unmute: 'Utišavanje ukinuto', unban: 'Zabrana ukinuta', unwarn: 'Upozorenja uklonjena',
+      removed: 'Poruka uklonjena', rule: 'Pravilo', reason: 'Razlog', other: 'Ostalo', customWords: 'Riječi zabranjene na ovom poslužitelju',
+      nativeWord: 'AutoMod pravilo poslužitelja', noReason: 'Razlog nije naveden', by: 'Izdano od: {who}', byBot: 'Automatski, od bota', caseN: 'Slučaj {n}',
+      ofLimit: '{n} od {limit}', forever: 'Zauvijek', permanent: 'Trajna zabrana', nextMute: 'Uz {limit} upozorenja u 30 dana slijedi utišavanje na 1 sat.',
+      escalated: 'Upozorenje {n} od {n}: utišan na {d}. Brojanje počinje ispočetka.', escalatedBlocked: 'Upozorenje {n} od {n}. Brojanje počinje ispočetka.',
+      tally: 'Brojač', untilLabel: 'Do', lifts: 'Završava', banWord: 'zabrana', status: 'Status', notApplied: 'Nije primijenjeno: {why}',
+      ownerBlocked: 'vlasnika poslužitelja nije moguće utišati ni zabraniti', adminBlocked: 'administratore nije moguće utišati',
+      failed: 'Nije uspjelo: bot nema dopuštenje', canTalk: 'Opet može pisati', backIn: 'Opet se može pridružiti poslužitelju', clean: 'Sada čista evidencija',
+      mistake: 'Mislite da je bot pogriješio? Javite se vlasniku.', warnsAddShort: 'Upozorenja se zbrajaju: 3 u 30 dana daju utišavanje na 1 sat.',
+      updated: 'Ažurirano {d}', actNone: 'UKLONJENO', actWarn: 'UPOZORENJE', actMute: 'UTIŠAN {d}', actBan: 'ZABRANA {d}',
+      serversTitle: 'Poslužitelji', onlineN: '{n} online', noRoomsNow: 'Trenutno nema soba. Pritisnite Igraj i otvorit će se nova.', stOpen: 'otvorena', stFull: 'puna',
+      stFreeing: 'oslobađa se mjesto', phHiding: 'Skrivanje', phHunt: 'Lov', phStory: 'Priča završena', leftT: 'preostalo {t}', mapN: 'karta {m}',
+      moreRooms: '+ još soba: {n}', refresh: 'Osvježi', playNow: 'Igraj', gRaceMode: 'Utrka', gHnsMode: 'Skrivača', playersN: 'igrača: {n}',
+      playerN: '1 igrač', roomsN: 'soba: {n}', roomN: '1 soba', upTo40: 'do 40 igrača u svakoj',
+      openProfile: 'Otvori profil', tabProfile: 'Profil', tabMaps: 'Karte', tabFriends: 'Prijatelji', perToday: 'Danas', perWeek: 'Ovaj tjedan', perAll: 'Ukupno',
+      joined: 'Pridružen {d}', coinsL: 'Novčići', raceScores: 'Bodovi u utrkama', hsScores: 'Bodovi u skrivača', noRank: 'bez ranga', aboutL: 'O meni',
+      nothingWritten: 'Još ništa nije napisano', todayWord: 'danas', weekWord: 'ovaj tjedan', noMapsYet: 'Još nema objavljenih karata', noFriendsYet: 'Još nema prijatelja',
+      published: 'Objavljeno {d}', inGameTag: 'u igri', likesN: 'sviđa mi se {a} · ne sviđa mi se {b}', onlineNowTag: 'trenutno online', minAgo: 'prije {n} min',
+      hAgo: 'prije {n} h', dAgo: 'prije {n} dana', longAgo: 'davno', friendsL: 'Prijatelji', mapsL: 'Karte', moreN2: '+ još {n}', race: 'Utrka', hns: 'Skrivača',
+      rulesTitle: 'Pravila poslužitelja AIBROFIST'
+    },
+    rules: ['Bez spama', 'Bez pozivnica na druge Discord poslužitelje', 'Bez sadržaja za odrasle', 'Bez govora mržnje', 'Bez prijevara i opasnih poveznica',
+            'Zabranjena prodaja računa ili novčića za pravi novac', 'Bez tuđih IP adresa'],
+    short: ['Više od 3 poruke u 2 sekunde. Utišavanje 5. put.', 'Poruka se briše i dobivate upozorenje.', 'Slike, poveznice i tekst.',
+            'Uvrede i poticanje drugih da si naude.', 'Phishing, lažni Nitro, hvatači IP-a, .exe. Jedina zabrana.',
+            'Poruka se briše i dobivate upozorenje.', 'Poruka se briše, bez kazne.'],
+    notes: { flood: 'Više od 3 poruke u 2 sekunde', invite: 'Pozivnica na drugi poslužitelj', 'nsfw-link': 'Poveznica na stranicu 18+', 'nsfw-image': 'Slika 18+',
+             slur: 'Uvreda ili govor mržnje', selfharm: 'Poticanje na samoozljeđivanje', 'scam-text': 'Poznata prijevarna poruka', 'everyone-link': 'Masovno označavanje s poveznicom',
+             badfile: 'Izvršna datoteka', scam: 'Prijevarna ili phishing poveznica', grabber: 'Poveznica koja krade IP adresu', cheat: 'Prodaja za pravi novac',
+             custom: 'Riječ zabranjena na ovom poslužitelju', 'native-word': 'Blokirano AutoMod pravilom poslužitelja', warns: '3 upozorenja u 30 dana' },
+    units: { plural: 'slavic', min: ['minuta', 'minute', 'minuta'], hour: ['sat', 'sata', 'sati'], day: ['dan', 'dana', 'dana'] }
+  },
+
+  /* ---------- lietuvių ---------- */
+  lt: {
+    name: 'Lietuvių', locale: 'lt',
+    s: {
+      warn: 'Įspėjimas', mute: 'Nutildytas', ban: 'Užblokuotas', unmute: 'Nutildymas panaikintas', unban: 'Blokavimas panaikintas', unwarn: 'Įspėjimai pašalinti',
+      removed: 'Žinutė pašalinta', rule: 'Taisyklė', reason: 'Priežastis', other: 'Kita', customWords: 'Šiame serveryje draudžiami žodžiai',
+      nativeWord: 'Serverio „AutoMod“ taisyklė', noReason: 'Priežastis nenurodyta', by: 'Skyrė: {who}', byBot: 'Automatiškai, botas', caseN: 'Atvejis {n}',
+      ofLimit: '{n} iš {limit}', forever: 'Visam laikui', permanent: 'Blokavimas visam laikui', nextMute: 'Per 30 dienų surinkus {limit} įspėjimus – nutildymas 1 valandai.',
+      escalated: 'Įspėjimas {n} iš {n}. Nutildymas: {d}. Skaičiavimas prasideda iš naujo.', escalatedBlocked: 'Įspėjimas {n} iš {n}. Skaičiavimas prasideda iš naujo.',
+      tally: 'Skaičius', untilLabel: 'Iki', lifts: 'Baigiasi', banWord: 'blokavimas', status: 'Būsena', notApplied: 'Netaikyta: {why}',
+      ownerBlocked: 'serverio savininko negalima nutildyti ar užblokuoti', adminBlocked: 'administratorių negalima nutildyti',
+      failed: 'Nepavyko: botas neturi teisių', canTalk: 'Vėl gali rašyti', backIn: 'Vėl gali prisijungti prie serverio', clean: 'Dabar be įspėjimų',
+      mistake: 'Manote, kad botas suklydo? Parašykite savininkui.', warnsAddShort: 'Įspėjimai sumuojasi: 3 per 30 dienų – nutildymas 1 valandai.',
+      updated: 'Atnaujinta {d}', actNone: 'PAŠALINTA', actWarn: 'ĮSPĖJIMAS', actMute: 'NUTILDYTA {d}', actBan: 'BLOKAVIMAS {d}',
+      serversTitle: 'Serveriai', onlineN: 'prisijungę: {n}', noRoomsNow: 'Šiuo metu kambarių nėra. Spustelėkite „Žaisti“ – atsidarys naujas.', stOpen: 'atviras', stFull: 'pilnas',
+      stFreeing: 'atsilaisvina vieta', phHiding: 'Slepiasi', phHunt: 'Medžioklė', phStory: 'Siužetas baigėsi', leftT: 'liko {t}', mapN: 'žemėlapis {m}',
+      moreRooms: '+ dar kambarių: {n}', refresh: 'Atnaujinti', playNow: 'Žaisti', gRaceMode: 'Lenktynės', gHnsMode: 'Slėpynės', playersN: 'žaidėjų: {n}',
+      playerN: '1 žaidėjas', roomsN: 'kambarių: {n}', roomN: '1 kambarys', upTo40: 'iki 40 žaidėjų kiekviename',
+      openProfile: 'Atidaryti profilį', tabProfile: 'Profilis', tabMaps: 'Žemėlapiai', tabFriends: 'Draugai', perToday: 'Šiandien', perWeek: 'Šią savaitę', perAll: 'Per visą laiką',
+      joined: 'Prisijungė {d}', coinsL: 'Monetos', raceScores: 'Lenktynių taškai', hsScores: 'Slėpynių taškai', noRank: 'be rango', aboutL: 'Apie',
+      nothingWritten: 'Dar nieko neparašyta', todayWord: 'šiandien', weekWord: 'šią savaitę', noMapsYet: 'Dar nėra paskelbtų žemėlapių', noFriendsYet: 'Dar nėra draugų',
+      published: 'Paskelbta {d}', inGameTag: 'žaidime', likesN: 'patinka {a} · nepatinka {b}', onlineNowTag: 'dabar prisijungęs', minAgo: 'prieš {n} min.',
+      hAgo: 'prieš {n} val.', dAgo: 'prieš {n} d.', longAgo: 'seniai', friendsL: 'Draugai', mapsL: 'Žemėlapiai', moreN2: '+ dar {n}', race: 'Lenktynės', hns: 'Slėpynės',
+      rulesTitle: 'AIBROFIST serverio taisyklės'
+    },
+    rules: ['Jokio šlamšto', 'Jokių kvietimų į kitus „Discord“ serverius', 'Jokio turinio suaugusiesiems', 'Jokios neapykantos kalbos', 'Jokių sukčiavimų ir pavojingų nuorodų',
+            'Draudžiama parduoti paskyras ar monetas už tikrus pinigus', 'Jokių svetimų IP adresų'],
+    short: ['Daugiau nei 3 žinutės per 2 sekundes. Penktą kartą – nutildymas.', 'Žinutė ištrinama, gaunate įspėjimą.', 'Paveikslėliai, nuorodos ir tekstas.',
+            'Įžeidinėjimai ir raginimas kitam sau pakenkti.', 'Sukčiavimas, netikras „Nitro“, IP vagys, .exe. Vienintelis blokavimas.',
+            'Žinutė ištrinama, gaunate įspėjimą.', 'Žinutė ištrinama, bausmės nėra.'],
+    notes: { flood: 'Daugiau nei 3 žinutės per 2 sekundes', invite: 'Kvietimas į kitą serverį', 'nsfw-link': 'Nuoroda į 18+ svetainę', 'nsfw-image': '18+ paveikslėlis',
+             slur: 'Įžeidinėjimas arba neapykantos kalba', selfharm: 'Raginimas susižaloti', 'scam-text': 'Žinoma sukčių žinutė', 'everyone-link': 'Masinis paminėjimas su nuoroda',
+             badfile: 'Vykdomasis failas', scam: 'Sukčių arba „phishing“ nuoroda', grabber: 'Nuoroda, vagianti IP adresą', cheat: 'Prekyba už tikrus pinigus',
+             custom: 'Šiame serveryje draudžiamas žodis', 'native-word': 'Užblokuota serverio „AutoMod“ taisykle', warns: '3 įspėjimai per 30 dienų' },
+    units: { plural: 'lt', min: ['minutė', 'minutės', 'minučių'], hour: ['valanda', 'valandos', 'valandų'], day: ['diena', 'dienos', 'dienų'] }
+  },
+
+  /* ---------- magyar ---------- */
+  hu: {
+    name: 'Magyar', locale: 'hu',
+    s: {
+      warn: 'Figyelmeztetés', mute: 'Némítva', ban: 'Kitiltva', unmute: 'Némítás feloldva', unban: 'Kitiltás feloldva', unwarn: 'Figyelmeztetések törölve',
+      removed: 'Üzenet törölve', rule: 'Szabály', reason: 'Indok', other: 'Egyéb', customWords: 'Ezen a szerveren tiltott szavak',
+      nativeWord: 'A szerver AutoMod-szabálya', noReason: 'Nincs megadva indok', by: 'Kiadta: {who}', byBot: 'Automatikus, a bot által', caseN: '{n}. eset',
+      ofLimit: '{n} / {limit}', forever: 'Örökre', permanent: 'Végleges kitiltás', nextMute: '30 napon belül {limit} figyelmeztetés 1 óra némítást jelent.',
+      escalated: 'Figyelmeztetés: {n} / {n}. Némítás: {d}. A számláló újraindul.', escalatedBlocked: 'Figyelmeztetés: {n} / {n}. A számláló újraindul.',
+      tally: 'Számláló', untilLabel: 'Eddig', lifts: 'Lejár', banWord: 'kitiltás', status: 'Állapot', notApplied: 'Nem alkalmazva: {why}',
+      ownerBlocked: 'a szerver tulajdonosát nem lehet némítani vagy kitiltani', adminBlocked: 'az adminisztrátorokat nem lehet némítani',
+      failed: 'Sikertelen: a botnak nincs jogosultsága', canTalk: 'Újra írhat', backIn: 'Újra csatlakozhat a szerverhez', clean: 'Mostantól tiszta a lap',
+      mistake: 'Szerinted a bot tévedett? Írj a tulajdonosnak.', warnsAddShort: 'A figyelmeztetések összeadódnak: 30 napon belül 3 darab 1 óra némítást jelent.',
+      updated: 'Frissítve: {d}', actNone: 'TÖRÖLVE', actWarn: 'FIGYELMEZTETÉS', actMute: 'NÉMÍTÁS {d}', actBan: 'KITILTÁS {d}',
+      serversTitle: 'Szerverek', onlineN: '{n} online', noRoomsNow: 'Jelenleg nincs szoba. Nyomd meg a Játék gombot, és új szoba nyílik.', stOpen: 'nyitott', stFull: 'tele',
+      stFreeing: 'hamarosan felszabadul egy hely', phHiding: 'Bújás', phHunt: 'Vadászat', phStory: 'A történet véget ért', leftT: '{t} van hátra', mapN: '{m} pálya',
+      moreRooms: '+ még {n} szoba', refresh: 'Frissítés', playNow: 'Játék', gRaceMode: 'Verseny', gHnsMode: 'Bújócska', playersN: '{n} játékos',
+      playerN: '1 játékos', roomsN: '{n} szoba', roomN: '1 szoba', upTo40: 'szobánként legfeljebb 40 játékos',
+      openProfile: 'Profil megnyitása', tabProfile: 'Profil', tabMaps: 'Pályák', tabFriends: 'Barátok', perToday: 'Ma', perWeek: 'Ezen a héten', perAll: 'Összesen',
+      joined: 'Csatlakozott: {d}', coinsL: 'Érmék', raceScores: 'Verseny pontok', hsScores: 'Bújócska pontok', noRank: 'nincs rang', aboutL: 'Bemutatkozás',
+      nothingWritten: 'Még nincs semmi megírva', todayWord: 'ma', weekWord: 'ezen a héten', noMapsYet: 'Még nincs közzétett pálya', noFriendsYet: 'Még nincsenek barátok',
+      published: 'Közzétéve: {d}', inGameTag: 'a játékban', likesN: 'tetszik {a} · nem tetszik {b}', onlineNowTag: 'most online', minAgo: '{n} perce',
+      hAgo: '{n} órája', dAgo: '{n} napja', longAgo: 'régen', friendsL: 'Barátok', mapsL: 'Pályák', moreN2: '+ még {n}', race: 'Verseny', hns: 'Bújócska',
+      rulesTitle: 'AIBROFIST szerverszabályok'
+    },
+    rules: ['Nincs spam', 'Nincs meghívó más Discord-szerverekre', 'Nincs felnőtt tartalom', 'Nincs gyűlöletbeszéd', 'Nincs csalás és veszélyes link',
+            'Tilos fiókot vagy érmét valódi pénzért árulni', 'Nincs más emberek IP-címe'],
+    short: ['Több mint 3 üzenet 2 másodperc alatt. Az 5. alkalommal némítás.', 'Az üzenet törlődik, és figyelmeztetést kapsz.', 'Képek, linkek és szöveg.',
+            'Sértegetés és mások önsértésre buzdítása.', 'Adathalászat, hamis Nitro, IP-lopók, .exe. Az egyetlen kitiltás.',
+            'Az üzenet törlődik, és figyelmeztetést kapsz.', 'Az üzenet törlődik, büntetés nélkül.'],
+    notes: { flood: 'Több mint 3 üzenet 2 másodperc alatt', invite: 'Meghívó egy másik szerverre', 'nsfw-link': 'Link 18+ oldalra', 'nsfw-image': '18+ kép',
+             slur: 'Sértegetés vagy gyűlöletbeszéd', selfharm: 'Önsértésre buzdítás', 'scam-text': 'Ismert csalóüzenet', 'everyone-link': 'Tömeges említés linkkel',
+             badfile: 'Futtatható fájl', scam: 'Csaló vagy adathalász link', grabber: 'IP-címet lopó link', cheat: 'Értékesítés valódi pénzért',
+             custom: 'Ezen a szerveren tiltott szó', 'native-word': 'A szerver AutoMod-szabálya blokkolta', warns: '3 figyelmeztetés 30 napon belül' },
+    units: { plural: 'none', min: ['perc'], hour: ['óra'], day: ['nap'] }
+  },
+
+  /* ---------- Nederlands ---------- */
+  nl: {
+    name: 'Nederlands', locale: 'nl',
+    s: {
+      warn: 'Waarschuwing', mute: 'Gedempt', ban: 'Verbannen', unmute: 'Demping opgeheven', unban: 'Verbanning opgeheven', unwarn: 'Waarschuwingen verwijderd',
+      removed: 'Bericht verwijderd', rule: 'Regel', reason: 'Reden', other: 'Anders', customWords: 'Verboden woorden op deze server',
+      nativeWord: 'AutoMod-regel van de server', noReason: 'Geen reden opgegeven', by: 'Gegeven door {who}', byBot: 'Automatisch, door de bot', caseN: 'Zaak {n}',
+      ofLimit: '{n} van {limit}', forever: 'Voor altijd', permanent: 'Permanente verbanning', nextMute: 'Bij {limit} waarschuwingen binnen 30 dagen volgt 1 uur demping.',
+      escalated: 'Waarschuwing {n} van {n}: gedempt voor {d}. De teller begint opnieuw.', escalatedBlocked: 'Waarschuwing {n} van {n}. De teller begint opnieuw.',
+      tally: 'Teller', untilLabel: 'Tot', lifts: 'Eindigt', banWord: 'verbanning', status: 'Status', notApplied: 'Niet toegepast: {why}',
+      ownerBlocked: 'de servereigenaar kan niet worden gedempt of verbannen', adminBlocked: 'beheerders kunnen niet worden gedempt',
+      failed: 'Mislukt: de bot heeft geen toestemming', canTalk: 'Mag weer praten', backIn: 'Mag weer lid worden van de server', clean: 'Nu een schone lei',
+      mistake: 'Denk je dat de bot zich vergist heeft? Stuur de eigenaar een bericht.', warnsAddShort: 'Waarschuwingen tellen op: 3 binnen 30 dagen geeft 1 uur demping.',
+      updated: 'Bijgewerkt op {d}', actNone: 'VERWIJDERD', actWarn: 'WAARSCHUWING', actMute: 'DEMPING {d}', actBan: 'BAN {d}',
+      serversTitle: 'Servers', onlineN: '{n} online', noRoomsNow: 'Nu geen kamers. Druk op Spelen en er opent een nieuwe.', stOpen: 'open', stFull: 'vol',
+      stFreeing: 'er komt een plek vrij', phHiding: 'Verstoppen', phHunt: 'Jacht', phStory: 'Verhaal afgelopen', leftT: '{t} over', mapN: 'kaart {m}',
+      moreRooms: '+ {n} kamers meer', refresh: 'Vernieuwen', playNow: 'Spelen', gRaceMode: 'Race', gHnsMode: 'Verstoppertje', playersN: '{n} spelers',
+      playerN: '1 speler', roomsN: '{n} kamers', roomN: '1 kamer', upTo40: 'tot 40 spelers per kamer',
+      openProfile: 'Profiel openen', tabProfile: 'Profiel', tabMaps: 'Kaarten', tabFriends: 'Vrienden', perToday: 'Vandaag', perWeek: 'Deze week', perAll: 'Altijd',
+      joined: 'Lid sinds {d}', coinsL: 'Munten', raceScores: 'Racepunten', hsScores: 'Verstoppertje-punten', noRank: 'geen rang', aboutL: 'Over mij',
+      nothingWritten: 'Nog niets geschreven', todayWord: 'vandaag', weekWord: 'deze week', noMapsYet: 'Nog geen kaarten gepubliceerd', noFriendsYet: 'Nog geen vrienden',
+      published: 'Gepubliceerd op {d}', inGameTag: 'in het spel', likesN: 'likes {a} · dislikes {b}', onlineNowTag: 'nu online', minAgo: '{n} min geleden',
+      hAgo: '{n} u geleden', dAgo: '{n} dagen geleden', longAgo: 'lang geleden', friendsL: 'Vrienden', mapsL: 'Kaarten', moreN2: '+ {n} meer', race: 'Race',
+      hns: 'Verstoppertje', rulesTitle: 'Serverregels van AIBROFIST'
+    },
+    rules: ['Geen spam', 'Geen uitnodigingen naar andere Discord-servers', 'Geen inhoud voor volwassenen', 'Geen haatzaaiende taal', 'Geen oplichting of gevaarlijke links',
+            'Accounts of munten verkopen voor echt geld is verboden', 'Geen IP-adressen van anderen'],
+    short: ['Meer dan 3 berichten in 2 seconden. Bij de 5e keer demping.', 'Het bericht wordt verwijderd en je krijgt een waarschuwing.', 'Afbeeldingen, links en tekst.',
+            'Scheldwoorden en anderen aanzetten tot zelfbeschadiging.', 'Phishing, nep-Nitro, IP-grabbers, .exe. De enige ban.',
+            'Het bericht wordt verwijderd en je krijgt een waarschuwing.', 'Het bericht wordt verwijderd, geen straf.'],
+    notes: { flood: 'Meer dan 3 berichten in 2 seconden', invite: 'Uitnodiging voor een andere server', 'nsfw-link': 'Link naar een 18+-site', 'nsfw-image': '18+-afbeelding',
+             slur: 'Scheldwoord of haatzaaiende taal', selfharm: 'Aanzetten tot zelfbeschadiging', 'scam-text': 'Bekend oplichtingsbericht', 'everyone-link': 'Massale vermelding met link',
+             badfile: 'Uitvoerbaar bestand', scam: 'Oplichtings- of phishinglink', grabber: 'Link die het IP-adres steelt', cheat: 'Verkoop voor echt geld',
+             custom: 'Verboden woord op deze server', 'native-word': 'Geblokkeerd door een AutoMod-regel van de server', warns: '3 waarschuwingen in 30 dagen' },
+    units: { plural: 'one', min: ['minuut', 'minuten'], hour: ['uur', 'uur'], day: ['dag', 'dagen'] }
+  },
+
+  /* ---------- norsk ---------- */
+  no: {
+    name: 'Norsk', locale: 'nb',
+    s: {
+      warn: 'Advarsel', mute: 'Dempet', ban: 'Utestengt', unmute: 'Demping opphevet', unban: 'Utestengelse opphevet', unwarn: 'Advarsler fjernet',
+      removed: 'Melding fjernet', rule: 'Regel', reason: 'Årsak', other: 'Annet', customWords: 'Ord som er forbudt på denne serveren',
+      nativeWord: 'Serverens AutoMod-regel', noReason: 'Ingen årsak oppgitt', by: 'Gitt av {who}', byBot: 'Automatisk, av boten', caseN: 'Sak {n}',
+      ofLimit: '{n} av {limit}', forever: 'For alltid', permanent: 'Permanent utestengelse', nextMute: 'Ved {limit} advarsler innen 30 dager: 1 times demping.',
+      escalated: 'Advarsel {n} av {n}: dempet i {d}. Telleren starter på nytt.', escalatedBlocked: 'Advarsel {n} av {n}. Telleren starter på nytt.',
+      tally: 'Teller', untilLabel: 'Til', lifts: 'Slutter', banWord: 'utestengelse', status: 'Status', notApplied: 'Ikke utført: {why}',
+      ownerBlocked: 'serverens eier kan ikke dempes eller utestenges', adminBlocked: 'administratorer kan ikke dempes',
+      failed: 'Mislyktes: boten har ikke tillatelse', canTalk: 'Kan skrive igjen', backIn: 'Kan bli med på serveren igjen', clean: 'Nå ren historikk',
+      mistake: 'Tror du boten tok feil? Skriv til eieren.', warnsAddShort: 'Advarsler legges sammen: 3 innen 30 dager gir 1 times demping.',
+      updated: 'Oppdatert {d}', actNone: 'FJERNET', actWarn: 'ADVARSEL', actMute: 'DEMPET {d}', actBan: 'UTESTENGT {d}',
+      serversTitle: 'Servere', onlineN: '{n} online', noRoomsNow: 'Ingen rom akkurat nå. Trykk Spill, så åpnes et nytt.', stOpen: 'åpent', stFull: 'fullt',
+      stFreeing: 'en plass blir ledig', phHiding: 'Gjemmer seg', phHunt: 'Jakt', phStory: 'Historien er slutt', leftT: '{t} igjen', mapN: 'bane {m}',
+      moreRooms: '+ {n} rom til', refresh: 'Oppdater', playNow: 'Spill', gRaceMode: 'Løp', gHnsMode: 'Gjemsel', playersN: '{n} spillere',
+      playerN: '1 spiller', roomsN: '{n} rom', roomN: '1 rom', upTo40: 'opptil 40 spillere per rom',
+      openProfile: 'Åpne profil', tabProfile: 'Profil', tabMaps: 'Baner', tabFriends: 'Venner', perToday: 'I dag', perWeek: 'Denne uken', perAll: 'Totalt',
+      joined: 'Registrert {d}', coinsL: 'Mynter', raceScores: 'Løpspoeng', hsScores: 'Gjemsel-poeng', noRank: 'ingen rang', aboutL: 'Om',
+      nothingWritten: 'Ingenting skrevet ennå', todayWord: 'i dag', weekWord: 'denne uken', noMapsYet: 'Ingen baner utgitt ennå', noFriendsYet: 'Ingen venner ennå',
+      published: 'Utgitt {d}', inGameTag: 'i spillet', likesN: 'liker {a} · liker ikke {b}', onlineNowTag: 'online nå', minAgo: '{n} min siden',
+      hAgo: '{n} t siden', dAgo: '{n} dager siden', longAgo: 'for lenge siden', friendsL: 'Venner', mapsL: 'Baner', moreN2: '+ {n} til', race: 'Løp', hns: 'Gjemsel',
+      rulesTitle: 'AIBROFIST-serverregler'
+    },
+    rules: ['Ingen spam', 'Ingen invitasjoner til andre Discord-servere', 'Ikke noe innhold for voksne', 'Ingen hatefulle ytringer', 'Ingen svindel eller farlige lenker',
+            'Ikke selg kontoer eller mynter for ekte penger', 'Ingen andres IP-adresser'],
+    short: ['Mer enn 3 meldinger på 2 sekunder. Demping 5. gang.', 'Meldingen slettes, og du får en advarsel.', 'Bilder, lenker og tekst.',
+            'Banning og å be noen skade seg selv.', 'Phishing, falsk Nitro, IP-fangere, .exe. Den eneste utestengelsen.',
+            'Meldingen slettes, og du får en advarsel.', 'Meldingen slettes, ingen straff.'],
+    notes: { flood: 'Mer enn 3 meldinger på 2 sekunder', invite: 'Invitasjon til en annen server', 'nsfw-link': 'Lenke til et 18+-nettsted', 'nsfw-image': '18+-bilde',
+             slur: 'Banning eller hatefulle ytringer', selfharm: 'Oppfordring til selvskading', 'scam-text': 'Kjent svindelmelding', 'everyone-link': 'Masseomtale med lenke',
+             badfile: 'Kjørbar fil', scam: 'Svindel- eller phishing-lenke', grabber: 'Lenke som stjeler IP-adressen', cheat: 'Salg for ekte penger',
+             custom: 'Forbudt ord på denne serveren', 'native-word': 'Blokkert av serverens AutoMod-regel', warns: '3 advarsler på 30 dager' },
+    units: { plural: 'one', min: ['minutt', 'minutter'], hour: ['time', 'timer'], day: ['dag', 'dager'] }
+  },
+
+  /* ---------- română ---------- */
+  ro: {
+    name: 'Română', locale: 'ro',
+    s: {
+      warn: 'Avertisment', mute: 'Mute', ban: 'Ban', unmute: 'Mute ridicat', unban: 'Ban ridicat', unwarn: 'Avertismente șterse',
+      removed: 'Mesaj șters', rule: 'Regulă', reason: 'Motiv', other: 'Altele', customWords: 'Cuvinte interzise pe acest server',
+      nativeWord: 'Regula AutoMod a serverului', noReason: 'Niciun motiv indicat', by: 'Dat de {who}', byBot: 'Automat, de bot', caseN: 'Cazul {n}',
+      ofLimit: '{n} din {limit}', forever: 'Pentru totdeauna', permanent: 'Ban permanent', nextMute: 'La {limit} avertismente în 30 de zile: mute de 1 oră.',
+      escalated: 'Avertisment {n} din {n}: mute pentru {d}. Numărătoarea reîncepe.', escalatedBlocked: 'Avertisment {n} din {n}. Numărătoarea reîncepe.',
+      tally: 'Contor', untilLabel: 'Până la', lifts: 'Se termină', banWord: 'ban', status: 'Stare', notApplied: 'Neaplicat: {why}',
+      ownerBlocked: 'proprietarul serverului nu poate primi mute sau ban', adminBlocked: 'administratorii nu pot primi mute',
+      failed: 'Eșec: botul nu are permisiune', canTalk: 'Poate scrie din nou', backIn: 'Poate intra din nou pe server', clean: 'Acum fără avertismente',
+      mistake: 'Crezi că botul a greșit? Scrie-i proprietarului.', warnsAddShort: 'Avertismentele se adună: 3 în 30 de zile înseamnă mute de 1 oră.',
+      updated: 'Actualizat {d}', actNone: 'ȘTERS', actWarn: 'AVERTISMENT', actMute: 'MUTE {d}', actBan: 'BAN {d}',
+      serversTitle: 'Servere', onlineN: '{n} online', noRoomsNow: 'Momentan nu există camere. Apasă Joacă și se deschide una nouă.', stOpen: 'deschisă', stFull: 'plină',
+      stFreeing: 'se eliberează un loc', phHiding: 'Ascundere', phHunt: 'Vânătoare', phStory: 'Povestea s-a încheiat', leftT: 'mai sunt {t}', mapN: 'harta {m}',
+      moreRooms: '+ încă {n} camere', refresh: 'Reîmprospătează', playNow: 'Joacă', gRaceMode: 'Cursă', gHnsMode: 'De-a v-ați ascunselea', playersN: '{n} jucători',
+      playerN: '1 jucător', roomsN: '{n} camere', roomN: '1 cameră', upTo40: 'până la 40 de jucători fiecare',
+      openProfile: 'Deschide profilul', tabProfile: 'Profil', tabMaps: 'Hărți', tabFriends: 'Prieteni', perToday: 'Azi', perWeek: 'Săptămâna aceasta', perAll: 'Total',
+      joined: 'Înscris la {d}', coinsL: 'Monede', raceScores: 'Puncte la curse', hsScores: 'Puncte la ascunselea', noRank: 'fără rang', aboutL: 'Despre',
+      nothingWritten: 'Încă nu e scris nimic', todayWord: 'azi', weekWord: 'săptămâna aceasta', noMapsYet: 'Nicio hartă publicată încă', noFriendsYet: 'Încă niciun prieten',
+      published: 'Publicată la {d}', inGameTag: 'în joc', likesN: 'apreciere {a} · neapreciere {b}', onlineNowTag: 'online acum', minAgo: 'acum {n} min',
+      hAgo: 'acum {n} h', dAgo: 'acum {n} zile', longAgo: 'demult', friendsL: 'Prieteni', mapsL: 'Hărți', moreN2: '+ încă {n}', race: 'Cursă', hns: 'De-a v-ați ascunselea',
+      rulesTitle: 'Regulile serverului AIBROFIST'
+    },
+    rules: ['Fără spam', 'Fără invitații către alte servere Discord', 'Fără conținut pentru adulți', 'Fără discurs al urii', 'Fără înșelătorii sau linkuri periculoase',
+            'Interzis să vinzi conturi sau monede pe bani reali', 'Fără adresele IP ale altor persoane'],
+    short: ['Peste 3 mesaje în 2 secunde. Mute la a 5-a oară.', 'Mesajul este șters și primești un avertisment.', 'Imagini, linkuri și text.',
+            'Insulte și îndemnuri ca cineva să-și facă rău.', 'Phishing, Nitro fals, furt de IP, .exe. Singurul ban.',
+            'Mesajul este șters și primești un avertisment.', 'Mesajul este șters, fără pedeapsă.'],
+    notes: { flood: 'Peste 3 mesaje în 2 secunde', invite: 'Invitație către alt server', 'nsfw-link': 'Link către un site 18+', 'nsfw-image': 'Imagine 18+',
+             slur: 'Insultă sau discurs al urii', selfharm: 'Îndemn la autovătămare', 'scam-text': 'Mesaj de înșelăciune cunoscut', 'everyone-link': 'Mențiune în masă cu link',
+             badfile: 'Fișier executabil', scam: 'Link de înșelăciune sau phishing', grabber: 'Link care fură adresa IP', cheat: 'Vânzare pe bani reali',
+             custom: 'Cuvânt interzis pe acest server', 'native-word': 'Blocat de o regulă AutoMod a serverului', warns: '3 avertismente în 30 de zile' },
+    units: { plural: 'ro', min: ['minut', 'minute', 'de minute'], hour: ['oră', 'ore', 'de ore'], day: ['zi', 'zile', 'de zile'] }
+  },
+
+  /* ---------- suomi ---------- */
+  fi: {
+    name: 'Suomi', locale: 'fi',
+    s: {
+      warn: 'Varoitus', mute: 'Mykistetty', ban: 'Porttikielto', unmute: 'Mykistys purettu', unban: 'Porttikielto purettu', unwarn: 'Varoitukset poistettu',
+      removed: 'Viesti poistettu', rule: 'Sääntö', reason: 'Syy', other: 'Muu', customWords: 'Tällä palvelimella kielletyt sanat',
+      nativeWord: 'Palvelimen AutoMod-sääntö', noReason: 'Syytä ei annettu', by: 'Antaja: {who}', byBot: 'Automaattinen, botin antama', caseN: 'Tapaus {n}',
+      ofLimit: '{n} / {limit}', forever: 'Ikuisesti', permanent: 'Pysyvä porttikielto', nextMute: '{limit} varoitusta 30 päivässä tarkoittaa 1 tunnin mykistystä.',
+      escalated: 'Varoitus {n} / {n}. Mykistys: {d}. Laskuri alkaa alusta.', escalatedBlocked: 'Varoitus {n} / {n}. Laskuri alkaa alusta.',
+      tally: 'Laskuri', untilLabel: 'Asti', lifts: 'Päättyy', banWord: 'porttikielto', status: 'Tila', notApplied: 'Ei sovellettu: {why}',
+      ownerBlocked: 'palvelimen omistajaa ei voi mykistää eikä estää', adminBlocked: 'ylläpitäjiä ei voi mykistää',
+      failed: 'Epäonnistui: botilla ei ole oikeuksia', canTalk: 'Voi taas kirjoittaa', backIn: 'Voi taas liittyä palvelimelle', clean: 'Nyt puhtaat paperit',
+      mistake: 'Mielestäsi botti erehtyi? Kirjoita omistajalle.', warnsAddShort: 'Varoitukset kertyvät: 3 varoitusta 30 päivässä tarkoittaa 1 tunnin mykistystä.',
+      updated: 'Päivitetty {d}', actNone: 'POISTETTU', actWarn: 'VAROITUS', actMute: 'MYKISTYS {d}', actBan: 'PORTTIKIELTO {d}',
+      serversTitle: 'Palvelimet', onlineN: '{n} paikalla', noRoomsNow: 'Ei huoneita juuri nyt. Paina Pelaa, niin uusi avautuu.', stOpen: 'avoin', stFull: 'täysi',
+      stFreeing: 'paikka vapautumassa', phHiding: 'Piiloutuminen', phHunt: 'Metsästys', phStory: 'Tarina päättyi', leftT: '{t} jäljellä', mapN: 'kenttä {m}',
+      moreRooms: '+ {n} huonetta lisää', refresh: 'Päivitä', playNow: 'Pelaa', gRaceMode: 'Kilpa-ajo', gHnsMode: 'Piilosta', playersN: '{n} pelaajaa',
+      playerN: '1 pelaaja', roomsN: '{n} huonetta', roomN: '1 huone', upTo40: 'enintään 40 pelaajaa per huone',
+      openProfile: 'Avaa profiili', tabProfile: 'Profiili', tabMaps: 'Kentät', tabFriends: 'Kaverit', perToday: 'Tänään', perWeek: 'Tällä viikolla', perAll: 'Kaikki aika',
+      joined: 'Liittynyt {d}', coinsL: 'Kolikot', raceScores: 'Kilpa-ajopisteet', hsScores: 'Piilopisteet', noRank: 'ei sijoitusta', aboutL: 'Tietoja',
+      nothingWritten: 'Ei vielä mitään kirjoitettu', todayWord: 'tänään', weekWord: 'tällä viikolla', noMapsYet: 'Ei vielä julkaistuja kenttiä', noFriendsYet: 'Ei vielä kavereita',
+      published: 'Julkaistu {d}', inGameTag: 'pelissä', likesN: 'tykkäykset {a} · ei-tykkäykset {b}', onlineNowTag: 'paikalla nyt', minAgo: '{n} min sitten',
+      hAgo: '{n} t sitten', dAgo: '{n} päivää sitten', longAgo: 'kauan sitten', friendsL: 'Kaverit', mapsL: 'Kentät', moreN2: '+ {n} lisää', race: 'Kilpa-ajo', hns: 'Piilosta',
+      rulesTitle: 'AIBROFISTin palvelimen säännöt'
+    },
+    rules: ['Ei roskapostia', 'Ei kutsuja muille Discord-palvelimille', 'Ei aikuissisältöä', 'Ei vihapuhetta', 'Ei huijauksia eikä vaarallisia linkkejä',
+            'Tilien tai kolikoiden myynti oikealla rahalla kielletty', 'Ei muiden IP-osoitteita'],
+    short: ['Yli 3 viestiä 2 sekunnissa. Viidennellä kerralla mykistys.', 'Viesti poistetaan ja saat varoituksen.', 'Kuvat, linkit ja teksti.',
+            'Haukkumista ja kehotuksia vahingoittaa itseään.', 'Tietojenkalastelu, väärä Nitro, IP-kalastelijat, .exe. Ainoa porttikielto.',
+            'Viesti poistetaan ja saat varoituksen.', 'Viesti poistetaan, ei rangaistusta.'],
+    notes: { flood: 'Yli 3 viestiä 2 sekunnissa', invite: 'Kutsu toiselle palvelimelle', 'nsfw-link': 'Linkki 18+ -sivustolle', 'nsfw-image': '18+ -kuva',
+             slur: 'Haukkuminen tai vihapuhe', selfharm: 'Kehotus vahingoittaa itseään', 'scam-text': 'Tunnettu huijausviesti', 'everyone-link': 'Massamaininta linkillä',
+             badfile: 'Suoritettava tiedosto', scam: 'Huijaus- tai kalastelulinkki', grabber: 'IP-osoitteen varastava linkki', cheat: 'Myynti oikealla rahalla',
+             custom: 'Tällä palvelimella kielletty sana', 'native-word': 'Palvelimen AutoMod-sääntö esti', warns: '3 varoitusta 30 päivässä' },
+    units: { plural: 'one', min: ['minuutti', 'minuuttia'], hour: ['tunti', 'tuntia'], day: ['päivä', 'päivää'] }
+  },
+
+  /* ---------- svenska ---------- */
+  sv: {
+    name: 'Svenska', locale: 'sv',
+    s: {
+      warn: 'Varning', mute: 'Avstängd', ban: 'Bannad', unmute: 'Avstängning upphävd', unban: 'Ban upphävd', unwarn: 'Varningar borttagna',
+      removed: 'Meddelande borttaget', rule: 'Regel', reason: 'Orsak', other: 'Övrigt', customWords: 'Ord som är förbjudna på den här servern',
+      nativeWord: 'Serverns AutoMod-regel', noReason: 'Ingen orsak angiven', by: 'Utfärdad av {who}', byBot: 'Automatiskt, av boten', caseN: 'Ärende {n}',
+      ofLimit: '{n} av {limit}', forever: 'För alltid', permanent: 'Permanent ban', nextMute: 'Vid {limit} varningar inom 30 dagar: 1 timmes avstängning.',
+      escalated: 'Varning {n} av {n}: avstängd i {d}. Räknaren börjar om.', escalatedBlocked: 'Varning {n} av {n}. Räknaren börjar om.',
+      tally: 'Räknare', untilLabel: 'Till', lifts: 'Upphör', banWord: 'ban', status: 'Status', notApplied: 'Inte utfört: {why}',
+      ownerBlocked: 'serverägaren kan inte stängas av eller bannas', adminBlocked: 'administratörer kan inte stängas av',
+      failed: 'Misslyckades: boten saknar behörighet', canTalk: 'Kan skriva igen', backIn: 'Kan gå med i servern igen', clean: 'Nu rent register',
+      mistake: 'Tror du att boten har fel? Skriv till ägaren.', warnsAddShort: 'Varningar summeras: 3 inom 30 dagar ger 1 timmes avstängning.',
+      updated: 'Uppdaterad {d}', actNone: 'BORTTAGET', actWarn: 'VARNING', actMute: 'AVSTÄNGD {d}', actBan: 'BAN {d}',
+      serversTitle: 'Servrar', onlineN: '{n} online', noRoomsNow: 'Inga rum just nu. Tryck på Spela så öppnas ett nytt.', stOpen: 'öppet', stFull: 'fullt',
+      stFreeing: 'en plats blir ledig', phHiding: 'Gömmer sig', phHunt: 'Jakt', phStory: 'Berättelsen är slut', leftT: '{t} kvar', mapN: 'bana {m}',
+      moreRooms: '+ {n} rum till', refresh: 'Uppdatera', playNow: 'Spela', gRaceMode: 'Race', gHnsMode: 'Kurragömma', playersN: '{n} spelare',
+      playerN: '1 spelare', roomsN: '{n} rum', roomN: '1 rum', upTo40: 'upp till 40 spelare per rum',
+      openProfile: 'Öppna profil', tabProfile: 'Profil', tabMaps: 'Banor', tabFriends: 'Vänner', perToday: 'Idag', perWeek: 'Den här veckan', perAll: 'Totalt',
+      joined: 'Gick med {d}', coinsL: 'Mynt', raceScores: 'Racepoäng', hsScores: 'Kurragömma-poäng', noRank: 'ingen rank', aboutL: 'Om',
+      nothingWritten: 'Inget skrivet ännu', todayWord: 'idag', weekWord: 'den här veckan', noMapsYet: 'Inga banor publicerade ännu', noFriendsYet: 'Inga vänner ännu',
+      published: 'Publicerad {d}', inGameTag: 'i spelet', likesN: 'gillar {a} · ogillar {b}', onlineNowTag: 'online nu', minAgo: '{n} min sedan',
+      hAgo: '{n} tim sedan', dAgo: '{n} dagar sedan', longAgo: 'för längesedan', friendsL: 'Vänner', mapsL: 'Banor', moreN2: '+ {n} till', race: 'Race', hns: 'Kurragömma',
+      rulesTitle: 'AIBROFIST serverregler'
+    },
+    rules: ['Ingen spam', 'Inga inbjudningar till andra Discord-servrar', 'Inget innehåll för vuxna', 'Inget hatiskt språk', 'Inget bedrägeri eller farliga länkar',
+            'Det är förbjudet att sälja konton eller mynt för riktiga pengar', 'Inga andras IP-adresser'],
+    short: ['Fler än 3 meddelanden på 2 sekunder. Avstängning vid femte gången.', 'Meddelandet raderas och du får en varning.', 'Bilder, länkar och text.',
+            'Förolämpningar och att uppmana någon att skada sig själv.', 'Nätfiske, falsk Nitro, IP-fångare, .exe. Den enda banen.',
+            'Meddelandet raderas och du får en varning.', 'Meddelandet raderas, inget straff.'],
+    notes: { flood: 'Fler än 3 meddelanden på 2 sekunder', invite: 'Inbjudan till en annan server', 'nsfw-link': 'Länk till en 18+-sida', 'nsfw-image': '18+-bild',
+             slur: 'Förolämpning eller hatiskt språk', selfharm: 'Uppmaning till självskada', 'scam-text': 'Känt bedrägerimeddelande', 'everyone-link': 'Massomnämnande med länk',
+             badfile: 'Körbar fil', scam: 'Bedrägeri- eller nätfiskelänk', grabber: 'Länk som stjäl IP-adressen', cheat: 'Försäljning för riktiga pengar',
+             custom: 'Förbjudet ord på den här servern', 'native-word': 'Blockerat av en AutoMod-regel på servern', warns: '3 varningar på 30 dagar' },
+    units: { plural: 'one', min: ['minut', 'minuter'], hour: ['timme', 'timmar'], day: ['dag', 'dagar'] }
+  },
+
+  /* ---------- Tiếng Việt ---------- */
+  vi: {
+    name: 'Tiếng Việt', locale: 'vi',
+    s: {
+      warn: 'Cảnh cáo', mute: 'Bị cấm chat', ban: 'Bị cấm', unmute: 'Đã gỡ cấm chat', unban: 'Đã gỡ lệnh cấm', unwarn: 'Đã xóa cảnh cáo',
+      removed: 'Đã xóa tin nhắn', rule: 'Quy tắc', reason: 'Lý do', other: 'Khác', customWords: 'Từ bị cấm trên máy chủ này',
+      nativeWord: 'Quy tắc AutoMod của máy chủ', noReason: 'Không nêu lý do', by: 'Người xử lý: {who}', byBot: 'Tự động, bởi bot', caseN: 'Vụ việc {n}',
+      ofLimit: '{n}/{limit}', forever: 'Vĩnh viễn', permanent: 'Cấm vĩnh viễn', nextMute: 'Đủ {limit} cảnh cáo trong 30 ngày sẽ bị cấm chat 1 giờ.',
+      escalated: 'Cảnh cáo {n}/{n}: bị cấm chat {d}. Bộ đếm được tính lại từ đầu.', escalatedBlocked: 'Cảnh cáo {n}/{n}. Bộ đếm được tính lại từ đầu.',
+      tally: 'Bộ đếm', untilLabel: 'Đến', lifts: 'Hết hạn', banWord: 'lệnh cấm', status: 'Trạng thái', notApplied: 'Không áp dụng: {why}',
+      ownerBlocked: 'không thể cấm chat hay cấm chủ máy chủ', adminBlocked: 'không thể cấm chat quản trị viên',
+      failed: 'Thất bại: bot không có quyền', canTalk: 'Có thể nhắn tin lại', backIn: 'Có thể vào lại máy chủ', clean: 'Hồ sơ đã sạch',
+      mistake: 'Bạn nghĩ bot nhầm? Hãy nhắn cho chủ máy chủ.', warnsAddShort: 'Cảnh cáo cộng dồn: 3 lần trong 30 ngày sẽ bị cấm chat 1 giờ.',
+      updated: 'Cập nhật {d}', actNone: 'BỊ XÓA', actWarn: 'CẢNH CÁO', actMute: 'CẤM CHAT {d}', actBan: 'CẤM {d}',
+      serversTitle: 'Máy chủ', onlineN: '{n} đang online', noRoomsNow: 'Hiện chưa có phòng nào. Nhấn Chơi để mở phòng mới.', stOpen: 'còn chỗ', stFull: 'đầy',
+      stFreeing: 'sắp trống một chỗ', phHiding: 'Đang trốn', phHunt: 'Đang săn', phStory: 'Cốt truyện đã kết thúc', leftT: 'còn {t}', mapN: 'bản đồ {m}',
+      moreRooms: '+ {n} phòng nữa', refresh: 'Làm mới', playNow: 'Chơi', gRaceMode: 'Đua xe', gHnsMode: 'Trốn tìm', playersN: '{n} người chơi',
+      playerN: '1 người chơi', roomsN: '{n} phòng', roomN: '1 phòng', upTo40: 'tối đa 40 người chơi mỗi phòng',
+      openProfile: 'Mở hồ sơ', tabProfile: 'Hồ sơ', tabMaps: 'Bản đồ', tabFriends: 'Bạn bè', perToday: 'Hôm nay', perWeek: 'Tuần này', perAll: 'Tất cả',
+      joined: 'Tham gia {d}', coinsL: 'Xu', raceScores: 'Điểm đua xe', hsScores: 'Điểm trốn tìm', noRank: 'chưa có hạng', aboutL: 'Giới thiệu',
+      nothingWritten: 'Chưa viết gì', todayWord: 'hôm nay', weekWord: 'tuần này', noMapsYet: 'Chưa có bản đồ nào được đăng', noFriendsYet: 'Chưa có bạn bè',
+      published: 'Đăng {d}', inGameTag: 'trong game', likesN: 'thích {a} · không thích {b}', onlineNowTag: 'đang online', minAgo: '{n} phút trước',
+      hAgo: '{n} giờ trước', dAgo: '{n} ngày trước', longAgo: 'lâu rồi', friendsL: 'Bạn bè', mapsL: 'Bản đồ', moreN2: '+ {n} nữa', race: 'Đua xe', hns: 'Trốn tìm',
+      rulesTitle: 'Quy tắc máy chủ AIBROFIST'
+    },
+    rules: ['Không spam', 'Không mời sang máy chủ Discord khác', 'Không nội dung người lớn', 'Không phát ngôn thù ghét', 'Không lừa đảo hay liên kết nguy hiểm',
+            'Cấm bán tài khoản hoặc xu lấy tiền thật', 'Không đăng địa chỉ IP của người khác'],
+    short: ['Hơn 3 tin nhắn trong 2 giây. Lần thứ 5 sẽ bị cấm chat.', 'Tin nhắn bị xóa và bạn nhận một cảnh cáo.', 'Hình ảnh, liên kết và văn bản.',
+            'Lăng mạ và xúi người khác tự làm hại bản thân.', 'Lừa đảo, Nitro giả, đánh cắp IP, .exe. Quy tắc duy nhất bị cấm.',
+            'Tin nhắn bị xóa và bạn nhận một cảnh cáo.', 'Tin nhắn bị xóa, không bị phạt.'],
+    notes: { flood: 'Hơn 3 tin nhắn trong 2 giây', invite: 'Lời mời sang máy chủ khác', 'nsfw-link': 'Liên kết đến trang 18+', 'nsfw-image': 'Hình ảnh 18+',
+             slur: 'Lăng mạ hoặc phát ngôn thù ghét', selfharm: 'Xúi giục tự làm hại bản thân', 'scam-text': 'Tin nhắn lừa đảo đã biết', 'everyone-link': 'Gắn thẻ hàng loạt kèm liên kết',
+             badfile: 'Tệp thực thi', scam: 'Liên kết lừa đảo hoặc phishing', grabber: 'Liên kết đánh cắp địa chỉ IP', cheat: 'Mua bán bằng tiền thật',
+             custom: 'Từ bị cấm trên máy chủ này', 'native-word': 'Bị chặn bởi quy tắc AutoMod của máy chủ', warns: '3 cảnh cáo trong 30 ngày' },
+    units: { plural: 'none', min: ['phút'], hour: ['giờ'], day: ['ngày'] }
+  },
+
+  /* ---------- čeština ---------- */
+  cs: {
+    name: 'Čeština', locale: 'cs',
+    s: {
+      warn: 'Varování', mute: 'Ztlumen', ban: 'Zabanován', unmute: 'Ztlumení zrušeno', unban: 'Ban zrušen', unwarn: 'Varování odstraněna',
+      removed: 'Zpráva odstraněna', rule: 'Pravidlo', reason: 'Důvod', other: 'Jiné', customWords: 'Slova zakázaná na tomto serveru',
+      nativeWord: 'Pravidlo AutoMod serveru', noReason: 'Důvod neuveden', by: 'Uděleno uživatelem {who}', byBot: 'Automaticky, botem', caseN: 'Případ {n}',
+      ofLimit: '{n} z {limit}', forever: 'Navždy', permanent: 'Trvalý ban', nextMute: 'Při {limit} varováních během 30 dnů následuje ztlumení na 1 hodinu.',
+      escalated: 'Varování {n} z {n}. Ztlumení: {d}. Počítání začíná znovu.', escalatedBlocked: 'Varování {n} z {n}. Počítání začíná znovu.',
+      tally: 'Počítadlo', untilLabel: 'Do', lifts: 'Skončí', banWord: 'ban', status: 'Stav', notApplied: 'Neprovedeno: {why}',
+      ownerBlocked: 'majitele serveru nelze ztlumit ani zabanovat', adminBlocked: 'administrátory nelze ztlumit',
+      failed: 'Selhalo: bot nemá oprávnění', canTalk: 'Může znovu psát', backIn: 'Může se znovu připojit na server', clean: 'Nyní čistý záznam',
+      mistake: 'Myslíte, že se bot spletl? Napište majiteli.', warnsAddShort: 'Varování se sčítají: 3 během 30 dnů znamenají ztlumení na 1 hodinu.',
+      updated: 'Aktualizováno {d}', actNone: 'ODSTRANĚNO', actWarn: 'VAROVÁNÍ', actMute: 'ZTLUMENÍ {d}', actBan: 'BAN {d}',
+      serversTitle: 'Servery', onlineN: 'online: {n}', noRoomsNow: 'Právě nejsou žádné místnosti. Stiskněte Hrát a otevře se nová.', stOpen: 'otevřená', stFull: 'plná',
+      stFreeing: 'uvolňuje se místo', phHiding: 'Schovávání', phHunt: 'Hon', phStory: 'Příběh skončil', leftT: 'zbývá {t}', mapN: 'mapa {m}',
+      moreRooms: '+ další místnosti: {n}', refresh: 'Obnovit', playNow: 'Hrát', gRaceMode: 'Závod', gHnsMode: 'Schovávaná', playersN: 'hráčů: {n}',
+      playerN: '1 hráč', roomsN: 'místností: {n}', roomN: '1 místnost', upTo40: 'až 40 hráčů v každé',
+      openProfile: 'Otevřít profil', tabProfile: 'Profil', tabMaps: 'Mapy', tabFriends: 'Přátelé', perToday: 'Dnes', perWeek: 'Tento týden', perAll: 'Celkem',
+      joined: 'Registrace: {d}', coinsL: 'Mince', raceScores: 'Body ze závodů', hsScores: 'Body ze schovávané', noRank: 'bez ranku', aboutL: 'O mně',
+      nothingWritten: 'Zatím nic nenapsáno', todayWord: 'dnes', weekWord: 'tento týden', noMapsYet: 'Zatím žádné zveřejněné mapy', noFriendsYet: 'Zatím žádní přátelé',
+      published: 'Zveřejněno {d}', inGameTag: 've hře', likesN: 'líbí se {a} · nelíbí se {b}', onlineNowTag: 'právě online', minAgo: 'před {n} min',
+      hAgo: 'před {n} h', dAgo: 'před {n} dny', longAgo: 'dávno', friendsL: 'Přátelé', mapsL: 'Mapy', moreN2: '+ dalších {n}', race: 'Závod', hns: 'Schovávaná',
+      rulesTitle: 'Pravidla serveru AIBROFIST'
+    },
+    rules: ['Žádný spam', 'Žádné pozvánky na jiné servery Discord', 'Žádný obsah pro dospělé', 'Žádné nenávistné projevy', 'Žádné podvody ani nebezpečné odkazy',
+            'Je zakázáno prodávat účty nebo mince za skutečné peníze', 'Žádné cizí IP adresy'],
+    short: ['Více než 3 zprávy za 2 sekundy. Při 5. porušení ztlumení.', 'Zpráva se smaže a dostanete varování.', 'Obrázky, odkazy a text.',
+            'Nadávky a pobízení někoho, aby si ublížil.', 'Phishing, falešný Nitro, krádež IP, .exe. Jediný ban.',
+            'Zpráva se smaže a dostanete varování.', 'Zpráva se smaže, bez trestu.'],
+    notes: { flood: 'Více než 3 zprávy za 2 sekundy', invite: 'Pozvánka na jiný server', 'nsfw-link': 'Odkaz na web 18+', 'nsfw-image': 'Obrázek 18+',
+             slur: 'Nadávka nebo nenávistný projev', selfharm: 'Pobízení k sebepoškozování', 'scam-text': 'Známá podvodná zpráva', 'everyone-link': 'Hromadná zmínka s odkazem',
+             badfile: 'Spustitelný soubor', scam: 'Podvodný nebo phishingový odkaz', grabber: 'Odkaz kradoucí IP adresu', cheat: 'Prodej za skutečné peníze',
+             custom: 'Slovo zakázané na tomto serveru', 'native-word': 'Zablokováno pravidlem AutoMod serveru', warns: '3 varování během 30 dnů' },
+    units: { plural: 'cs', min: ['minuta', 'minuty', 'minut'], hour: ['hodina', 'hodiny', 'hodin'], day: ['den', 'dny', 'dní'] }
+  },
+
+  /* ---------- Ελληνικά ---------- */
+  el: {
+    name: 'Ελληνικά', locale: 'el',
+    s: {
+      warn: 'Προειδοποίηση', mute: 'Σίγαση', ban: 'Αποκλεισμός', unmute: 'Άρση σίγασης', unban: 'Άρση αποκλεισμού', unwarn: 'Οι προειδοποιήσεις αφαιρέθηκαν',
+      removed: 'Το μήνυμα αφαιρέθηκε', rule: 'Κανόνας', reason: 'Λόγος', other: 'Άλλο', customWords: 'Λέξεις που απαγορεύονται σε αυτόν τον διακομιστή',
+      nativeWord: 'Κανόνας AutoMod του διακομιστή', noReason: 'Δεν δόθηκε λόγος', by: 'Από: {who}', byBot: 'Αυτόματα, από το bot', caseN: 'Υπόθεση {n}',
+      ofLimit: '{n} από {limit}', forever: 'Για πάντα', permanent: 'Μόνιμος αποκλεισμός', nextMute: 'Με {limit} προειδοποιήσεις μέσα σε 30 ημέρες: σίγαση 1 ώρας.',
+      escalated: 'Προειδοποίηση {n} από {n}: σίγαση για {d}. Η μέτρηση ξεκινά από την αρχή.', escalatedBlocked: 'Προειδοποίηση {n} από {n}. Η μέτρηση ξεκινά από την αρχή.',
+      tally: 'Μετρητής', untilLabel: 'Έως', lifts: 'Λήγει', banWord: 'αποκλεισμός', status: 'Κατάσταση', notApplied: 'Δεν εφαρμόστηκε: {why}',
+      ownerBlocked: 'ο ιδιοκτήτης του διακομιστή δεν μπορεί να σιγαστεί ή να αποκλειστεί', adminBlocked: 'οι διαχειριστές δεν μπορούν να σιγαστούν',
+      failed: 'Αποτυχία: το bot δεν έχει άδεια', canTalk: 'Μπορεί να μιλήσει ξανά', backIn: 'Μπορεί να μπει ξανά στον διακομιστή', clean: 'Πλέον καθαρό ιστορικό',
+      mistake: 'Νομίζεις ότι το bot έκανε λάθος; Στείλε μήνυμα στον ιδιοκτήτη.', warnsAddShort: 'Οι προειδοποιήσεις αθροίζονται: 3 μέσα σε 30 ημέρες δίνουν σίγαση 1 ώρας.',
+      updated: 'Ενημερώθηκε {d}', actNone: 'ΔΙΑΓΡΑΦΗ', actWarn: 'ΠΡΟΕΙΔΟΠΟΙΗΣΗ', actMute: 'ΣΙΓΑΣΗ {d}', actBan: 'ΑΠΟΚΛΕΙΣΜΟΣ {d}',
+      serversTitle: 'Διακομιστές', onlineN: '{n} online', noRoomsNow: 'Δεν υπάρχουν δωμάτια αυτή τη στιγμή. Πάτα Παίξε και ανοίγει ένα νέο.', stOpen: 'ανοιχτό', stFull: 'γεμάτο',
+      stFreeing: 'ελευθερώνεται μια θέση', phHiding: 'Κρύψιμο', phHunt: 'Κυνήγι', phStory: 'Η ιστορία τελείωσε', leftT: 'απομένουν {t}', mapN: 'χάρτης {m}',
+      moreRooms: '+ {n} ακόμη δωμάτια', refresh: 'Ανανέωση', playNow: 'Παίξε', gRaceMode: 'Αγώνας', gHnsMode: 'Κρυφτό', playersN: '{n} παίκτες',
+      playerN: '1 παίκτης', roomsN: '{n} δωμάτια', roomN: '1 δωμάτιο', upTo40: 'έως 40 παίκτες ανά δωμάτιο',
+      openProfile: 'Άνοιγμα προφίλ', tabProfile: 'Προφίλ', tabMaps: 'Χάρτες', tabFriends: 'Φίλοι', perToday: 'Σήμερα', perWeek: 'Αυτή την εβδομάδα', perAll: 'Συνολικά',
+      joined: 'Εγγραφή: {d}', coinsL: 'Νομίσματα', raceScores: 'Πόντοι αγώνων', hsScores: 'Πόντοι κρυφτού', noRank: 'χωρίς βαθμίδα', aboutL: 'Σχετικά',
+      nothingWritten: 'Δεν έχει γραφτεί τίποτα ακόμη', todayWord: 'σήμερα', weekWord: 'αυτή την εβδομάδα', noMapsYet: 'Δεν υπάρχουν δημοσιευμένοι χάρτες', noFriendsYet: 'Δεν υπάρχουν φίλοι ακόμη',
+      published: 'Δημοσιεύτηκε {d}', inGameTag: 'στο παιχνίδι', likesN: 'μου αρέσει {a} · δεν μου αρέσει {b}', onlineNowTag: 'online τώρα', minAgo: 'πριν από {n} λεπτά',
+      hAgo: 'πριν από {n} ώρες', dAgo: 'πριν από {n} ημέρες', longAgo: 'πριν από πολύ καιρό', friendsL: 'Φίλοι', mapsL: 'Χάρτες', moreN2: '+ {n} ακόμη', race: 'Αγώνας', hns: 'Κρυφτό',
+      rulesTitle: 'Κανόνες διακομιστή AIBROFIST'
+    },
+    rules: ['Όχι spam', 'Όχι προσκλήσεις σε άλλους διακομιστές Discord', 'Όχι περιεχόμενο για ενήλικες', 'Όχι ρητορική μίσους', 'Όχι απάτες ή επικίνδυνοι σύνδεσμοι',
+            'Απαγορεύεται η πώληση λογαριασμών ή νομισμάτων με πραγματικά χρήματα', 'Όχι διευθύνσεις IP άλλων ατόμων'],
+    short: ['Πάνω από 3 μηνύματα σε 2 δευτερόλεπτα. Στην 5η φορά σίγαση.', 'Το μήνυμα διαγράφεται και παίρνεις προειδοποίηση.', 'Εικόνες, σύνδεσμοι και κείμενο.',
+            'Βρισιές και προτροπή σε κάποιον να κάνει κακό στον εαυτό του.', 'Phishing, ψεύτικο Nitro, κλέφτες IP, .exe. Ο μόνος αποκλεισμός.',
+            'Το μήνυμα διαγράφεται και παίρνεις προειδοποίηση.', 'Το μήνυμα διαγράφεται, χωρίς ποινή.'],
+    notes: { flood: 'Πάνω από 3 μηνύματα σε 2 δευτερόλεπτα', invite: 'Πρόσκληση σε άλλον διακομιστή', 'nsfw-link': 'Σύνδεσμος σε ιστότοπο 18+', 'nsfw-image': 'Εικόνα 18+',
+             slur: 'Βρισιά ή ρητορική μίσους', selfharm: 'Προτροπή σε αυτοτραυματισμό', 'scam-text': 'Γνωστό μήνυμα απάτης', 'everyone-link': 'Μαζική αναφορά με σύνδεσμο',
+             badfile: 'Εκτελέσιμο αρχείο', scam: 'Σύνδεσμος απάτης ή phishing', grabber: 'Σύνδεσμος που κλέβει τη διεύθυνση IP', cheat: 'Πώληση με πραγματικά χρήματα',
+             custom: 'Λέξη που απαγορεύεται σε αυτόν τον διακομιστή', 'native-word': 'Αποκλείστηκε από κανόνα AutoMod του διακομιστή', warns: '3 προειδοποιήσεις σε 30 ημέρες' },
+    units: { plural: 'one', min: ['λεπτό', 'λεπτά'], hour: ['ώρα', 'ώρες'], day: ['ημέρα', 'ημέρες'] }
+  },
+
+  /* ---------- български ---------- */
+  bg: {
+    name: 'Български', locale: 'bg',
+    s: {
+      warn: 'Предупреждение', mute: 'Заглушен', ban: 'Баннат', unmute: 'Заглушаването е премахнато', unban: 'Банът е премахнат', unwarn: 'Предупрежденията са премахнати',
+      removed: 'Съобщението е премахнато', rule: 'Правило', reason: 'Причина', other: 'Друго', customWords: 'Думи, забранени на този сървър',
+      nativeWord: 'AutoMod правило на сървъра', noReason: 'Не е посочена причина', by: 'Издадено от {who}', byBot: 'Автоматично, от бота', caseN: 'Случай {n}',
+      ofLimit: '{n} от {limit}', forever: 'Завинаги', permanent: 'Перманентен бан', nextMute: 'При {limit} предупреждения за 30 дни: заглушаване за 1 час.',
+      escalated: 'Предупреждение {n} от {n}: заглушен за {d}. Броячът започва отначало.', escalatedBlocked: 'Предупреждение {n} от {n}. Броячът започва отначало.',
+      tally: 'Брояч', untilLabel: 'До', lifts: 'Изтича', banWord: 'бан', status: 'Състояние', notApplied: 'Не е приложено: {why}',
+      ownerBlocked: 'собственикът на сървъра не може да бъде заглушаван или банван', adminBlocked: 'администраторите не могат да бъдат заглушавани',
+      failed: 'Неуспех: ботът няма права', canTalk: 'Отново може да пише', backIn: 'Отново може да влезе в сървъра', clean: 'Вече е с чист запис',
+      mistake: 'Мислите, че ботът е сгрешил? Пишете на собственика.', warnsAddShort: 'Предупрежденията се натрупват: 3 за 30 дни дават заглушаване за 1 час.',
+      updated: 'Обновено {d}', actNone: 'ПРЕМАХНАТО', actWarn: 'ПРЕДУПРЕЖДЕНИЕ', actMute: 'ЗАГЛУШАВАНЕ {d}', actBan: 'БАН {d}',
+      serversTitle: 'Сървъри', onlineN: '{n} онлайн', noRoomsNow: 'В момента няма стаи. Натиснете Играй и ще се отвори нова.', stOpen: 'отворена', stFull: 'пълна',
+      stFreeing: 'освобождава се място', phHiding: 'Криене', phHunt: 'Лов', phStory: 'Историята приключи', leftT: 'остават {t}', mapN: 'карта {m}',
+      moreRooms: '+ още {n} стаи', refresh: 'Обнови', playNow: 'Играй', gRaceMode: 'Състезание', gHnsMode: 'Криеница', playersN: '{n} играчи',
+      playerN: '1 играч', roomsN: '{n} стаи', roomN: '1 стая', upTo40: 'до 40 играчи във всяка',
+      openProfile: 'Отвори профила', tabProfile: 'Профил', tabMaps: 'Карти', tabFriends: 'Приятели', perToday: 'Днес', perWeek: 'Тази седмица', perAll: 'Общо',
+      joined: 'Регистрация: {d}', coinsL: 'Монети', raceScores: 'Точки от състезания', hsScores: 'Точки от криеница', noRank: 'без ранг', aboutL: 'За мен',
+      nothingWritten: 'Още нищо не е написано', todayWord: 'днес', weekWord: 'тази седмица', noMapsYet: 'Още няма публикувани карти', noFriendsYet: 'Още няма приятели',
+      published: 'Публикувана {d}', inGameTag: 'в играта', likesN: 'харесвания {a} · нехаресвания {b}', onlineNowTag: 'онлайн сега', minAgo: 'преди {n} мин',
+      hAgo: 'преди {n} ч', dAgo: 'преди {n} дни', longAgo: 'отдавна', friendsL: 'Приятели', mapsL: 'Карти', moreN2: '+ още {n}', race: 'Състезание', hns: 'Криеница',
+      rulesTitle: 'Правила на сървъра AIBROFIST'
+    },
+    rules: ['Без спам', 'Без покани към други Discord сървъри', 'Без съдържание за възрастни', 'Без реч на омразата', 'Без измами и опасни връзки',
+            'Забранена е продажбата на акаунти или монети за истински пари', 'Без чужди IP адреси'],
+    short: ['Над 3 съобщения за 2 секунди. При 5-ия път заглушаване.', 'Съобщението се изтрива и получавате предупреждение.', 'Изображения, връзки и текст.',
+            'Обиди и подтикване на някого да си навреди.', 'Фишинг, фалшив Nitro, крадци на IP, .exe. Единственият бан.',
+            'Съобщението се изтрива и получавате предупреждение.', 'Съобщението се изтрива, без наказание.'],
+    notes: { flood: 'Над 3 съобщения за 2 секунди', invite: 'Покана към друг сървър', 'nsfw-link': 'Връзка към сайт 18+', 'nsfw-image': 'Изображение 18+',
+             slur: 'Обида или реч на омразата', selfharm: 'Подтикване към самонараняване', 'scam-text': 'Известно измамно съобщение', 'everyone-link': 'Масово споменаване с връзка',
+             badfile: 'Изпълним файл', scam: 'Измамна или фишинг връзка', grabber: 'Връзка, крадяща IP адреса', cheat: 'Продажба за истински пари',
+             custom: 'Забранена дума на този сървър', 'native-word': 'Блокирано от AutoMod правило на сървъра', warns: '3 предупреждения за 30 дни' },
+    units: { plural: 'one', min: ['минута', 'минути'], hour: ['час', 'часа'], day: ['ден', 'дни'] }
+  },
+
+  /* ---------- हिन्दी ---------- */
+  hi: {
+    name: 'हिन्दी', locale: 'hi',
+    s: {
+      warn: 'चेतावनी', mute: 'म्यूट किया गया', ban: 'प्रतिबंधित', unmute: 'म्यूट हटाया गया', unban: 'प्रतिबंध हटाया गया', unwarn: 'चेतावनियाँ हटाई गईं',
+      removed: 'संदेश हटाया गया', rule: 'नियम', reason: 'कारण', other: 'अन्य', customWords: 'इस सर्वर पर प्रतिबंधित शब्द',
+      nativeWord: 'सर्वर का AutoMod नियम', noReason: 'कोई कारण नहीं बताया गया', by: 'जारीकर्ता: {who}', byBot: 'स्वचालित, बॉट द्वारा', caseN: 'मामला {n}',
+      ofLimit: '{n} / {limit}', forever: 'हमेशा के लिए', permanent: 'स्थायी प्रतिबंध', nextMute: '30 दिनों में {limit} चेतावनियाँ मिलने पर 1 घंटे का म्यूट लगेगा।',
+      escalated: 'चेतावनी {n} / {n}: {d} के लिए म्यूट। गिनती फिर से शुरू होगी।', escalatedBlocked: 'चेतावनी {n} / {n}। गिनती फिर से शुरू होगी।',
+      tally: 'गिनती', untilLabel: 'तक', lifts: 'समाप्ति', banWord: 'प्रतिबंध', status: 'स्थिति', notApplied: 'लागू नहीं हुआ: {why}',
+      ownerBlocked: 'सर्वर के मालिक को म्यूट या प्रतिबंधित नहीं किया जा सकता', adminBlocked: 'एडमिन को म्यूट नहीं किया जा सकता',
+      failed: 'विफल: बॉट के पास अनुमति नहीं है', canTalk: 'फिर से बोल सकते हैं', backIn: 'सर्वर में फिर से आ सकते हैं', clean: 'अब रिकॉर्ड साफ़ है',
+      mistake: 'लगता है बॉट से गलती हुई? मालिक को संदेश भेजें।', warnsAddShort: 'चेतावनियाँ जुड़ती जाती हैं: 30 दिनों में 3 चेतावनियों पर 1 घंटे का म्यूट।',
+      updated: '{d} को अपडेट किया गया', actNone: 'हटाया गया', actWarn: 'चेतावनी', actMute: 'म्यूट {d}', actBan: 'प्रतिबंध {d}',
+      serversTitle: 'सर्वर', onlineN: '{n} ऑनलाइन', noRoomsNow: 'अभी कोई रूम नहीं है। खेलें दबाएँ, नया रूम खुल जाएगा।', stOpen: 'खुला', stFull: 'भरा हुआ',
+      stFreeing: 'एक जगह खाली हो रही है', phHiding: 'छिपना', phHunt: 'खोज', phStory: 'कहानी समाप्त', leftT: '{t} बाकी', mapN: 'मैप {m}',
+      moreRooms: '+ {n} और रूम', refresh: 'रीफ़्रेश', playNow: 'खेलें', gRaceMode: 'रेस', gHnsMode: 'आँख-मिचौली', playersN: '{n} खिलाड़ी',
+      playerN: '1 खिलाड़ी', roomsN: '{n} रूम', roomN: '1 रूम', upTo40: 'हर रूम में 40 खिलाड़ी तक',
+      openProfile: 'प्रोफ़ाइल खोलें', tabProfile: 'प्रोफ़ाइल', tabMaps: 'मैप', tabFriends: 'दोस्त', perToday: 'आज', perWeek: 'इस सप्ताह', perAll: 'कुल',
+      joined: 'जुड़े: {d}', coinsL: 'सिक्के', raceScores: 'रेस के अंक', hsScores: 'आँख-मिचौली के अंक', noRank: 'कोई रैंक नहीं', aboutL: 'परिचय',
+      nothingWritten: 'अभी कुछ नहीं लिखा', todayWord: 'आज', weekWord: 'इस सप्ताह', noMapsYet: 'अभी कोई मैप प्रकाशित नहीं', noFriendsYet: 'अभी कोई दोस्त नहीं',
+      published: 'प्रकाशित: {d}', inGameTag: 'गेम में', likesN: 'पसंद {a} · नापसंद {b}', onlineNowTag: 'अभी ऑनलाइन', minAgo: '{n} मिनट पहले',
+      hAgo: '{n} घंटे पहले', dAgo: '{n} दिन पहले', longAgo: 'बहुत पहले', friendsL: 'दोस्त', mapsL: 'मैप', moreN2: '+ {n} और', race: 'रेस', hns: 'आँख-मिचौली',
+      rulesTitle: 'AIBROFIST सर्वर के नियम'
+    },
+    rules: ['स्पैम नहीं', 'दूसरे Discord सर्वर के निमंत्रण नहीं', 'वयस्क सामग्री नहीं', 'नफ़रत भरी बातें नहीं', 'धोखाधड़ी और ख़तरनाक लिंक नहीं',
+            'असली पैसों के बदले अकाउंट या सिक्के बेचना मना है', 'दूसरों के IP पते नहीं'],
+    short: ['2 सेकंड में 3 से ज़्यादा संदेश। 5वीं बार म्यूट।', 'संदेश हटा दिया जाता है और आपको चेतावनी मिलती है।', 'तस्वीरें, लिंक और टेक्स्ट।',
+            'गाली-गलौज और किसी को खुद को नुकसान पहुँचाने के लिए कहना।', 'फ़िशिंग, नकली Nitro, IP चुराने वाले, .exe। इकलौता प्रतिबंध।',
+            'संदेश हटा दिया जाता है और आपको चेतावनी मिलती है।', 'संदेश हटा दिया जाता है, कोई सज़ा नहीं।'],
+    notes: { flood: '2 सेकंड में 3 से ज़्यादा संदेश', invite: 'दूसरे सर्वर का निमंत्रण', 'nsfw-link': '18+ साइट का लिंक', 'nsfw-image': '18+ तस्वीर',
+             slur: 'गाली या नफ़रत भरी बात', selfharm: 'खुद को नुकसान पहुँचाने के लिए उकसाना', 'scam-text': 'जानी-पहचानी धोखाधड़ी वाला संदेश', 'everyone-link': 'लिंक के साथ सामूहिक मेंशन',
+             badfile: 'चलाने योग्य फ़ाइल', scam: 'धोखाधड़ी या फ़िशिंग लिंक', grabber: 'IP पता चुराने वाला लिंक', cheat: 'असली पैसों में बिक्री',
+             custom: 'इस सर्वर पर प्रतिबंधित शब्द', 'native-word': 'सर्वर के AutoMod नियम ने रोका', warns: '30 दिनों में 3 चेतावनियाँ' },
+    units: { plural: 'one', min: ['मिनट', 'मिनट'], hour: ['घंटा', 'घंटे'], day: ['दिन', 'दिन'] }
+  },
+
+  /* ---------- ไทย ---------- */
+  th: {
+    name: 'ไทย', locale: 'th',
+    s: {
+      warn: 'คำเตือน', mute: 'ถูกปิดเสียง', ban: 'ถูกแบน', unmute: 'ยกเลิกการปิดเสียงแล้ว', unban: 'ยกเลิกการแบนแล้ว', unwarn: 'ลบคำเตือนแล้ว',
+      removed: 'ลบข้อความแล้ว', rule: 'กฎ', reason: 'เหตุผล', other: 'อื่น ๆ', customWords: 'คำที่ห้ามใช้ในเซิร์ฟเวอร์นี้',
+      nativeWord: 'กฎ AutoMod ของเซิร์ฟเวอร์', noReason: 'ไม่ได้ระบุเหตุผล', by: 'โดย {who}', byBot: 'อัตโนมัติ โดยบอต', caseN: 'เคส {n}',
+      ofLimit: '{n} จาก {limit}', forever: 'ถาวร', permanent: 'แบนถาวร', nextMute: 'ครบ {limit} คำเตือนภายใน 30 วัน จะถูกปิดเสียง 1 ชั่วโมง',
+      escalated: 'คำเตือน {n} จาก {n}: ปิดเสียง {d} และเริ่มนับใหม่', escalatedBlocked: 'คำเตือน {n} จาก {n} และเริ่มนับใหม่',
+      tally: 'จำนวนที่นับ', untilLabel: 'ถึง', lifts: 'สิ้นสุด', banWord: 'แบน', status: 'สถานะ', notApplied: 'ไม่ได้ดำเนินการ: {why}',
+      ownerBlocked: 'ไม่สามารถปิดเสียงหรือแบนเจ้าของเซิร์ฟเวอร์ได้', adminBlocked: 'ไม่สามารถปิดเสียงผู้ดูแลได้',
+      failed: 'ล้มเหลว: บอตไม่มีสิทธิ์', canTalk: 'พิมพ์ได้อีกครั้ง', backIn: 'เข้าเซิร์ฟเวอร์ได้อีกครั้ง', clean: 'ประวัติสะอาดแล้ว',
+      mistake: 'คิดว่าบอตทำผิดพลาด? ติดต่อเจ้าของเซิร์ฟเวอร์', warnsAddShort: 'คำเตือนจะสะสม: ครบ 3 ครั้งใน 30 วัน ถูกปิดเสียง 1 ชั่วโมง',
+      updated: 'อัปเดต {d}', actNone: 'ลบข้อความ', actWarn: 'คำเตือน', actMute: 'ปิดเสียง {d}', actBan: 'แบน {d}',
+      serversTitle: 'เซิร์ฟเวอร์', onlineN: 'ออนไลน์ {n} คน', noRoomsNow: 'ตอนนี้ยังไม่มีห้อง กดเล่นแล้วจะเปิดห้องใหม่', stOpen: 'ว่าง', stFull: 'เต็ม',
+      stFreeing: 'กำลังจะมีที่ว่าง', phHiding: 'กำลังซ่อน', phHunt: 'กำลังล่า', phStory: 'เนื้อเรื่องจบแล้ว', leftT: 'เหลือ {t}', mapN: 'แมป {m}',
+      moreRooms: 'และอีก {n} ห้อง', refresh: 'รีเฟรช', playNow: 'เล่น', gRaceMode: 'แข่งรถ', gHnsMode: 'ซ่อนแอบ', playersN: '{n} ผู้เล่น',
+      playerN: '1 ผู้เล่น', roomsN: '{n} ห้อง', roomN: '1 ห้อง', upTo40: 'ห้องละไม่เกิน 40 คน',
+      openProfile: 'เปิดโปรไฟล์', tabProfile: 'โปรไฟล์', tabMaps: 'แมป', tabFriends: 'เพื่อน', perToday: 'วันนี้', perWeek: 'สัปดาห์นี้', perAll: 'ตลอดกาล',
+      joined: 'เข้าร่วม {d}', coinsL: 'เหรียญ', raceScores: 'คะแนนแข่งรถ', hsScores: 'คะแนนซ่อนแอบ', noRank: 'ยังไม่มีแรงก์', aboutL: 'เกี่ยวกับ',
+      nothingWritten: 'ยังไม่ได้เขียนอะไร', todayWord: 'วันนี้', weekWord: 'สัปดาห์นี้', noMapsYet: 'ยังไม่มีแมปที่เผยแพร่', noFriendsYet: 'ยังไม่มีเพื่อน',
+      published: 'เผยแพร่ {d}', inGameTag: 'ในเกม', likesN: 'ถูกใจ {a} · ไม่ถูกใจ {b}', onlineNowTag: 'ออนไลน์อยู่', minAgo: '{n} นาทีที่แล้ว',
+      hAgo: '{n} ชั่วโมงที่แล้ว', dAgo: '{n} วันที่แล้ว', longAgo: 'นานแล้ว', friendsL: 'เพื่อน', mapsL: 'แมป', moreN2: 'และอีก {n}', race: 'แข่งรถ', hns: 'ซ่อนแอบ',
+      rulesTitle: 'กฎของเซิร์ฟเวอร์ AIBROFIST'
+    },
+    rules: ['ห้ามสแปม', 'ห้ามเชิญไปเซิร์ฟเวอร์ Discord อื่น', 'ห้ามเนื้อหาสำหรับผู้ใหญ่', 'ห้ามใช้คำพูดแสดงความเกลียดชัง', 'ห้ามหลอกลวงและลิงก์อันตราย',
+            'ห้ามขายบัญชีหรือเหรียญด้วยเงินจริง', 'ห้ามเปิดเผยที่อยู่ IP ของผู้อื่น'],
+    short: ['เกิน 3 ข้อความใน 2 วินาที ครั้งที่ 5 ถูกปิดเสียง', 'ข้อความถูกลบและคุณจะได้รับคำเตือน', 'รูปภาพ ลิงก์ และข้อความ', 'คำหยาบคายและการชักชวนให้คนอื่นทำร้ายตัวเอง',
+            'ฟิชชิง Nitro ปลอม ตัวขโมย IP ไฟล์ .exe กฎข้อเดียวที่ถูกแบน', 'ข้อความถูกลบและคุณจะได้รับคำเตือน', 'ข้อความถูกลบ ไม่มีบทลงโทษ'],
+    notes: { flood: 'เกิน 3 ข้อความใน 2 วินาที', invite: 'คำเชิญไปเซิร์ฟเวอร์อื่น', 'nsfw-link': 'ลิงก์ไปเว็บไซต์ 18+', 'nsfw-image': 'รูปภาพ 18+',
+             slur: 'คำหยาบคายหรือคำพูดแสดงความเกลียดชัง', selfharm: 'ชักชวนให้ทำร้ายตัวเอง', 'scam-text': 'ข้อความหลอกลวงที่รู้จัก', 'everyone-link': 'แท็กทุกคนพร้อมลิงก์',
+             badfile: 'ไฟล์ที่เรียกใช้งานได้', scam: 'ลิงก์หลอกลวงหรือฟิชชิง', grabber: 'ลิงก์ที่ขโมยที่อยู่ IP', cheat: 'ซื้อขายด้วยเงินจริง',
+             custom: 'คำที่ห้ามใช้ในเซิร์ฟเวอร์นี้', 'native-word': 'ถูกบล็อกโดยกฎ AutoMod ของเซิร์ฟเวอร์', warns: '3 คำเตือนใน 30 วัน' },
+    units: { plural: 'none', min: ['นาที'], hour: ['ชั่วโมง'], day: ['วัน'] }
+  },
+
+  /* ---------- 한국어 ---------- */
+  ko: {
+    name: '한국어', locale: 'ko',
+    s: {
+      warn: '경고', mute: '채팅 금지', ban: '차단', unmute: '채팅 금지 해제', unban: '차단 해제', unwarn: '경고 삭제됨',
+      removed: '메시지 삭제됨', rule: '규칙', reason: '사유', other: '기타', customWords: '이 서버에서 금지된 단어',
+      nativeWord: '서버 AutoMod 규칙', noReason: '사유 없음', by: '처리자: {who}', byBot: '자동, 봇이 처리', caseN: '사건 {n}',
+      ofLimit: '{n} / {limit}', forever: '영구', permanent: '영구 차단', nextMute: '30일 안에 경고 {limit}회가 쌓이면 1시간 채팅 금지입니다.',
+      escalated: '경고 {n}/{n}: {d} 동안 채팅 금지. 횟수는 처음부터 다시 셉니다.', escalatedBlocked: '경고 {n}/{n}. 횟수는 처음부터 다시 셉니다.',
+      tally: '횟수', untilLabel: '종료', lifts: '해제', banWord: '차단', status: '상태', notApplied: '적용되지 않음: {why}',
+      ownerBlocked: '서버 주인은 채팅 금지나 차단을 할 수 없습니다', adminBlocked: '관리자는 채팅 금지를 할 수 없습니다',
+      failed: '실패: 봇에게 권한이 없습니다', canTalk: '다시 채팅할 수 있습니다', backIn: '서버에 다시 들어올 수 있습니다', clean: '이제 기록이 깨끗합니다',
+      mistake: '봇이 잘못 판단했다고 생각하나요? 서버 주인에게 문의하세요.', warnsAddShort: '경고는 누적됩니다: 30일 안에 3회면 1시간 채팅 금지.',
+      updated: '{d} 업데이트', actNone: '삭제', actWarn: '경고', actMute: '채팅 금지 {d}', actBan: '차단 {d}',
+      serversTitle: '서버', onlineN: '접속 중 {n}명', noRoomsNow: '지금은 방이 없습니다. 플레이를 누르면 새 방이 열립니다.', stOpen: '입장 가능', stFull: '가득 참',
+      stFreeing: '곧 자리가 납니다', phHiding: '숨는 중', phHunt: '추격 중', phStory: '스토리 종료', leftT: '{t} 남음', mapN: '맵 {m}',
+      moreRooms: '외 {n}개 방', refresh: '새로고침', playNow: '플레이', gRaceMode: '레이스', gHnsMode: '숨바꼭질', playersN: '{n}명',
+      playerN: '1명', roomsN: '{n}개 방', roomN: '1개 방', upTo40: '방당 최대 40명',
+      openProfile: '프로필 열기', tabProfile: '프로필', tabMaps: '맵', tabFriends: '친구', perToday: '오늘', perWeek: '이번 주', perAll: '전체',
+      joined: '가입일 {d}', coinsL: '코인', raceScores: '레이스 점수', hsScores: '숨바꼭질 점수', noRank: '랭크 없음', aboutL: '소개',
+      nothingWritten: '아직 작성된 내용이 없습니다', todayWord: '오늘', weekWord: '이번 주', noMapsYet: '공개된 맵이 아직 없습니다', noFriendsYet: '아직 친구가 없습니다',
+      published: '{d} 공개', inGameTag: '게임 내', likesN: '좋아요 {a} · 싫어요 {b}', onlineNowTag: '접속 중', minAgo: '{n}분 전',
+      hAgo: '{n}시간 전', dAgo: '{n}일 전', longAgo: '오래전', friendsL: '친구', mapsL: '맵', moreN2: '외 {n}', race: '레이스', hns: '숨바꼭질',
+      rulesTitle: 'AIBROFIST 서버 규칙'
+    },
+    rules: ['도배 금지', '다른 Discord 서버 초대 금지', '성인 콘텐츠 금지', '혐오 발언 금지', '사기 및 위험한 링크 금지', '실제 돈으로 계정이나 코인 판매 금지',
+            '타인의 IP 주소 게시 금지'],
+    short: ['2초 안에 메시지 3개 초과. 5번째에 채팅 금지.', '메시지가 삭제되고 경고를 받습니다.', '이미지, 링크, 텍스트.', '욕설, 그리고 다른 사람에게 자해를 부추기는 말.',
+            '피싱, 가짜 Nitro, IP 탈취, .exe. 유일한 차단 사유.', '메시지가 삭제되고 경고를 받습니다.', '메시지가 삭제됩니다. 처벌은 없습니다.'],
+    notes: { flood: '2초 안에 메시지 3개 초과', invite: '다른 서버 초대', 'nsfw-link': '성인 사이트 링크', 'nsfw-image': '성인 이미지',
+             slur: '욕설 또는 혐오 발언', selfharm: '자해를 부추기는 말', 'scam-text': '알려진 사기 메시지', 'everyone-link': '링크가 포함된 전체 멘션',
+             badfile: '실행 파일', scam: '사기 또는 피싱 링크', grabber: 'IP 주소를 탈취하는 링크', cheat: '실제 돈 거래',
+             custom: '이 서버에서 금지된 단어', 'native-word': '서버 AutoMod 규칙에 의해 차단됨', warns: '30일 안에 경고 3회' },
+    units: { plural: 'none', sep: '', min: ['분'], hour: ['시간'], day: ['일'] }
+  },
+
+  /* ---------- 繁體中文 (台灣) ---------- */
+  zt: {
+    name: '繁體中文', locale: 'zh-TW',
+    s: {
+      warn: '警告', mute: '禁言', ban: '封鎖', unmute: '已解除禁言', unban: '已解除封鎖', unwarn: '警告已清除',
+      removed: '訊息已刪除', rule: '規則', reason: '原因', other: '其他', customWords: '本伺服器的違禁詞',
+      nativeWord: '伺服器 AutoMod 規則', noReason: '未說明原因', by: '執行者：{who}', byBot: '自動，由機器人執行', caseN: '案件 {n}',
+      ofLimit: '{n}/{limit}', forever: '永久', permanent: '永久封鎖', nextMute: '30 天內累計 {limit} 次警告將禁言 1 小時。',
+      escalated: '警告 {n}/{n}：禁言 {d}。計數重新開始。', escalatedBlocked: '警告 {n}/{n}。計數重新開始。',
+      tally: '計數', untilLabel: '截止', lifts: '解除時間', banWord: '封鎖', status: '狀態', notApplied: '未執行：{why}',
+      ownerBlocked: '無法對伺服器擁有者禁言或封鎖', adminBlocked: '無法對管理員禁言',
+      failed: '失敗：機器人沒有權限', canTalk: '可以重新發言', backIn: '可以重新加入伺服器', clean: '紀錄已清空',
+      mistake: '覺得機器人判斷錯了嗎？請聯絡伺服器擁有者。', warnsAddShort: '警告會累計：30 天內 3 次警告將禁言 1 小時。',
+      updated: '更新於 {d}', actNone: '刪除', actWarn: '警告', actMute: '禁言 {d}', actBan: '封鎖 {d}',
+      serversTitle: '伺服器', onlineN: '{n} 人在線', noRoomsNow: '目前沒有房間。按「開始遊戲」即可建立新房間。', stOpen: '開放', stFull: '已滿',
+      stFreeing: '即將空出位置', phHiding: '躲藏中', phHunt: '追捕中', phStory: '劇情結束', leftT: '剩餘 {t}', mapN: '地圖 {m}',
+      moreRooms: '另有 {n} 個房間', refresh: '重新整理', playNow: '開始遊戲', gRaceMode: '競速', gHnsMode: '捉迷藏', playersN: '{n} 位玩家',
+      playerN: '1 位玩家', roomsN: '{n} 個房間', roomN: '1 個房間', upTo40: '每個房間最多 40 位玩家',
+      openProfile: '開啟個人檔案', tabProfile: '個人檔案', tabMaps: '地圖', tabFriends: '好友', perToday: '今日', perWeek: '本週', perAll: '全部',
+      joined: '註冊於 {d}', coinsL: '金幣', raceScores: '競速得分', hsScores: '捉迷藏得分', noRank: '尚無段位', aboutL: '簡介',
+      nothingWritten: '還沒有填寫', todayWord: '今日', weekWord: '本週', noMapsYet: '還沒有發布地圖', noFriendsYet: '還沒有好友',
+      published: '發布於 {d}', inGameTag: '已入遊戲', likesN: '按讚 {a} · 倒讚 {b}', onlineNowTag: '在線', minAgo: '{n} 分鐘前',
+      hAgo: '{n} 小時前', dAgo: '{n} 天前', longAgo: '很久以前', friendsL: '好友', mapsL: '地圖', moreN2: '另有 {n} 個', race: '競速', hns: '捉迷藏',
+      rulesTitle: 'AIBROFIST 伺服器規則'
+    },
+    rules: ['禁止洗版', '禁止邀請至其他 Discord 伺服器', '禁止成人內容', '禁止仇恨言論', '禁止詐騙和危險連結', '禁止用真實貨幣販售帳號或金幣', '禁止公開他人的 IP 位址'],
+    short: ['2 秒內發送超過 3 則訊息。第 5 次將被禁言。', '訊息會被刪除，並收到一次警告。', '圖片、連結和文字。', '辱罵，以及叫別人傷害自己。',
+            '網路釣魚、假 Nitro、IP 竊取、.exe。唯一會被封鎖的規則。', '訊息會被刪除，並收到一次警告。', '訊息會被刪除，不作處罰。'],
+    notes: { flood: '2 秒內發送超過 3 則訊息', invite: '邀請至其他伺服器', 'nsfw-link': '成人網站連結', 'nsfw-image': '成人圖片',
+             slur: '辱罵或仇恨言論', selfharm: '慫恿自殘', 'scam-text': '已知的詐騙訊息', 'everyone-link': '附連結的群發提及',
+             badfile: '可執行檔案', scam: '詐騙或釣魚連結', grabber: '竊取 IP 位址的連結', cheat: '以真實貨幣交易',
+             custom: '本伺服器的違禁詞', 'native-word': '被伺服器 AutoMod 規則攔截', warns: '30 天內 3 次警告' },
+    units: { plural: 'none', sep: '', min: ['分鐘'], hour: ['小時'], day: ['天'] }
   }
 };
 
