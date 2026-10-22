@@ -1,4 +1,9 @@
 {
   "base": "13f9f8f5a03fb9f246cc81ca8c2fc1f594850357",
-  "updates": []
+  "updates": [
+    {
+      "title": "Discord bot languages",
+      "text": "The Discord bot now answers in the language of your Discord: Spanish, Portuguese, German, French, Turkish, Polish, Ukrainian, Italian, Chinese and Japanese, besides English and Russian."
+    }
+  ]
 }

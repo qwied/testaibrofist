@@ -4,7 +4,9 @@
      не превращаются ни в разметку, ни в упоминание;
    - сообщение целиком: рамка, не больше 4000 знаков текста, пустых кусков нет, кнопки серые,
      выбранная не нажимается, id не повторяются, лимиты Discord (ряд — до 5 кнопок, надпись — до 80);
-   - все виды по-английски и по-русски собираются без «undefined» и «NaN»;
+   - все виды на всех языках (английский, русский и переводы из discordLang.js) собираются без «undefined», «NaN» и неподставленных {скобок};
+   - переводы полные: все ключи на месте, подстановки ({n}, {d}...) те же, что в английском, 7 правил, находки автомода;
+   - язык человека берётся из языка Discord (de, pt-BR, es-419, zh-TW...), неизвестный — английский;
    - данные профиля — только то, что видно на странице игрока на сайте.
    Данные игроков — выдуманные, во временной папке; настоящий data/ тест не трогает.
    Запуск: node test-discord-views.js */
@@ -15,6 +17,8 @@ let fails = 0;
 const ok = (n, c, x) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', n, x === undefined ? '' : x); };
 const V = require('./discordViews.js');
 const R = require('./discordRules.js');
+const { PACKS, KEYS, NOTE_KEYS } = require('./discordLang.js');
+const ALL = ['en', 'ru'].concat(Object.keys(PACKS));
 
 const now = Date.now();
 const servers = { at: now, online: 21, rooms: 3, modes: { race: { players: 16 }, hideAndSeek: { players: 5 } }, list: [
@@ -80,11 +84,52 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
   const ru = V.view('rules', { std: true, title: 'AIBROFIST Server Rules', text: '', at: now }, 'en');
   const rm = V.message(ru, [V.row(...V.langButtons(l => 'rules:' + l, 'en', 'rules-lang'))]);
   const rb = buttons(rm);
-  ok('кнопки языка: выбранная неактивна, с постоянным id; обе серые, с флагами', rb.length === 2 && rb[0].disabled && rb[0].custom_id === 'rules-lang' && rb[1].custom_id === 'rules:ru' &&
-     rb.every(b => b.style === 2) && rb[0].emoji.name === '🇬🇧' && rb[1].emoji.name === '🇷🇺');
+  ok('кнопки языка: выбранная неактивна, с постоянным id; все серые; флаги и глобус «My language»', rb.length === 3 && rb[0].disabled && rb[0].custom_id === 'rules-lang' && rb[1].custom_id === 'rules:ru' &&
+     rb[2].custom_id === 'rules:me' && rb[2].label === 'My language' && rb.every(b => b.style === 2) && rb[0].emoji.name === '🇬🇧' && rb[1].emoji.name === '🇷🇺' && rb[2].emoji.name === '🌐');
+  const rd = buttons(V.message(ru, [V.row(...V.langButtons(l => 'rules:' + l, 'de', 'rules-lang'))]));
+  ok('показан другой язык (немецкий): English и Русский нажимаются, глобус стоит выбранным и подписан «Deutsch»; id не повторяются', rd.map(b => b.label + ':' + !!b.disabled).join() === 'English:false,Русский:false,Deutsch:true' &&
+     new Set(rd.map(b => b.custom_id)).size === 3 && rd[2].custom_id === 'rules-lang');
   ok('ссылка — кнопка со ссылкой без id; надпись длиннее 80 знаков обрезается', V.linkButton('x'.repeat(100), 'https://aibrofist.online').label.length === 80 && !('custom_id' in V.linkButton('a', 'https://aibrofist.online')));
 
-  console.log('\nвсе виды, английский и русский:');
+  console.log('\nпереводы (discordLang.js):');
+  const holes = [], marks = [];
+  const slots = t => (String(t).replace(/\{nth\}/g, '{limit}').match(/\{[a-zA-Z0-9]+\}/g) || []).sort().join();      // {nth} («3-е») в переводах заменено числом {limit}
+  for (const [code, pack] of Object.entries(PACKS)) {
+    for (const k of KEYS) {
+      const own = pack.s[k], en = V.say('en', k);
+      if (typeof own !== 'string' || !own.trim()) holes.push(code + '.' + k + ' нет');
+      else if (slots(own) !== slots(en)) marks.push(code + '.' + k + ': ' + slots(own) + ' вместо ' + slots(en));
+    }
+    for (const k of Object.keys(pack.s)) if (KEYS.indexOf(k) === -1) holes.push(code + '.' + k + ' лишний ключ');
+    if (!pack.name || !pack.locale || !pack.units) holes.push(code + ': нет name/locale/units');
+    if ((pack.rules || []).length !== 7 || pack.rules.some(x => !String(x).trim())) holes.push(code + ': правил не 7');
+    if ((pack.short || []).length !== 7 || pack.short.some(x => !String(x).trim())) holes.push(code + ': коротких строк не 7');
+    for (const k of NOTE_KEYS) if (!pack.notes || !String(pack.notes[k] || '').trim()) holes.push(code + '.notes.' + k + ' нет');
+    for (const u of ['min', 'hour', 'day']) if (!pack.units[u] || !pack.units[u].length) holes.push(code + '.units.' + u + ' нет');
+  }
+  ok('у каждого языка (' + Object.keys(PACKS).length + ') есть все ключи, 7 правил, 7 коротких строк, все находки автомода, единицы времени; лишнего нет', holes.length === 0, holes.slice(0, 5).join(' | '));
+  ok('подстановки в переводах те же, что в английском ({n}, {d}, {limit}...): бот ставит их по имени', marks.length === 0, marks.slice(0, 5).join(' | '));
+  const sameAsEn = Object.entries(PACKS).map(([c, p]) => [c, KEYS.filter(k => p.s[k] === V.say('en', k)).length]).filter(([, n]) => n > 12);
+  ok('перевод не копия английского (не больше 12 общих строк с английским у языка)', sameAsEn.length === 0, JSON.stringify(sameAsEn));
+  ok('язык Discord -> язык ответа: de, pt-BR, es-ES и es-419, zh-CN и zh-TW, uk, ru-RU, регион после дефиса не важен', [['de', 'de'], ['de-AT', 'de'], ['pt-BR', 'pt'], ['es-ES', 'es'], ['es-419', 'es'],
+     ['zh-CN', 'zh'], ['zh-TW', 'zh'], ['uk', 'uk'], ['ru', 'ru'], ['ja', 'ja'], ['fr', 'fr'], ['tr', 'tr'], ['pl', 'pl'], ['it', 'it'], ['en-US', 'en'], ['en-GB', 'en']].every(([l, w]) => V.fromLocale(l) === w));
+  ok('неизвестный или пустой язык — английский (корейский, арабский, hi, пусто, мусор)', ['ko', 'ar', 'hi', '', undefined, null, 'zz-ZZ', '123', 'constructor', '__proto__'].every(l => V.fromLocale(l) === 'en'));
+  ok('langOf не принимает чужие ключи (constructor и т. п.) — иначе из имени языка в кнопке получилось бы что угодно', ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'de ', 'DE'].every(l => V.langOf(l) === 'en'));
+  const dur = (ms, l) => V.duration(ms, l), H = 3600000, D = 86400000;
+  ok('длительности по правилам языка: польский 1 godzina / 2 dni / 5 dni / 22 dni, украинский 2 дні / 5 днів, немецкий 1 Stunde / 6 Stunden, китайский 1小时, турецкий 1 saat',
+     dur(H, 'pl') === '1 godzina' && dur(2 * D, 'pl') === '2 dni' && dur(5 * D, 'pl') === '5 dni' && dur(22 * D, 'pl') === '22 dni' && dur(2 * H, 'pl') === '2 godziny' && dur(5 * H, 'pl') === '5 godzin' &&
+     dur(2 * D, 'uk') === '2 дні' && dur(5 * D, 'uk') === '5 днів' && dur(H, 'de') === '1 Stunde' && dur(6 * H, 'de') === '6 Stunden' && dur(H, 'zh') === '1小时' && dur(H, 'tr') === '1 saat' &&
+     dur(600000, 'es') === '10 minutos' && dur(7 * D, 'fr') === '7 jours' && dur(H, 'ja') === '1時間', [dur(H, 'pl'), dur(22 * D, 'pl'), dur(5 * D, 'uk')].join(' / '));
+  ok('даты делает сама система по языку (Intl): немецкая, японская, русская и английская', /^\d{1,2}\. .* 2026$/.test(V.date(Date.UTC(2026, 1, 3), 'de')) && /^2026年2月3日$/.test(V.date(Date.UTC(2026, 1, 3), 'ja')) &&
+     V.date(Date.UTC(2026, 1, 3), 'ru') === '3 фев 2026' && V.date(Date.UTC(2026, 1, 3), 'en') === 'Feb 3, 2026' && /07:05 UTC$/.test(V.date(Date.UTC(2026, 1, 3, 7, 5), 'fr', true)), V.date(Date.UTC(2026, 1, 3), 'de'));
+  const warn = lang => allText(V.message(V.view('action', { type: 'warn', name: 'Bob', rule: 6, kind: 'cheat', reason: 'x', n: 1, limit: 3, by: '', caseNo: 4, at: now }, lang), []));
+  ok('наказание на другом языке: правило, причина-находка автомода (kind) и «обычная» причина переводятся; ник и написанный человеком текст — как есть',
+     /Regel:\*\* 6\. Kein Verkauf von Konten/.test(warn('de')) && /Grund:\*\* Verkauf für echtes Geld/.test(warn('de')) && /Raison:\*\* Vente contre de l’argent réel/.test(warn('fr')) &&
+     /\*\*Bob\*\*/.test(warn('ja')) && /Auto/.test(warn('en')));
+  const own = allText(V.message(V.view('action', { type: 'warn', name: 'Bob', rule: 0, reason: 'свой текст человека', n: 1, limit: 3, by: 'owner', at: now }, 'es'), []));
+  ok('причина, написанная владельцем, не переводится (её нет в переводах) — показана как написана', /Motivo:\*\* свой текст человека/.test(own) && /Regla:\*\* Otro/.test(own));
+
+  console.log('\nвсе виды на всех языках:');
   const samples = {
     action: [{ type: 'warn', name: 'Alice', user: 'alice', rule: 6, reason: 'sold coins', n: 1, limit: 3, by: 'owner', caseNo: 7, at: now, avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' },
              { type: 'mute', name: 'Bob', rule: 4, kind: 'slur', reason: 'Hate speech', ms: 3600000, caseNo: 8, at: now },
@@ -102,17 +147,17 @@ const count = m => { let n = 0; const w = x => { if (Array.isArray(x)) x.forEach
     account: [p1, empty]
   };
   const bad = [];
-  for (const kind of Object.keys(samples)) for (const lang of ['en', 'ru']) for (const [i, d] of samples[kind].entries()) {
+  for (const kind of Object.keys(samples)) for (const lang of ALL) for (const [i, d] of samples[kind].entries()) {
     const pages = kind === 'account' ? [['p', 'all'], ['p', 'day'], ['p', 'week'], ['m'], ['f']] : [[]];
     for (const [page, period] of pages) {
       let m;
       try { m = V.message(V.view(kind, d, lang, { page, period }), [V.row(...V.langButtons(l => 'x:' + l, lang, 'x-lang'))]); } catch (e) { bad.push(kind + '/' + lang + '/' + i + ': ' + e.message); continue; }
       const all = allText(m);
-      if (/undefined|NaN|\[object|null/.test(all) || !all.trim()) bad.push(kind + '/' + lang + '/' + i + ': ' + all.replace(/\s+/g, ' ').slice(0, 100));
+      if (/undefined|NaN|\[object|null|\{[a-zA-Z0-9]+\}/.test(all) || !all.trim()) bad.push(kind + '/' + lang + '/' + i + ': ' + all.replace(/\s+/g, ' ').slice(0, 100));
       if (all.length > 4000 || count(m) > 40 || m.components[0].components.some(c => c.type === 10 && !c.content.trim())) bad.push(kind + '/' + lang + '/' + i + ': пределы');
     }
   }
-  ok('каждый вид и каждая страница, по-английски и по-русски: без «undefined»/«NaN», не длиннее 4000 знаков, не больше 40 частей', bad.length === 0, bad.slice(0, 4).join(' | '));
+  ok('каждый вид и каждая страница на каждом языке (' + ALL.join(', ') + '): без «undefined»/«NaN»/неподставленных скобок, не длиннее 4000 знаков, не больше 40 частей', bad.length === 0, bad.slice(0, 4).join(' | '));
   const act = V.message(V.view('action', samples.action[0], 'en'), []);
   ok('аватарка участника — справа в заголовке (раздел с миниатюрой); без неё — просто текст', act.components[0].components[0].type === 9 &&
      act.components[0].components[0].accessory.media.url === 'https://cdn.discordapp.com/embed/avatars/0.png' && V.message(V.view('action', samples.action[1], 'en'), []).components[0].components[0].type === 10);

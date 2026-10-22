@@ -13,7 +13,10 @@
 //   - пишет игроку в личку, за что и как он наказан, а в канал mod-log
 //     (если он есть) — запись о случае;
 //   - отвечает аккуратными сообщениями Discord (рамка, текст, аватарка,
-//     серые кнопки; discordViews.js) с флагами English / Русский под ними;
+//     серые кнопки; discordViews.js). Язык берёт у самого Discord (locale в
+//     команде или нажатии): английский, русский и ещё 10 языков из
+//     discordLang.js, остальным — английский. Под сообщением кнопки English /
+//     Русский и глобус «My language» (то же на языке нажавшего);
 //   - секретные команды владельца сервера прямо в канале (начало команд —
 //     DISCORD_CMD_PREFIX на хостинге): news (пост в любой канал с
 //     картинками и кнопкой-ссылкой — в окне, которое видит только он),
@@ -831,13 +834,30 @@ async function updateMessage(i, msg) {
 // запасной ответ текстом (виден только нажавшему)
 const textAnswer = (i, data) => respond(i, { type: 4, data: Object.assign({ flags: 64, allowed_mentions: { parse: [] } }, data) });
 
+/* Язык человека — по языку его Discord (locale есть в каждой команде и каждом нажатии): ru, de, pt-BR... ->
+   свой перевод из discordLang.js, чего там нет — английский. В публичных карточках канала и в личке язык
+   получателя Discord не сообщает — там английский, а глобус под текстом («Мой язык») показывает карточку на языке нажавшего. */
+const userLang = i => V.fromLocale(i && i.locale);
+/* Кнопка языка: code — en, ru, другой язык или «me» (глобус: язык самого нажавшего). make(язык) собирает сообщение.
+   Сообщение общее (в канале) и нажат глобус — человек получает личную копию, видную только ему, остальным ничего
+   не меняется; в личке, в личной копии и при выборе English/Русский — то же сообщение правится на месте. */
+function langAnswer(i, code, make) {
+  const me = code === 'me', lang = me ? userLang(i) : V.langOf(code);
+  let msg;
+  try { msg = make(lang); }
+  catch (e) { once('lang:' + e.message, 'could not build the message in', lang + ':', e.message); return textAnswer(i, { content: 'Could not change the language right now. Please try again.' }); }
+  const shared = i.guild_id && !(i.message && (i.message.flags & 64));
+  if (me && shared) return respond(i, { type: 4, data: Object.assign({}, msg, { flags: msg.flags | 64 }) });
+  return updateMessage(i, msg);
+}
+
 /* Ответ на команду или кнопку панели: новое сообщение, видное только владельцу.
    fallback — текст на случай, если сообщение не соберётся или Discord его не возьмёт. */
 async function showCard(i, g, kind, data, fallback) {
   const rec = { k: kind, d: data, g: g ? g.id : null };
   const id = keepCard(kind, data, rec.g);
   let msg = null;
-  try { msg = cardMessage(rec, id, 'en', true); }
+  try { msg = cardMessage(rec, id, userLang(i), true); }
   catch (e) { once('card:' + e.message, 'could not build the ' + kind + ' card, sending text instead:', e.message); }
   const r = msg ? await respond(i, { type: 4, data: msg }) : null;
   if (r && ok(r)) return r;
@@ -845,19 +865,16 @@ async function showCard(i, g, kind, data, fallback) {
   return textAnswer(i, fallback || card('Could not show this right now. Please try again.'));
 }
 
-// кнопка с флагом: та же карточка на выбранном языке, в том же сообщении
+// кнопка языка (флаг или глобус): та же карточка на выбранном языке
 function onCardLang(i, cid) {
-  const m = /^cd:([0-9a-f]+):(en|ru)(?::(?:dark|light))?$/.exec(cid);       // «:тема» — кнопки сообщений прежней версии
+  const m = /^cd:([0-9a-f]+):(me|[a-z]{2})(?::(?:dark|light))?$/.exec(cid);       // «:тема» — кнопки сообщений прежней версии
   if (!m || pressedTooFast(i)) return respond(i, { type: 6 });
-  const rec = state.cards[m[1]], lang = m[2];
-  if (!rec) return reply(i, { content: lang === 'ru' ? 'Эта карточка слишком старая: вызовите команду снова.' : 'This card is too old: use the command again.' });
+  const rec = state.cards[m[1]];
+  if (!rec) return reply(i, { content: (m[2] === 'me' ? userLang(i) : m[2]) === 'ru' ? 'Эта карточка слишком старая: вызовите команду снова.' : 'This card is too old: use the command again.' });
   // справка, статистика и предупреждения — только владельцу (их и видит только он)
   const g = rec.g && guilds.get(rec.g);
   if (OWNER_ONLY.has(rec.k) && !(g && userOf(i) === g.owner)) return reply(i, card('Only the server owner can use this.'));
-  let msg;
-  try { msg = cardMessage(rec, m[1], lang, false); }
-  catch (e) { return textAnswer(i, { content: lang === 'ru' ? 'Не получилось обновить карточку, попробуйте ещё раз.' : 'Could not update the card right now. Please try again.' }); }
-  return updateMessage(i, msg);
+  return langAnswer(i, m[2], lang => cardMessage(rec, m[1], lang, false));
 }
 
 /* ---------- предупреждения ----------
@@ -1455,7 +1472,7 @@ async function finishCard(i, g, kind, data, text) {
   const rec = { k: kind, d: Object.assign({ at: Date.now() }, data), g: g ? g.id : null };
   const id = keepCard(kind, rec.d, rec.g);
   try {
-    const r = await finishMessage(i, cardMessage(rec, id, 'en', true));
+    const r = await finishMessage(i, cardMessage(rec, id, userLang(i), true));
     if (ok(r)) return r;
     log('Discord did not take the ' + kind + ' card:', r.status, JSON.stringify(r.body).slice(0, 200));
   } catch (e) { once('card:' + e.message, 'could not build the ' + kind + ' card, sending text instead:', e.message); }
@@ -1518,16 +1535,21 @@ const rulesPost = (title, text, o) => {
    правила, свой текст владельца — как он написан. Под текстом флаги: English и
    Русский (без русского текста флагов нет). */
 const CARD_DESIGN = 4;               // версия оформления ответов бота (1-3 — картинки, 4 — сообщения Discord): поменялось — пост правил один раз перерисуется
+const rulesAreStd = r => r.en === R.rulesText('en') && (!r.ru || r.ru === R.rulesText('ru'));
 function rulesData(g, r, lang) {
-  const ru = lang === 'ru' && !!r.ru;
-  const std = r.en === R.rulesText('en') && (!r.ru || r.ru === R.rulesText('ru'));
+  const ru = lang === 'ru' && !!r.ru, std = rulesAreStd(r), title = r.title || RULES_TITLE;
   const text = ru ? r.ru : r.en;
-  return { std, title: ru ? RULES_TITLE_RU : (r.title || RULES_TITLE), text: g ? linkify(g, text) : text, at: r.at };
+  // другой язык (не en и не ru) — только у стандартных правил, у них есть перевод; название по умолчанию тоже переводится
+  return { std, title: ru ? RULES_TITLE_RU : lang !== 'en' && lang !== 'ru' && title === RULES_TITLE ? V.say(lang, 'rulesTitle') : title,
+           text: g ? linkify(g, text) : text, at: r.at };
 }
 function rulesMessage(g, r, lang) {
-  lang = lang === 'ru' && r.ru ? 'ru' : 'en';
-  const rows = r.ru ? [V.row(...V.langButtons(l => 'rules:' + l, lang, 'rules-lang'))] : [];
-  return V.message(V.view('rules', rulesData(g, r, lang), lang), rows);
+  lang = V.langOf(lang);
+  const std = rulesAreStd(r);
+  if ((lang === 'ru' && !r.ru) || (!std && lang !== 'en' && lang !== 'ru')) lang = 'en';
+  // свой текст владельца переводится только на русский (если он его написал): глобуса у него нет
+  const btns = V.langButtons(l => 'rules:' + l, lang, 'rules-lang').slice(0, std ? 3 : 2);
+  return V.message(V.view('rules', rulesData(g, r, lang), lang), r.ru ? [V.row(...btns)] : []);
 }
 
 /* Один пост: тот же канал — правим прежний на месте (картинку прежней версии
@@ -1620,20 +1642,21 @@ async function postDefaultRules(g) {
   save();
 }
 
-/* Флаги под правилами: текст в том же посте меняется на другой язык (это
-   правка самого поста, её видят все). Не собралось — прежняя рамка с текстом;
-   Discord правку не примет — отвечаем только нажавшему. */
-async function rulesSwitch(i, g, lang) {
+/* Кнопки языка под правилами: English и Русский меняют текст в том же посте (это правка самого поста, её видят
+   все), глобус даёт правила на языке Discord нажавшего личной копией, видной только ему. Не собралось —
+   прежняя рамка с текстом; Discord правку не примет — отвечаем только нажавшему. */
+async function rulesSwitch(i, g, code) {
   const r = g && gstate(g.id).rules || {};
   const full = { title: r.title || RULES_TITLE, en: r.en || R.rulesText('en'), ru: r.ru === undefined ? R.rulesText('ru') : r.ru, at: r.at };
-  const showRu = lang === 'ru' && !!full.ru;
-  let msg;
-  try { msg = rulesMessage(g, full, showRu ? 'ru' : 'en'); }
-  catch (e) {
-    const text = showRu ? full.ru : full.en;
-    msg = rulesPost(showRu ? RULES_TITLE_RU : full.title, g ? linkify(g, text) : text, { lang: showRu ? 'ru' : full.ru ? 'en' : null, at: r.at });
-  }
-  return updateMessage(i, Object.assign({ attachments: [] }, msg));
+  return langAnswer(i, code, lang => {
+    let msg;
+    try { msg = rulesMessage(g, full, lang); }
+    catch (e) {
+      const showRu = lang === 'ru' && !!full.ru, text = showRu ? full.ru : full.en;
+      msg = rulesPost(showRu ? RULES_TITLE_RU : full.title, g ? linkify(g, text) : text, { lang: showRu ? 'ru' : full.ru ? 'en' : null, at: r.at });
+    }
+    return Object.assign({ attachments: [] }, msg);
+  });
 }
 
 async function showModal(i, modern, classic) {
@@ -1746,7 +1769,7 @@ async function onUpdatesSubmit(i, g) {
 async function onInteraction(i) {
   if (!i) return;
   const cid = String((i.data && i.data.custom_id) || '');
-  const rs = i.type === 3 && /^rules:(en|ru)(?::(?:dark|light))?$/.exec(cid);       // «:тема» — кнопки поста прежней версии
+  const rs = i.type === 3 && /^rules:(me|[a-z]{2})(?::(?:dark|light))?$/.exec(cid);       // «:тема» — кнопки поста прежней версии
   if (rs) return rulesSwitch(i, i.guild_id ? guilds.get(i.guild_id) : guilds.values().next().value, rs[1]);
   if (i.type === 2 && i.data && i.data.name === 'servers') return onServers(i);
   if (i.type === 2 && i.data && i.data.name === 'account') return onAccount(i);
@@ -1813,7 +1836,7 @@ const pressedTooFast = i => {
   return now - last < PRESS_GAP_MS;
 };
 
-// /servers: кнопки — обновить, играть, флаги языка; id «sv:r:язык»
+// /servers: кнопки — обновить, играть, язык (английский, русский, глобус); id «sv:r:язык»
 function serversMessage(lang) {
   lang = V.langOf(lang);
   const rows = [V.row(V.button(V.say(lang, 'refresh'), 'sv:r:' + lang), V.linkButton(V.say(lang, 'playNow'), SITE_URL),
@@ -1847,13 +1870,13 @@ async function answerCommand(i, make, what) {
 }
 
 function onServers(i) {
-  return answerCommand(i, () => serversMessage('en'), 'servers');
+  return answerCommand(i, () => serversMessage(userLang(i)), 'servers');
 }
 function onAccount(i) {
   const opt = ((i.data && i.data.options) || []).find(o => o.name === 'nick');
   const nick = String((opt && opt.value) || '').trim().slice(0, 40);
   const d = nick && cards.profileData(nick);
-  if (d) return answerCommand(i, () => accountMessage(d, 'en', 'p', 'all'), 'account');
+  if (d) return answerCommand(i, () => accountMessage(d, userLang(i), 'p', 'all'), 'account');
   const like = nick ? cards.searchNames(nick, 5) : [];
   return reply(i, { content: 'No player named **' + md(nick || '?') + '** on aibrofist.online.' +
                              (like.length ? ' Maybe: ' + like.map(n => '**' + md(n) + '**').join(', ') + '?' : '') });
@@ -1866,23 +1889,16 @@ function onAccountHint(i) {
 }
 function onCardButton(i, cid) {
   if (pressedTooFast(i)) return respond(i, { type: 6 });
-  // «sv:r:язык»; у сообщений прежних версий (картинки) — «sv:тема[:страница][:язык]»
-  const sv = /^sv:(?:r:(en|ru)|(?:dark|light)(?::-?\d+)?(?::(en|ru))?)$/.exec(cid);
-  if (sv) {
-    let msg;
-    try { msg = serversMessage(sv[1] || sv[2]); } catch (e) { return sorry(i); }
-    return updateMessage(i, msg);
-  }
+  // «sv:r:язык» (язык — en, ru, другой или me); у сообщений прежних версий (картинки) — «sv:тема[:страница][:язык]»
+  const sv = /^sv:(?:r:(me|[a-z]{2})|(?:dark|light)(?::-?\d+)?(?::(en|ru))?)$/.exec(cid);
+  if (sv) return langAnswer(i, sv[1] || sv[2] || 'en', lang => serversMessage(lang));
   // «ac:вкладка:период:язык:ник»; прежних версий — «ac:тема:страница[:период][:язык]:ник»
-  const m = /^ac:([pmf]):(day|week|all):(en|ru):(.+)$/.exec(cid);
+  const m = /^ac:([pmf]):(day|week|all):(me|[a-z]{2}):(.+)$/.exec(cid);
   const old = !m && /^ac:(?:dark|light):(-?\d+):(?:(day|week|all):)?(?:(en|ru):)?([^:]+)$/.exec(cid);
   if (!m && !old) return respond(i, { type: 6 });
   const d = cards.profileData(m ? m[4] : old[4]);
   if (!d) return reply(i, { content: 'This player is no longer on aibrofist.online.' });
-  let msg;
-  try { msg = m ? accountMessage(d, m[3], m[1], m[2]) : accountMessage(d, old[3], Number(old[1]) === 1 ? 'm' : 'p', old[2]); }
-  catch (e) { return sorry(i); }
-  return updateMessage(i, msg);
+  return langAnswer(i, (m ? m[3] : old[3]) || 'en', lang => m ? accountMessage(d, lang, m[1], m[2]) : accountMessage(d, lang, Number(old[1]) === 1 ? 'm' : 'p', old[2]));
 }
 
 /* Глобальные слэш-команды приложения: ровно этот список. Запись целиком

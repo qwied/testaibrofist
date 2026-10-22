@@ -2,14 +2,16 @@
 // Ответы на команды — не картинки, а настоящие компоненты Discord (новый вид
 // сообщений): рамка-контейнер с цветной полоской, текст, аватарка участника
 // справа, кнопки. Минималистично и компактно: без логотипа, без шапок.
-// Текст — на английском или русском; кнопки с флагами меняют язык в том же
-// сообщении. Кнопки у Discord бывают синие, серые, зелёные, красные и ссылки;
+// Язык — английский, русский или один из discordLang.js: его бот берёт у самого
+// Discord (язык человека в команде или нажатии). Кнопки English / Русский и
+// глобус «мой язык» меняют язык в том же сообщении. Кнопки у Discord бывают синие, серые, зелёные, красные и ссылки;
 // чёрных нет, ближе всего серая («secondary», тёмная в тёмной теме) — все
 // кнопки бота только такие, выбранная показывается неактивной.
 // Здесь только разметка: данные собирает бот (discordBot.js).
 'use strict';
 const R = require('./discordRules.js');
 const { COMPONENTS_V2 } = require('./discordApi.js');
+const { PACKS } = require('./discordLang.js');      // переводы на остальные языки
 
 /* ---------- тексты ---------- */
 const S = {
@@ -52,7 +54,7 @@ const S = {
     nothingWritten: 'Nothing written yet', todayWord: 'today', weekWord: 'this week', noMapsYet: 'No maps published yet', noFriendsYet: 'No friends yet',
     published: 'Published {d}', inGameTag: 'in game', likesN: 'likes {a} · dislikes {b}', onlineNowTag: 'online now', minAgo: '{n} min ago', hAgo: '{n} h ago',
     dAgo: '{n} days ago', longAgo: 'long ago', friendsL: 'Friends', mapsL: 'Maps', moreN2: '+ {n} more',
-    gRaceMode: 'Race', gHnsMode: 'Hide and Seek', userWord: 'Player', tipDark: ''
+    gRaceMode: 'Race', gHnsMode: 'Hide and Seek', userWord: 'Player', tipDark: '', myLang: 'My language', rulesTitle: 'AIBROFIST Server Rules'
   },
   ru: {
     moderation: 'Модерация', caseN: 'Случай {n}', warnings: 'Предупреждения', rulesTag: 'Правила сервера', helpTag: 'Команды владельца',
@@ -93,12 +95,24 @@ const S = {
     nothingWritten: 'Ничего не написано', todayWord: 'сегодня', weekWord: 'за неделю', noMapsYet: 'Карт пока нет', noFriendsYet: 'Друзей пока нет',
     published: 'Опубликована {d}', inGameTag: 'в игре', likesN: 'нравится {a} · не нравится {b}', onlineNowTag: 'в сети', minAgo: '{n} мин назад', hAgo: '{n} ч назад',
     dAgo: '{n} дн. назад', longAgo: 'давно', friendsL: 'Друзья', mapsL: 'Карты', moreN2: '+ ещё {n}',
-    gRaceMode: 'Гонка', gHnsMode: 'Прятки', userWord: 'Игрок', tipDark: ''
+    gRaceMode: 'Гонка', gHnsMode: 'Прятки', userWord: 'Игрок', tipDark: '', myLang: 'Мой язык', rulesTitle: 'Правила сервера AIBROFIST'
   }
 };
-const langOf = l => l === 'ru' ? 'ru' : 'en';
+/* Язык ответа: en, ru или один из PACKS. Язык человека бот берёт у Discord (locale в нажатии или команде):
+   ru-… -> ru, de -> de, pt-BR -> pt, zh-CN и zh-TW -> zh; чего нет в списке — английский. */
+const has = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);     // только свои ключи: не «constructor», не «__proto__»
+const langOf = l => l === 'ru' ? 'ru' : has(PACKS, l) ? l : 'en';
+const LOCALES = { 'es-es': 'es', 'es-419': 'es', 'pt-br': 'pt', 'zh-cn': 'zh', 'zh-tw': 'zh' };
+function fromLocale(locale) {
+  const l = String(locale || '').toLowerCase();
+  return langOf(has(LOCALES, l) ? LOCALES[l] : l.split('-')[0]);
+}
+const NAMES = { en: 'English', ru: 'Русский' };
+Object.keys(PACKS).forEach(k => { NAMES[k] = PACKS[k].name; });
+// строки языка; чего в переводе нет — английская (так владельцу достаются его английские карточки на любом языке)
 function say(lang, key, vars) {
-  let s = (S[langOf(lang)][key] !== undefined ? S[langOf(lang)][key] : S.en[key]) || '';
+  const l = langOf(lang), own = l === 'en' || l === 'ru' ? S[l] : PACKS[l].s;
+  let s = (own[key] !== undefined ? own[key] : S.en[key]) || '';
   for (const k of Object.keys(vars || {})) s = s.split('{' + k + '}').join(String(vars[k]));
   return s;
 }
@@ -108,31 +122,64 @@ const plural = (n, one, few, many) => {
   const a = Math.abs(n) % 100, b = a % 10;
   return a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many;
 };
+// слово в нужной форме по правилу языка: one — «1 / много», slavic — русское, pl — польское, none — без форм
+function pluralForm(kind, n, forms) {
+  if (kind === 'none') return forms[0];
+  if (kind === 'one') return n === 1 ? forms[0] : forms[1];
+  if (kind === 'pl') {
+    const a = n % 100, b = n % 10;
+    return n === 1 ? forms[0] : b >= 2 && b <= 4 && !(a >= 12 && a <= 14) ? forms[1] : forms[2];
+  }
+  return plural(n, forms[0], forms[1], forms[2]);
+}
 function duration(ms, lang) {
-  if (langOf(lang) === 'en') return R.duration(ms);
+  lang = langOf(lang);
+  if (lang === 'en') return R.duration(ms);
   const MIN = R.MIN, HOUR = R.HOUR, DAY = R.DAY;
-  if (ms >= DAY) { const d = Math.round(ms / DAY); return d + ' ' + plural(d, 'день', 'дня', 'дней'); }
-  if (ms >= HOUR) { const h = Math.round(ms / HOUR); return h + ' ' + plural(h, 'час', 'часа', 'часов'); }
-  const m = Math.max(1, Math.round(ms / MIN));
-  return m + ' ' + plural(m, 'минута', 'минуты', 'минут');
+  if (lang === 'ru') {
+    if (ms >= DAY) { const d = Math.round(ms / DAY); return d + ' ' + plural(d, 'день', 'дня', 'дней'); }
+    if (ms >= HOUR) { const h = Math.round(ms / HOUR); return h + ' ' + plural(h, 'час', 'часа', 'часов'); }
+    const m = Math.max(1, Math.round(ms / MIN));
+    return m + ' ' + plural(m, 'минута', 'минуты', 'минут');
+  }
+  const u = PACKS[lang].units, sep = u.sep === undefined ? ' ' : u.sep;
+  const num = ms >= DAY ? Math.round(ms / DAY) : ms >= HOUR ? Math.round(ms / HOUR) : Math.max(1, Math.round(ms / MIN));
+  return num + sep + pluralForm(u.plural, num, ms >= DAY ? u.day : ms >= HOUR ? u.hour : u.min);
 }
 const MON = { en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
               ru: ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'] };
 const two = n => (n < 10 ? '0' : '') + n;
+// дата средствами самой системы (Intl) для языков из PACKS; не вышло — английская запись
+function intlDate(ms, lang, opts) {
+  try { return new Intl.DateTimeFormat(PACKS[lang].locale, Object.assign({ timeZone: 'UTC' }, opts)).format(new Date(Number(ms) || 0)); }
+  catch (e) { return null; }
+}
 function date(ms, lang, withTime) {
   const d = new Date(Number(ms) || 0);
   if (isNaN(d.getTime()) || !ms) return '';
+  if (langOf(lang) !== 'en' && langOf(lang) !== 'ru') {
+    const t = intlDate(ms, langOf(lang), withTime ? { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+                                                  : { year: 'numeric', month: 'short', day: 'numeric' });
+    if (t) return withTime ? t + ' UTC' : t;
+    lang = 'en';
+  }
   const l = langOf(lang), m = MON[l][d.getUTCMonth()];
   const day = l === 'ru' ? d.getUTCDate() + ' ' + m + ' ' + d.getUTCFullYear() : m + ' ' + d.getUTCDate() + ', ' + d.getUTCFullYear();
   return withTime ? day + ', ' + two(d.getUTCHours()) + ':' + two(d.getUTCMinutes()) + ' UTC' : day;
 }
 // «Oct 22» (год — только если он не текущий)
 function dshort(ms, lang) {
+  if (langOf(lang) !== 'en' && langOf(lang) !== 'ru') {
+    const cur = new Date(Number(ms) || 0).getUTCFullYear() === new Date().getUTCFullYear();
+    const t = intlDate(ms, langOf(lang), cur ? { month: 'short', day: 'numeric' } : { year: 'numeric', month: 'short', day: 'numeric' });
+    if (t) return t;
+    lang = 'en';
+  }
   const d = new Date(Number(ms) || 0), l = langOf(lang), m = MON[l][d.getUTCMonth()];
   const y = d.getUTCFullYear() === new Date().getUTCFullYear() ? '' : (l === 'ru' ? ' ' : ', ') + d.getUTCFullYear();
   return (l === 'ru' ? d.getUTCDate() + ' ' + m : m + ' ' + d.getUTCDate()) + y;
 }
-const ordinal = (n, lang) => langOf(lang) === 'ru' ? n + '-е' : n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
+const ordinal = (n, lang) => langOf(lang) === 'ru' ? n + '-е' : langOf(lang) !== 'en' ? String(n) : n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
 
 // что нашёл автомод — по-русски (по-английски это note самой находки)
 const NOTE_RU = {
@@ -144,18 +191,26 @@ const NOTE_RU = {
   warns: '3 предупреждения за 30 дней'
 };
 function reasonText(d, lang) {
-  if (d.kind && langOf(lang) === 'ru' && NOTE_RU[d.kind]) return NOTE_RU[d.kind] + (d.detail ? ' (' + d.detail + ')' : '');
+  const l = langOf(lang), note = l === 'ru' ? NOTE_RU[d.kind] : l === 'en' ? null : PACKS[l].notes[d.kind];
+  if (d.kind && note) return note + (d.detail ? ' (' + d.detail + ')' : '');
   return d.reason || say(lang, 'noReason');
 }
+// название стандартного правила на языке
+const ruleTitle = (r, lang) => { const l = langOf(lang); return l === 'ru' ? r.ru[0] : l === 'en' ? r.title : PACKS[l].rules[r.id - 1] || r.title; };
 function ruleText(d, lang) {
   const r = R.ruleById(Number(d.rule));
-  if (r) return r.id + '. ' + (langOf(lang) === 'ru' ? r.ru[0] : r.title);
+  if (r) return r.id + '. ' + ruleTitle(r, lang);
   if (d.kind === 'custom') return say(lang, 'customWords');
   if (d.kind === 'native-word') return say(lang, 'nativeWord');
   return say(lang, 'other');
 }
+// ПРОПИСНЫМИ по правилам языка (в турецком «dakika» -> «DAKİKA», а не «DAKIKA»)
+const up = (s, lang) => {
+  const l = langOf(lang);
+  try { return String(s).toLocaleUpperCase(l === 'en' || l === 'ru' ? undefined : PACKS[l].locale); } catch (e) { return String(s).toUpperCase(); }
+};
 const actLabel = (act, lang) => !act || act.type === 'none' ? say(lang, 'actNone') : act.type === 'warn' ? say(lang, 'actWarn')
-  : say(lang, act.type === 'ban' ? 'actBan' : 'actMute', { d: act.ms ? duration(act.ms, lang).toUpperCase() : say(lang, 'forever').toUpperCase() });
+  : say(lang, act.type === 'ban' ? 'actBan' : 'actMute', { d: up(act.ms ? duration(act.ms, lang) : say(lang, 'forever'), lang) });
 
 /* ---------- кирпичики ---------- */
 // имя игрока в тексте: без разметки и без упоминания
@@ -198,10 +253,19 @@ const button = (label, id, o) => Object.assign({ type: 2, style: 2, label: Strin
 const linkButton = (label, url) => ({ type: 2, style: 5, label: String(label).slice(0, 80), url });
 const row = (...b) => ({ type: 1, components: b.filter(Boolean) });
 const LANGS = [{ key: 'en', label: 'English', flag: '🇬🇧' }, { key: 'ru', label: 'Русский', flag: '🇷🇺' }];
-// флаги языка: idOf(язык) — id кнопки; у выбранного — current (постоянный) и он неактивен
-const langButtons = (idOf, lang, current) => LANGS.map(l => l.key === lang
-  ? button(l.label, current, { emoji: { name: l.flag }, disabled: true })
-  : button(l.label, idOf(l.key), { emoji: { name: l.flag } }));
+/* Кнопки языка: English, Русский и глобус. idOf(язык) — id кнопки; у выбранного — current (постоянный), он неактивен.
+   Глобус — «мой язык»: id idOf('me'), бот сам берёт язык Discord того, кто нажал (так читают и публичные карточки,
+   и личные сообщения, где язык получателя заранее не известен). Показан другой язык (не en и не ru) — глобус
+   стоит выбранным и подписан названием этого языка. */
+const langButtons = (idOf, lang, current) => {
+  lang = langOf(lang);
+  const out = LANGS.map(l => l.key === lang
+    ? button(l.label, current, { emoji: { name: l.flag }, disabled: true })
+    : button(l.label, idOf(l.key), { emoji: { name: l.flag } }));
+  out.push(lang === 'en' || lang === 'ru' ? button(say(lang, 'myLang'), idOf('me'), { emoji: { name: '🌐' } })
+                                           : button(NAMES[lang], current, { emoji: { name: '🌐' }, disabled: true }));
+  return out;
+};
 // набор кнопок-вкладок: items [{ label, id, on }] — выбранная неактивная
 const tabs = (items, current) => items.map(x => x.on ? button(x.label, current, { disabled: true }) : button(x.label, x.id));
 
@@ -222,7 +286,7 @@ function action(d, lang) {
   if (d.reason || d.kind) lines.push('**' + L('reason') + ':** ' + esc(reasonText(d, lang).slice(0, 300)));
   if (type === 'warn' && d.limit) {
     const text = d.escalated ? (d.blocked || !d.escalated.ms ? L('escalatedBlocked', { n: d.limit }) : L('escalated', { n: d.limit, d: duration(d.escalated.ms, lang) }))
-                             : L('nextMute', { nth: ordinal(d.limit, lang) });
+                             : L('nextMute', { nth: ordinal(d.limit, lang), limit: d.limit });
     lines.push('**' + L('tally') + ':** ' + dots(Math.min(d.n, d.limit), d.limit) + '  ' + text);
   } else if (type === 'mute' && d.ms && !d.blocked && !d.failed) {
     lines.push('**' + L('untilLabel') + ':** ' + date((d.at || Date.now()) + d.ms, lang, true));
@@ -277,6 +341,8 @@ const SHORT = {
   6: ['Message deleted, you get a warning.', 'Сообщение удаляется, предупреждение.'],
   7: ['Message deleted, no punishment.', 'Сообщение удаляется, без наказания.']
 };
+// короткая строка под названием правила на языке
+const shortOf = (id, lang) => { const l = langOf(lang); return l === 'ru' ? SHORT[id][1] : l === 'en' ? SHORT[id][0] : PACKS[l].short[id - 1] || SHORT[id][0]; };
 function rules(d, lang) {
   const L = (k, v) => say(lang, k, v);
   const ru = langOf(lang) === 'ru';
@@ -285,7 +351,7 @@ function rules(d, lang) {
     return { color: R.COLORS.neutral, parts: [txt('## ' + String(d.title || (ru ? 'Правила сервера' : 'Server Rules')).slice(0, 200)), txt(String(d.text || '').slice(0, 3600)),
       txt(small(d.at ? L('updated', { d: date(d.at, lang) }) : ''))] };
   }
-  const body = R.RULES.map(r => '**' + r.id + '  ' + (ru ? r.ru[0] : r.title) + '**  ' + code(actLabel(r.act, lang)) + '\n' + small(SHORT[r.id][ru ? 1 : 0])).join('\n');
+  const body = R.RULES.map(r => '**' + r.id + '  ' + ruleTitle(r, lang) + '**  ' + code(actLabel(r.act, lang)) + '\n' + small(shortOf(r.id, lang))).join('\n');
   return { color: R.COLORS.neutral, parts: [txt('## ' + title), txt(body), txt(dots(3, 3) + '  ' + L('warnsAddShort')),
     txt(small(L('mistake') + (d.at ? '  ·  ' + L('updated', { d: date(d.at, lang) }) : '')))] };
 }
@@ -358,7 +424,7 @@ function servers(d, lang) {
     const rs = list.filter(r => r.mode === key), info_ = m[key] || { players: 0 };
     const shown = rs.slice(0, 8);
     const body = shown.length
-      ? shown.map(r => '**' + esc(r.room) + '**  ' + r.players + '/' + (r.limit || 40) + '  ' + code(L(STATUS_KEY[r.status] || 'stOpen').toUpperCase()) +
+      ? shown.map(r => '**' + esc(r.room) + '**  ' + r.players + '/' + (r.limit || 40) + '  ' + code(up(L(STATUS_KEY[r.status] || 'stOpen'), lang)) +
           (r.phase || r.map ? '\n' + small([r.phase ? L(PHASE_KEY[r.phase] || 'phHunt') + (r.secondsLeft !== null && r.secondsLeft !== undefined ? ' · ' + L('leftT', { t: mmss(r.secondsLeft) }) : '') : '',
                                               r.map ? L('mapN', { m: esc(r.map) }) : ''].filter(Boolean).join(' · ')) : '')).join('\n') +
         (rs.length > shown.length ? '\n' + small(L('moreRooms', { n: rs.length - shown.length })) : '')
@@ -392,8 +458,8 @@ function account(d, lang, page, period) {
   const title = '### ' + esc(d.name);
   if (page === 'm') {
     const maps = (d.maps || []).slice(0, 8);
-    const body = maps.length ? maps.map(x => '**' + esc(x.mapName || 'Untitled') + '**  ' + code(x.mapType === 'hideAndSeek' ? L('gHnsMode').toUpperCase() : L('gRaceMode').toUpperCase()) +
-        (x.inGame ? '  ' + code(L('inGameTag').toUpperCase()) : '') + '  **' + plus(x.rating) + '**\n' +
+    const body = maps.length ? maps.map(x => '**' + esc(x.mapName || 'Untitled') + '**  ' + code(up(x.mapType === 'hideAndSeek' ? L('gHnsMode') : L('gRaceMode'), lang)) +
+        (x.inGame ? '  ' + code(up(L('inGameTag'), lang)) : '') + '  **' + plus(x.rating) + '**\n' +
         small((x.date ? L('published', { d: dshort(x.date, lang) }) : L('longAgo')) + ' · ' + L('likesN', { a: nfmt(x.likes), b: nfmt(x.dislikes) }))).join('\n') : L('noMapsYet');
     return { color: R.COLORS.neutral, parts: [txt(title + '\n' + sub), txt(body + ((d.mapsCount || 0) > maps.length ? '\n' + small(L('moreN2', { n: d.mapsCount - maps.length })) : ''))] };
   }
@@ -420,4 +486,4 @@ function view(kind, data, lang, extra) {
   return fn(data || {}, langOf(lang), extra && extra.page, extra && extra.period);
 }
 
-module.exports = { view, message, button, linkButton, row, langButtons, tabs, LANGS, say, langOf, duration, date, dshort, ruleText, reasonText, esc, code, small, txt, SHORT, HELP, NOTE_RU, VIEWS };
+module.exports = { view, message, button, linkButton, row, langButtons, tabs, LANGS, NAMES, say, langOf, fromLocale, duration, date, dshort, ruleText, reasonText, esc, code, small, txt, SHORT, HELP, NOTE_RU, VIEWS };
