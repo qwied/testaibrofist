@@ -1,9 +1,4 @@
 {
-  "base": "e2854f8db3d72cc6e50fb47e32ba8b6d87ed4dc9",
-  "updates": [
-    {
-      "title": "Neater Discord cards and new logo",
-      "text": "Discord bot cards are tidier and no longer show the ALT badge over the picture. The game logo now has a longer straight body, like the player."
-    }
-  ]
+  "base": "a38424da2e1e0dc199b6592bff969d0d5844fd64",
+  "updates": []
 }
