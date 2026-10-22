@@ -1658,8 +1658,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   bot.stop();
   await sleep(200);
   const sf2 = JSON.parse(fs.readFileSync(process.env.DISCORD_BOT_STATE, 'utf8'));
-  ok('в состоянии отмечено: пост правил уже с кнопками темы', sf2.fixes.rulesTheme === true);
-  delete sf2.fixes.rulesTheme;
+  ok('в состоянии отмечено: пост правил уже в нынешнем оформлении', sf2.fixes.rulesCard === 2);
+  sf2.fixes.rulesCard = 1;                // состояние от прежнего оформления карточек
   fs.writeFileSync(process.env.DISCORD_BOT_STATE, JSON.stringify(sf2));
   t = Date.now();
   bot._test.reload();
@@ -1667,8 +1667,8 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
   await waitFor(() => find(since(t), 'PATCH', /^\/channels\/301\/messages\/\d+$/).length, 8000);
   await sleep(500);
   const upg = find(since(t), 'PATCH', /^\/channels\/301\/messages\/\d+$/);
-  ok('после выкладки бот один раз правит пост правил на месте: нового поста нет, появился ряд тем', upg.length === 1 && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 &&
-     rowsOf(bodyOf(upg[0])).length === 2 && bot._test.state().fixes.rulesTheme === true);
+  ok('после выкладки нового оформления бот один раз правит пост правил на месте: нового поста нет, картинка новая, ряд тем на месте', upg.length === 1 && find(since(t), 'POST', /^\/channels\/301\/messages$/).length === 0 &&
+     rowsOf(bodyOf(upg[0])).length === 2 && multipartOf(upg[0]).png && bot._test.state().fixes.rulesCard === 2);
 
   bot.stop();
   wss.close(); server.close();

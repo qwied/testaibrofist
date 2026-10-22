@@ -1560,6 +1560,7 @@ const rulesPost = (title, text, o) => {
    English и Русский (без русского текста флагов нет). Картинка одного и
    того же текста рисуется один раз. */
 const rulesPics = new Map();         // язык, тема и текст -> картинка
+const CARD_DESIGN = 2;               // версия оформления карточек (1 — крупные, 2 — компактные с темой): поменялось — пост правил один раз перерисуется
 function rulesData(r, lang) {
   const ru = lang === 'ru' && !!r.ru;
   const std = r.en === R.rulesText('en') && (!r.ru || r.ru === R.rulesText('ru'));
@@ -1656,7 +1657,7 @@ async function postDefaultRules(g) {
   const en = R.rulesText('en'), ru = R.rulesText('ru');
   const c = g.channels.get(RULES_CHANNEL);
   const toPic = !!(old && old.message && !old.pic);
-  const upgrade = !state.fixes.rulesTheme;           // один раз: пост получает кнопки темы
+  const upgrade = state.fixes.rulesCard !== CARD_DESIGN;     // один раз на версию оформления карточек: пост перерисовывается
   if (old && old.message && !force && !toPic && !upgrade && (old.custom || (old.en === en && old.ru === ru && !old.ruMessage))) return;
   if (!old && !c) return;
   const chan = old && old.channel && g.channels.has(old.channel) ? old.channel : c && c.id;
@@ -1668,7 +1669,7 @@ async function postDefaultRules(g) {
   if (r.error) { log('could not post the rules in ' + chan + ':', r.error); return; }
   st.rules = Object.assign({ channel: chan, message: r.message }, text, { at: r.at, pic: r.pic }, keep ? { custom: true } : {});
   if (force) state.fixes.rules7 = true;
-  state.fixes.rulesTheme = true;
+  state.fixes.rulesCard = CARD_DESIGN;
   save();
 }
 
