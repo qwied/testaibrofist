@@ -1,9 +1,4 @@
 {
-  "base": "b09523f0c63fd00f71cf59c23f473db1fa761f8c",
-  "updates": [
-    {
-      "title": "Choose the Discord bot language",
-      "text": "The Discord bot has a new /language command: pick any country or language in the world and the bot answers every command in it, and remembers your choice. 22 more languages added."
-    }
-  ]
+  "base": "b3a02c4648d519d8a1194bd5ec3e20beebdb873d",
+  "updates": []
 }
