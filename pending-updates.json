@@ -1,9 +1,4 @@
 {
-  "base": "8a494b8dbd283c2edc57e0d30662f078b2d0dc9b",
-  "updates": [
-    {
-      "title": "Compact Discord cards",
-      "text": "Discord bot cards are now much more compact and use the game style, so the text is easier to read. Server and profile pictures from /servers and /account are also smaller and sharper."
-    }
-  ]
+  "base": "1a00220c52b867ac6b316b7fc41daf6159750972",
+  "updates": []
 }
