@@ -1,4 +1,13 @@
 {
   "base": "507ca69071f9a000cfa7b56ccdef34a62e908739",
-  "updates": []
+  "updates": [
+    {
+      "title": "Zombie model fixed",
+      "text": "A zombie player now looks like a zombie again instead of a plain black figure, and the seeker is sent to the start point when the round begins."
+    },
+    {
+      "title": "Softer text outline",
+      "text": "Names, clan tags and chat text in the game now have a soft light gray outline instead of the double one."
+    }
+  ]
 }

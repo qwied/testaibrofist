@@ -9,6 +9,10 @@
      браузера — сюда ссылка уже попала и работает как раньше. */
   var GAME = window.GAME;
   if (!GAME) return;
+  /* Дальше везде — только эта ссылка. В window после load моста уже нет (см. выше), и условие
+     «а есть ли он в window» молча отключало зомби-скин, телепорт искателя на старт раунда и место
+     ожидания на настоящем сайте — на localhost мост остаётся, и тесты этого не замечали
+     (см. test-zombie-prod.js). */
 
   var q      = new URLSearchParams(location.search);
   var STORY  = q.get('story') === '1';        // приватная комната по приглашению — см. story.html
@@ -1003,18 +1007,19 @@
     if (/^[A-Za-z0-9]{2,5}$/.test(tag || '') && /^#[0-9a-f]{6}$/i.test(color || '')) clanTags[name] = { tag: tag, color: color };
     else delete clanTags[name];
   }
-  /* Подпись поверх карты: фон может быть любым — белым, чёрным блоком, цветным —
-     и цвет игрока может совпасть с ним. Одной обводки мало: светлая теряется на
-     белом, тёмная на чёрном. Поэтому обводка двойная — тёмное кольцо вплотную к
-     буквам и тонкий светлый ободок снаружи: на любом фоне одно из них видно, и
-     любой цвет букв отделён от фона. */
+  /* Подпись поверх карты: фон может быть любым — белым, чёрным блоком, цветным — и цвет игрока
+     может совпасть с ним. Обводка одна, мягкая, серая: у тёмных и насыщенных цветов она почти
+     белая — на чёрном блоке отделяет буквы, на светлом фоне её не видно, текст читается сам; у
+     светлых цветов (в том числе белого ника по умолчанию) она потемнее, иначе на светлом фоне
+     такие буквы пропали бы. */
+  function isLightColor(c) {
+    var n = parseInt(String(c).slice(1), 16);
+    return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 170;
+  }
   function inkText(ctx, t, x, y, tk, color) {
     ctx.lineJoin = 'round';
-    ctx.lineWidth = 4.4 * tk;
-    ctx.strokeStyle = 'rgba(255,255,255,.95)';
-    ctx.strokeText(t, x, y);
-    ctx.lineWidth = 2.6 * tk;
-    ctx.strokeStyle = 'rgba(17,24,39,.95)';
+    ctx.lineWidth = 3 * tk;
+    ctx.strokeStyle = /^#[0-9a-f]{6}$/i.test(color) && isLightColor(color) ? '#6b7280' : '#e5e7eb';
     ctx.strokeText(t, x, y);
     ctx.fillStyle = color;
     ctx.fillText(t, x, y);
@@ -1156,7 +1161,7 @@
   // см. syncMeIsZombie() и GAME.figureZombie в GAME.onDraw ниже
   var hsApocRound = false;
   function syncMeIsZombie() {
-    if (window.GAME) GAME.meIsZombie = !!(hsApocRound && me.role === 'seeker');
+    GAME.meIsZombie = !!(hsApocRound && me.role === 'seeker');
   }
 
   function setRole(role) {
@@ -1351,7 +1356,7 @@
         res.classList.add('on');
         // классика: сразу на отмеченное место ожидания, если оно есть на
         // карте (см. teleportToSeekerSpot в game.html) — apoc его не знает
-        if (!d.apoc && window.GAME && GAME.seekerWaitSpot) GAME.seekerWaitSpot();
+        if (!d.apoc && GAME.seekerWaitSpot) GAME.seekerWaitSpot();
       }
       /* С этого мгновения комната пропадает с экрана (см. hsHiding в
          onDraw). Без строчки-подсказки это читается как поломка: только
@@ -2040,7 +2045,7 @@
            комнаты она ещё грузится по сети, и respawn() до этого момента
            работал по пустому/старому spawnPt и никуда не телепортировал. */
         var teleportSeeker = function () {
-          if (me.role === 'seeker' && window.GAME && GAME.respawn) GAME.respawn();
+          if (me.role === 'seeker' && GAME.respawn) GAME.respawn();
         };
         if (!STORY) loadServerMap(d.map, teleportSeeker); else teleportSeeker();
         log(d.apoc ? TR('roundStartApoc', 'Раунд начался! Зомби уже идёт за кем-то...')
@@ -2116,7 +2121,7 @@
           applySeeker(d.seekerId);
           log(TR('roulSeekerIs', 'Искатель: ') + '<b>' + esc(nameOfId(d.seekerId)) + '</b>');
           // классика: догоняем и ожидание на метке, если она есть на карте
-          if (d.seekerId === socket.id && !hsApocRound && window.GAME && GAME.seekerWaitSpot) GAME.seekerWaitSpot();
+          if (d.seekerId === socket.id && !hsApocRound && GAME.seekerWaitSpot) GAME.seekerWaitSpot();
         }
       }
     });
@@ -2301,7 +2306,7 @@
       ctx.translate(o.x, o.y);
       // заражён в apoc-раунде — выглядит зомби, а не обычной фигуркой
       // (см. hsApocRound/hsSeekerIds — тот же набор, что красит полосу под ником)
-      if (hsApocRound && hsSeekerIds[id] && window.GAME && GAME.figureZombie) GAME.figureZombie(w, h);
+      if (hsApocRound && hsSeekerIds[id] && GAME.figureZombie) GAME.figureZombie(w, h);
       else GAME.figure(w, h, o.color || COLOR_NORMAL, true, o.skin || null);
       ctx.restore();
       drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74));

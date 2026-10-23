@@ -14,7 +14,7 @@ ok('не наезжают друг на друга', /var lift = \(list\.length 
 ok('перенос длинных реплик',  /function wrapSay/.test(src) && /wrapSay\(sp\.text/.test(src));
 ok('bidi-символы чистятся',   /BIDI_RE/.test(src) && /cleanSay\(text\)/.test(src));
 ok('ник белый с обводкой',    /inkText\(ctx, name,/.test(src) && /tagColor \|\| '#ffffff'/.test(src) && /function inkText[\s\S]*?strokeText/.test(src));
-ok('обводка двойная: светлый ободок и тёмное кольцо', /function inkText[\s\S]*?rgba\(255,255,255[\s\S]*?rgba\(17,24,39/.test(src));
+ok('обводка светло-серая, у светлых букв потемнее', /function inkText[\s\S]*?#6b7280[\s\S]*?#e5e7eb/.test(src));
 ok('цвет ника отдельно от цвета реплик', /nickColors\[name\]/.test(src) && !/chatColors\[name\]/.test(src.slice(src.indexOf('function drawTag'))));
 
 console.log('\nотправка сообщений:');
