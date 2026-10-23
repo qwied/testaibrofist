@@ -1,4 +1,9 @@
 {
   "base": "8ca93da56b9ef37676f0950f32ca5e640ef40477",
-  "updates": []
+  "updates": [
+    {
+      "title": "Blocks that shrink for real",
+      "text": "The Size changer option in the Map Editor now shrinks the block's hitbox too, so a shrunk block really lets players through. Choose how small it gets with Smallest size."
+    }
+  ]
 }

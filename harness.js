@@ -43,7 +43,7 @@ const EXPORT = `
 ;
 __export({ objects: function(){return objects;}, setObjects: function(a){objects=a;},
   pl: function(){return pl;}, keys: function(){return keys;},
-  step: function(){return step();}, respawn: function(){return respawn();},
+  step: function(){return step();}, respawn: function(){return respawn();}, bbox: function(o){return bbox(o);},
   spawnPt: function(){return spawnPt;}, setSpawn: function(x,y){spawnPt={x:x,y:y};},
   indexMovers: function(){return indexMovers();}, jumpV: function(){return jumpV();},
   G: function(){return G();}, gravityScale: function(){return gravityScale;},

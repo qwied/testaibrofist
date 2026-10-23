@@ -52,11 +52,11 @@
       words: ['size changer', 'изменение размера', 'пульс', 'мерца', 'мигает размер', 'changer',
               'дышит', 'пульсир'],
       answer:
-        '"Size changer" is a purely visual effect: the shape smoothly pulses on screen, changing size '
-        + 'slightly. It never touches the hitbox — the object\'s physical width and height stay exactly '
-        + 'the same, so this checkbox can never open up a path that wasn\'t there before, or trap the '
-        + 'player in a wall. Works independently of Bouncing, Physics, Lift and Rotation — it doesn\'t '
-        + 'switch any of them off, and they don\'t switch it off either.'
+        '"Size changer" makes the shape smoothly shrink and grow back, and the hitbox shrinks together '
+        + 'with it, so a shrunk block really lets the player through. Set how small it gets with '
+        + '"Smallest size" (10-90% of the size you drew). The block is never bigger than the size you '
+        + 'drew, so it can\'t trap the player where you didn\'t build a wall. Works together with Bouncing, '
+        + 'Physics, Lift and Rotation, and is fine on a deadly block too: the danger shrinks with it.'
     },
     {
       id: 'laser',
