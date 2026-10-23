@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <title>AIBrofist — Profile</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=174">
+<link rel="stylesheet" href="ui.css?v=175">
 <script src="offline.js?v=2"></script>
-<script src="theme.js?v=174"></script>
-<script src="device.js?v=174"></script>
-<script src="sound.js?v=174"></script>
+<script src="theme.js?v=175"></script>
+<script src="device.js?v=175"></script>
+<script src="sound.js?v=175"></script>
 <style>
 .upSearch{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
 .upSearch .bfInput{margin-bottom:0;flex:1 1 180px}
@@ -19,6 +19,8 @@
 .upFound a:hover{background:var(--soft)}
 
 .upTop{display:flex;gap:20px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
+.upClan a{display:inline-flex;align-items:center;gap:8px;margin-top:4px;color:var(--ink);font-weight:700;text-decoration:none}
+.upClan i{font-style:normal;font-size:12px;font-weight:800;letter-spacing:.4px;padding:2px 8px;border-radius:7px}
 .upAva{width:136px;height:136px;border-radius:50%;overflow:hidden;flex:0 0 auto;
   background:var(--soft);border:1px solid var(--line);display:flex;
   align-items:center;justify-content:center}
@@ -158,15 +160,15 @@
   <div class="bfMsg" id="upMsg"></div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=174">
-<script src="i18n.js?v=174"></script>
-<script src="coin.js?v=174"></script>
-<script src="skinRender.js?v=174"></script>
-<script src="skinAvatar.js?v=174" defer></script>
-<script src="shell.js?v=174"></script>
-<script src="abuseShow.js?v=174" defer></script>
-<script src="account.js?v=174" defer></script>
-<script src="owner.js?v=174" defer></script>
+<link rel="stylesheet" href="mobile.css?v=175">
+<script src="i18n.js?v=175"></script>
+<script src="coin.js?v=175"></script>
+<script src="skinRender.js?v=175"></script>
+<script src="skinAvatar.js?v=175" defer></script>
+<script src="shell.js?v=175"></script>
+<script src="abuseShow.js?v=175" defer></script>
+<script src="account.js?v=175" defer></script>
+<script src="owner.js?v=175" defer></script>
 <script>
 (function () {
   'use strict';
@@ -260,6 +262,7 @@
       + '<div class="upInfo">'
       +   '<div class="upName">' + esc(who) + '</div>'
       +   '<div class="upMeta">' + T('joinDate', 'Дата регистрации') + ': ' + when(d.joined) + '</div>'
+      +   '<div class="upClan" id="upClan"></div>'
       +   '<div class="upStats" id="upStats" data-coins-day="' + (s.coinsDay || 0) + '" data-coins-week="' + (s.coinsWeek || 0) + '" data-coins-all="' + (s.coins || 0) + '"'
       +     ' data-score-day="' + (s.scoreDay || 0) + '" data-score-week="' + (s.scoreWeek || 0) + '" data-score-all="' + (s.score || 0) + '">'
       +     '<div class="upStatTabs" id="upStatTabs">'
@@ -595,6 +598,14 @@
         };
       }
 
+      // клан игрока (см. clans.js): тег цветом клана и название ссылкой на его страницу
+      get('/clanOf?name=' + encodeURIComponent(who)).then(function (c) {
+        if (!c || !c.clan || !$('upClan')) return;
+        var n = parseInt(String(c.clan.color).slice(1), 16);
+        var fg = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 170 ? '#111827' : '#ffffff';
+        $('upClan').innerHTML = '<a href="clans?id=' + encodeURIComponent(c.clan.id) + '"><i style="background:'
+          + esc(c.clan.color) + ';color:' + fg + '">' + esc(c.clan.tag) + '</i>' + esc(c.clan.name) + '</a>';
+      }).catch(function () {});
       if (window.BFAvatar) BFAvatar.scan(document);
       showTab('friends');
       if (window.I18N) I18N.apply(document.body);

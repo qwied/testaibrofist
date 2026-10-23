@@ -14,17 +14,19 @@ function register(app, acc) {
   const { currentUser, save } = acc;
   const messages = require('./messages.js');
   const maps = require('./maps.js');
+  const clans = require('./clans.js');
 
   app.get('/notifications', (req, res) => {
     const u = currentUser(req);
     if (!u) return res.json({ guest: true, messages: { total: 0, from: [] },
-                              maps: { count: 0, authors: [] } });
+                              maps: { count: 0, authors: [] }, clans: { requests: 0 } });
     const un = messages.unreadFor(u.name);
     const nm = maps.newFromFriends(u);
     res.json({
       guest: false,
       messages: { total: un.total, from: un.from.slice(0, 8), threads: un.threads },
-      maps: { count: nm.count, authors: nm.authors.slice(0, 8) }
+      maps: { count: nm.count, authors: nm.authors.slice(0, 8) },
+      clans: { requests: clans.pendingFor(u.name) }      // заявки в клан, ждущие решения лидера/офицера
     });
   });
 

@@ -666,6 +666,7 @@ function register(app) {
        так же, как пропажа. renameAuthor переносит авторство самих карт
        и чужие избранное/папки, которые на них ссылаются. */
     require('./maps.js').renameAuthor(old, to);
+    require('./clans.js').renameMember(old, to);    // клан узнаёт игрока под новым ником
     res.json({ status: 'success', message: 'Nickname changed to «' + to + '»', name: to, coins: u.coins });
   });
 

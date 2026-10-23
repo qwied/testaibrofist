@@ -36,6 +36,7 @@
     { key: 'quests',      href: 'quests',      txt: 'Quests' },
     { key: 'daily',       href: 'daily',       txt: 'Daily Reward' },
     { key: 'story',       href: 'story',       txt: 'Story Mode' },
+    { key: 'clans',       href: 'clans',       txt: 'Clans' },
     { key: 'logs',        href: 'logs',        txt: 'Logs' },
     { key: 'messages',    href: 'messages',    txt: 'Messages' },
     { key: 'avatar',      href: 'avatar',      txt: 'Avatar' },
@@ -94,7 +95,7 @@
     /* Пустой значок держим в разметке с самого начала: он появляется и
        исчезает через класс, поэтому счётчик не дёргает раскладку пункта,
        когда приходит ответ сервера. */
-    if (l.key === 'messages' || l.key === 'mapsBrowser') {
+    if (l.key === 'messages' || l.key === 'mapsBrowser' || l.key === 'clans') {
       var dot = el('span', 'bfNavDot');
       dot.id = 'bfDot_' + l.key;
       a.appendChild(dot);
@@ -115,7 +116,8 @@
     if (!d) return;
     var here = (location.pathname.split('/').pop() || '').toLowerCase();
     var mine = (key === 'messages' && here === 'messages')
-            || (key === 'mapsBrowser' && here === 'mapsbrowser');
+            || (key === 'mapsBrowser' && here === 'mapsbrowser')
+            || (key === 'clans' && here === 'clans');
     if (key === 'messages' && hideChat) n = 0;
     if (!n || mine) { d.className = 'bfNavDot'; d.textContent = ''; d.removeAttribute('title'); return; }
     d.className = 'bfNavDot on';
@@ -127,12 +129,13 @@
     fetch('/notifications', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        if (!d || d.guest) { paintDot('messages', 0); paintDot('mapsBrowser', 0); return; }
-        var m = d.messages || {}, mp = d.maps || {};
+        if (!d || d.guest) { paintDot('messages', 0); paintDot('mapsBrowser', 0); paintDot('clans', 0); return; }
+        var m = d.messages || {}, mp = d.maps || {}, cl = d.clans || {};
         paintDot('messages', m.total || 0,
                  (m.from || []).length ? T('newFrom', 'New from') + ' ' + m.from.join(', ') : '');
         paintDot('mapsBrowser', mp.count || 0,
                  (mp.authors || []).length ? T('newMapsFrom', 'New maps from') + ' ' + mp.authors.join(', ') : '');
+        paintDot('clans', cl.requests || 0, T('clanDotTip', 'Join requests waiting for you'));
         window.dispatchEvent(new CustomEvent('bf-notify', { detail: d }));
       })
       .catch(function () {});

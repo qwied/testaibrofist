@@ -226,7 +226,7 @@ app.get('/sitemap.xml', (req, res) => {
   const base = siteOrigin(req);
   const pages = ['/', '/hide-and-seek', '/race', '/mapsBrowser',
                  '/editor', '/leaderboard', '/logs',
-                 '/users', '/quests', '/daily'];
+                 '/users', '/quests', '/daily', '/clans'];
   res.set('Content-Type', 'application/xml; charset=utf-8');
   res.set('Cache-Control', 'public, max-age=3600');
   res.send('<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -249,7 +249,7 @@ app.get('/favicon.ico', (req, res) => {
    есть, оба маршрута на неё вообще не смотрят. Сам редирект нужен
    раньше express.static (см. ниже) — иначе static успеет отдать файл
    первым, до того как маршрут до него доберётся. */
-const PAGE_FILES = ['avatar', 'daily', 'editor', 'game', 'hide-and-seek',
+const PAGE_FILES = ['avatar', 'clans', 'daily', 'editor', 'game', 'hide-and-seek',
   'leaderboard', 'logs', 'mapsBrowser', 'messages', 'quests', 'race', 'servers', 'story', 'users'];
 app.get(PAGE_FILES.map(p => '/' + p + '.html'), (req, res) => {
   const qs = req.originalUrl.split('?')[1];
@@ -293,6 +293,7 @@ require('./backup.js').register(app, {
     require('./maps.js').reload();
     require('./userSkins.js').reload();
     require('./messages.js').reload();
+    require('./clans.js').reload();
     require('./extras.js').reload();
     require('./abuse.js').reload();
   }
@@ -322,6 +323,7 @@ require('./maps.js').register(app, accounts.currentUser, accounts, cleanText);
 require('./ranks.js').register(app, accounts.currentUser, accounts);
 require('./userSkins.js').register(app, accounts);
 require('./messages.js').register(app, accounts);
+require('./clans.js').register(app, accounts);
 require('./themes.js').register(app, accounts);
 require('./notifications.js').register(app, accounts);
 require('./updateTimer.js').register(app, accounts);
@@ -1031,6 +1033,7 @@ io.on('connection', (socket) => {
       if (prevRoom.indexOf('race:') === 0) broadcastRaceScores(io, prevRoom);
     }
 
+    const clan = account ? require('./clans.js').clanOf(account) : null;
     const player = {
       id: socket.id,
       nid: (nidSeq = (nidSeq + 1) % 1000000000),
@@ -1040,6 +1043,8 @@ io.on('connection', (socket) => {
       position: { x: Math.random() * 800, y: Math.random() * 600 },
       joinedAt: Date.now(),
       chatColor: account ? accountsRef.chatColorOf(account) : '',   // купленный цвет ника и реплик, см. accounts.js
+      clanTag: clan ? clan.tag : '',       // тег и цвет клана рядом с ником, см. clans.js
+      clanColor: clan ? clan.color : '',
       linesUsed: 0    // «нарисовать линию» — ограниченное число раз за вход, см. drawLine
     };
 

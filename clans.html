@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIBrofist — Clans</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="ui.css?v=175">
+<script src="offline.js?v=2"></script>
+<script src="theme.js?v=175"></script>
+<script src="device.js?v=175"></script>
+<script src="sound.js?v=175"></script>
+<style>
+.clBar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.clBar .bfInput{margin-bottom:0;flex:1 1 220px}
+.clBar .bfSelect{margin-bottom:0;flex:0 1 190px;width:auto}
+.clBar .bfBtn{margin:0;width:auto;padding:11px 18px}
+.clTag{display:inline-block;min-width:40px;text-align:center;padding:3px 9px;border-radius:7px;
+  font-weight:800;font-size:13px;letter-spacing:.4px;background:var(--c,#111827);color:var(--t,#fff)}
+.clRow{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);
+  border-radius:12px;background:var(--panel);margin-bottom:8px;color:var(--ink);text-decoration:none}
+.clRow:hover{background:var(--soft)}
+.clRow .nm{font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clRow .meta{color:var(--muted);font-size:13px;white-space:nowrap}
+.clRow .acc{flex:none;font-size:11px;letter-spacing:.3px;text-transform:uppercase;border:1px solid var(--line);
+  border-radius:999px;padding:2px 8px;color:var(--muted)}
+.clMine{border:1px solid var(--blue);border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;
+  align-items:center;gap:12px;flex-wrap:wrap}
+.clMine .lbl{color:var(--muted);font-size:13px}
+.clMine .bfBtn{margin:0 0 0 auto;width:auto;padding:8px 18px;font-size:14px;text-decoration:none}
+.clBack{color:var(--muted);text-decoration:none;font-size:14px}
+.clBack:hover{color:var(--ink)}
+.clPager{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:10px;font-size:13px;color:var(--muted)}
+.clPager button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:4px 12px;cursor:pointer}
+.clPager button:disabled{opacity:.4;cursor:default}
+.clForm{display:none;border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px;max-width:520px}
+.clForm.on{display:block}
+.clField{margin-bottom:12px}
+.clField label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:5px}
+.clField input[type=color]{width:48px;height:36px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.clField .bfInput,.clField .bfSelect{margin-bottom:0}
+.clHead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.clHead h1{margin:0;font-size:24px}
+.clDesc{color:var(--muted);font-size:14px;margin:6px 0 10px;white-space:pre-wrap;word-break:break-word}
+.clFacts{display:flex;gap:16px;flex-wrap:wrap;font-size:13.5px;color:var(--muted);margin-bottom:12px}
+.clFacts b{color:var(--ink)}
+.clActs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.clActs .bfBtn{margin:0;width:auto;padding:9px 18px;font-size:14px}
+.clSec{font-size:15px;font-weight:800;margin:18px 0 8px}
+.clMem{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);
+  border-radius:10px;background:var(--panel);margin-bottom:6px;flex-wrap:wrap}
+.clMem a{color:var(--ink);font-weight:700;text-decoration:none}
+.clMem .role{font-size:11px;letter-spacing:.3px;text-transform:uppercase;border:1px solid var(--line);
+  border-radius:999px;padding:2px 8px;color:var(--muted)}
+.clMem .role.leader{border-color:var(--blue);color:var(--blue)}
+.clMem .pts{color:var(--muted);font-size:13px;margin-left:auto}
+.clMem .ops{display:flex;gap:6px;flex-wrap:wrap}
+.clMem .ops button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;
+  padding:4px 10px;font-size:12.5px;cursor:pointer}
+.clMem .ops button:hover{background:var(--soft)}
+.clMem .ops button.bad{color:var(--red)}
+</style>
+        <link rel="icon" href="favicon.ico" sizes="any">
+        <link rel="icon" type="image/svg+xml" href="favicon.svg">
+        <link rel="apple-touch-icon" href="apple-touch-icon.png">
+        <link rel="manifest" href="site.webmanifest">
+        <meta name="theme-color" content="#111827">
+        <link rel="canonical" href="https://aibrofist.online/clans">
+        <meta name="description" content="Clans — team up with other players.">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="AIBrofist">
+        <meta property="og:title" content="AIBrofist — Clans">
+        <meta property="og:description" content="Clans — team up with other players.">
+        <meta property="og:url" content="https://aibrofist.online/clans">
+        <meta property="og:image" content="https://aibrofist.online/preview.png">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="https://aibrofist.online/preview.png">
+</head>
+<body>
+
+<div class="bfWrap" id="clRoot">
+  <div class="bfHint" data-i18n="loading">Загрузка…</div>
+</div>
+
+<link rel="stylesheet" href="mobile.css?v=175">
+<script src="i18n.js?v=175"></script>
+<script src="coin.js?v=175"></script>
+<script src="skinRender.js?v=175"></script>
+<script src="skinAvatar.js?v=175" defer></script>
+<script src="shell.js?v=175"></script>
+<script src="abuseShow.js?v=175" defer></script>
+<script src="account.js?v=175" defer></script>
+<script src="owner.js?v=175" defer></script>
+<script>
+(function () {
+  'use strict';
+  var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; };
+  var $ = function (id) { return document.getElementById(id); };
+  var root = $('clRoot');
+  var me = null;                       // { guest, name, owner }
+  var clanId = new URLSearchParams(location.search).get('id');
+  var st = { q: '', sort: 'points', page: 1 };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function get(url) {
+    return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+  }
+  function post(url, data) {
+    return fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: Object.keys(data || {}).map(function (k) {
+        return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
+      }).join('&')
+    }).then(function (r) { return r.json(); });
+  }
+  function msg(id, t, ok) {
+    var m = $(id); if (!m) return;
+    m.textContent = t || ''; m.style.color = ok ? 'var(--green)' : 'var(--red)';
+  }
+  // тег читается на любом цвете: светлый фон — тёмные буквы
+  function textOn(c) {
+    var n = parseInt(String(c).slice(1), 16);
+    return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 170 ? '#111827' : '#ffffff';
+  }
+  function chip(c) {
+    return '<span class="clTag" style="--c:' + esc(c.color) + ';--t:' + textOn(c.color) + '">' + esc(c.tag) + '</span>';
+  }
+  function date(ts) {
+    try { return new Date(ts).toLocaleDateString(window.I18N ? I18N.current : undefined); } catch (e) { return ''; }
+  }
+
+  /* ============ список кланов ============ */
+  function viewList() {
+    document.title = 'AIBrofist — ' + T('clTitle', 'Clans');
+    root.innerHTML =
+      '<div class="bfTitle" data-i18n="clTitle">' + T('clTitle', 'Clans') + '</div>'
+      + '<div class="bfSub" data-i18n="clSub">' + T('clSub', 'Team up with other players. Your clan tag shows next to your name in the game.') + '</div>'
+      + '<div id="clMine"></div>'
+      + '<div class="clForm" id="clForm">'
+      +   '<div class="clField"><label>' + T('clName', 'Clan name') + '</label><input class="bfInput" id="clfName" maxlength="20"></div>'
+      +   '<div class="clField"><label>' + T('clTag', 'Tag (2 to 5 letters or digits)') + '</label><input class="bfInput" id="clfTag" maxlength="5" style="text-transform:uppercase"></div>'
+      +   '<div class="clField"><label>' + T('clDesc', 'Description (optional)') + '</label><input class="bfInput" id="clfDesc" maxlength="200"></div>'
+      +   '<div class="clField"><label>' + T('clColor', 'Tag color') + '</label><input type="color" id="clfColor" value="#111827"></div>'
+      +   '<div class="clField"><label>' + T('clAccess', 'Who can join') + '</label><select class="bfSelect" id="clfOpen">'
+      +     '<option value="true">' + T('clAccessOpen', 'Anyone can join') + '</option>'
+      +     '<option value="false">' + T('clAccessClosed', 'By request') + '</option></select></div>'
+      +   '<button class="bfBtn go" id="clfGo">' + T('clCreate', 'Create') + '</button>'
+      +   '<div class="bfMsg" id="clfMsg"></div>'
+      + '</div>'
+      + '<div class="clBar">'
+      +   '<input class="bfInput" id="clQ" placeholder="' + esc(T('clSearchPh', 'Search by name or tag')) + '" maxlength="30">'
+      +   '<select class="bfSelect" id="clSort">'
+      +     '<option value="points">' + T('clSortPoints', 'Top points') + '</option>'
+      +     '<option value="members">' + T('clSortMembers', 'Most members') + '</option>'
+      +     '<option value="new">' + T('clSortNew', 'Newest') + '</option></select>'
+      +   '<button class="bfBtn go" id="clNew" style="display:none">' + T('clCreateBtn', 'Create a clan') + '</button>'
+      + '</div>'
+      + '<div id="clList"><div class="bfHint">' + T('loading', 'Загрузка…') + '</div></div>'
+      + '<div class="clPager"><button id="clPrev">&lt;</button><span id="clPg">1/1</span><button id="clNext">&gt;</button></div>';
+
+    var timer = null;
+    $('clQ').oninput = function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { st.q = $('clQ').value.trim(); st.page = 1; loadList(); }, 250);
+    };
+    $('clSort').onchange = function () { st.sort = $('clSort').value; st.page = 1; loadList(); };
+    $('clPrev').onclick = function () { if (st.page > 1) { st.page--; loadList(); } };
+    $('clNext').onclick = function () { st.page++; loadList(); };
+    $('clNew').onclick = function () { $('clForm').classList.toggle('on'); };
+    $('clfGo').onclick = function () {
+      msg('clfMsg', '');
+      post('/clan/create', {
+        name: $('clfName').value, tag: $('clfTag').value, desc: $('clfDesc').value,
+        color: $('clfColor').value, open: $('clfOpen').value
+      }).then(function (r) {
+        if (r.status !== 'success') { msg('clfMsg', r.message || T('errorTxt', 'Ошибка')); return; }
+        location.href = 'clans?id=' + encodeURIComponent(r.clan.id);
+      }).catch(function () { msg('clfMsg', T('serverDown', 'Сервер недоступен')); });
+    };
+    loadList();
+  }
+
+  function loadList() {
+    get('/clan/list?q=' + encodeURIComponent(st.q) + '&sort=' + st.sort + '&page=' + st.page).then(function (d) {
+      st.page = d.page;
+      $('clPg').textContent = d.page + '/' + d.pages;
+      $('clPrev').disabled = d.page <= 1;
+      $('clNext').disabled = d.page >= d.pages;
+      $('clList').innerHTML = d.clans.length ? d.clans.map(function (c) {
+        return '<a class="clRow" href="clans?id=' + encodeURIComponent(c.id) + '">' + chip(c)
+          + '<span class="nm">' + esc(c.name) + '</span>'
+          + '<span class="meta">' + c.members + '/' + c.max + ' &middot; ' + c.points + ' ' + T('clPoints', 'points') + '</span>'
+          + '<span class="acc">' + (c.open ? T('clOpenTag', 'Open') : T('clClosedTag', 'By request')) + '</span></a>';
+      }).join('') : '<div class="bfHint">' + (st.q ? T('clNoMatch', 'No clans found') : T('clEmpty', 'No clans yet. Create the first one!')) + '</div>';
+      if (me && !me.guest && !d.mine) $('clNew').style.display = '';
+    }).catch(function () { $('clList').innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
+  }
+
+  function loadMine() {
+    if (!me || me.guest) { $('clMine').innerHTML = '<div class="bfHint" style="padding:6px 0 14px">' + T('clSignIn', 'Sign in to create or join a clan') + '</div>'; return; }
+    get('/myClan').then(function (d) {
+      if (!d.clan) return;
+      $('clMine').innerHTML = '<div class="clMine"><span class="lbl">' + T('clMine', 'Your clan') + '</span>' + chip(d.clan)
+        + '<b>' + esc(d.clan.name) + '</b>'
+        + '<a class="bfBtn go" href="clans?id=' + encodeURIComponent(d.clan.id) + '">' + T('clOpenIt', 'Open') + '</a></div>';
+    });
+  }
+
+  /* ============ карточка клана ============ */
+  var ROLE = { leader: 'clLeader', officer: 'clOfficer', member: 'clMember' };
+  var ROLE_EN = { leader: 'Leader', officer: 'Officer', member: 'Member' };
+
+  function viewClan() {
+    get('/clan?id=' + encodeURIComponent(clanId)).then(function (c) {
+      if (c.status !== 'success') {
+        root.innerHTML = '<div class="bfHint">' + esc(c.message || T('errorTxt', 'Ошибка')) + '</div>'
+          + '<p style="text-align:center"><a href="clans">' + T('clBack', 'All clans') + '</a></p>';
+        return;
+      }
+      document.title = 'AIBrofist — ' + c.name;
+      var role = c.myRole, manage = role === 'leader' || role === 'officer';
+      var acts = '';
+      if (me && !me.guest) {
+        // лидеру с командой выйти нельзя, пока не передал лидерство (см. /clan/leave)
+        if (role) { if (role !== 'leader' || c.members <= 1) acts += '<button class="bfBtn ghost" data-act="leave">' + T('clLeave', 'Leave clan') + '</button>'; }
+        else if (c.myOtherClan) acts += '<div class="bfHint" style="padding:6px 0">' + T('clAlreadyIn', 'You are already in a clan') + '</div>';
+        else if (c.myRequest) acts += '<button class="bfBtn ghost" data-act="cancel">' + T('clCancelReq', 'Cancel request') + '</button>';
+        else if (c.members >= c.max) acts += '<button class="bfBtn ghost" disabled>' + T('clFull', 'Full') + '</button>';
+        else acts += '<button class="bfBtn go" data-act="join">' + (c.open ? T('clJoin', 'Join') : T('clRequest', 'Request to join')) + '</button>';
+        if (role === 'leader' || c.isOwner) acts += '<button class="bfBtn ghost" data-act="disband">' + T('clDisband', 'Disband clan') + '</button>';
+      } else {
+        acts = '<div class="bfHint" style="padding:6px 0">' + T('clSignIn', 'Sign in to create or join a clan') + '</div>';
+      }
+
+      var html = '<p style="margin:0 0 8px"><a class="clBack" href="clans">&larr; ' + T('clBack', 'All clans') + '</a></p>'
+        + '<div class="clHead">' + chip(c) + '<h1>' + esc(c.name) + '</h1></div>'
+        + (c.desc ? '<div class="clDesc">' + esc(c.desc) + '</div>' : '')
+        + '<div class="clFacts"><span>' + T('clLeader', 'Leader') + ': <b>' + esc(c.leader) + '</b></span>'
+        + '<span>' + T('clMembers', 'Members') + ': <b>' + c.members + '/' + c.max + '</b></span>'
+        + '<span><b>' + c.points + '</b> ' + T('clPoints', 'points') + '</span>'
+        + '<span>' + (c.open ? T('clOpenTag', 'Open') : T('clClosedTag', 'By request')) + '</span>'
+        + '<span>' + T('clCreated', 'Created') + ': ' + esc(date(c.created)) + '</span></div>'
+        + '<div class="clActs">' + acts + '</div><div class="bfMsg" id="clMsg"></div>';
+
+      if (manage) {
+        html += '<div class="clSec">' + T('clRequests', 'Join requests') + '</div>'
+          + (c.requests && c.requests.length ? c.requests.map(function (n) {
+              return '<div class="clMem"><a href="users?name=' + encodeURIComponent(n) + '">' + esc(n) + '</a>'
+                + '<span class="ops" style="margin-left:auto"><button data-act="accept" data-n="' + esc(n) + '">' + T('clAccept', 'Accept') + '</button>'
+                + '<button class="bad" data-act="decline" data-n="' + esc(n) + '">' + T('clDecline', 'Decline') + '</button></span></div>';
+            }).join('') : '<div class="bfHint" style="padding:6px 0">' + T('clNoRequests', 'No requests') + '</div>');
+      }
+
+      html += '<div class="clSec">' + T('clMembers', 'Members') + '</div>' + c.memberList.map(function (m) {
+        var ops = '';
+        if (role === 'leader' && m.role === 'member') ops += '<button data-act="promote" data-n="' + esc(m.name) + '">' + T('clPromote', 'Make officer') + '</button>';
+        if (role === 'leader' && m.role === 'officer') ops += '<button data-act="demote" data-n="' + esc(m.name) + '">' + T('clDemote', 'Remove officer') + '</button>';
+        if (role === 'leader' && m.role !== 'leader') ops += '<button data-act="transfer" data-n="' + esc(m.name) + '">' + T('clTransfer', 'Make leader') + '</button>';
+        if ((role === 'leader' && m.role !== 'leader') || (role === 'officer' && m.role === 'member'))
+          ops += '<button class="bad" data-act="kick" data-n="' + esc(m.name) + '">' + T('clKick', 'Remove') + '</button>';
+        return '<div class="clMem"><a href="users?name=' + encodeURIComponent(m.name) + '">' + esc(m.name) + '</a>'
+          + '<span class="role ' + m.role + '">' + T(ROLE[m.role], ROLE_EN[m.role]) + '</span>'
+          + '<span class="pts">' + m.points + ' ' + T('clPoints', 'points') + '</span>'
+          + (ops ? '<span class="ops">' + ops + '</span>' : '') + '</div>';
+      }).join('');
+
+      if (role === 'leader') {
+        html += '<div class="clSec">' + T('clEdit', 'Clan settings') + '</div>'
+          + '<div class="clForm on">'
+          + '<div class="clField"><label>' + T('clDesc', 'Description (optional)') + '</label><input class="bfInput" id="cleDesc" maxlength="200" value="' + esc(c.desc) + '"></div>'
+          + '<div class="clField"><label>' + T('clColor', 'Tag color') + '</label><input type="color" id="cleColor" value="' + esc(c.color) + '"></div>'
+          + '<div class="clField"><label>' + T('clAccess', 'Who can join') + '</label><select class="bfSelect" id="cleOpen">'
+          + '<option value="true"' + (c.open ? ' selected' : '') + '>' + T('clAccessOpen', 'Anyone can join') + '</option>'
+          + '<option value="false"' + (c.open ? '' : ' selected') + '>' + T('clAccessClosed', 'By request') + '</option></select></div>'
+          + '<button class="bfBtn go" data-act="save">' + T('clSave', 'Save') + '</button></div>';
+      }
+      root.innerHTML = html;
+
+      root.onclick = function (e) {
+        var b = e.target.closest && e.target.closest('[data-act]');
+        if (!b || b.disabled) return;
+        var act = b.dataset.act, n = b.dataset.n;
+        var ask = {
+          leave: T('clConfirmLeave', 'Leave this clan?'),
+          disband: T('clConfirmDisband', 'Disband this clan? All members will be removed.'),
+          kick: T('clConfirmKick', 'Remove {n} from the clan?').replace('{n}', n || ''),
+          transfer: T('clConfirmTransfer', 'Make {n} the leader? You will become an officer.').replace('{n}', n || '')
+        }[act];
+        if (ask && !window.confirm(ask)) return;
+        var url = { join: '/clan/join', cancel: '/clan/cancelRequest', leave: '/clan/leave', disband: '/clan/disband',
+                    accept: '/clan/accept', decline: '/clan/decline', kick: '/clan/kick', promote: '/clan/promote',
+                    demote: '/clan/demote', transfer: '/clan/transfer', save: '/clan/edit' }[act];
+        var data = { id: c.id, name: n };
+        if (act === 'save') data = { desc: $('cleDesc').value, color: $('cleColor').value, open: $('cleOpen').value };
+        post(url, data).then(function (r) {
+          if (r.status !== 'success') { msg('clMsg', r.message || T('errorTxt', 'Ошибка')); return; }
+          if (act === 'leave' || act === 'disband') { location.href = 'clans'; return; }
+          viewClan();
+          if (act === 'save') setTimeout(function () { msg('clMsg', T('clSaved', 'Saved'), true); }, 150);
+        }).catch(function () { msg('clMsg', T('serverDown', 'Сервер недоступен')); });
+      };
+    }).catch(function () { root.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
+  }
+
+  get('/whoAmI').then(function (d) { me = d; }).catch(function () { me = { guest: true }; }).then(function () {
+    if (clanId) { viewClan(); return; }
+    viewList(); loadMine();
+  });
+})();
+</script>
+</body>
+</html>

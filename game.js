@@ -990,6 +990,13 @@
     if (!name) return;
     if (/^#[0-9a-f]{6}$/i.test(c || '')) chatColors[name] = c; else delete chatColors[name];
   }
+  /* Тег клана перед ником (см. clans.js): сервер присылает его в списке игроков. */
+  var clanTags = Object.create(null);
+  function setClan(name, tag, color) {
+    if (!name) return;
+    if (/^[A-Za-z0-9]{2,5}$/.test(tag || '') && /^#[0-9a-f]{6}$/i.test(color || '')) clanTags[name] = { tag: tag, color: color };
+    else delete clanTags[name];
+  }
   // светлый цвет на белой обводке не читается — для него обводка тёмная
   function isLightColor(c) {
     var n = parseInt(String(c).slice(1), 16);
@@ -1025,7 +1032,7 @@
   // (см. hideBridge() там): реплики рисуются на canvas, без него снаружи
   // нечем проверить, что заглушённый действительно не долетает до экрана
   if (/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname)) {
-    window.__bfChatDebug = { spoken: spoken, isMuted: isMuted, chatColors: chatColors };
+    window.__bfChatDebug = { spoken: spoken, isMuted: isMuted, chatColors: chatColors, clanTags: clanTags };
   }
   function speak(who, text) {
     if (!text) return;
@@ -1865,6 +1872,7 @@
       byNid = {};
       list.forEach(function (p) {
         setChatColor(p.name, p.chatColor);
+        setClan(p.name, p.clanTag, p.clanColor);
         if (p.id === socket.id) return;
         seen[p.id] = 1;
         var o = others[p.id] || (others[p.id] = { x: 0, y: 0, tx: 0, ty: 0 });
@@ -1881,6 +1889,7 @@
 
     socket.on('playerJoined', function (p) {
       setChatColor(p.name, p.chatColor);
+      setClan(p.name, p.clanTag, p.clanColor);
       if (p.id === socket.id) return;
       others[p.id] = { x: 0, y: 0, tx: 0, ty: 0, name: p.name, nid: p.nid };
       applyKnown(others[p.id], p.position);
@@ -2374,11 +2383,28 @@
     ctx.font = (15 * tk) + 'px sans-serif';
     // имя — под игроком: белый с чуть серой обводкой, а у купившего цвет — этим цветом
     var tagColor = chatColors[name] || '';
+    var nameY = topY + h + 17 * tk;
+    var clan = clanTags[name];
+    var nameX = cx;
+    if (clan) {
+      // «[ТЕГ] ник» одной строкой по центру: тег цветом клана, ник — как обычно
+      var tagText = '[' + clan.tag + '] ';
+      var wTag = ctx.measureText(tagText).width, wName = ctx.measureText(name).width;
+      var x0 = cx - (wTag + wName) / 2;
+      ctx.textAlign = 'left';
+      ctx.lineWidth = 3 * tk;
+      ctx.strokeStyle = outlineFor(clan.color, 'rgba(255,255,255,.9)');
+      ctx.strokeText(tagText, x0, nameY);
+      ctx.fillStyle = clan.color;
+      ctx.fillText(tagText, x0, nameY);
+      nameX = x0 + wTag;
+    }
     ctx.lineWidth = 3 * tk;
     ctx.strokeStyle = outlineFor(tagColor, tagColor ? 'rgba(255,255,255,.9)' : 'rgba(122,130,142,.85)');
-    ctx.strokeText(name, cx, topY + h + 17 * tk);
+    ctx.strokeText(name, nameX, nameY);
     ctx.fillStyle = tagColor || '#ffffff';
-    ctx.fillText(name, cx, topY + h + 17 * tk);
+    ctx.fillText(name, nameX, nameY);
+    ctx.textAlign = 'center';
 
     // отправленная реплика плавно уплывает вверх и тает —
     // и не пропадает от того, что игрок уже набирает следующую

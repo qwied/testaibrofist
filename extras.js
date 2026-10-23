@@ -604,6 +604,7 @@ function register(app, acc) {
     saveUsers();
     // владелец переименовал игрока — карты того тоже переезжают на новое имя (см. maps.renameAuthor)
     mapsApi.renameAuthor(old, to);
+    require('./clans.js').renameMember(old, to);
     res.json({ status: 'success', message: '«' + old + '» is now «' + to + '»' });
   });
 

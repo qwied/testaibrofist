@@ -4,6 +4,10 @@
     {
       "title": "Blocks that shrink for real",
       "text": "The Size changer option in the Map Editor now shrinks the block's hitbox too, so a shrunk block really lets players through. Choose how small it gets with Smallest size."
+    },
+    {
+      "title": "Clans",
+      "text": "Create or join a clan on the new Clans page. Your clan tag shows next to your name in the game, clans have leaders and officers, join requests, a member list and points from their members' scores."
     }
   ]
 }
