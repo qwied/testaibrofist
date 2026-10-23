@@ -983,6 +983,21 @@
   // Object.create(null): игрок по имени "__proto__" не должен получать
   // унаследованный Object.prototype вместо своего личного массива реплик
   var spoken = Object.create(null);
+  /* Купленный цвет ника и реплик: сервер присылает его в списке игроков и в
+     каждой реплике (см. chatColor в server.js), здесь он копится по нику. */
+  var chatColors = Object.create(null);
+  function setChatColor(name, c) {
+    if (!name) return;
+    if (/^#[0-9a-f]{6}$/i.test(c || '')) chatColors[name] = c; else delete chatColors[name];
+  }
+  // светлый цвет на белой обводке не читается — для него обводка тёмная
+  function isLightColor(c) {
+    var n = parseInt(String(c).slice(1), 16);
+    return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 170;
+  }
+  function outlineFor(c, fallback) {
+    return c && isLightColor(c) ? 'rgba(40,44,52,.85)' : fallback;
+  }
   /* Мьют чата — только локально у себя: сам заглушённый ничего не
      замечает, его сообщения как ни в чём не бывало доходят до всех
      остальных, просто эта вкладка их не рисует. Живёт в localStorage,
@@ -1010,13 +1025,13 @@
   // (см. hideBridge() там): реплики рисуются на canvas, без него снаружи
   // нечем проверить, что заглушённый действительно не долетает до экрана
   if (/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname)) {
-    window.__bfChatDebug = { spoken: spoken, isMuted: isMuted };
+    window.__bfChatDebug = { spoken: spoken, isMuted: isMuted, chatColors: chatColors };
   }
   function speak(who, text) {
     if (!text) return;
     text = cleanSay(text);   // невидимые bidi-символы не переворачивают слова на экране
     var list = spoken[who] || (spoken[who] = []);
-    list.push({ text: text, born: Date.now() });
+    list.push({ text: text, born: Date.now(), color: chatColors[who] || '' });
     /* Лишние не выкидываем разом: при частой отправке реплики пропадали
        рывком прямо на глазах. Вместо этого состариваем самую старую —
        она доживает свои полсекунды и растворяется как обычно. */
@@ -1849,6 +1864,7 @@
       var seen = {};
       byNid = {};
       list.forEach(function (p) {
+        setChatColor(p.name, p.chatColor);
         if (p.id === socket.id) return;
         seen[p.id] = 1;
         var o = others[p.id] || (others[p.id] = { x: 0, y: 0, tx: 0, ty: 0 });
@@ -1864,6 +1880,7 @@
     });
 
     socket.on('playerJoined', function (p) {
+      setChatColor(p.name, p.chatColor);
       if (p.id === socket.id) return;
       others[p.id] = { x: 0, y: 0, tx: 0, ty: 0, name: p.name, nid: p.nid };
       applyKnown(others[p.id], p.position);
@@ -1910,6 +1927,7 @@
     });
 
     socket.on('chatMessage', function (m) {
+      setChatColor(m.playerName, m.color);
       if (m.playerName !== me.name && !isMuted(m.playerName) && !hideChatPref) {
         speak(m.playerName, m.text);
         if (window.BFSound) BFSound.chat();
@@ -2332,7 +2350,7 @@
   // тёмный текст со светлым ореолом: читается и на светлом, и на тёмном фоне
   function paintSay(ctx, t, x, y, tk, color) {
     ctx.lineWidth = 3 * tk;
-    ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.strokeStyle = outlineFor(color, 'rgba(255,255,255,.85)');
     ctx.strokeText(t, x, y);
     ctx.fillStyle = color || '#3a3a3a';
     ctx.fillText(t, x, y);
@@ -2354,11 +2372,12 @@
     var tk = touch ? 1 / Math.max(0.25, (GAME && GAME.viewScale) || 1) : 1;
 
     ctx.font = (15 * tk) + 'px sans-serif';
-    // имя — под игроком: белый с чуть серой обводкой
+    // имя — под игроком: белый с чуть серой обводкой, а у купившего цвет — этим цветом
+    var tagColor = chatColors[name] || '';
     ctx.lineWidth = 3 * tk;
-    ctx.strokeStyle = 'rgba(122,130,142,.85)';
+    ctx.strokeStyle = outlineFor(tagColor, tagColor ? 'rgba(255,255,255,.9)' : 'rgba(122,130,142,.85)');
     ctx.strokeText(name, cx, topY + h + 17 * tk);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = tagColor || '#ffffff';
     ctx.fillText(name, cx, topY + h + 17 * tk);
 
     // отправленная реплика плавно уплывает вверх и тает —
@@ -2390,7 +2409,7 @@
           // SAY_GAP — облачко стоит отдельно над головой, а не сразу над
           // теменем; всплытие при растворении (k*46) добавляется поверх.
           var ly = sp.y - (SAY_GAP + (lines.length - 1 - li) * 16) * tk - lift - k * 46 * tk;
-          paintSay(ctx, lines[li], sp.x, ly, tk);
+          paintSay(ctx, lines[li], sp.x, ly, tk, sp.color);
         }
       }
       ctx.globalAlpha = 1;

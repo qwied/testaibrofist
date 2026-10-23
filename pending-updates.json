@@ -1,4 +1,9 @@
 {
   "base": "7c2d8447b2b50f6aef72eebd466677ecba9b16dc",
-  "updates": []
+  "updates": [
+    {
+      "title": "Chat color works in the game",
+      "text": "The chat color you unlocked now colors your name under your character and your chat messages above your head, for everyone in the room."
+    }
+  ]
 }

@@ -1039,6 +1039,7 @@ io.on('connection', (socket) => {
       room: room,
       position: { x: Math.random() * 800, y: Math.random() * 600 },
       joinedAt: Date.now(),
+      chatColor: account ? accountsRef.chatColorOf(account) : '',   // купленный цвет ника и реплик, см. accounts.js
       linesUsed: 0    // «нарисовать линию» — ограниченное число раз за вход, см. drawLine
     };
 
@@ -1189,6 +1190,7 @@ io.on('connection', (socket) => {
         playerId: socket.id,
         playerName: player.name,
         text: cleanText(data.text, 200),
+        color: player.chatColor || '',
         timestamp: Date.now(),
         room: room
       };

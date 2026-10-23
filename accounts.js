@@ -945,4 +945,13 @@ function register(app) {
   app.get('/captcha/getCaptcha', (req, res) => res.json({}));
 }
 
-module.exports = { register, reload: load, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, creditCoins, logCoins, backfillCoins, creditScore, creditHsScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, getHsLog: () => hsLog, paginate, NICK_CHANGE_PRICE };
+/* Цвет, которым игрок подписан в игре: ник под фигурой и реплики над головой.
+   Свой цвет открывается покупкой (см. /chatColor/unlock) — без неё и без
+   выбранного цвета игрок выглядит как все. */
+const CHAT_COLOR_RE = /^#[0-9a-f]{6}$/i;
+function chatColorOf(name) {
+  const u = db.users[key(name)];
+  return u && u.chatColorUnlocked && CHAT_COLOR_RE.test(u.chatColor || '') ? u.chatColor.toLowerCase() : '';
+}
+
+module.exports = { register, reload: load, chatColorOf, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, creditCoins, logCoins, backfillCoins, creditScore, creditHsScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, getHsLog: () => hsLog, paginate, NICK_CHANGE_PRICE };
