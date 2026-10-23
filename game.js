@@ -1018,7 +1018,7 @@
   }
   function inkText(ctx, t, x, y, tk, color) {
     ctx.lineJoin = 'round';
-    ctx.lineWidth = 3 * tk;
+    ctx.lineWidth = 3.4 * tk;
     ctx.strokeStyle = /^#[0-9a-f]{6}$/i.test(color) && isLightColor(color) ? '#6b7280' : '#e5e7eb';
     ctx.strokeText(t, x, y);
     ctx.fillStyle = color;
