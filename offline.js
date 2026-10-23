@@ -47,7 +47,7 @@
         { id: 6, type: 'coin', x: 390, y: 420 },
         { id: 7, type: 'coin', x: 730, y: 355 },
         { id: 8, type: 'bounce', x: 560, y: 535 },
-        { id: 9, type: 'teleport', x: 880, y: 520, targetIds: ['exit'] },
+        { id: 9, type: 'teleport', x: 880, y: 520, targetIds: 'exit' },
         { id: 10, type: 'teleport', customId: 'exit', x: 1160, y: 420 },
         { id: 11, type: 'text', x: 180, y: 510, text: 'LOCAL TEST MAP' }
       ];
@@ -108,11 +108,138 @@
   function commentList(m) { return (m && m.comments) || []; }
   function parseJsonMap(data) { try { return typeof data === 'string' ? JSON.parse(data) : data; } catch (e) { return null; } }
 
+  /* ---------- кланы: та же логика, что в clans.js на сервере, но на данных браузера ---------- */
+  var CLAN_PTS = { 'Local Bot': 120, 'Test Pilot': 45, 'Sample Boss': 80 };    // очки выдуманных участников
+  function readClans() {
+    var c = read('clans', null);
+    if (!Array.isArray(c)) c = write('clans', [
+      { id: '1', name: 'Local Test Crew', tag: 'LTC', color: '#2563eb', desc: 'Sample clan: anyone can join.', open: true, created: now() - 86400000,
+        leader: 'Local Bot', officers: [], members: ['Local Bot', 'Test Pilot'], requests: [] },
+      { id: '2', name: 'Closed Sample', tag: 'CLS', color: '#16a34a', desc: 'Sample clan that takes join requests.', open: false, created: now() - 3600000,
+        leader: 'Sample Boss', officers: [], members: ['Sample Boss'], requests: [] }
+    ]);
+    return c;
+  }
+  function clanSquash(s) { return String(s || '').toLowerCase().replace(/[\s._-]+/g, ''); }
+  function clanRole(c, name) { return c.leader === name ? 'leader' : (c.officers.indexOf(name) !== -1 ? 'officer' : (c.members.indexOf(name) !== -1 ? 'member' : null)); }
+  function clansApi(path, sp, method, data, user) {
+    if (path.indexOf('/clan/') !== 0 && path !== '/clan' && path !== '/myClan' && path !== '/clanOf') return null;
+    var clans = readClans(), me = user.name;
+    var mineOf = function (name) { return clans.filter(function (c) { return c.members.indexOf(name) !== -1; })[0] || null; };
+    var mine = mineOf(me);
+    var pts = function (c) { return c.members.reduce(function (s, n) { return s + (n === me ? (user.score || 0) + (user.hsScore || 0) : (CLAN_PTS[n] || 0)); }, 0); };
+    var summary = function (c) { return { id: c.id, name: c.name, tag: c.tag, color: c.color, desc: c.desc || '', open: !!c.open, members: c.members.length, max: 30, points: pts(c), created: c.created }; };
+    var err = function (m) { return Promise.resolve(response({ status: 'error', message: m })); };
+    var ok = function (extra) { return Promise.resolve(response(Object.assign({ status: 'success' }, extra || {}))); };
+    var save = function () { write('clans', clans); };
+    var byId = function (id) { return clans.filter(function (c) { return c.id === String(id || ''); })[0] || null; };
+    var drop = function (list, name) { var i = list.indexOf(name); if (i !== -1) list.splice(i, 1); return i !== -1; };
+    var yes = function (v) { return !(v === false || v === 'false' || v === '0'); };
+    var role = mine ? clanRole(mine, me) : null, manage = role === 'leader' || role === 'officer';
+
+    if (path === '/clan/list') {
+      var q = String(sp.get('q') || '').toLowerCase(), sort = sp.get('sort') === 'members' ? 'members' : (sp.get('sort') === 'new' ? 'new' : 'points');
+      var list = clans.filter(function (c) { return !q || c.name.toLowerCase().indexOf(q) !== -1 || c.tag.toLowerCase().indexOf(q) !== -1; }).map(summary);
+      list.sort(function (a, b) { return sort === 'members' ? b.members - a.members || b.points - a.points : (sort === 'new' ? b.created - a.created : b.points - a.points || b.members - a.members); });
+      var pages = Math.max(1, Math.ceil(list.length / 12)), page = Math.min(pages, Math.max(1, Number(sp.get('page')) || 1));
+      return Promise.resolve(response({ clans: list.slice((page - 1) * 12, page * 12), page: page, pages: pages, total: list.length, sort: sort, mine: mine ? mine.id : null }));
+    }
+    if (path === '/myClan') return Promise.resolve(response({ clan: mine ? { id: mine.id, name: mine.name, tag: mine.tag, color: mine.color } : null, role: role, pending: manage ? mine.requests.length : 0 }));
+    if (path === '/clanOf') { var oc = mineOf(String(sp.get('name') || '')); return Promise.resolve(response({ clan: oc ? { id: oc.id, name: oc.name, tag: oc.tag, color: oc.color } : null })); }
+    if (path === '/clan') {
+      var c = byId(sp.get('id'));
+      if (!c) return err('Clan not found');
+      var rank = { leader: 0, officer: 1, member: 2 };
+      var out = Object.assign(summary(c), { status: 'success', leader: c.leader, myRole: clanRole(c, me), myRequest: c.requests.indexOf(me) !== -1,
+        myOtherClan: !!mine && !clanRole(c, me), isOwner: false,
+        memberList: c.members.map(function (n) { return { name: n, role: clanRole(c, n), points: n === me ? (user.score || 0) + (user.hsScore || 0) : (CLAN_PTS[n] || 0) }; })
+          .sort(function (a, b) { return rank[a.role] - rank[b.role] || b.points - a.points; }) });
+      var cr = clanRole(c, me); if (cr === 'leader' || cr === 'officer') out.requests = c.requests.slice();
+      return Promise.resolve(response(out));
+    }
+    if (method !== 'POST') return null;
+
+    if (path === '/clan/create') {
+      if (mine) return err('Leave your current clan first');
+      var name = String(data.name || '').replace(/\s+/g, ' ').trim(), tag = String(data.tag || '').trim().toUpperCase();
+      if (name.length < 3 || name.length > 20) return err('Clan name must be 3 to 20 characters');
+      if (!/^[A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9 ._-]*[A-Za-zА-Яа-яЁё0-9]$/.test(name)) return err('Clan name may only contain letters, digits, spaces and - _ .');
+      if (!/^[A-Za-z0-9]{2,5}$/.test(tag)) return err('Tag must be 2 to 5 letters or digits');
+      if (clans.some(function (x) { return clanSquash(x.name) === clanSquash(name); })) return err('A clan with this name already exists');
+      if (clans.some(function (x) { return x.tag.toLowerCase() === tag.toLowerCase(); })) return err('This tag is already taken');
+      var nid = String(clans.reduce(function (m, x) { return Math.max(m, parseInt(x.id, 10) || 0); }, 0) + 1);
+      var nc = { id: nid, name: name, tag: tag, desc: String(data.desc || '').trim().slice(0, 200), color: /^#[0-9a-f]{6}$/i.test(data.color || '') ? String(data.color).toLowerCase() : '#111827',
+        open: yes(data.open), created: now(), leader: me, officers: [], members: [me], requests: [] };
+      clans.push(nc); save();
+      return ok({ message: 'Clan created', clan: summary(nc) });
+    }
+    if (path === '/clan/join') {
+      var jc = byId(data.id);
+      if (mine) return err('Leave your current clan first');
+      if (!jc) return err('Clan not found');
+      if (jc.members.length >= 30) return err('This clan is full');
+      if (jc.open) { jc.members.push(me); save(); return ok({ joined: true, message: 'You joined ' + jc.name }); }
+      if (jc.requests.indexOf(me) !== -1) return err('Request already sent');
+      jc.requests.push(me); save();
+      return ok({ joined: false, message: 'Request sent' });
+    }
+    if (path === '/clan/cancelRequest') { var cc = byId(data.id); if (!cc || !drop(cc.requests, me)) return err('No such request'); save(); return ok(); }
+    if (path === '/clan/leave') {
+      if (!mine) return err('You are not in a clan');
+      if (role === 'leader') {
+        if (mine.members.length > 1) return err('Make someone else the leader first, or disband the clan');
+        clans.splice(clans.indexOf(mine), 1); save(); return ok({ disbanded: true });
+      }
+      drop(mine.members, me); drop(mine.officers, me); save(); return ok();
+    }
+    if (path === '/clan/disband') {
+      if (role !== 'leader') return err('Only the leader can disband the clan');
+      clans.splice(clans.indexOf(mine), 1); save(); return ok();
+    }
+    if (path === '/clan/edit') {
+      if (role !== 'leader') return err('Only the leader can do this');
+      if (data.desc !== undefined) mine.desc = String(data.desc).trim().slice(0, 200);
+      if (data.color !== undefined) { if (!/^#[0-9a-f]{6}$/i.test(data.color)) return err('Bad color'); mine.color = String(data.color).toLowerCase(); }
+      if (data.open !== undefined) mine.open = yes(data.open);
+      save(); return ok({ clan: summary(mine) });
+    }
+    if (!mine) return err('You are not in a clan');
+    var who = String(data.name || ''), wr = clanRole(mine, who);
+    if (path === '/clan/accept' || path === '/clan/decline') {
+      if (!manage) return err('Only the leader or an officer can do this');
+      if (mine.requests.indexOf(who) === -1) return err('No such request');
+      if (path === '/clan/accept') { if (mine.members.length >= 30) return err('This clan is full'); mine.members.push(who); }
+      drop(mine.requests, who); save(); return ok();
+    }
+    if (path === '/clan/kick') {
+      if (!manage) return err('Only the leader or an officer can do this');
+      if (!wr) return err('This player is not in your clan');
+      if (wr === 'leader' || who === me) return err('You cannot remove this player');
+      if (wr === 'officer' && role !== 'leader') return err('Only the leader can remove an officer');
+      drop(mine.members, who); drop(mine.officers, who); save(); return ok();
+    }
+    if (role !== 'leader') return err('Only the leader can do this');
+    if (path === '/clan/promote') {
+      if (wr !== 'member') return err('Only a regular member can become an officer');
+      if (mine.officers.length >= 5) return err('At most 5 officers');
+      mine.officers.push(who); save(); return ok();
+    }
+    if (path === '/clan/demote') { if (!drop(mine.officers, who)) return err('This player is not an officer'); save(); return ok(); }
+    if (path === '/clan/transfer') {
+      if (who === me || !wr) return err('Pick another member of your clan');
+      drop(mine.officers, who); if (mine.officers.length < 5) mine.officers.push(mine.leader);
+      mine.leader = who; save(); return ok();
+    }
+    return null;
+  }
+
   function localApi(input, init) {
     var url = typeof input === 'string' ? input : (input && input.url) || '';
     var path = new URL(url, location.href).pathname;
     var sp = query(url), method = (init && init.method || 'GET').toUpperCase(), data = bodyData(init);
     var user = currentUser();
+    var clanRes = clansApi(path, sp, method, data, user);
+    if (clanRes) return clanRes;
     if (path === '/whoAmI' || path === '/iSigned') return Promise.resolve(response({ name: user.name, guest: false, data: user, owner: false }));
     if (path === '/getMySettings') return Promise.resolve(response({ status: 'success', data: user.settings || {} }));
     if (path === '/getMyProfile') return Promise.resolve(response({ status: 'success', data: user }));

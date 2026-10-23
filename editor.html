@@ -348,16 +348,16 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body.mob #toolTip{display:none!important}
 body.mob #hint{display:none}
 </style>
-        <script src="offline.js?v=2"></script>
-<script src="device.js?v=176"></script>
-        <script src="sound.js?v=176"></script>
-        <script src="skinRender.js?v=176"></script>
-        <script src="skinCanvas.js?v=176"></script>
-        <script src="gifuct.bundle.js?v=176"></script>
-        <script src="gifPlayer.js?v=176"></script>
-        <script src="coin.js?v=176"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=176">
-        <script src="theme.js?v=176"></script>
+        <script src="offline.js?v=3"></script>
+<script src="device.js?v=177"></script>
+        <script src="sound.js?v=177"></script>
+        <script src="skinRender.js?v=177"></script>
+        <script src="skinCanvas.js?v=177"></script>
+        <script src="gifuct.bundle.js?v=177"></script>
+        <script src="gifPlayer.js?v=177"></script>
+        <script src="coin.js?v=177"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=177">
+        <script src="theme.js?v=177"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -4760,6 +4760,10 @@ window.GAME = BRIDGE = {
       o.h = isFinite(o.h) ? Math.max(1, Math.min(10000, o.h)) : 1;
       o.rot = isFinite(o.rot) ? o.rot : 0;
       cleanLift(o);
+      /* «Цели» связей — строка с ID через запятую. Из чужого JSON (или локальной тестовой карты) приходил
+         массив, число или объект: .split в step() падал на каждом кадре, и вся физика карты вставала. */
+      if(o.targetIds !== undefined && typeof o.targetIds !== "string")
+        o.targetIds = Array.isArray(o.targetIds) ? o.targetIds.join(",") : (o.targetIds == null ? "" : String(o.targetIds));
       // наименьший размер при изменении размера: от 10% до 90% (чужой JSON мог прислать что угодно)
       if(o.pulseMin !== undefined){
         if(isFinite(o.pulseMin)) o.pulseMin = Math.max(0.1, Math.min(0.9, +o.pulseMin)); else delete o.pulseMin;
@@ -4849,12 +4853,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=176"></script>
-<script src="abuseShow.js?v=176" defer></script>
-<script src="editorHelp.js?v=176"></script>
-<script src="editorAI.js?v=176" defer></script>
-<script src="account.js?v=176" defer></script>
-<script src="owner.js?v=176" defer></script>
+<script src="i18n.js?v=177"></script>
+<script src="abuseShow.js?v=177" defer></script>
+<script src="editorHelp.js?v=177"></script>
+<script src="editorAI.js?v=177" defer></script>
+<script src="account.js?v=177" defer></script>
+<script src="owner.js?v=177" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -4970,7 +4974,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=176" defer></script>
+        <script src="skinAvatar.js?v=177" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */

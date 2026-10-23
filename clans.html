@@ -4,16 +4,19 @@
 <meta charset="utf-8">
 <title>AIBrofist — Clans</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=176">
-<script src="offline.js?v=2"></script>
-<script src="theme.js?v=176"></script>
-<script src="device.js?v=176"></script>
-<script src="sound.js?v=176"></script>
+<link rel="stylesheet" href="ui.css?v=177">
+<script src="offline.js?v=3"></script>
+<script src="theme.js?v=177"></script>
+<script src="device.js?v=177"></script>
+<script src="sound.js?v=177"></script>
 <style>
 .clBar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .clBar .bfInput{margin-bottom:0;flex:1 1 220px}
 .clBar .bfSelect{margin-bottom:0;flex:0 1 190px;width:auto}
 .clBar .bfBtn{margin:0;width:auto;padding:11px 18px}
+.clFree{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:rgba(255,255,255,.22);
+  font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;vertical-align:1px}
+.clNote{color:var(--muted);font-size:13px;margin:0 0 10px}
 .clTag{display:inline-block;min-width:40px;text-align:center;padding:3px 9px;border-radius:7px;
   font-weight:800;font-size:13px;letter-spacing:.4px;background:var(--c,#111827);color:var(--t,#fff)}
 .clRow{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);
@@ -81,15 +84,15 @@
   <div class="bfHint" data-i18n="loading">Загрузка…</div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=176">
-<script src="i18n.js?v=176"></script>
-<script src="coin.js?v=176"></script>
-<script src="skinRender.js?v=176"></script>
-<script src="skinAvatar.js?v=176" defer></script>
-<script src="shell.js?v=176"></script>
-<script src="abuseShow.js?v=176" defer></script>
-<script src="account.js?v=176" defer></script>
-<script src="owner.js?v=176" defer></script>
+<link rel="stylesheet" href="mobile.css?v=177">
+<script src="i18n.js?v=177"></script>
+<script src="coin.js?v=177"></script>
+<script src="skinRender.js?v=177"></script>
+<script src="skinAvatar.js?v=177" defer></script>
+<script src="shell.js?v=177"></script>
+<script src="abuseShow.js?v=177" defer></script>
+<script src="account.js?v=177" defer></script>
+<script src="owner.js?v=177" defer></script>
 <script>
 (function () {
   'use strict';
@@ -148,6 +151,7 @@
       +   '<div class="clField"><label>' + T('clAccess', 'Who can join') + '</label><select class="bfSelect" id="clfOpen">'
       +     '<option value="true">' + T('clAccessOpen', 'Anyone can join') + '</option>'
       +     '<option value="false">' + T('clAccessClosed', 'By request') + '</option></select></div>'
+      +   '<div class="clNote">' + T('clFreeNote', 'Creating a clan is free.') + '</div>'
       +   '<button class="bfBtn go" id="clfGo">' + T('clCreate', 'Create') + '</button>'
       +   '<div class="bfMsg" id="clfMsg"></div>'
       + '</div>'
@@ -157,7 +161,7 @@
       +     '<option value="points">' + T('clSortPoints', 'Top points') + '</option>'
       +     '<option value="members">' + T('clSortMembers', 'Most members') + '</option>'
       +     '<option value="new">' + T('clSortNew', 'Newest') + '</option></select>'
-      +   '<button class="bfBtn go" id="clNew" style="display:none">' + T('clCreateBtn', 'Create a clan') + '</button>'
+      +   '<button class="bfBtn go" id="clNew" style="display:none">' + T('clCreateBtn', 'Create a clan') + '<span class="clFree">' + T('clFree', 'Free') + '</span></button>'
       + '</div>'
       + '<div id="clList"><div class="bfHint">' + T('loading', 'Загрузка…') + '</div></div>'
       + '<div class="clPager"><button id="clPrev">&lt;</button><span id="clPg">1/1</span><button id="clNext">&gt;</button></div>';
@@ -186,6 +190,7 @@
 
   function loadList() {
     get('/clan/list?q=' + encodeURIComponent(st.q) + '&sort=' + st.sort + '&page=' + st.page).then(function (d) {
+      if (!d || !Array.isArray(d.clans)) throw new Error('bad list');
       st.page = d.page;
       $('clPg').textContent = d.page + '/' + d.pages;
       $('clPrev').disabled = d.page <= 1;
@@ -196,18 +201,19 @@
           + '<span class="meta">' + c.members + '/' + c.max + ' &middot; ' + c.points + ' ' + T('clPoints', 'points') + '</span>'
           + '<span class="acc">' + (c.open ? T('clOpenTag', 'Open') : T('clClosedTag', 'By request')) + '</span></a>';
       }).join('') : '<div class="bfHint">' + (st.q ? T('clNoMatch', 'No clans found') : T('clEmpty', 'No clans yet. Create the first one!')) + '</div>';
-      if (me && !me.guest && !d.mine) $('clNew').style.display = '';
     }).catch(function () { $('clList').innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
   }
 
   function loadMine() {
     if (!me || me.guest) { $('clMine').innerHTML = '<div class="bfHint" style="padding:6px 0 14px">' + T('clSignIn', 'Sign in to create or join a clan') + '</div>'; return; }
+    // кнопка «Создать клан» нужна тому, у кого клана нет; если ответ не пришёл — показываем её всё равно, сервер сам откажет, если клан уже есть
+    var showCreate = function () { var b = $('clNew'); if (b) b.style.display = ''; };
     get('/myClan').then(function (d) {
-      if (!d.clan) return;
+      if (!d || !d.clan) { showCreate(); return; }
       $('clMine').innerHTML = '<div class="clMine"><span class="lbl">' + T('clMine', 'Your clan') + '</span>' + chip(d.clan)
         + '<b>' + esc(d.clan.name) + '</b>'
         + '<a class="bfBtn go" href="clans?id=' + encodeURIComponent(d.clan.id) + '">' + T('clOpenIt', 'Open') + '</a></div>';
-    });
+    }).catch(showCreate);
   }
 
   /* ============ карточка клана ============ */

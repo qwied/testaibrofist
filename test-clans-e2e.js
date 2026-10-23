@@ -74,7 +74,9 @@ const until = async (f, ms = 6000) => { const t = Date.now(); while (Date.now() 
   const pl = await mkPage(lead);
   await open(pl, '/clans');
   ok(/No clans yet/i.test(await pl.textContent('#clList')), 'список пока пуст');
+  ok(/Free/i.test(await pl.textContent('#clNew')), 'на кнопке «Create a clan» написано «Free»');
   await pl.click('#clNew');
+  ok(/free/i.test(await pl.textContent('#clForm')), 'в форме сказано, что создание бесплатно');
   await pl.fill('#clfName', 'Night Owls');
   await pl.fill('#clfTag', 'owl');
   await pl.fill('#clfDesc', 'We play at night');

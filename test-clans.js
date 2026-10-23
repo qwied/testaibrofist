@@ -55,10 +55,12 @@ for (const [name, tag, why] of [
   ['System', 'SYS', 'зарезервированное название'], ['System Team', 'ST', 'название начинается с ника владельца'],
   ['Wolves', 'System', 'зарезервированный тег']
 ]) ok(post('/clan/create', 'Lead', { name, tag }).status === 'error', 'не создаётся: ' + why);
+users.lead.coins = 0;
 let r = post('/clan/create', 'Lead', { name: '  Red   Wolves ', tag: 'rw', desc: 'We run <fast>', color: '#E11D48', open: 'true' });
 ok(r.status === 'success' && r.clan.tag === 'RW' && r.clan.name === 'Red Wolves', 'создан: пробелы сжаты, тег в верхнем регистре', JSON.stringify(r.clan));
 ok(r.clan.color === '#e11d48' && r.clan.open === true, 'цвет и открытость сохранены');
 const id = r.clan.id;
+ok(users.lead.coins === 0, 'создание клана бесплатно: монеты не нужны и не списываются', 'монет ' + users.lead.coins);
 ok(post('/clan/create', 'Lead', { name: 'Other', tag: 'OT' }).message === 'Leave your current clan first', 'второй клан тому же игроку нельзя');
 ok(post('/clan/create', 'Bob', { name: 'red-wolves', tag: 'ZZ' }).status === 'error', 'то же название с другими знаками занято');
 ok(post('/clan/create', 'Bob', { name: 'Blue Hawks', tag: 'Rw' }).status === 'error', 'тег занят без учёта регистра');

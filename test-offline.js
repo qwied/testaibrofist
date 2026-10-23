@@ -12,7 +12,7 @@ const offline = read('offline.js');
 const game = read('game.js');
 const gameHtml = read('game.html');
 const pages = ['index.html','race.html','hide-and-seek.html','mapsBrowser.html','story.html','editor.html','leaderboard.html','quests.html','daily.html','avatar.html','users.html','messages.html'];
-pages.forEach(file => ok(file + ' loads offline runtime', read(file).includes('offline.js?v=2')));
+pages.forEach(file => ok(file + ' loads offline runtime', read(file).includes('offline.js?v=3')));
 ok('original game connect contract is preserved', game.includes('function connect()') && game.includes("socket = io({"));
 ok('online Socket.IO script remains available', gameHtml.includes('src="/socket.io/socket.io.js"'));
 ok('local map catalog exists', offline.includes("PREFIX = 'aibrofist.local.v2.'") && offline.includes('makeMaps'));
@@ -23,7 +23,7 @@ ok('local Story create/info endpoints exist', offline.includes("path === '/story
 ok('local profile and leaderboard endpoints exist', offline.includes("path === '/whoAmI'") && offline.includes("path === '/getLeaderboard'"));
 ok('local quests and daily reward endpoints exist', offline.includes("path === '/quests'") && offline.includes("path === '/dailyReward/claim'"));
 ok('offline Hide and Seek phases exist', offline.includes("fire('hsRoulette'") && offline.includes("fire('hsPhase'"));
-ok('offline teleport uses engine target contract', offline.includes("targetIds: ['exit']") && offline.includes("customId: 'exit'"));
+ok('offline teleport uses engine target contract', offline.includes("targetIds: 'exit'") && offline.includes("customId: 'exit'"));
 ok('admin show is disabled only in offline runtime', read('abuseShow.js').includes('if (window.BFOffline) return'));
 ok('game page does not load admin scripts', !/<script src="(?:account|abuseShow|owner)\.js/.test(gameHtml));
 ok('all JavaScript parses', fs.readdirSync(root).filter(f => f.endsWith('.js')).length > 0);
