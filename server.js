@@ -1058,7 +1058,8 @@ io.on('connection', (socket) => {
       room: room,
       position: { x: Math.random() * 800, y: Math.random() * 600 },
       joinedAt: Date.now(),
-      chatColor: account ? accountsRef.chatColorOf(account) : '',   // купленный цвет ника и реплик, см. accounts.js
+      chatColor: account ? accountsRef.chatColorOf(account) : '',   // купленный цвет реплик, см. accounts.js
+      nickColor: account ? accountsRef.nickColorOf(account) : '',   // купленный цвет ника под фигурой
       clanTag: clan ? clan.tag : '',       // тег и цвет клана рядом с ником, см. clans.js
       clanColor: clan ? clan.color : '',
       linesUsed: 0    // «нарисовать линию» — ограниченное число раз за вход, см. drawLine

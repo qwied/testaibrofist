@@ -763,13 +763,14 @@ function register(app) {
   });
   app.get('/getMyBio', (req, res) => {
     const u = currentUser(req);
-    if (!u) return res.json({ name: '', avatar: '0', chatColor: '#000000', whatBro: 'none',
+    if (!u) return res.json({ name: '', avatar: '0', chatColor: '#000000', nickColor: '#ffffff', whatBro: 'none',
                               chatColorUnlocked: false, chatColorPrice: CHAT_COLOR_PRICE,
                               nickPrice: NICK_CHANGE_PRICE, coins: 0 });
     res.json({
       name: u.name,
       avatar: u.avatar || '0',
       chatColor: u.chatColor || '#000000',
+      nickColor: u.nickColor || '#ffffff',
       whatBro: u.whatBro || 'none',
       chatColorUnlocked: !!u.chatColorUnlocked,
       chatColorPrice: CHAT_COLOR_PRICE,
@@ -778,18 +779,22 @@ function register(app) {
     });
   });
 
-  // сохранение аватара и цвета чата — свой цвет требует разовой покупки (см. /chatColor/unlock)
+  /* Сохранение аватара и цветов — свои цвета требуют разовой покупки (см. /chatColor/unlock).
+     Их два и они независимы: chatColor красит реплики в чате, nickColor — ник под фигурой.
+     Одна покупка открывает оба, поэтому цена не менялась. */
   app.post('/setMyBio', (req, res) => {
     const u = currentUser(req);
     if (!u) return res.json({ status: 'error', message: 'Sign in first' });
     const avatar = String(req.body.avatar || '').trim();
     const chatColor = String(req.body.chatColor || '').trim();
+    const nickColor = String(req.body.nickColor || '').trim();
     if (avatar) u.avatar = avatar.slice(0, 40);
-    if (/^#[0-9a-fA-F]{6}$/.test(chatColor)) {
+    if (/^#[0-9a-fA-F]{6}$/.test(chatColor) || /^#[0-9a-fA-F]{6}$/.test(nickColor)) {
       if (!u.chatColorUnlocked)
         return res.json({ status: 'error', code: 'locked',
-                          message: 'Chat color is not unlocked yet — needs ' + CHAT_COLOR_PRICE + ' coins' });
-      u.chatColor = chatColor;
+                          message: 'Colors are not unlocked yet — needs ' + CHAT_COLOR_PRICE + ' coins' });
+      if (/^#[0-9a-fA-F]{6}$/.test(chatColor)) u.chatColor = chatColor;
+      if (/^#[0-9a-fA-F]{6}$/.test(nickColor)) u.nickColor = nickColor;
     }
     save();
     res.json({ status: 'success' });
@@ -946,13 +951,19 @@ function register(app) {
   app.get('/captcha/getCaptcha', (req, res) => res.json({}));
 }
 
-/* Цвет, которым игрок подписан в игре: ник под фигурой и реплики над головой.
-   Свой цвет открывается покупкой (см. /chatColor/unlock) — без неё и без
-   выбранного цвета игрок выглядит как все. */
+/* Цвета, которыми игрок подписан в игре: реплики над головой (chatColor) и
+   ник под фигурой (nickColor) — два отдельных цвета. Они открываются
+   покупкой (см. /chatColor/unlock) — без неё и без выбранного цвета игрок
+   выглядит как все. Ник цветом по умолчанию не красится: раньше его
+   красил цвет чата, теперь только свой, выбранный отдельно. */
 const CHAT_COLOR_RE = /^#[0-9a-f]{6}$/i;
 function chatColorOf(name) {
   const u = db.users[key(name)];
   return u && u.chatColorUnlocked && CHAT_COLOR_RE.test(u.chatColor || '') ? u.chatColor.toLowerCase() : '';
 }
+function nickColorOf(name) {
+  const u = db.users[key(name)];
+  return u && u.chatColorUnlocked && CHAT_COLOR_RE.test(u.nickColor || '') ? u.nickColor.toLowerCase() : '';
+}
 
-module.exports = { register, reload: load, chatColorOf, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, creditCoins, logCoins, backfillCoins, creditScore, creditHsScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, getHsLog: () => hsLog, paginate, NICK_CHANGE_PRICE };
+module.exports = { register, reload: load, chatColorOf, nickColorOf, currentUser, isOwner, OWNER, OWNER_ALIASES, getDb: () => db, save, newSession, hash, hashNew, verifyPassword, sessionNameBySid, nameIsTaken, dropUserSessions, key, checkName, creditCoins, logCoins, backfillCoins, creditScore, creditHsScore, sumLog, getCoinLog: () => coinLog, getScoreLog: () => scoreLog, getHsLog: () => hsLog, paginate, NICK_CHANGE_PRICE };

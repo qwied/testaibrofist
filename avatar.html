@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <title>AIBrofist — Avatar</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=177">
+<link rel="stylesheet" href="ui.css?v=178">
 <script src="offline.js?v=3"></script>
-<script src="theme.js?v=177"></script>
-<script src="device.js?v=177"></script>
-<script src="sound.js?v=177"></script>
+<script src="theme.js?v=178"></script>
+<script src="device.js?v=178"></script>
+<script src="sound.js?v=178"></script>
 <style>
   /* Тот же приём, что и у карточек Settings/профиля: рамка var(--line),
      фон var(--panel) — никаких своих цветов, чтобы страница не выбивалась
@@ -27,7 +27,7 @@
   .avErr{font-size:13px;margin-top:8px;min-height:16px}
   .avErr.bad{color:var(--red)}
   .avErr.good{color:var(--green)}
-  #avChatBtn{max-width:260px}
+  #avChatBtn{max-width:320px}
 
   /* Скин игрока — окошко посередине страницы. Обводка того же цвета,
      что и у карточек в светлой теме (var(--line), светло-серый), но в
@@ -47,13 +47,16 @@
      тот же затемняющий фон и та же центральная карточка, см. bfOpenModal.
      Здесь только своя раскладка внутри: поле и кнопка в один ряд. */
   .avModalRow{display:flex;gap:8px;margin:10px 0}
-  .avModalRow .bf-i{flex:1;margin:0;width:auto}
+  /* min-width:0 обязателен: у поля ввода своя ширина по умолчанию (size=20), flex не даёт
+     ему стать уже неё — поле выталкивало кнопку «Change» за правый край карточки, где
+     её срезало overflow-x:hidden окна. Теперь поле сжимается, кнопка всегда целиком. */
+  .avModalRow .bf-i{flex:1 1 0;min-width:0;margin:0;width:auto}
   /* .bf-b задаёт свой padding:11px 0 (см. account.js) — здесь его заменяли
      на padding:0 16px, обнуляя вертикальный отступ, и кнопка выходила
      заметно ниже соседнего поля ввода (то же padding:11px 0 у .bf-i
      никто не трогал). Вертикальный отступ теперь тот же, что у поля —
      кнопка и поле в ряду одной высоты. */
-  .avModalRow .bf-b{margin:0;white-space:nowrap;padding:11px 16px}
+  .avModalRow .bf-b{flex:none;margin:0;white-space:nowrap;padding:11px 16px}
   .avModalPrice{display:flex;justify-content:center;align-items:center;gap:5px;
     color:var(--muted);font-size:13px;margin-top:2px}
 </style>
@@ -63,11 +66,11 @@
 	<link rel="manifest" href="site.webmanifest">
 	<meta name="theme-color" content="#111827">
 	<link rel="canonical" href="https://aibrofist.online/avatar">
-	<meta name="description" content="Your account: chat color and nickname.">
+	<meta name="description" content="Your account: chat color, nick color and nickname.">
 	<meta property="og:type" content="website">
 	<meta property="og:site_name" content="AIBrofist">
 	<meta property="og:title" content="AIBrofist — Avatar">
-	<meta property="og:description" content="Your account: chat color and nickname.">
+	<meta property="og:description" content="Your account: chat color, nick color and nickname.">
 	<meta property="og:url" content="https://aibrofist.online/avatar">
 	<meta property="og:image" content="https://aibrofist.online/preview.png">
 	<meta name="twitter:card" content="summary_large_image">
@@ -79,7 +82,7 @@
   <div class="bfTitle" data-i18n="avatar">Avatar</div>
   <div class="bfSub" data-i18n="avatarSub">Your account's look and identity.</div>
 
-  <div id="avGuest" class="bfHint" data-i18n="avatarGuest" style="display:none">Sign in to change your chat color or nickname.</div>
+  <div id="avGuest" class="bfHint" data-i18n="avatarGuest" style="display:none">Sign in to change your colors or nickname.</div>
 
   <div id="avBody" style="display:none">
     <div class="avSkinWrap"><div class="avSkinBox"><img class="bfAvatar" alt=""></div></div>
@@ -92,18 +95,22 @@
       <div class="avCardTitle" data-i18n="chatColorTitle">Chat color</div>
       <div id="avChatColorBox"></div>
     </div>
+    <div class="avCard" id="avNickCard" style="display:none">
+      <div class="avCardTitle" data-i18n="nickColorTitle">Nick color</div>
+      <div id="avNickColorBox"></div>
+    </div>
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=177">
-<script src="i18n.js?v=177"></script>
-<script src="coin.js?v=177"></script>
-<script src="skinRender.js?v=177"></script>
-<script src="skinAvatar.js?v=177" defer></script>
-<script src="shell.js?v=177"></script>
-<script src="abuseShow.js?v=177" defer></script>
-<script src="account.js?v=177" defer></script>
-<script src="owner.js?v=177" defer></script>
+<link rel="stylesheet" href="mobile.css?v=178">
+<script src="i18n.js?v=178"></script>
+<script src="coin.js?v=178"></script>
+<script src="skinRender.js?v=178"></script>
+<script src="skinAvatar.js?v=178" defer></script>
+<script src="shell.js?v=178"></script>
+<script src="abuseShow.js?v=178" defer></script>
+<script src="account.js?v=178" defer></script>
+<script src="owner.js?v=178" defer></script>
 <script>
 (function () {
   'use strict';
@@ -126,47 +133,67 @@
 
   var bio = null;
 
-  function drawChatColor() {
-    var box = document.getElementById('avChatColorBox');
+  /* Цветов два, и они не зависят друг от друга: «Chat color» красит реплики в игровом чате,
+     «Nick color» — ник под фигурой. Открываются одной покупкой (см. /chatColor/unlock). */
+  function drawColors() {
+    var nickCard = document.getElementById('avNickCard');
     if (!bio.chatColorUnlocked) {
-      box.innerHTML =
-          '<div class="avHint">' + T('chatColorLocked', 'Pick your own color for chat bubbles and your name tag.') + '</div>'
-        + '<div class="avRow">'
-        +   '<button class="bfBtn go" id="avChatBtn">' + T('chatColorUnlockBtn', 'Unlock chat color')
-        +     ' <span class="avPrice">&middot; ' + bio.chatColorPrice + (window.BFCoin ? BFCoin.svg(13) : '') + '</span></button>'
-        + '</div>'
-        + '<div class="avErr" id="avChatErr"></div>';
-      document.getElementById('avChatBtn').onclick = function () {
-        var btn = this; btn.disabled = true;
-        post('/chatColor/unlock', {}, function (r) {
-          btn.disabled = false;
-          var err = document.getElementById('avChatErr');
-          if (r && r.status === 'success') {
-            bio.chatColorUnlocked = true;
-            if (window.BFShell && BFShell.refreshCoins) BFShell.refreshCoins(r.coins);
-            drawChatColor();
-            return;
-          }
-          err.className = 'avErr bad';
-          err.textContent = (r && r.message) || T('errorTxt', 'Error');
-        });
-      };
+      nickCard.style.display = 'none';
+      drawLocked();
       return;
     }
+    nickCard.style.display = '';
+    drawPicker('avChatColorBox', 'chatColor', '#000000', 'avColorInput', 'avChatBtn', 'avChatErr',
+               'chatColorHint', 'The color of your messages in the game chat.');
+    drawPicker('avNickColorBox', 'nickColor', '#ffffff', 'avNickColorInput', 'avNickBtn', 'avNickErr',
+               'nickColorHint', 'The color of your nickname under your character.');
+  }
+
+  function drawLocked() {
+    var box = document.getElementById('avChatColorBox');
     box.innerHTML =
-        '<div class="avRow">'
-      +   '<input type="color" id="avColorInput" value="' + (bio.chatColor || '#000000') + '">'
-      +   '<button class="bfBtn go" id="avChatBtn" style="width:auto;padding:11px 18px">'
-      +     T('chatColorSaveBtn', 'Save color') + '</button>'
+        '<div class="avHint">' + T('chatColorLocked',
+          'Pick your own colors: one for your chat messages and one for your nickname under your character. One purchase unlocks both.') + '</div>'
+      + '<div class="avRow">'
+      +   '<button class="bfBtn go" id="avChatBtn">' + T('chatColorUnlockBtn', 'Unlock colors')
+      +     ' <span class="avPrice">&middot; ' + bio.chatColorPrice + (window.BFCoin ? BFCoin.svg(13) : '') + '</span></button>'
       + '</div>'
       + '<div class="avErr" id="avChatErr"></div>';
     document.getElementById('avChatBtn').onclick = function () {
-      var v = document.getElementById('avColorInput').value;
-      var err = document.getElementById('avChatErr');
-      err.className = 'avErr'; err.textContent = '…';
-      post('/setMyBio', { chatColor: v }, function (r) {
+      var btn = this; btn.disabled = true;
+      post('/chatColor/unlock', {}, function (r) {
+        btn.disabled = false;
+        var err = document.getElementById('avChatErr');
         if (r && r.status === 'success') {
-          bio.chatColor = v;
+          bio.chatColorUnlocked = true;
+          if (window.BFShell && BFShell.refreshCoins) BFShell.refreshCoins(r.coins);
+          drawColors();
+          return;
+        }
+        err.className = 'avErr bad';
+        err.textContent = (r && r.message) || T('errorTxt', 'Error');
+      });
+    };
+  }
+
+  function drawPicker(boxId, field, dflt, inputId, btnId, errId, hintKey, hintText) {
+    var box = document.getElementById(boxId);
+    box.innerHTML =
+        '<div class="avHint">' + T(hintKey, hintText) + '</div>'
+      + '<div class="avRow">'
+      +   '<input type="color" id="' + inputId + '" value="' + (bio[field] || dflt) + '">'
+      +   '<button class="bfBtn go" id="' + btnId + '" style="width:auto;padding:11px 18px">'
+      +     T('chatColorSaveBtn', 'Save color') + '</button>'
+      + '</div>'
+      + '<div class="avErr" id="' + errId + '"></div>';
+    document.getElementById(btnId).onclick = function () {
+      var v = document.getElementById(inputId).value;
+      var err = document.getElementById(errId);
+      var data = {}; data[field] = v;
+      err.className = 'avErr'; err.textContent = '…';
+      post('/setMyBio', data, function (r) {
+        if (r && r.status === 'success') {
+          bio[field] = v;
           err.className = 'avErr good';
           err.textContent = T('chatColorSaved', 'Color saved');
         } else {
@@ -187,7 +214,7 @@
         bio = r || {};
         document.getElementById('avBody').style.display = 'block';
         document.getElementById('avNickName').textContent = me.name;
-        drawChatColor();
+        drawColors();
       });
     });
   }

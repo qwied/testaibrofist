@@ -983,12 +983,18 @@
   // Object.create(null): игрок по имени "__proto__" не должен получать
   // унаследованный Object.prototype вместо своего личного массива реплик
   var spoken = Object.create(null);
-  /* Купленный цвет ника и реплик: сервер присылает его в списке игроков и в
-     каждой реплике (см. chatColor в server.js), здесь он копится по нику. */
+  /* Купленные цвета: реплик (chatColor) и ника под фигурой (nickColor) — два
+     отдельных. Сервер присылает оба в списке игроков, цвет реплики ещё и в
+     каждой реплике (см. server.js), здесь они копятся по нику. */
   var chatColors = Object.create(null);
   function setChatColor(name, c) {
     if (!name) return;
     if (/^#[0-9a-f]{6}$/i.test(c || '')) chatColors[name] = c; else delete chatColors[name];
+  }
+  var nickColors = Object.create(null);
+  function setNickColor(name, c) {
+    if (!name) return;
+    if (/^#[0-9a-f]{6}$/i.test(c || '')) nickColors[name] = c; else delete nickColors[name];
   }
   /* Тег клана перед ником (см. clans.js): сервер присылает его в списке игроков. */
   var clanTags = Object.create(null);
@@ -997,13 +1003,21 @@
     if (/^[A-Za-z0-9]{2,5}$/.test(tag || '') && /^#[0-9a-f]{6}$/i.test(color || '')) clanTags[name] = { tag: tag, color: color };
     else delete clanTags[name];
   }
-  // светлый цвет на белой обводке не читается — для него обводка тёмная
-  function isLightColor(c) {
-    var n = parseInt(String(c).slice(1), 16);
-    return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 170;
-  }
-  function outlineFor(c, fallback) {
-    return c && isLightColor(c) ? 'rgba(40,44,52,.85)' : fallback;
+  /* Подпись поверх карты: фон может быть любым — белым, чёрным блоком, цветным —
+     и цвет игрока может совпасть с ним. Одной обводки мало: светлая теряется на
+     белом, тёмная на чёрном. Поэтому обводка двойная — тёмное кольцо вплотную к
+     буквам и тонкий светлый ободок снаружи: на любом фоне одно из них видно, и
+     любой цвет букв отделён от фона. */
+  function inkText(ctx, t, x, y, tk, color) {
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 4.4 * tk;
+    ctx.strokeStyle = 'rgba(255,255,255,.95)';
+    ctx.strokeText(t, x, y);
+    ctx.lineWidth = 2.6 * tk;
+    ctx.strokeStyle = 'rgba(17,24,39,.95)';
+    ctx.strokeText(t, x, y);
+    ctx.fillStyle = color;
+    ctx.fillText(t, x, y);
   }
   /* Мьют чата — только локально у себя: сам заглушённый ничего не
      замечает, его сообщения как ни в чём не бывало доходят до всех
@@ -1032,7 +1046,7 @@
   // (см. hideBridge() там): реплики рисуются на canvas, без него снаружи
   // нечем проверить, что заглушённый действительно не долетает до экрана
   if (/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname)) {
-    window.__bfChatDebug = { spoken: spoken, isMuted: isMuted, chatColors: chatColors, clanTags: clanTags };
+    window.__bfChatDebug = { spoken: spoken, isMuted: isMuted, chatColors: chatColors, nickColors: nickColors, clanTags: clanTags };
   }
   function speak(who, text) {
     if (!text) return;
@@ -1872,6 +1886,7 @@
       byNid = {};
       list.forEach(function (p) {
         setChatColor(p.name, p.chatColor);
+        setNickColor(p.name, p.nickColor);
         setClan(p.name, p.clanTag, p.clanColor);
         if (p.id === socket.id) return;
         seen[p.id] = 1;
@@ -1889,6 +1904,7 @@
 
     socket.on('playerJoined', function (p) {
       setChatColor(p.name, p.chatColor);
+      setNickColor(p.name, p.nickColor);
       setClan(p.name, p.clanTag, p.clanColor);
       if (p.id === socket.id) return;
       others[p.id] = { x: 0, y: 0, tx: 0, ty: 0, name: p.name, nid: p.nid };
@@ -2356,13 +2372,9 @@
     return lines;
   }
 
-  // тёмный текст со светлым ореолом: читается и на светлом, и на тёмном фоне
+  // реплика с двойной обводкой (см. inkText): читается и на светлом, и на тёмном фоне
   function paintSay(ctx, t, x, y, tk, color) {
-    ctx.lineWidth = 3 * tk;
-    ctx.strokeStyle = outlineFor(color, 'rgba(255,255,255,.85)');
-    ctx.strokeText(t, x, y);
-    ctx.fillStyle = color || '#3a3a3a';
-    ctx.fillText(t, x, y);
+    inkText(ctx, t, x, y, tk, color || '#3a3a3a');
   }
 
   /* Роль раньше показывала короткая полоса прямо под ником (синяя —
@@ -2381,8 +2393,8 @@
     var tk = touch ? 1 / Math.max(0.25, (GAME && GAME.viewScale) || 1) : 1;
 
     ctx.font = (15 * tk) + 'px sans-serif';
-    // имя — под игроком: белый с чуть серой обводкой, а у купившего цвет — этим цветом
-    var tagColor = chatColors[name] || '';
+    // имя — под игроком: белое, а у купившего цвет ника — этим цветом (цвет реплик на ник не влияет)
+    var tagColor = nickColors[name] || '';
     var nameY = topY + h + 17 * tk;
     var clan = clanTags[name];
     var nameX = cx;
@@ -2392,18 +2404,11 @@
       var wTag = ctx.measureText(tagText).width, wName = ctx.measureText(name).width;
       var x0 = cx - (wTag + wName) / 2;
       ctx.textAlign = 'left';
-      ctx.lineWidth = 3 * tk;
-      ctx.strokeStyle = outlineFor(clan.color, 'rgba(255,255,255,.9)');
-      ctx.strokeText(tagText, x0, nameY);
-      ctx.fillStyle = clan.color;
-      ctx.fillText(tagText, x0, nameY);
+      inkText(ctx, tagText, x0, nameY, tk, clan.color);
       nameX = x0 + wTag;
     }
-    ctx.lineWidth = 3 * tk;
-    ctx.strokeStyle = outlineFor(tagColor, tagColor ? 'rgba(255,255,255,.9)' : 'rgba(122,130,142,.85)');
-    ctx.strokeText(name, nameX, nameY);
-    ctx.fillStyle = tagColor || '#ffffff';
-    ctx.fillText(name, nameX, nameY);
+    ctx.textAlign = clan ? 'left' : 'center';
+    inkText(ctx, name, nameX, nameY, tk, tagColor || '#ffffff');
     ctx.textAlign = 'center';
 
     // отправленная реплика плавно уплывает вверх и тает —

@@ -1,4 +1,9 @@
 {
   "base": "a28930a3cc62c292ed2ee476dcfcbc19bd75475d",
-  "updates": []
+  "updates": [
+    {
+      "title": "Separate chat and nick colors",
+      "text": "Chat color and Nick color are now two separate colors, text in the game has a clear outline so it stays readable on any background, and the Change button in the nickname window is no longer cut off."
+    }
+  ]
 }

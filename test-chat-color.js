@@ -1,5 +1,6 @@
-/* Купленный цвет чата доходит до игры: сервер шлёт его в списке игроков и в репликах,
-   клиент рисует им ник под фигурой и реплики над головой.
+/* Купленные цвета доходят до игры: сервер шлёт их в списке игроков и в репликах. Их два и
+   они независимы — цвет чата красит реплики над головой, цвет ника — ник под фигурой;
+   текст обведён, чтобы не сливаться с фоном.
    Свой сервер на копии репозитория (порт 3212) — монеты нужны, а на общем их взять негде. */
 const fs = require('fs');
 const os = require('os');
@@ -31,7 +32,7 @@ const until = async (f, ms = 6000) => { const t = Date.now(); while (Date.now() 
   };
   fs.mkdirSync(path.join(tmp, 'data'));
   fs.writeFileSync(path.join(tmp, 'data', 'users.json'),
-    JSON.stringify({ users: { colorbro: mk('ColorBro', 600), plainbro: mk('PlainBro', 0) }, sessions: {} }));
+    JSON.stringify({ users: { colorbro: mk('ColorBro', 600), plainbro: mk('PlainBro', 0), chatonly: mk('ChatOnly', 600) }, sessions: {} }));
 
   const srv = spawn('node', ['server.js'], { cwd: tmp, env: { ...process.env, PASSWORD_AUTH: '1', PORT: String(PORT) }, stdio: 'ignore' });
   const cleanup = () => { try { srv.kill(); } catch (e) {} try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {} };
@@ -51,14 +52,23 @@ const until = async (f, ms = 6000) => { const t = Date.now(); while (Date.now() 
 
   // до покупки цвет не выбрать, после — выбирается; неверный цвет не принимается
   let r = await api(a.cookie, '/setMyBio', { chatColor: '#e11d48' });
-  ok(r.json.status !== 'success', 'до покупки цвет не выбрать', r.json.message);
+  ok(r.json.status !== 'success', 'до покупки цвет чата не выбрать', r.json.message);
+  r = await api(a.cookie, '/setMyBio', { nickColor: '#16a34a' });
+  ok(r.json.status !== 'success', 'до покупки цвет ника не выбрать', r.json.message);
   r = await api(a.cookie, '/chatColor/unlock');
-  ok(r.json.status === 'success', 'цвет куплен', r.json.message);
+  ok(r.json.status === 'success', 'цвета куплены', r.json.message);
   r = await api(a.cookie, '/setMyBio', { chatColor: '#E11D48' });
-  ok(r.json.status === 'success', 'цвет сохранён', r.json.message);
-  await api(a.cookie, '/setMyBio', { chatColor: 'red' });
+  ok(r.json.status === 'success', 'цвет чата сохранён', r.json.message);
+  const bio0 = await fetch(BASE + '/getMyBio', { headers: { cookie: a.cookie, 'CF-Connecting-IP': ip } }).then(x => x.json());
+  ok(bio0.nickColor === '#ffffff', 'цвет ника не задан — по умолчанию белый и цвет чата его не трогает', bio0.nickColor);
+  r = await api(a.cookie, '/setMyBio', { nickColor: '#16A34A' });
+  ok(r.json.status === 'success', 'цвет ника сохранён отдельно', r.json.message);
+  await api(a.cookie, '/setMyBio', { chatColor: 'red', nickColor: 'blue' });
   const bio = await fetch(BASE + '/getMyBio', { headers: { cookie: a.cookie, 'CF-Connecting-IP': ip } }).then(x => x.json());
-  ok(bio.chatColor === '#E11D48', 'неверный цвет не заменяет выбранный', bio.chatColor);
+  ok(bio.chatColor === '#E11D48' && bio.nickColor === '#16A34A', 'неверный цвет не заменяет выбранные', bio.chatColor + ' ' + bio.nickColor);
+  const co = await api('', '/login/password', { name: 'ChatOnly', password: 'Passw0rd!x' });
+  await api(co.cookie, '/chatColor/unlock');
+  await api(co.cookie, '/setMyBio', { chatColor: '#2563eb' });
 
   // сервер: список игроков и реплики несут цвет
   const mkSock = cookie => io(BASE, { extraHeaders: { cookie, 'CF-Connecting-IP': ip }, transports: ['websocket'], forceNew: true });
@@ -74,8 +84,8 @@ const until = async (f, ms = 6000) => { const t = Date.now(); while (Date.now() 
   sb.emit('join', { ...room, playerName: 'x' });
   const full = await until(() => listB.find(l => l.length === 2));
   const pa = full && full.find(p => p.name === 'ColorBro'), pb = full && full.find(p => p.name === 'PlainBro');
-  ok(pa && pa.chatColor === '#e11d48', 'в списке игроков у купившего есть цвет', pa && pa.chatColor);
-  ok(pb && pb.chatColor === '', 'у некупившего цвета нет', pb && JSON.stringify(pb.chatColor));
+  ok(pa && pa.chatColor === '#e11d48' && pa.nickColor === '#16a34a', 'в списке игроков у купившего есть оба цвета', pa && pa.chatColor + ' ' + pa.nickColor);
+  ok(pb && pb.chatColor === '' && pb.nickColor === '', 'у некупившего цветов нет', pb && JSON.stringify([pb.chatColor, pb.nickColor]));
   sa.emit('sendChat', { text: 'hello' });
   sb.emit('sendChat', { text: 'hi' });
   await until(() => msgsB.length && msgsA.length >= 2, 4000);
@@ -95,7 +105,9 @@ const until = async (f, ms = 6000) => { const t = Date.now(); while (Date.now() 
   await p.goto(BASE + '/game?mode=race&room=ccroom', { waitUntil: 'domcontentloaded' });
   await p.evaluate(() => { const c = document.getElementById('bfConsent'); if (c) c.remove(); });
   const dbg = await until(() => p.evaluate(() => window.__bfChatDebug && window.__bfChatDebug.chatColors['ColorBro']), 10000);
-  ok(dbg === '#e11d48', 'клиент знает свой цвет из списка игроков', dbg);
+  ok(dbg === '#e11d48', 'клиент знает свой цвет чата из списка игроков', dbg);
+  const dbgNick = await p.evaluate(() => window.__bfChatDebug.nickColors['ColorBro']);
+  ok(dbgNick === '#16a34a', 'и свой цвет ника — отдельно', dbgNick);
   sb.emit('sendChat', { text: 'plain talk' });
   await until(() => p.evaluate(() => (window.__bfChatDebug.spoken['PlainBro'] || []).length), 4000);
   const plain = await p.evaluate(() => window.__bfChatDebug.spoken['PlainBro'][0]);
@@ -123,7 +135,16 @@ const until = async (f, ms = 6000) => { const t = Date.now(); while (Date.now() 
   await until(() => p2.evaluate(() => !!window.__bfChatDebug), 10000);
   sa2.emit('join', { ...room, playerName: 'x' });
   await until(() => p2.evaluate(() => window.__bfChatDebug.chatColors['ColorBro']), 6000);
-  await sleep(600);
+  const sc = mkSock(co.cookie);
+  await until(() => sc.connected);
+  sc.emit('join', { ...room, playerName: 'x' });
+  await until(() => p2.evaluate(() => window.__bfChatDebug.chatColors['ChatOnly']), 6000);
+  const only = await p2.evaluate(() => ({ chat: window.__bfChatDebug.chatColors['ChatOnly'], nick: window.__bfChatDebug.nickColors['ChatOnly'] || '' }));
+  ok(only.chat === '#2563eb' && only.nick === '', 'у игрока только с цветом чата ник остаётся обычным', JSON.stringify(only));
+  sc.disconnect();
+  // стоит на открытом месте: случайное место появления иногда прячет реплику под верхней панелью
+  const mover = setInterval(() => sa2.emit('movePlayer', { position: { x: 560, y: 380, w: 34, h: 74 } }), 80);
+  await sleep(900);
   sa2.emit('sendChat', { text: 'colored words' });
   await until(() => p2.evaluate(() => (window.__bfChatDebug.spoken['ColorBro'] || []).length), 4000);
   const seen = await p2.evaluate(() => window.__bfChatDebug.spoken['ColorBro'][0]);
@@ -133,10 +154,24 @@ const until = async (f, ms = 6000) => { const t = Date.now(); while (Date.now() 
   const shot = await p2.screenshot();
   if (process.env.SHOT) fs.writeFileSync(process.env.SHOT, shot);
   const png = PNG.sync.read(shot);
-  let hits = 0;
-  for (let i = 0; i < png.data.length; i += 4)
-    if (Math.abs(png.data[i] - 225) < 10 && Math.abs(png.data[i + 1] - 29) < 10 && Math.abs(png.data[i + 2] - 72) < 10) hits++;
-  ok(hits > 40, 'на экране есть пиксели купленного цвета', hits + ' px');
+  const near = (i, c, d) => Math.abs(png.data[i] - c[0]) < d && Math.abs(png.data[i + 1] - c[1]) < d && Math.abs(png.data[i + 2] - c[2]) < d;
+  const W = png.width, H = png.height;
+  let red = 0, green = 0, ringed = 0;
+  for (let y = 4; y < H - 4; y++) for (let x = 4; x < W - 4; x++) {
+    const i = (y * W + x) * 4;
+    if (near(i, [225, 29, 72], 10)) red++;
+    if (near(i, [22, 163, 74], 10)) {
+      green++;
+      let dark = false;                              // тёмное кольцо обводки в паре пикселей от буквы
+      for (let k = 1; k <= 3 && !dark; k++)
+        dark = near(i - k * 4, [17, 24, 39], 22) || near(i + k * 4, [17, 24, 39], 22) || near(i - k * W * 4, [17, 24, 39], 22) || near(i + k * W * 4, [17, 24, 39], 22);
+      if (dark) ringed++;
+    }
+  }
+  ok(red > 40, 'реплика нарисована цветом чата', red + ' px');
+  ok(green > 40, 'ник под фигурой нарисован цветом ника', green + ' px');
+  ok(green > 0 && ringed / green > 0.5, 'буквы ника обведены тёмным кольцом', ringed + ' из ' + green);
+  clearInterval(mover);
   sa2.disconnect(); await b3.close(); cleanup();
   ok(errs.length === 0, 'ошибок скриптов нет', errs.join(' | '));
   console.log(pass + ' ok, ' + fail + ' fail');

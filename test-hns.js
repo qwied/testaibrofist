@@ -13,7 +13,9 @@ ok('рисуются все',          /for \(var si = 0; si < list\.length; si\
 ok('не наезжают друг на друга', /var lift = \(list\.length - 1 - si\) \* 15 \* tk;/.test(src));
 ok('перенос длинных реплик',  /function wrapSay/.test(src) && /wrapSay\(sp\.text/.test(src));
 ok('bidi-символы чистятся',   /BIDI_RE/.test(src) && /cleanSay\(text\)/.test(src));
-ok('ник белый с обводкой',    /strokeText\(name/.test(src) && /#ffffff/.test(src));
+ok('ник белый с обводкой',    /inkText\(ctx, name,/.test(src) && /tagColor \|\| '#ffffff'/.test(src) && /function inkText[\s\S]*?strokeText/.test(src));
+ok('обводка двойная: светлый ободок и тёмное кольцо', /function inkText[\s\S]*?rgba\(255,255,255[\s\S]*?rgba\(17,24,39/.test(src));
+ok('цвет ника отдельно от цвета реплик', /nickColors\[name\]/.test(src) && !/chatColors\[name\]/.test(src.slice(src.indexOf('function drawTag'))));
 
 console.log('\nотправка сообщений:');
 ok('одна дорога отправки',  /function sendTyped/.test(src));
