@@ -337,3 +337,11 @@ body.bfHasSidebar{padding-left:calc(var(--sbw) + env(safe-area-inset-left,0px));
   box-shadow:0 4px 14px rgba(15,23,42,.18)}
 #bfUpd{left:calc(var(--sbw-m) + 10px)}
 @media (min-width:861px){ #bfUpd{left:calc(var(--sbw) + 14px)} }
+
+/* Уведомление «вышла новая версия сайта» (shell.js): сверху по центру, поверх меню, под выпадающими окнами */
+#bfNewVer{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:10px;
+  width:max-content;max-width:min(92vw,520px);box-sizing:border-box;padding:8px 8px 8px 14px;border-radius:12px;background:var(--sb-bg2);color:var(--sb-on2);
+  border:1px solid var(--sb-line);font:600 13px system-ui,sans-serif;box-shadow:0 6px 20px rgba(15,23,42,.25)}
+#bfNewVer button{font:inherit;border:0;cursor:pointer;border-radius:8px;padding:6px 12px;background:var(--blue);color:var(--on-brand,#fff)}
+#bfNewVer button.bfNewVerX{background:transparent;color:inherit;opacity:.7;padding:4px 8px;font-size:18px;line-height:1}
+#bfNewVer button.bfNewVerX:hover{opacity:1}

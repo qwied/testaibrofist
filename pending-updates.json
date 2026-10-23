@@ -1,4 +1,9 @@
 {
   "base": "37814e64d96a1d54dd6be253dc565a6914c85d75",
-  "updates": []
+  "updates": [
+    {
+      "title": "New version notice",
+      "text": "When a new version of the site is released, pages that are already open now show a small notice with a Reload button."
+    }
+  ]
 }

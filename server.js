@@ -235,6 +235,22 @@ app.get('/sitemap.xml', (req, res) => {
     + '\n</urlset>\n');
 });
 
+/* Версия скриптов и стилей, с которой собраны страницы: число после ?v= у shell.js
+   в index.html (его поднимают на каждой выкладке, см. CLAUDE.md). Уже открытая
+   вкладка или установленное приложение сверяют с ним свою версию и предлагают
+   обновиться (shell.js). Читаем один раз при старте: код внутри контейнера не
+   меняется, новая версия — это новый контейнер. */
+const ASSET_VERSION = (() => {
+  try {
+    const m = /shell\.js\?v=(\d+)/.exec(require('fs').readFileSync(path.join(__dirname, 'index.html'), 'utf8'));
+    return m ? m[1] : '';
+  } catch (e) { return ''; }
+})();
+app.get('/assetVersion', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ v: ASSET_VERSION });
+});
+
 // иконки сайта: браузер запрашивает /favicon.ico ещё до загрузки страницы
 app.get('/favicon.ico', (req, res) => {
   res.set('Cache-Control', 'public, max-age=604800');

@@ -341,12 +341,73 @@
       .catch(function () {});
   }
 
+  /* ---------- новая версия сайта ----------
+     После выкладки уже открытая вкладка или установленное приложение продолжают
+     жить на старых скриптах. Наша версия — число после ?v= у этого скрипта, актуальную
+     отдаёт сервер (/assetVersion). Если она больше — предлагаем обновиться кнопкой.
+     Сами страницу не перезагружаем: человек мог что-то набирать. В игре меню нет, значит
+     нет и этого уведомления — раунд не прерываем. */
+  var ownVer = (function () {
+    var s = document.currentScript || document.querySelector('script[src*="shell.js"]');
+    var m = s && /[?&]v=(\d+)/.exec(s.getAttribute('src') || '');
+    return m ? parseInt(m[1], 10) : 0;
+  })();
+  var verShown = false, verLast = 0;
+
+  function showNewVersion() {
+    if (verShown) return;
+    verShown = true;
+    var bar = el('div');
+    bar.id = 'bfNewVer';
+    bar.setAttribute('role', 'status');
+    var txt = el('span');
+    txt.setAttribute('data-i18n', 'verNew');
+    txt.textContent = T('verNew', 'A new version of the site is available.');
+    var go = el('button');
+    go.type = 'button';
+    go.setAttribute('data-i18n', 'verReload');
+    go.textContent = T('verReload', 'Reload');
+    go.addEventListener('click', function () { location.reload(); });
+    var x = el('button');
+    x.type = 'button';
+    x.className = 'bfNewVerX';
+    x.setAttribute('data-i18n-title', 'verLater');
+    x.title = T('verLater', 'Not now');
+    x.textContent = '\u00d7';
+    x.addEventListener('click', function () { if (bar.parentNode) bar.parentNode.removeChild(bar); });
+    bar.appendChild(txt); bar.appendChild(go); bar.appendChild(x);
+    document.body.appendChild(bar);
+    if (window.I18N) I18N.apply(bar);
+  }
+
+  function checkNewVersion() {
+    if (!ownVer || verShown) return;
+    verLast = Date.now();
+    fetch('/assetVersion', { cache: 'no-store', credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        // только если на сервере версия НОВЕЕ: пока выкладка катится, старый контейнер отдаёт прежнюю
+        if (d && parseInt(d.v, 10) > ownVer) showNewVersion();
+      })
+      .catch(function () {});
+  }
+
+  function startVersionWatch() {
+    if (!ownVer) return;
+    setTimeout(checkNewVersion, 4000);
+    setInterval(checkNewVersion, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && Date.now() - verLast > 60 * 1000) checkNewVersion();
+    });
+  }
+
   function boot() {
     if (document.getElementById('bfHead')) return;
     build();
     loadMe();
     applyHideChat();
     startNotifications();
+    startVersionWatch();
     if (window.I18N) I18N.apply(document.body);
 
     // при смене языка перевод должен лечь на всю страницу целиком,
