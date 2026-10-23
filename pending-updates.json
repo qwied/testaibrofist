@@ -1,9 +1,4 @@
 {
-  "base": "37814e64d96a1d54dd6be253dc565a6914c85d75",
-  "updates": [
-    {
-      "title": "New version notice",
-      "text": "When a new version of the site is released, pages that are already open now show a small notice with a Reload button."
-    }
-  ]
+  "base": "6c067116af816152deb262713d95570b7cb5a6d4",
+  "updates": []
 }
