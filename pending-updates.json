@@ -1,9 +1,4 @@
 {
-  "base": "6c067116af816152deb262713d95570b7cb5a6d4",
-  "updates": [
-    {
-      "title": "Create Clan is free",
-      "text": "The Create a clan button on the Clans page is clearly marked Free: creating a clan never costs coins."
-    }
-  ]
+  "base": "a28930a3cc62c292ed2ee476dcfcbc19bd75475d",
+  "updates": []
 }
