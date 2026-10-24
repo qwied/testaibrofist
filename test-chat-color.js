@@ -113,6 +113,17 @@ const until = async (f, ms = 6000) => { const t = Date.now(); while (Date.now() 
   const plain = await p.evaluate(() => window.__bfChatDebug.spoken['PlainBro'][0]);
   ok(plain && plain.color === '', 'чужая реплика без цвета рисуется как обычно', JSON.stringify(plain));
   await p.fill('#gMsg', 'colored talk');
+  // набираемый текст над головой виден: светло-серый с серой обводкой, а не серая полоса из одного цвета
+  await p.evaluate(() => { const g = document.getElementById('gBanner'); if (g) g.style.display = 'none'; });
+  await sleep(500);
+  const tpng = PNG.sync.read(await p.screenshot());
+  let typedFill = 0, typedEdge = 0;
+  for (let i = 0; i < tpng.data.length; i += 4) {
+    const r = tpng.data[i], g = tpng.data[i + 1], b = tpng.data[i + 2];
+    if (Math.abs(r - 209) < 8 && Math.abs(g - 213) < 8 && Math.abs(b - 219) < 8) typedFill++;
+    else if (Math.abs(r - 107) < 12 && Math.abs(g - 114) < 12 && Math.abs(b - 128) < 12) typedEdge++;
+  }
+  ok(typedFill > 30 && typedEdge > 30, 'набираемый текст отличается от своей обводки', 'буквы ' + typedFill + ' px, обводка ' + typedEdge + ' px');
   await p.press('#gMsg', 'Enter');
   const own = await p.evaluate(() => (window.__bfChatDebug.spoken['ColorBro'] || [])[0]);
   ok(own && own.color === '#e11d48', 'своя реплика уплывает с купленным цветом', JSON.stringify(own));
