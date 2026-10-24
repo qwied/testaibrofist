@@ -1,4 +1,9 @@
 {
   "base": "753a3d62b246b31b1274fe51a56dc90a519adc8c",
-  "updates": []
+  "updates": [
+    {
+      "title": "Decorations keep their look",
+      "text": "Objects without collision are no longer drawn half-transparent. They look exactly like solid ones, and the player simply walks through them."
+    }
+  ]
 }
