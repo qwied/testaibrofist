@@ -1,9 +1,4 @@
 {
-  "base": "3ceec0b4cc7d9ab5e4aa0d3bdbdb79a5f2a54620",
-  "updates": [
-    {
-      "title": "Chat text readable again",
-      "text": "Chat messages and the text you are typing are no longer lost in their outline: messages are white and the text you type is light gray."
-    }
-  ]
+  "base": "25d75a873bc66ff260e31429d79dba5850a550f1",
+  "updates": []
 }
