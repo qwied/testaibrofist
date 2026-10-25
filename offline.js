@@ -358,6 +358,14 @@
       (sock._ls[ev] = sock._ls[ev] || []).push(fn);
       return sock;
     };
+    // общая гонка в песочнице: раунд за раундом по картам песочницы (см. raceRooms в server.js)
+    var raceK = 0, raceT = null;
+    function raceRound() {
+      clearTimeout(raceT);
+      var list = (window.BFOffline && BFOffline.getMaps('race')) || [];
+      fire('racePhase', { phase: 'round', map: list.length ? list[raceK % list.length] : null, msLeft: 120000, goal: '', roundNum: ++raceK });
+      raceT = setTimeout(raceRound, 120000);
+    }
     sock.emit = function (ev, data) {
       if (ev === 'join') {
         var user = currentUser();
@@ -371,10 +379,15 @@
             fire('hsRoulette', { players: [{ id: sock.id, name: user.name, chance: 50 }, bot], winnerId: winner, duration: 1400, msLeft: 6000 });
             setTimeout(function () { fire('hsPhase', { phase: 'round', seekerId: winner, msLeft: 120000, map: hsMap }); }, 3900);
           }
+          // гонка: общий раунд ведёт сервер (racePhase) — песочница одиночная, сразу старт без отсчёта
+          if (data && data.gameMode === 'race' && !/[?&]story=1/.test(location.search)) raceRound();
         }, 0);
       } else if (ev === 'pingCheck') {
         fire('pongCheck', data);
       } else if (ev === 'raceFinish') {
+        fire('raceFinished', { id: sock.id, name: currentUser().name, place: 1 });
+        clearTimeout(raceT);
+        raceT = setTimeout(raceRound, 1400);            // финишировал — следующая карта, как на сервере
         sock.localCoins += 1;
         fire('coinsAwarded', { amount: 1, coins: sock.localCoins, reason: 'offlineRaceFinish' });
         fire('raceScores', [{ name: currentUser().name, score: sock.localCoins }]);

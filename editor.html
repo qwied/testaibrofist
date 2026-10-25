@@ -82,6 +82,8 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 .rrBtn.on{background:#111827;color:#fff;box-shadow:0 2px 8px rgba(17,24,39,.3)}
 .rrLbl{padding:7px 2px 7px 8px;font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
 .rrLbl.rrGap{margin-left:6px;border-left:1px solid var(--line,#e5e7eb);padding-left:10px}
+#apoc{flex-wrap:wrap;max-width:calc(100vw - 28px)}
+.rrGrp{display:flex;gap:2px;align-items:center}
 
 /* top bar */
 #scene{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;padding:4px;gap:2px;z-index:10}
@@ -356,15 +358,15 @@ body.mob #toolTip{display:none!important}
 body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=3"></script>
-<script src="device.js?v=186"></script>
-        <script src="sound.js?v=186"></script>
-        <script src="skinRender.js?v=186"></script>
-        <script src="skinCanvas.js?v=186"></script>
-        <script src="gifuct.bundle.js?v=186"></script>
-        <script src="gifPlayer.js?v=186"></script>
-        <script src="coin.js?v=186"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=186">
-        <script src="theme.js?v=186"></script>
+<script src="device.js?v=187"></script>
+        <script src="sound.js?v=187"></script>
+        <script src="skinRender.js?v=187"></script>
+        <script src="skinCanvas.js?v=187"></script>
+        <script src="gifuct.bundle.js?v=187"></script>
+        <script src="gifPlayer.js?v=187"></script>
+        <script src="coin.js?v=187"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=187">
+        <script src="theme.js?v=187"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1073,16 +1075,19 @@ var mode = "hideAndSeek", tool = "select", objects = [], sel = null, uid = 1;
 var apoc = false;
 /* Правила гонки на карту (идеи 2019 года), хранятся в JSON карты рядом с apoc, только в Race:
    raceLives — сколько смертей до перезапуска забега с самого начала (0 — без ограничения,
-   Deathrun — 3); raceTimeMin — время на карту в минутах (0 — обычные 2, лабиринту — 5 или 10). */
-var raceLives = 0, raceTimeMin = 0;
-var RACE_LIVES = [0, 1, 3, 5], RACE_TIMES = [0, 5, 10];
+   Deathrun — 3); raceTimeMin — время на карту в минутах (0 — обычные 2, лабиринту — 5 или 10);
+   raceGoal — цель общего раунда (см. raceRooms в server.js): "" — финишируют все, "first" —
+   побеждает первый, "last" — Last bro standing, только с жизнями. */
+var raceLives = 0, raceTimeMin = 0, raceGoal = "";
+var RACE_LIVES = [0, 1, 3, 5], RACE_TIMES = [0, 5, 10], RACE_GOALS = ["", "first", "last"];
 function cleanRaceRules(d){
   raceLives = (mode === "race" && d && RACE_LIVES.indexOf(+d.lives) !== -1) ? +d.lives : 0;
   raceTimeMin = (mode === "race" && d && RACE_TIMES.indexOf(+d.timeMin) !== -1) ? +d.timeMin : 0;
+  raceGoal = (mode === "race" && d && (d.goal === "first" || (d.goal === "last" && raceLives))) ? d.goal : "";
 }
 // поля правил гонки для сохранения карты — пустые не пишем
 function withRaceRules(m){
-  if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; }
+  if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; if(raceGoal) m.goal = raceGoal; }
   return m;
 }
 
@@ -1488,8 +1493,10 @@ function die(){
   setTimeout(function(){
     if(!playing) return;
     if(!outOfLives){ respawn(); return; }
-    restartRun();
-    if(typeof BRIDGE !== "undefined" && BRIDGE && BRIDGE.onOutOfLives) BRIDGE.onOutOfLives();
+    /* игра решает сама: в Last bro standing игрок выбывает до конца раунда (стоит на месте) —
+       иначе забег начинается заново */
+    var out = typeof BRIDGE !== "undefined" && BRIDGE && BRIDGE.onOutOfLives ? BRIDGE.onOutOfLives() : null;
+    if(out === "out") respawn(); else restartRun();
   }, 300);
 }
 function stat(){
@@ -3071,24 +3078,36 @@ document.getElementById("bGrid").classList.add("on");
 /* Правила гонки на карту (см. raceLives/raceTimeMin) — жизни до перезапуска забега с начала
    и время на карту. Кнопки живут в той же панели #apoc и видны только в Race. */
 (function(){
-  var box = document.getElementById("apoc");
+  var panel = document.getElementById("apoc"), box = null;
   var tip = "";
+  // каждая группа — свой блок: на узком экране переносится целиком, а не по одной кнопке
+  function group(){ box = document.createElement("div"); box.className = "rrGrp"; panel.appendChild(box); }
   function add(cls, text, key, val){
     var d = document.createElement("div");
     d.className = cls; d.textContent = text; d.title = tip;
     if(key) d.dataset[key] = val;
     box.appendChild(d);
   }
+  group();
   tip = TR("rrLivesTip","Сколько смертей до перезапуска забега с самого начала");
   add("rrLbl", TR("rrLives","Жизни"));
   RACE_LIVES.forEach(function(n){ add("rrBtn" + (n ? "" : " on"), n ? String(n) : "\u221e", "lives", n); });
+  group();
   tip = TR("rrTimeTip","Время на эту карту");
   add("rrLbl rrGap", TR("rrTime","Время"));
   RACE_TIMES.forEach(function(n){ add("rrBtn" + (n ? "" : " on"), (n || 2) + " " + TR("rrMin","мин"), "time", n); });
+  group();
+  tip = TR("rrGoalTip","Цель общего раунда");
+  add("rrLbl rrGap", TR("rrGoal","Цель"));
+  RACE_GOALS.forEach(function(g){ add("rrBtn" + (g ? "" : " on"), goalName(g), "goal", g); });
 })();
+function goalName(g){
+  return g === "first" ? TR("rrGoalFirst","Первый") : g === "last" ? TR("rrGoalLast","Последний") : TR("rrGoalAll","Финиш");
+}
 function syncRaceBtns(){
   document.querySelectorAll(".rrBtn").forEach(function(b){
-    var on = b.dataset.lives !== undefined ? +b.dataset.lives === raceLives : +b.dataset.time === raceTimeMin;
+    var on = b.dataset.lives !== undefined ? +b.dataset.lives === raceLives
+      : b.dataset.goal !== undefined ? b.dataset.goal === raceGoal : +b.dataset.time === raceTimeMin;
     b.classList.toggle("on", on);
   });
 }
@@ -3110,7 +3129,7 @@ function syncApocVisibility(){
   box.style.display = on ? "flex" : "none";
   // в прятках — Classic/Zombie Apocalypse, в гонке — жизни и время карты
   box.querySelectorAll(".apocBtn").forEach(function(b){ b.style.display = hs ? "" : "none"; });
-  box.querySelectorAll(".rrBtn,.rrLbl").forEach(function(b){ b.style.display = race ? "" : "none"; });
+  box.querySelectorAll(".rrGrp,.rrBtn,.rrLbl").forEach(function(b){ b.style.display = race ? "" : "none"; });
   // низкий экран: без этой строки инструменты поднимаются на её место
   document.body.classList.toggle("noApoc", !on);
 }
@@ -3119,7 +3138,13 @@ document.getElementById("apoc").addEventListener("click", function(e){
   var r = e.target.closest(".rrBtn");
   if(r){
     if(playing) return;
-    if(r.dataset.lives !== undefined) raceLives = +r.dataset.lives; else raceTimeMin = +r.dataset.time;
+    if(r.dataset.lives !== undefined){
+      raceLives = +r.dataset.lives;
+      if(!raceLives && raceGoal === "last") raceGoal = "";      // Last bro standing без жизней не бывает
+    } else if(r.dataset.goal !== undefined){
+      raceGoal = r.dataset.goal;
+      if(raceGoal === "last" && !raceLives) raceLives = 3;
+    } else raceTimeMin = +r.dataset.time;
     syncRaceBtns();
     return;
   }
@@ -3205,14 +3230,20 @@ function retip(){
     b.textContent = b.dataset.apoc === "1" ? TR("modApoc","Zombie Apocalypse") : TR("modClassic","Классика");
   });
   Array.prototype.forEach.call(document.querySelectorAll(".rrLbl"), function(b, i){
-    b.textContent = i === 0 ? TR("rrLives","Жизни") : TR("rrTime","Время");
+    b.textContent = i === 0 ? TR("rrLives","Жизни") : i === 1 ? TR("rrTime","Время") : TR("rrGoal","Цель");
+    b.title = i === 0 ? TR("rrLivesTip","Сколько смертей до перезапуска забега с самого начала")
+      : i === 1 ? TR("rrTimeTip","Время на эту карту") : TR("rrGoalTip","Цель общего раунда");
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".rrBtn[data-goal]"), function(b){
+    b.textContent = goalName(b.dataset.goal);
   });
   Array.prototype.forEach.call(document.querySelectorAll(".rrBtn[data-time]"), function(b){
     b.textContent = ((+b.dataset.time) || 2) + " " + TR("rrMin","мин");
   });
-  Array.prototype.forEach.call(document.querySelectorAll(".rrBtn,.rrLbl"), function(b){
-    var time = b.dataset.time !== undefined || b.classList.contains("rrGap");
-    b.title = time ? TR("rrTimeTip","Время на эту карту") : TR("rrLivesTip","Сколько смертей до перезапуска забега с самого начала");
+  Array.prototype.forEach.call(document.querySelectorAll(".rrBtn"), function(b){
+    b.title = b.dataset.time !== undefined ? TR("rrTimeTip","Время на эту карту")
+      : b.dataset.goal !== undefined ? TR("rrGoalTip","Цель общего раунда")
+      : TR("rrLivesTip","Сколько смертей до перезапуска забега с самого начала");
   });
   if(typeof inspect === "function") inspect();
 }
@@ -4788,6 +4819,8 @@ window.GAME = BRIDGE = {
   // правила гонки карты (см. raceLives/raceTimeMin) и счётчик смертей текущего забега
   get raceLives(){ return raceLives; },
   get raceTimeMin(){ return raceTimeMin; },
+  get raceGoal(){ return raceGoal; },
+  restartRun: restartRun,         // общий раунд гонки: все с самого старта (см. racePhase в game.js)
   get deaths(){ return deaths; },
   onOutOfLives: null,
   toolOK: function(t){ return toolOK(t); },   // автотесты: доступность инструмента (зомби/apoc)
@@ -4951,12 +4984,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=186"></script>
-<script src="abuseShow.js?v=186" defer></script>
-<script src="editorHelp.js?v=186"></script>
-<script src="editorAI.js?v=186" defer></script>
-<script src="account.js?v=186" defer></script>
-<script src="owner.js?v=186" defer></script>
+<script src="i18n.js?v=187"></script>
+<script src="abuseShow.js?v=187" defer></script>
+<script src="editorHelp.js?v=187"></script>
+<script src="editorAI.js?v=187" defer></script>
+<script src="account.js?v=187" defer></script>
+<script src="owner.js?v=187" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -5072,7 +5105,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=186" defer></script>
+        <script src="skinAvatar.js?v=187" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */

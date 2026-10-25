@@ -454,6 +454,9 @@ function serversSnapshot() {
     if (!players.length) return;
     const st = mode === 'hideAndSeek' ? hsRooms.get(key) : null;
     let map = st && st.map ? st.map.mapName + ' by ' + st.map.author : null;
+    // общий раунд гонки — карта у комнаты одна (см. raceRooms)
+    const rst = mode === 'race' ? raceRooms.get(key) : null;
+    if (!map && rst && rst.map) map = rst.map.mapName + ' by ' + rst.map.author;
     if (!map && mode === 'race') {
       // в гонке карту знает каждый игрок сам — берём ту, что бежит больше всего народу
       const count = {};
@@ -559,6 +562,134 @@ function raceScoreboard(room) {
 }
 function broadcastRaceScores(io, room) {
   io.to(room).emit('raceScores', raceScoreboard(room));
+}
+
+/* ================== ГОНКА: ОБЩИЕ РАУНДЫ ==================
+   Вся комната бежит одну карту с общим стартом (идеи 2019 года: Deathrun «побеждает только
+   первый» и Last bro standing). Сервер выбирает карту, ведёт отсчёт перед стартом (игроки стоят
+   на старте), раунд длится время карты (timeMin, иначе 2 минуты) и кончается раньше, когда все
+   финишировали или выбыли. Цель раунда — из правил карты (goal, см. редактор):
+     ''    — обычная гонка: финишируют все, очки за время;
+     first — побеждает первый: после первого финиша остальным даётся RACE_FIRST_GRACE_MS,
+             но очки и монеты только у первого;
+     last  — Last bro standing (только с жизнями): у кого кончились жизни — выбыл до конца
+             раунда; остался один — победил (финиш тоже победа).
+   Story-комнаты сюда не попадают: там своя карта и свой лимит (см. story.html). */
+const RACE_LOBBY_MS = Number(process.env.RACE_LOBBY_MS) || 5000;
+const RACE_ROUND_MS = Number(process.env.RACE_ROUND_MS) || 120000;
+const RACE_FIRST_GRACE_MS = 5000;
+const raceRooms = new Map();      // 'race:roomN' -> состояние общего раунда
+function raceRulesOf(m) {
+  const r = { timeMin: 0, goal: '' };
+  try {
+    const d = m && m.mapData && JSON.parse(m.mapData);
+    if (!d) return r;
+    if (d.timeMin === 5 || d.timeMin === 10) r.timeMin = d.timeMin;
+    if (d.goal === 'first') r.goal = 'first';
+    else if (d.goal === 'last' && [1, 3, 5].indexOf(d.lives) !== -1) r.goal = 'last';
+  } catch (e) { /* битая карта — обычная гонка */ }
+  return r;
+}
+function raceIds(room) {
+  const set = gameState.rooms.get(room);
+  return set ? Array.from(set).filter(id => gameState.players.has(id)) : [];
+}
+function raceStartLobby(io, room, st) {
+  clearTimeout(st.timer);
+  const m = require('./maps.js').randomFor('race', st.map ? st.map.mapName : '');
+  st.map = m ? { author: m.author, mapName: m.mapName } : null;
+  st.rules = raceRulesOf(m);
+  st.phase = 'lobby';
+  st.roundNum++;
+  st.finished = []; st.out = new Set(); st.ending = false; st.winner = null; st.members = new Set();
+  st.endsAt = Date.now() + RACE_LOBBY_MS;
+  io.to(room).emit('racePhase', { phase: 'lobby', map: st.map, msLeft: RACE_LOBBY_MS, goal: st.rules.goal, roundNum: st.roundNum });
+  // карт гонки нет вовсе — заглядываем снова, вдруг владелец добавит
+  st.timer = setTimeout(() => st.map ? raceStartRound(io, room, st) : raceStartLobby(io, room, st), st.map ? RACE_LOBBY_MS : 15000);
+}
+function raceStartRound(io, room, st) {
+  const ms = st.rules.timeMin ? st.rules.timeMin * 60000 : RACE_ROUND_MS;
+  st.phase = 'round';
+  st.endsAt = Date.now() + ms;
+  st.members = new Set(raceIds(room));     // кто стартовал — только их ждём на финише
+  io.to(room).emit('racePhase', { phase: 'round', map: st.map, msLeft: ms, goal: st.rules.goal, roundNum: st.roundNum });
+  st.timer = setTimeout(() => raceEndRound(io, room, st, 'time'), ms);
+}
+function raceEndRound(io, room, st, why) {
+  if (st.phase !== 'round') return;
+  clearTimeout(st.timer);
+  io.to(room).emit('raceResult', { why, goal: st.rules.goal, winner: st.winner,
+    places: st.finished.slice(0, 10).map(f => ({ name: f.name, place: f.place })) });
+  raceStartLobby(io, room, st);
+}
+function raceSoonEnd(io, room, st, ms) {
+  if (st.ending) return;
+  st.ending = true;
+  clearTimeout(st.timer);
+  st.timer = setTimeout(() => raceEndRound(io, room, st, 'done'), ms);
+}
+// все стартовавшие и оставшиеся в комнате финишировали или выбыли — раунд можно заканчивать
+function raceCheckDone(io, room, st) {
+  if (st.phase !== 'round' || st.ending) return;
+  const ids = raceIds(room).filter(id => st.members.has(id));
+  if (!ids.length) return;
+  const done = id => st.out.has(id) || st.finished.some(f => f.id === id);
+  if (st.rules.goal === 'last' && st.members.size >= 2) {
+    const alive = ids.filter(id => !st.out.has(id));
+    if (alive.length <= 1) {
+      const w = alive.length && gameState.players.get(alive[0]);
+      st.winner = w ? w.name : null;
+      if (w) raceCreditWin(io, w.id);
+      raceSoonEnd(io, room, st, 2000);
+      return;
+    }
+  }
+  if (ids.every(done)) raceSoonEnd(io, room, st, 2000);
+}
+// победителю Last bro standing, который не дошёл до финиша, — монеты как за финиш
+function raceCreditWin(io, id) {
+  const sock = io.sockets.sockets.get(id);
+  const acct = sock && sessionName(sock.handshake.headers.cookie);
+  if (acct) hsCreditAndNotify(sock, acct, 1 + Math.floor(Math.random() * 5), 'raceFinish');
+}
+/* Честный финиш (его уже проверил raceFinish) на карте общего раунда. Возвращает false, если
+   по правилам раунда этот финиш ничего не приносит: «побеждает первый» — не первый,
+   Last bro standing — уже есть победитель или игрок выбыл. */
+function raceOnFinish(io, player, mapKey, ms) {
+  const st = raceRooms.get(player.room);
+  if (!st || st.phase !== 'round' || !st.map || mapKey !== st.map.author + '|' + st.map.mapName) return true;
+  if (st.out.has(player.id) || st.finished.some(f => f.id === player.id)) return false;
+  const place = st.finished.length + 1;
+  st.finished.push({ id: player.id, name: player.name, place, ms });
+  io.to(player.room).emit('raceFinished', { id: player.id, name: player.name, place, ms });
+  if (st.rules.goal === 'first' || st.rules.goal === 'last') {
+    if (place !== 1) return false;
+    st.winner = player.name;
+    raceSoonEnd(io, player.room, st, st.rules.goal === 'first' ? RACE_FIRST_GRACE_MS : 2000);
+    return true;
+  }
+  raceCheckDone(io, player.room, st);
+  return true;
+}
+function raceOnJoin(io, socket, room, roomName) {
+  if (roomName.indexOf('story_') === 0) return;
+  let st = raceRooms.get(room);
+  if (!st) {
+    st = { phase: 'lobby', roundNum: 0, map: null, rules: { timeMin: 0, goal: '' }, timer: null,
+           finished: [], out: new Set(), members: new Set(), ending: false, winner: null, endsAt: 0 };
+    raceRooms.set(room, st);
+    raceStartLobby(io, room, st);
+    return;
+  }
+  socket.emit('raceState', { phase: st.phase, map: st.map, msLeft: Math.max(0, st.endsAt - Date.now()),
+    goal: st.rules.goal, roundNum: st.roundNum,
+    finished: st.finished.map(f => ({ id: f.id, name: f.name, place: f.place })), out: Array.from(st.out) });
+}
+function raceOnLeave(io, room) {
+  const st = raceRooms.get(room);
+  if (!st) return;
+  if (!raceIds(room).length) { clearTimeout(st.timer); raceRooms.delete(room); return; }
+  raceCheckDone(io, room, st);
 }
 
 function hsMembers(room) {
@@ -1188,7 +1319,7 @@ io.on('connection', (socket) => {
       roomLeftAt.set(prevRoom, Date.now());
       io.to(prevRoom).emit('playerLeft', { playerId: socket.id });
       if (prevRoom.indexOf('hideAndSeek:') === 0) hsOnLeave(io, prevRoom, socket.id);
-      if (prevRoom.indexOf('race:') === 0) broadcastRaceScores(io, prevRoom);
+      if (prevRoom.indexOf('race:') === 0) { broadcastRaceScores(io, prevRoom); raceOnLeave(io, prevRoom); }
     }
 
     const clan = account ? require('./clans.js').clanOf(account) : null;
@@ -1310,7 +1441,7 @@ io.on('connection', (socket) => {
     }
 
     // Гонка: новичку и всей комнате — актуальная табличка очков (новый участник входит в неё с нулём)
-    if (mode === 'race') broadcastRaceScores(io, room);
+    if (mode === 'race') { broadcastRaceScores(io, room); raceOnJoin(io, socket, room, roomName); }
   });
 
   socket.on('movePlayer', (data) => {
@@ -1653,6 +1784,19 @@ io.on('connection', (socket) => {
                          odo: player.odo || 0, moves: player.moves || 0 };
     if (account) raceTryStat(account);
   });
+  /* Last bro standing: у игрока кончились жизни — выбыл до конца раунда (см. raceCheckDone).
+     Верить на слово тут можно: так игрок вредит только себе. */
+  socket.on('raceOut', () => {
+    if (limRace()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('race:') !== 0) return;
+    const st = raceRooms.get(player.room);
+    if (!st || st.phase !== 'round' || st.rules.goal !== 'last' || st.ending || !st.members.has(socket.id)) return;
+    if (st.out.has(socket.id) || st.finished.some(f => f.id === socket.id)) return;
+    st.out.add(socket.id);
+    io.to(player.room).emit('raceOut', { id: socket.id, name: player.name });
+    raceCheckDone(io, player.room, st);
+  });
   socket.on('raceFinish', (data) => {
     if (limRace()) return;
     const player = gameState.players.get(socket.id);
@@ -1678,6 +1822,8 @@ io.on('connection', (socket) => {
     const gate = raceGate(author, mapName);
     if (elapsedMs < gate.ms) return;
     if ((player.odo || 0) - rs.odo < gate.dist) return;
+    // общий раунд: место и цель раунда (см. raceOnFinish) — в «побеждает первый» остальным ничего
+    if (!raceOnFinish(io, player, rs.key, elapsedMs)) return;
 
     // табличка «Scores» в углу — снимок комнаты, видна и гостям, копится
     // за все забеги подряд, пока игрок в комнате (см. raceScoreboard)
@@ -1720,7 +1866,7 @@ io.on('connection', (socket) => {
       roomLeftAt.set(room, Date.now());
       io.to(room).emit('playerLeft', { playerId: socket.id });
       if (room.indexOf('hideAndSeek:') === 0) hsOnLeave(io, room, socket.id);
-      if (room.indexOf('race:') === 0) broadcastRaceScores(io, room);
+      if (room.indexOf('race:') === 0) { broadcastRaceScores(io, room); raceOnLeave(io, room); }
       console.log(`${player.name} | Осталось: ${gameState.stats.totalPlayers}`);
     }
   });

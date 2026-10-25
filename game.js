@@ -36,6 +36,13 @@
   var COLOR_NORMAL = '#000000';
   var COLOR_SEEKER = '#1e6fe0';   // цвет модели искателя в классике (см. applyColor)
   var COLOR_CAUGHT = '#f97316';   // цвет модели пойманного в классике (см. applyColor)
+  var COLOR_OUT    = '#9ca3af';   // гонка Last bro standing: выбывший до конца раунда
+
+  /* Общие раунды гонки (см. raceRooms в server.js): карту, отсчёт перед стартом и конец раунда
+     задаёт сервер — вся комната бежит одно и то же. raceSync — сервер прислал фазу; без неё
+     (старый сервер) гонка, как раньше, идёт сама по себе. raceGoal — цель раунда из правил
+     карты: '' — финишируют все, 'first' — побеждает первый, 'last' — Last bro standing. */
+  var raceSync = false, raceGoal = '', raceOutMe = false;
 
   var me = { name: '', role: 'hider', caught: false };
 
@@ -1122,7 +1129,7 @@
       finSent = false;
       applyColor();
       // время на карту гонки задаёт сама карта (лабиринту — 5 или 10 минут, см. raceTimeMin)
-      if (MODE === 'race' && !STORY && !VIEW) phaseEnds = Date.now() + (GAME.raceTimeMin ? GAME.raceTimeMin * 60000 : ROUND_MS);
+      if (MODE === 'race' && !STORY && !VIEW && !raceSync) phaseEnds = Date.now() + (GAME.raceTimeMin ? GAME.raceTimeMin * 60000 : ROUND_MS);
       /* Сервер должен знать, что забег начался, ДО того как придёт
          raceFinish — иначе финиш без старта ничем не подтверждён и
          монет не будет (см. server.js). Но join() ещё может быть не
@@ -1132,7 +1139,8 @@
          до gameState.players — сервер тихо его игнорировал, а потом так
          же тихо отклонял честный raceFinish. Теперь запрос откладывается
          до joined и досылается, как только вход подтверждён. */
-      if (MODE === 'race' && !VIEW) {
+      // в общей гонке забег начинается не с загрузки карты, а со старта раунда (racePhase)
+      if (MODE === 'race' && !VIEW && !raceSync) {
         pendingRaceStart = { author: m.author, mapName: m.mapName };
         flushPendingRaceStart();
       }
@@ -1165,7 +1173,7 @@
       if (me.role === 'seeker' && hsVariant !== 'murder') { GAME.myColor = COLOR_SEEKER; return; }
       if (me.caught) { GAME.myColor = COLOR_CAUGHT; return; }
     }
-    GAME.myColor = COLOR_NORMAL;
+    GAME.myColor = MODE === 'race' && raceOutMe ? COLOR_OUT : COLOR_NORMAL;
   }
   /* Заражение (см. applyInfected) живёт ровно один раунд — новый раунд
      обнуляет и список охотящихся, и пометки «уже был целью». Раньше её
@@ -1558,6 +1566,7 @@
   }, 250);
 
   function advance() {
+    if (MODE === 'race' && raceSync && !STORY) return;   // следующий раунд начнёт сервер (racePhase)
     if (MODE === 'hideAndSeek') {
       if (phase === 'lobby') {
         phase = 'round'; phaseEnds = Date.now() + ROUND_MS;
@@ -1639,8 +1648,10 @@
          hsPhase/hsState сразу после join (см. loadServerMap). */
       phase = 'lobby'; phaseEnds = Date.now() + LOBBY_MS;
     } else {
+      /* Гонка: карту комнаты и отсчёт до старта пришлёт сервер (racePhase/raceState) — вся
+         комната бежит одно и то же. Старый сервер их не шлёт — тогда через несколько секунд
+         после join карту берём сами (см. запасной путь в connect). */
       phase = 'round'; phaseEnds = Date.now() + ROUND_MS;
-      nextMap();
     }
   }
 
@@ -1716,6 +1727,13 @@
   /* Жизни карты кончились: движок уже вернул игрока на старт и сбросил время и чекпоинты
      (см. die() в game.html) — для сервера это новый забег. */
   GAME.onOutOfLives = function () {
+    // Last bro standing: выбыл до конца раунда — стоит на месте серым, ждёт следующую карту
+    if (MODE === 'race' && raceSync && raceGoal === 'last' && phase === 'round') {
+      raceOutMe = true; GAME.frozen = true; applyColor();
+      if (socket) socket.emit('raceOut');
+      log(TR('raceOutMe', 'Жизни кончились — ты выбыл до конца раунда'));
+      return 'out';
+    }
     log(TR('outOfLives', 'Жизни кончились — забег заново с начала'));
     if (MODE !== 'race' || VIEW || !currentMap) return;
     finSent = false;
@@ -1730,6 +1748,32 @@
     if (n) $('gLives').textContent = Math.max(0, n - GAME.deaths) + '/' + n;
   }
   setInterval(livesTick, 200);
+  /* Общая гонка: в лобби все стоят на старте (GAME.frozen), со стартом раунда забег у всех
+     начинается заново с самого старта — время, смерти и чекпоинты сброшены. */
+  function raceLobby(d) {
+    raceOutMe = false; applyColor();
+    GAME.frozen = true;
+    loadServerMap(d.map, function () { GAME.frozen = true; if (GAME.restartRun) GAME.restartRun(); });
+    if (d.goal === 'first') log(TR('raceGoalFirstHint', 'Побеждает тот, кто финиширует первым!'));
+    else if (d.goal === 'last') log(TR('raceGoalLastHint', 'Last bro standing: не потеряй все жизни!'));
+  }
+  function raceGo(d, late) {
+    loadServerMap(d.map, function () {
+      if (!raceOutMe) GAME.frozen = false;
+      if (GAME.restartRun) GAME.restartRun();
+      finSent = false;
+      if (currentMap) { pendingRaceStart = { author: currentMap.author, mapName: currentMap.mapName }; flushPendingRaceStart(); }
+    });
+    if (!late) { log(TR('raceGo', 'Старт!')); if (window.BFSound) BFSound.go(); }
+  }
+  function racePhaseIn(d, late) {
+    if (MODE !== 'race' || STORY || VIEW || !d) return;
+    raceSync = true;
+    raceGoal = d.goal || '';
+    phase = d.phase === 'lobby' ? 'lobby' : 'round';
+    phaseEnds = Date.now() + (Number(d.msLeft) || 0);
+    if (phase === 'lobby') raceLobby(d); else raceGo(d, late);
+  }
   function checkRaceFinish() {
     if (VIEW || MODE !== 'race' || !socket || !GAME.playing || !GAME.done || finSent) return;
     finSent = true;
@@ -1888,6 +1932,10 @@
         me.name = (signed && signed.data && !signed.data.guest) ? signed.data.name : guestName();
         ROOM = pick.room || 'room1';
         socket.emit('join', { playerName: me.name, gameMode: MODE, room: ROOM });
+        // старый сервер общих раундов гонки не ведёт — тогда, как раньше, карту берём сами
+        setTimeout(function () {
+          if (MODE === 'race' && !STORY && !VIEW && !raceSync && !currentMap && socket.connected) nextMap();
+        }, 4000);
 
         // запасной путь: старый сервер ничего о рулетке не знает — тогда,
         // как и раньше, искателем становится игрок с наименьшим id
@@ -2141,6 +2189,24 @@
         runRoulette(d);
         showChance((d.players) || []);
       });
+    });
+
+    // ---------- общая гонка: фазы, финиши, выбывшие, итог (см. raceRooms в server.js) ----------
+    socket.on('racePhase', function (d) { racePhaseIn(d, false); });
+    socket.on('raceState', function (d) { racePhaseIn(d, true); });
+    socket.on('raceFinished', function (d) {
+      if (MODE !== 'race' || !d) return;
+      log(d.id === socket.id ? TR('raceFinMe', 'Ты финишировал {p}-м!').replace('{p}', d.place)
+        : TR('raceFinOther', '{n} финишировал {p}-м').replace('{n}', '<b>' + esc(d.name || '') + '</b>').replace('{p}', d.place));
+    });
+    socket.on('raceOut', function (d) {
+      if (MODE !== 'race' || !d || d.id === socket.id) return;
+      log(TR('raceOutOther', '{n} выбыл').replace('{n}', '<b>' + esc(d.name || '') + '</b>'));
+    });
+    socket.on('raceResult', function (d) {
+      if (MODE !== 'race' || !d) return;
+      if (d.winner) log(TR('raceWinner', '{n} победил!').replace('{n}', '<b>' + esc(d.winner) + '</b>'));
+      else log(TR('roundOver', 'Раунд окончен'));
     });
 
     // Murder Mystery: своя тайная роль — приходит только этому игроку
@@ -2486,6 +2552,7 @@
   function checkAllFinished() {
     if (switching || phase !== 'round' || VIEW) return;
     if (MODE === 'hideAndSeek' && hsSync) return;   // в прятках фазами правит сервер
+    if (MODE === 'race' && raceSync && !STORY) return;   // и в общей гонке тоже (raceRooms)
     if (!GAME.done) return;
     var ids = Object.keys(others);
     for (var i = 0; i < ids.length; i++) if (!others[ids[i]].fin) return;

@@ -254,16 +254,16 @@ body.mob #msg h1{font-size:38px}
 body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="offline.js?v=3"></script>
-<script src="device.js?v=186"></script>
-        <script src="sound.js?v=186"></script>
-        <script src="skinRender.js?v=186"></script>
-        <script src="skinCanvas.js?v=186"></script>
-        <script src="gifuct.bundle.js?v=186"></script>
-        <script src="gifPlayer.js?v=186"></script>
-        <script src="coin.js?v=186"></script>
-        <script src="liveText.js?v=186"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=186">
-        <script src="theme.js?v=186"></script>
+<script src="device.js?v=187"></script>
+        <script src="sound.js?v=187"></script>
+        <script src="skinRender.js?v=187"></script>
+        <script src="skinCanvas.js?v=187"></script>
+        <script src="gifuct.bundle.js?v=187"></script>
+        <script src="gifPlayer.js?v=187"></script>
+        <script src="coin.js?v=187"></script>
+        <script src="liveText.js?v=187"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=187">
+        <script src="theme.js?v=187"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -955,16 +955,19 @@ var mode = "hideAndSeek", tool = "select", objects = [], sel = null, uid = 1;
 var apoc = false;
 /* Правила гонки на карту (идеи 2019 года), хранятся в JSON карты рядом с apoc, только в Race:
    raceLives — сколько смертей до перезапуска забега с самого начала (0 — без ограничения,
-   Deathrun — 3); raceTimeMin — время на карту в минутах (0 — обычные 2, лабиринту — 5 или 10). */
-var raceLives = 0, raceTimeMin = 0;
-var RACE_LIVES = [0, 1, 3, 5], RACE_TIMES = [0, 5, 10];
+   Deathrun — 3); raceTimeMin — время на карту в минутах (0 — обычные 2, лабиринту — 5 или 10);
+   raceGoal — цель общего раунда (см. raceRooms в server.js): "" — финишируют все, "first" —
+   побеждает первый, "last" — Last bro standing, только с жизнями. */
+var raceLives = 0, raceTimeMin = 0, raceGoal = "";
+var RACE_LIVES = [0, 1, 3, 5], RACE_TIMES = [0, 5, 10], RACE_GOALS = ["", "first", "last"];
 function cleanRaceRules(d){
   raceLives = (mode === "race" && d && RACE_LIVES.indexOf(+d.lives) !== -1) ? +d.lives : 0;
   raceTimeMin = (mode === "race" && d && RACE_TIMES.indexOf(+d.timeMin) !== -1) ? +d.timeMin : 0;
+  raceGoal = (mode === "race" && d && (d.goal === "first" || (d.goal === "last" && raceLives))) ? d.goal : "";
 }
 // поля правил гонки для сохранения карты — пустые не пишем
 function withRaceRules(m){
-  if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; }
+  if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; if(raceGoal) m.goal = raceGoal; }
   return m;
 }
 
@@ -1366,8 +1369,10 @@ function die(){
   setTimeout(function(){
     if(!playing) return;
     if(!outOfLives){ respawn(); return; }
-    restartRun();
-    if(typeof BRIDGE !== "undefined" && BRIDGE && BRIDGE.onOutOfLives) BRIDGE.onOutOfLives();
+    /* игра решает сама: в Last bro standing игрок выбывает до конца раунда (стоит на месте) —
+       иначе забег начинается заново */
+    var out = typeof BRIDGE !== "undefined" && BRIDGE && BRIDGE.onOutOfLives ? BRIDGE.onOutOfLives() : null;
+    if(out === "out") respawn(); else restartRun();
   }, 300);
 }
 function stat(){
@@ -3902,6 +3907,8 @@ window.GAME = BRIDGE = {
   // правила гонки карты (см. raceLives/raceTimeMin) и счётчик смертей текущего забега
   get raceLives(){ return raceLives; },
   get raceTimeMin(){ return raceTimeMin; },
+  get raceGoal(){ return raceGoal; },
+  restartRun: restartRun,         // общий раунд гонки: все с самого старта (см. racePhase в game.js)
   get deaths(){ return deaths; },
   onOutOfLives: null,
   toolOK: function(t){ return toolOK(t); },   // автотесты: доступность инструмента (зомби/apoc)
@@ -4052,8 +4059,8 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=186"></script>
-        <script src="i18n.js?v=186"></script>
-        <script src="skinAvatar.js?v=186" defer></script>
+<script src="game.js?v=187"></script>
+        <script src="i18n.js?v=187"></script>
+        <script src="skinAvatar.js?v=187" defer></script>
 </body>
 </html>

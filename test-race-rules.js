@@ -29,7 +29,7 @@ function server(port, maps) {
   fs.writeFileSync(path.join(tmp, 'data', 'maps.json'), JSON.stringify(maps.map(m => ({ mapName: m.name, mapType: 'race',
     mapData: JSON.stringify(m.data), author: OWNER, date: Date.now(), created: Date.now(), rating: 0, votes: {},
     boostLikes: 0, boostDislikes: 0, inGameModes: [] }))));
-  const proc = spawn('node', ['server.js'], { cwd: tmp, stdio: 'ignore', env: { ...process.env, PORT: String(port), OWNER_ALIASES: OWNER } });
+  const proc = spawn('node', ['server.js'], { cwd: tmp, stdio: 'ignore', env: { ...process.env, PORT: String(port), OWNER_ALIASES: OWNER, RACE_LOBBY_MS: '800' } });
   return { base: 'http://127.0.0.1:' + port, kill: () => { try { proc.kill(); } catch (e) {} try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {} } };
 }
 const floorMap = (extra) => Object.assign({ mode: 'race', objects: [
@@ -70,12 +70,12 @@ const nearMap = (extra) => Object.assign({ mode: 'race', objects: [
     ok(hs.rr === 0 && hs.ap === 2, 'прятки: только Classic / Zombie Apocalypse' + tag, JSON.stringify(hs));
     await ep.click('.modeBtn[data-mode="race"]');
     const rc = await vis();
-    ok(rc.rr === 7 && rc.ap === 0, 'гонка: вместо них жизни и время карты' + tag, JSON.stringify(rc));
+    ok(rc.rr === 10 && rc.ap === 0, 'гонка: вместо них жизни, время и цель карты' + tag, JSON.stringify(rc));
     const fit = await ep.evaluate(() => {
       const r = document.getElementById('apoc').getBoundingClientRect();
       return { left: Math.round(r.left), right: Math.round(r.right), vw: document.documentElement.clientWidth, scroll: document.getElementById('apoc').scrollWidth - document.getElementById('apoc').clientWidth };
     });
-    ok(fit.left >= 0 && fit.right <= fit.vw && fit.scroll <= 1, 'строка правил целиком на экране' + tag, JSON.stringify(fit));
+    ok(fit.left >= 0 && fit.right <= fit.vw && fit.scroll <= 1, 'строка правил целиком на экране (на узком — в две строки)' + tag, JSON.stringify(fit));
     if (process.env.SHOT && vp.mobile) await ep.screenshot({ path: process.env.SHOT });
     if (!vp.mobile) {
       const tips = await ep.evaluate(() => Array.from(document.querySelectorAll('#apoc .rrLbl')).map(b => b.title));
@@ -87,16 +87,32 @@ const nearMap = (extra) => Object.assign({ mode: 'race', objects: [
       const after = JSON.parse(await ep.evaluate(() => window.getEditorMap().data));
       ok(after.lives === 3 && after.timeMin === 10, 'выбрали 3 жизни и 10 минут — они в JSON карты', JSON.stringify({ lives: after.lives, timeMin: after.timeMin }));
       const on = await ep.evaluate(() => Array.from(document.querySelectorAll('#apoc .rrBtn.on')).map(b => b.textContent).join(','));
-      ok(on === '3,10 min', 'выбранные кнопки подсвечены', on);
+      ok(on === '3,10 min,Finish', 'выбранные кнопки подсвечены', on);
+      // Last bro standing без жизней не бывает: выбрали его при ∞ — жизни становятся 3, вернули ∞ — цель снова Finish
+      await ep.click('#apoc .rrBtn[data-lives="0"]');
+      await ep.click('#apoc .rrBtn[data-goal="last"]');
+      const g1 = JSON.parse(await ep.evaluate(() => window.getEditorMap().data));
+      ok(g1.goal === 'last' && g1.lives === 3, '«Last one» при ∞ жизнях сам ставит 3 жизни', JSON.stringify({ goal: g1.goal, lives: g1.lives }));
+      await ep.click('#apoc .rrBtn[data-lives="0"]');
+      const g2 = JSON.parse(await ep.evaluate(() => window.getEditorMap().data));
+      ok(g2.goal === undefined && g2.lives === undefined, 'вернули ∞ — цель снова «Finish»', JSON.stringify({ goal: g2.goal, lives: g2.lives }));
+      await ep.click('#apoc .rrBtn[data-lives="3"]');
+      await ep.click('#apoc .rrBtn[data-goal="first"]');
+      const g3 = JSON.parse(await ep.evaluate(() => window.getEditorMap().data));
+      ok(g3.goal === 'first', '«1st wins» записан в карту', String(g3.goal));
+      const gtip = await ep.evaluate(() => document.querySelectorAll('#apoc .rrLbl')[2].title);
+      ok(/1st wins/.test(gtip) && /Last one/.test(gtip), 'у «Goal» подсказка объясняет все три цели', gtip.slice(0, 60) + '…');
       await ep.click('.modeBtn[data-mode="hideAndSeek"]');
       const hsMap = JSON.parse(await ep.evaluate(() => window.getEditorMap().data));
       ok(hsMap.lives === undefined && hsMap.timeMin === undefined, 'в карте пряток правил гонки нет');
       // загрузка карты с правилами возвращает их на кнопки
       await ep.evaluate((d) => window.GAME.loadMap(d), JSON.stringify(floorMap({ lives: 5, timeMin: 5 })));
       const on2 = await ep.evaluate(() => Array.from(document.querySelectorAll('#apoc .rrBtn.on')).map(b => b.textContent).join(','));
-      ok(on2 === '5,5 min', 'открыли карту с правилами — кнопки показывают их', on2);
-      await ep.evaluate((d) => window.GAME.loadMap(d), JSON.stringify(floorMap({ lives: 7, timeMin: 99 })));
-      ok(await ep.evaluate(() => window.GAME.raceLives === 0 && window.GAME.raceTimeMin === 0), 'мусорные значения из чужой карты не принимаются');
+      ok(on2 === '5,5 min,Finish', 'открыли карту с правилами — кнопки показывают их', on2);
+      await ep.evaluate((d) => window.GAME.loadMap(d), JSON.stringify(floorMap({ lives: 7, timeMin: 99, goal: 'boom' })));
+      ok(await ep.evaluate(() => window.GAME.raceLives === 0 && window.GAME.raceTimeMin === 0 && window.GAME.raceGoal === ''), 'мусорные значения из чужой карты не принимаются');
+      await ep.evaluate((d) => window.GAME.loadMap(d), JSON.stringify(floorMap({ goal: 'last' })));
+      ok(await ep.evaluate(() => window.GAME.raceGoal === ''), '«Last one» без жизней из чужой карты не принимается');
     }
     await ctx.close();
   }
@@ -108,8 +124,9 @@ const nearMap = (extra) => Object.assign({ mode: 'race', objects: [
   page.on('pageerror', e => errs.push(e.message.slice(0, 140)));
   await page.goto(A.base + '/game.html?mode=race&room=rr' + Math.floor(Math.random() * 1e6), { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => { const x = document.getElementById('bfConsent'); if (x) x.remove(); });
-  await until(() => page.evaluate(() => window.GAME && window.GAME.playing && window.GAME.raceLives === 3), 15000);
-  const time = await until(async () => { const t = await page.evaluate(() => document.getElementById('gTime').textContent); return /\d:\d\d/.test(t) ? t : null; }, 4000);
+  // общий раунд: короткий отсчёт (RACE_LOBBY_MS), потом старт — ждём, пока снимут заморозку
+  await until(() => page.evaluate(() => window.GAME && window.GAME.playing && window.GAME.raceLives === 3 && window.GAME.frozen === false), 15000);
+  const time = await until(async () => { const t = await page.evaluate(() => document.getElementById('gTime').textContent); return /^(5:00|4:5\d)$/.test(t) ? t : null; }, 4000);
   ok(/^(5:00|4:5\d)$/.test(time), 'таймер карты — 5 минут', time);
   const lives = () => page.evaluate(() => { const b = document.getElementById('gLivesBox'); return b.style.display === 'none' ? '' : document.getElementById('gLives').textContent; });
   ok(await until(async () => (await lives()) === '3/3'), 'в шапке: Lives 3/3', await lives());

@@ -20,6 +20,10 @@
     {
       "title": "Race map rules",
       "text": "Race map makers can now set lives and a time limit for their map in the editor. With limited lives, running out of them sends you back to the very start of the map (great for deathrun maps). Longer time limits of 5 or 10 minutes suit mazes, and score points scale with the map's time limit."
+    },
+    {
+      "title": "Shared Race rounds",
+      "text": "Everyone in a Race room now runs the same map at the same time: a short countdown at the start, then a shared timer, and the next map comes when the time is up or everyone has finished. Map makers can also pick a goal for their Race map: everyone races for points, only the first to finish scores, or last one standing, where running out of lives knocks you out and the last player left wins."
     }
   ]
 }
