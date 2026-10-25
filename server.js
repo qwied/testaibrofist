@@ -1560,6 +1560,7 @@ io.on('connection', (socket) => {
   const RACE_MIN_DIST = 200;
   // очки за забег: чем быстрее финиш, тем больше — 120 сек и дольше не
   // приносят ничего, секунда почти сразу после старта — почти максимум
+  // (на карте с долгим временем шкала растянута на него — см. capMs в raceGate)
   const RACE_SCORE_CAP_S = 120;
 
   /* Статистика гонки для автоматических рангов (см. ranks.js). Храним
@@ -1585,10 +1586,13 @@ io.on('connection', (socket) => {
     const k = author + '|' + mapName;
     const hit = raceGateCache.get(k);
     if (hit) return hit;
-    let gate = { ms: 0, dist: 0 };
+    let gate = { ms: 0, dist: 0, capMs: RACE_SCORE_CAP_S * 1000 };
     try {
       const rec = require('./maps.js').find(author, mapName);
       const data = rec && rec.mapData && JSON.parse(rec.mapData);
+      // лабиринту автор даёт больше времени (timeMin, см. правила гонки в редакторе) —
+      // шкала очков растягивается на это время, максимум за забег тот же
+      if (data && (data.timeMin === 5 || data.timeMin === 10)) gate.capMs = data.timeMin * 60000;
       const list = (data && (Array.isArray(data) ? data : data.objects)) || [];
       let sp = null, fin = null;
       for (let i = 0; i < list.length; i++) {
@@ -1599,9 +1603,10 @@ io.on('connection', (socket) => {
       }
       if (sp && fin) {
         const d = Math.hypot((fin.x || 0) - (sp.x || 0), (fin.y || 0) - (sp.y || 0));
-        gate = { ms: d / RACE_TOP_PX_PER_MS, dist: Math.max(0, d - RACE_SLACK_PX) };
+        gate.ms = d / RACE_TOP_PX_PER_MS;
+        gate.dist = Math.max(0, d - RACE_SLACK_PX);
       }
-    } catch (e) { gate = { ms: 0, dist: 0 }; }
+    } catch (e) { gate = { ms: 0, dist: 0, capMs: RACE_SCORE_CAP_S * 1000 }; }
     if (raceGateCache.size > 500) raceGateCache.clear();
     raceGateCache.set(k, gate);
     return gate;
@@ -1676,7 +1681,7 @@ io.on('connection', (socket) => {
 
     // табличка «Scores» в углу — снимок комнаты, видна и гостям, копится
     // за все забеги подряд, пока игрок в комнате (см. raceScoreboard)
-    const points = Math.max(0, Math.round(RACE_SCORE_CAP_S - elapsedMs / 1000));
+    const points = Math.max(0, Math.round(RACE_SCORE_CAP_S * (1 - elapsedMs / gate.capMs)));
     player.raceLiveScore = (player.raceLiveScore || 0) + points;
     broadcastRaceScores(io, player.room);
 

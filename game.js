@@ -399,6 +399,8 @@
     + '<span><span id="gLblPlayers">Игроков</span>: <b id="gCount">1</b></span>'
     + '<span><span id="gLblPing">Пинг</span>: <b id="gPing">—</b></span>'
     + '<span id="gTimeBox"><span id="gLblTime">Время</span>: <b id="gTime">—</b></span>'
+    // жизни на карте гонки (см. raceLives в движке) — только если карта их задаёт
+    + '<span id="gLivesBox" style="display:none"><span id="gLblLives">Жизни</span>: <b id="gLives"></b></span>'
     + '<button id="gDraw" aria-label="Draw" title="Draw an arrow for others to see"><svg viewBox="0 0 24 24" '
     + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     + '<line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></button>'
@@ -448,6 +450,7 @@
     $('gLblPlayers').textContent = TR('gPlayers', 'Игроков');
     $('gLblPing').textContent = TR('gPing', 'Пинг');
     $('gLblTime').textContent = TR('gTimeLbl', 'Время');
+    $('gLblLives').textContent = TR('gLivesLbl', 'Жизни');
     $('gLblRole').textContent = TR('roleLbl', 'Роль');
     $('gExit').textContent = TR('menu', 'Меню');
     if (PRACTICE) {
@@ -1118,6 +1121,8 @@
       GAME.startPlay();
       finSent = false;
       applyColor();
+      // время на карту гонки задаёт сама карта (лабиринту — 5 или 10 минут, см. raceTimeMin)
+      if (MODE === 'race' && !STORY && !VIEW) phaseEnds = Date.now() + (GAME.raceTimeMin ? GAME.raceTimeMin * 60000 : ROUND_MS);
       /* Сервер должен знать, что забег начался, ДО того как придёт
          raceFinish — иначе финиш без старта ничем не подтверждён и
          монет не будет (см. server.js). Но join() ещё может быть не
@@ -1708,6 +1713,23 @@
     socket.emit('raceStart', pendingRaceStart);
     pendingRaceStart = null;
   }
+  /* Жизни карты кончились: движок уже вернул игрока на старт и сбросил время и чекпоинты
+     (см. die() в game.html) — для сервера это новый забег. */
+  GAME.onOutOfLives = function () {
+    log(TR('outOfLives', 'Жизни кончились — забег заново с начала'));
+    if (MODE !== 'race' || VIEW || !currentMap) return;
+    finSent = false;
+    pendingRaceStart = { author: currentMap.author, mapName: currentMap.mapName };
+    flushPendingRaceStart();
+  };
+  function livesTick() {
+    var box = $('gLivesBox');
+    if (!box) return;
+    var n = MODE === 'race' && !PRACTICE && GAME.playing ? GAME.raceLives : 0;
+    box.style.display = n ? '' : 'none';
+    if (n) $('gLives').textContent = Math.max(0, n - GAME.deaths) + '/' + n;
+  }
+  setInterval(livesTick, 200);
   function checkRaceFinish() {
     if (VIEW || MODE !== 'race' || !socket || !GAME.playing || !GAME.done || finSent) return;
     finSent = true;

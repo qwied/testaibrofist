@@ -16,6 +16,10 @@
     {
       "title": "Murder Mystery and Cops & Robbers",
       "text": "Hide and Seek rounds with three or more players can now be Murder Mystery or Cops & Robbers. In Murder Mystery the murderer and the sheriff are secret: the murderer takes players out by touch, and the sheriff wins by touching the murderer. In Cops & Robbers several cops hunt, caught robbers freeze in place, and other robbers can free them with a touch."
+    },
+    {
+      "title": "Race map rules",
+      "text": "Race map makers can now set lives and a time limit for their map in the editor. With limited lives, running out of them sends you back to the very start of the map (great for deathrun maps). Longer time limits of 5 or 10 minutes suit mazes, and score points scale with the map's time limit."
     }
   ]
 }
