@@ -254,16 +254,16 @@ body.mob #msg h1{font-size:38px}
 body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="offline.js?v=3"></script>
-<script src="device.js?v=183"></script>
-        <script src="sound.js?v=183"></script>
-        <script src="skinRender.js?v=183"></script>
-        <script src="skinCanvas.js?v=183"></script>
-        <script src="gifuct.bundle.js?v=183"></script>
-        <script src="gifPlayer.js?v=183"></script>
-        <script src="coin.js?v=183"></script>
-        <script src="liveText.js?v=183"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=183">
-        <script src="theme.js?v=183"></script>
+<script src="device.js?v=184"></script>
+        <script src="sound.js?v=184"></script>
+        <script src="skinRender.js?v=184"></script>
+        <script src="skinCanvas.js?v=184"></script>
+        <script src="gifuct.bundle.js?v=184"></script>
+        <script src="gifPlayer.js?v=184"></script>
+        <script src="coin.js?v=184"></script>
+        <script src="liveText.js?v=184"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=184">
+        <script src="theme.js?v=184"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1335,8 +1335,13 @@ function teleportToSeekerSpot(){
   return true;
 }
 function die(){
-  // в прятках умереть нельзя вообще — единая точка входа для любой смерти
-  if(mode === "hideAndSeek") return;
+  /* В прятках умереть нельзя вообще — единая точка входа для любой смерти. Но о касании
+     яда (и ядовитого лазера) сообщаем игре: в зомби-раунде прячущийся от яда заражается
+     (см. onHazard в game.js и hsPoisoned в server.js). */
+  if(mode === "hideAndSeek"){
+    if(typeof BRIDGE !== "undefined" && BRIDGE && BRIDGE.onHazard) BRIDGE.onHazard();
+    return;
+  }
   if(godMode) return;   // Practice: неуязвимость — та же единая точка входа
   if(pl.dead || done) return;
   pl.dead = true; deaths++; shake = 13; stat();
@@ -3603,8 +3608,8 @@ function inspect(){
   grp(TR("grpGameProps","Игровые свойства"));
   /* В прятках умереть нельзя в принципе (см. hazard()) — галочка «Яд»
      там бы включала свойство, которое физика всё равно игнорирует. */
-  if(mode !== "hideAndSeek" && ["spawn","checkpoint","finishline","zombie","teleport","seekerSpot"].indexOf(sel.type) === -1)
-    chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
+  if((mode !== "hideAndSeek" || apoc) && ["spawn","checkpoint","finishline","zombie","teleport","seekerSpot"].indexOf(sel.type) === -1)
+    chk(mode === "hideAndSeek" ? TR("chkDeadlyApoc","Яд (заражает)") : TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; });
   if(SOLID.indexOf(sel.type) !== -1)
     chk(TR("chkGhost","Проходимый (декорация)"), !!sel.ghost, function(v){ sel.ghost = v; });
   /* Прятки: за таким объектом игрок исчезает для искателя вместе с ником.
@@ -4016,8 +4021,8 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=183"></script>
-        <script src="i18n.js?v=183"></script>
-        <script src="skinAvatar.js?v=183" defer></script>
+<script src="game.js?v=184"></script>
+        <script src="i18n.js?v=184"></script>
+        <script src="skinAvatar.js?v=184" defer></script>
 </body>
 </html>

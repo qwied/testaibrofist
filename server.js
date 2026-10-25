@@ -770,12 +770,15 @@ function hsMapOf(st) {
    включить модификатор без зомби на карте вполне можно, это не ошибка. */
 function hsApplyApoc(st) {
   st.apoc = false;
+  st.hasPoison = false;
   if (!st.map) return;
   try {
     const rec = require('./maps.js').find(st.map.author, st.map.mapName);
     const data = rec && rec.mapData && JSON.parse(rec.mapData);
     if (!data || !data.apoc) return;
     const list = (data && (Array.isArray(data) ? data : data.objects)) || [];
+    // яд на зомби-карте заражает прячущегося (см. hsPoisoned)
+    st.hasPoison = list.some(o => o && o.deadly === true);
     let zb = null;
     for (let i = 0; i < list.length; i++) {
       if (list[i] && list[i].type === 'zombie') { zb = list[i]; break; }
@@ -879,7 +882,7 @@ function hsEndRoundEarly(room, st) {
    "пациента ноль" — см. hsStartRound). В обычных прятках пойманный просто
    выходит из игры — в охоту не вступает, видно по оранжевой подсветке
    ника (см. applyOut/drawTag в game.js), а не по синей полосе искателя. */
-function hsDoInfect(io, room, st, targetId, target) {
+function hsDoInfect(io, room, st, targetId, target, how) {
   st.caughtSet.add(targetId);
   const mapKey = st.map ? (st.map.author + '|' + st.map.mapName) : null;
   const roundStartedAt = st.roundStartedAt || Date.now();
@@ -902,7 +905,7 @@ function hsDoInfect(io, room, st, targetId, target) {
     st.seekerIds.add(targetId);
     if (!st.seekerOdo) st.seekerOdo = new Map();
     st.seekerOdo.set(targetId, target.odo || 0);
-    io.to(room).emit('hsInfected', { id: targetId, name: target.name });
+    io.to(room).emit('hsInfected', { id: targetId, name: target.name, poison: how === 'poison' });
   } else {
     // Обычные прятки: пойманный выходит из игры — в охоту не вступает.
     io.to(room).emit('hsOut', { id: targetId, name: target.name });
@@ -1015,6 +1018,7 @@ io.on('connection', (socket) => {
   const limRace = socketLimiter(3, 10);      // старт/финиш забега — не гоночный протокол сам по себе
   const limDraw = socketLimiter(2, 6);       // линии на карте — не спамить кистью
   const limVote = socketLimiter(3, 12);      // голос за следующую карту — можно передумать, но не спамить
+  const limPoison = socketLimiter(2, 6);     // касание яда в зомби-раунде — срабатывает раз, дальше уже зомби
   let joinedAt = 0;
 
   /* Замер задержки: клиент присылает свою метку времени, сервер возвращает
@@ -1330,6 +1334,21 @@ io.on('connection', (socket) => {
     if (!Number.isInteger(i) || i < 0 || i >= st.vote.options.length) return;
     st.vote.votes.set(socket.id, i);
     io.to(player.room).emit('hsVoteTally', { counts: hsVoteCounts(st) });
+  });
+
+  /* Прячущийся коснулся яда в зомби-раунде — сам становится зомби, как если бы его поймали
+     (см. onHazard в game.js). Заражает только себя, поэтому проверки простые: идёт охота,
+     раунд зомби, на карте есть яд, игрок ещё прячется. */
+  socket.on('hsPoisoned', () => {
+    if (limPoison()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('hideAndSeek:') !== 0) return;
+    const st = hsRooms.get(player.room);
+    if (!st || st.phase !== 'round' || !st.apoc || !st.hasPoison) return;
+    if (st.seekerIds && st.seekerIds.has(socket.id)) return;
+    if (st.caughtSet && st.caughtSet.has(socket.id)) return;
+    if (!(st.roundMembers || []).some(m => m.id === socket.id)) return;
+    hsDoInfect(io, player.room, st, socket.id, player, 'poison');
   });
 
   socket.on('hsCaught', () => {

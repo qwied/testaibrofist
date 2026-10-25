@@ -4,6 +4,14 @@
     {
       "title": "Vote for the next map",
       "text": "In Hide and Seek you can now vote for the next map during the hunt: the map card shows three maps, and the one with the most votes is played next."
+    },
+    {
+      "title": "Poison in Zombie rounds",
+      "text": "In Hide and Seek Zombie rounds, touching poison now turns a hider into a zombie. In classic rounds poison still does nothing. Map makers can mark blocks as poison in the editor when Zombie Apocalypse is on."
+    },
+    {
+      "title": "Seeker minimap",
+      "text": "Hiders now get a small map in the top left corner during the hunt that shows the level and where the seekers are."
     }
   ]
 }

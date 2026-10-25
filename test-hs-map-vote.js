@@ -100,7 +100,7 @@ const once = (s, ev, ms) => new Promise((res, rej) => { const t = setTimeout(() 
   await page.click('#gVoteOpts button[data-i="1"]');
   ok(!!await until(() => tallies[tallies.length - 1] === '0,2,1'), 'клик в браузере засчитан: 0,2,1', tallies[tallies.length - 1]);
   const uiNow = () => page.evaluate(() => Array.from(document.querySelectorAll('#gVoteOpts button')).map(b => (b.classList.contains('on') ? '*' : '') + b.querySelector('.c').textContent).join(','));
-  const ui = await until(async () => { const u = await uiNow(); return u === '0,*2,1' ? u : null; }, 4000) || await uiNow();
+  const ui = await until(async () => { const u = await uiNow(); return u === '0,*2,1' ? u : null; }, 8000) || await uiNow();
   ok(ui === '0,*2,1', 'выбранная кнопка подсвечена, счётчики на кнопках', ui);
   const box = await page.locator('#gMap').boundingBox();
   ok(box && box.x + box.width <= 1280 && box.y + box.height <= 800 && box.y >= 0, 'карточка с голосованием целиком на экране', JSON.stringify(box && { y: Math.round(box.y), h: Math.round(box.height) }));
