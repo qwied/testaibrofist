@@ -32,7 +32,8 @@ const once = (s, ev, ms) => new Promise((res, rej) => { const t = setTimeout(() 
   fs.writeFileSync(path.join(tmp, 'data', 'maps.json'), JSON.stringify(names.map(n => ({
     mapName: n, mapType: 'hideAndSeek', mapData, author: OWNER, date: Date.now(), created: Date.now(),
     rating: 0, votes: {}, boostLikes: 0, boostDislikes: 0, inGameModes: [] }))));
-  const srv = spawn('node', ['server.js'], { cwd: tmp, env: { ...process.env, PORT: String(PORT), OWNER_ALIASES: OWNER, HS_ROUND_MS: '14000' }, stdio: 'ignore' });
+  const srv = spawn('node', ['server.js'], { cwd: tmp, env: { ...process.env, PORT: String(PORT), OWNER_ALIASES: OWNER, HS_ROUND_MS: '14000',
+    HS_VARIANT: 'classic' /* голосуют втроём — вариант раунда тут ни при чём */ }, stdio: 'ignore' });
   const cleanup = () => { try { srv.kill(); } catch (e) {} try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {} };
   process.on('exit', cleanup);
   if (!await until(() => fetch(BASE + '/').then(r => r.ok).catch(() => false), 20000)) throw new Error('сервер не поднялся');

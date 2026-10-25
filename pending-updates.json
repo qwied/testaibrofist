@@ -12,6 +12,10 @@
     {
       "title": "Seeker minimap",
       "text": "Hiders now get a small map in the top left corner during the hunt that shows the level and where the seekers are."
+    },
+    {
+      "title": "Murder Mystery and Cops & Robbers",
+      "text": "Hide and Seek rounds with three or more players can now be Murder Mystery or Cops & Robbers. In Murder Mystery the murderer and the sheriff are secret: the murderer takes players out by touch, and the sheriff wins by touching the murderer. In Cops & Robbers several cops hunt, caught robbers freeze in place, and other robbers can free them with a touch."
     }
   ]
 }

@@ -1156,7 +1156,8 @@
      обычный цвет. */
   function applyColor() {
     if (MODE === 'hideAndSeek' && !hsApocRound) {
-      if (me.role === 'seeker') { GAME.myColor = COLOR_SEEKER; return; }
+      // убийца в Murder Mystery выглядит как все — его роль тайная
+      if (me.role === 'seeker' && hsVariant !== 'murder') { GAME.myColor = COLOR_SEEKER; return; }
       if (me.caught) { GAME.myColor = COLOR_CAUGHT; return; }
     }
     GAME.myColor = COLOR_NORMAL;
@@ -1168,6 +1169,7 @@
      их снова. */
   function clearCaught() {
     me.caught = false;
+    GAME.frozen = false;          // Cops and Robbers: новый раунд — из тюрьмы все выходят
     Object.keys(others).forEach(function (id) { others[id].caught = false; });
     caughtNames = {};
     hsSeekerIds = {};
@@ -1182,6 +1184,10 @@
   // заражённые (искатели) выглядят зомби, а не обычной фигуркой —
   // см. syncMeIsZombie() и GAME.figureZombie в GAME.onDraw ниже
   var hsApocRound = false;
+  /* Вариант раунда (см. hsPickVariant в server.js): classic | zombie | murder | cops.
+     В Murder Mystery роль у каждого своя и тайная — её присылает только сервер (hsSecret). */
+  var hsVariant = 'classic';
+  var hsSecret = null;            // murderer | sheriff | innocent
   function syncMeIsZombie() {
     GAME.meIsZombie = !!(hsApocRound && me.role === 'seeker');
   }
@@ -1192,8 +1198,11 @@
     // apoc-раунд называет охотника зомби, а не искателем — та же роль
     // внутри (seeker), просто другая тема (см. hsApocRound/syncMeIsZombie)
     $('gRole').textContent = role === 'seeker'
-      ? (hsApocRound ? TR('roleZombie', 'Зомби') : TR('roleSeeker', 'Искатель'))
-      : TR('roleHider', 'Прячется');
+      ? (hsApocRound ? TR('roleZombie', 'Зомби')
+        : hsVariant === 'murder' ? TR('roleMurderer', 'Убийца')
+        : hsVariant === 'cops' ? TR('roleCop', 'Коп') : TR('roleSeeker', 'Искатель'))
+      : (hsVariant === 'murder' ? (hsSecret === 'sheriff' ? TR('roleSheriff', 'Шериф') : TR('roleInnocent', 'Невиновный'))
+        : hsVariant === 'cops' ? TR('roleRobber', 'Грабитель') : TR('roleHider', 'Прячется'));
     applyColor();
     syncMeIsZombie();
   }
@@ -1202,15 +1211,45 @@
      не меняется. Видно по оранжевой полосе под ником (см. drawTag), а не
      по синей, как у искателя/зомби. Событие приходит от сервера (hsOut) —
      решает только он (см. hsDoInfect в server.js). */
-  function applyOut(id, name) {
+  function applyOut(id, name, d) {
+    d = d || {};
     if (id === socket.id) {
       me.caught = true;
+      // Cops and Robbers: пойманный замирает, пока его не освободят (см. frz в game.html)
+      if (d.jail) GAME.frozen = true;
       applyColor();
       if (window.BFSound) BFSound.death();
     } else if (others[id]) {
       others[id].caught = true;
     }
-    log(TR('hsOut', '{n} пойман и выходит из игры').replace('{n}', esc(name || nameOfId(id))));
+    var n = esc(name || nameOfId(id));
+    log(d.murderer ? TR('mmCaught', 'Шериф поймал убийцу — это {n}!').replace('{n}', '<b>' + n + '</b>')
+      : d.jail ? TR('hsJailed', '{n} арестован — коснись его, чтобы освободить').replace('{n}', n)
+      : TR('hsOut', '{n} пойман и выходит из игры').replace('{n}', n));
+  }
+
+  /* Роли Murder Mystery и Cops and Robbers: рулетки игроков нет — кто убийца, знать нельзя,
+     а копов сразу несколько. Роль приходит вместе с вариантом (hsRoulette/hsSecret/hsState);
+     эта функция только раскладывает её по hsSeekerIds и подписи. */
+  function fixVariantRole() {
+    if (hsVariant === 'murder') {
+      if (hsSecret === 'murderer') hsSeekerIds[socket.id] = true;
+      setRole(hsSecret === 'murderer' ? 'seeker' : 'hider');
+    } else if (hsVariant === 'cops') {
+      setRole(hsSeekerIds[socket.id] ? 'seeker' : 'hider');
+    }
+  }
+  function variantRoleText() {
+    if (hsVariant === 'cops') return me.role === 'seeker' ? TR('roulYouCop', 'Ты коп!') : TR('roulYouRobber', 'Ты грабитель!');
+    return hsSecret === 'murderer' ? TR('roulYouMurderer', 'Ты убийца!')
+      : hsSecret === 'sheriff' ? TR('roulYouSheriff', 'Ты шериф!') : TR('roulYouInnocent', 'Ты невиновный!');
+  }
+  function variantHint() {
+    if (hsVariant === 'cops') return me.role === 'seeker' ? TR('hintCop', 'Лови грабителей — пойманные замирают на месте.')
+      : TR('hintRobber', 'Прячься от копов и касанием освобождай пойманных.');
+    return hsSecret === 'murderer' ? TR('hintMurderer', 'Касанием выбивай игроков. Берегись шерифа — его касание тебя поймает!')
+      : hsSecret === 'sheriff' ? TR('hintSheriff', 'Найди убийцу и коснись его. Невиновным твоё касание не вредит.')
+      : TR('hintInnocent', 'Прячься и выживи. Кто убийца — неизвестно никому.');
   }
 
   /* ---------- рулетка искателя (прятки) ----------
@@ -1399,12 +1438,18 @@
      искателя и так на него намекала. Короткая — только объявляет режим,
      не отнимает заметную часть времени на прятки (см. onDone ниже: для
      классики за ней сразу следует обычная рулетка искателя). */
-  function runModeRoulette(apoc, onDone) {
+  var VARIANTS = ['classic', 'zombie', 'murder', 'cops'];
+  function variantName(v) {
+    return v === 'zombie' ? TR('modeApoc', 'Zombie Apocalypse') : v === 'murder' ? TR('modeMurder', 'Murder Mystery')
+      : v === 'cops' ? TR('modeCops', 'Cops & Robbers') : TR('modeClassic', 'Classic');
+  }
+  function runModeRoulette(variant, onDone) {
     roulStop();
     var box = $('gRoul'), view = $('gRoulView'), track = $('gRoulTrack');
     var res = $('gRoulRes');
-    var list = [{ name: TR('modeClassic', 'Classic') }, { name: TR('modeApoc', 'Zombie Apocalypse') }];
-    var winIdx = apoc ? 1 : 0;
+    var list = VARIANTS.map(function (v) { return { name: variantName(v) }; });
+    var winIdx = Math.max(0, VARIANTS.indexOf(variant));
+    var special = variant === 'murder' || variant === 'cops';
 
     banner('', '', false);
     document.body.classList.add('hasRoulette');
@@ -1412,7 +1457,7 @@
     var seq = [], edge = 3;
     while (seq.length < edge) seq = seq.concat(list);
     var startIdx = seq.length;
-    var pass = 6 + Math.floor(Math.random() * 3);   // короче, чем у искателя — тут всего 2 исхода
+    var pass = 6 + Math.floor(Math.random() * 3);   // короче, чем у искателя — исходов всего 4
     while (seq.length < startIdx + pass) seq = seq.concat(list);
     var target = seq.length + winIdx;
     seq = seq.concat(list);
@@ -1458,9 +1503,16 @@
     roulTimers.push(setTimeout(function () {
       pills[target].classList.add('rWin');
       if (window.BFSound) BFSound.roulLand();
-      res.textContent = apoc ? TR('modeApoc', 'Zombie Apocalypse') : TR('modeClassic', 'Classic');
+      res.textContent = variantName(variant);
       res.classList.add('on');
       roulTimers.push(setTimeout(function () {
+        // Murder Mystery и Cops and Robbers: рулетки игроков нет — под режимом сразу своя роль
+        if (special) {
+          var t = onDone ? onDone() : '';
+          if (t) res.textContent = t;
+          roulTimers.push(setTimeout(roulStop, 2400));
+          return;
+        }
         roulStop();
         if (onDone) onDone();
       }, 1100));
@@ -2018,7 +2070,7 @@
     // Классика: пойманный просто выходит из игры (см. applyOut/hsDoInfect)
     socket.on('hsOut', function (d) {
       if (MODE !== 'hideAndSeek' || !d || !d.id) return;
-      applyOut(d.id, d.name);
+      applyOut(d.id, d.name, d);
     });
 
     /* ---------- прятки: серверные события ---------- */
@@ -2038,6 +2090,8 @@
          никого зомби не красит: роль/hsSeekerIds ниже всё равно сброшены
          на время самого вращения (см. setRole('hider')/clearCaught()). */
       hsApocRound = !!d.apoc;
+      hsVariant = d.variant || (d.apoc ? 'zombie' : 'classic');
+      hsSecret = null;                   // тайная роль придёт следом (hsSecret)
       setRole('hider');
       $('gRoleBox').style.display = 'none';
       clearCaught();
@@ -2047,11 +2101,52 @@
       // server.js). msLeft пересчитываем на момент фактического запуска —
       // от phaseEnds, а не берём д.msLeft как есть: он успел устареть на
       // время показа рулетки режима
-      runModeRoulette(!!d.apoc, function () {
+      runModeRoulette(hsVariant, function () {
+        if (hsVariant === 'murder' || hsVariant === 'cops') {
+          // роли раздал сервер: копы — всем (d.cops), убийца и шериф — каждому свою (hsSecret)
+          (d.cops || []).forEach(function (c) { hsSeekerIds[c.id] = true; });
+          hsWinnerId = 'variant';        // прятки начались — никого не видно (см. hsHiding в onDraw)
+          fixVariantRole();
+          if (hsVariant === 'cops' && d.cops && d.cops.length)
+            log(TR('copsAre', 'Копы: {n}').replace('{n}', d.cops.map(function (c) { return '<b>' + esc(c.name) + '</b>'; }).join(', ')));
+          else log(variantHint());
+          // коп ждёт на метке искателя, как в классике; убийце туда нельзя — выдаст себя
+          if (hsVariant === 'cops' && me.role === 'seeker' && GAME.seekerWaitSpot) GAME.seekerWaitSpot();
+          if (window.BFSound) BFSound.roulLand();
+          return variantRoleText();
+        }
         d.msLeft = phaseEnds - Date.now();
         runRoulette(d);
         showChance((d.players) || []);
       });
+    });
+
+    // Murder Mystery: своя тайная роль — приходит только этому игроку
+    socket.on('hsSecret', function (d) {
+      if (MODE !== 'hideAndSeek' || !d) return;
+      hsSecret = d.role === 'murderer' || d.role === 'sheriff' ? d.role : 'innocent';
+    });
+
+    // Cops and Robbers: пойманного освободили
+    socket.on('hsFreed', function (d) {
+      if (MODE !== 'hideAndSeek' || !d || !d.id) return;
+      if (d.id === socket.id) { me.caught = false; GAME.frozen = false; applyColor(); }
+      else if (others[d.id]) others[d.id].caught = false;
+      log(TR('hsFreed', '{b} освободил {n}!').replace('{b}', '<b>' + esc(d.by || '') + '</b>').replace('{n}', '<b>' + esc(d.name || nameOfId(d.id)) + '</b>'));
+    });
+
+    // итог раунда Murder Mystery и Cops and Robbers (см. hsRevealRound в server.js)
+    socket.on('hsReveal', function (d) {
+      if (MODE !== 'hideAndSeek' || !d) return;
+      var m = '<b>' + esc(d.murderer || '') + '</b>';
+      if (d.variant === 'murder') {
+        log(d.winner === 'murderer' ? TR('mmWinMurderer', 'Убийца {m} выбил всех!').replace('{m}', m)
+          : d.winner === 'sheriff' ? TR('mmWinSheriff', 'Невиновные победили — шериф поймал убийцу {m}!').replace('{m}', m)
+          : TR('mmWinTime', 'Время вышло — невиновные выжили! Убийцей был {m}.').replace('{m}', m));
+      } else if (d.variant === 'cops') {
+        log(d.winner === 'cops' ? TR('copsWin', 'Копы победили — все грабители пойманы!')
+          : TR('robbersWin', 'Грабители победили — на свободе: {n}').replace('{n}', String(d.free || 0)));
+      }
     });
 
     // смена фазы: конец рулетки/прятаний — начало охоты и обратно
@@ -2101,8 +2196,12 @@
         // apoc-раунд: заражённые выглядят зомби (см. syncMeIsZombie) —
         // у apoc нет искателя-человека, applySeeker ниже не позовут вовсе
         hsApocRound = !!d.apoc;
+        if (d.variant) hsVariant = d.variant;
         syncMeIsZombie();
         if (d.seekerId) applySeeker(d.seekerId);
+        // копы — все сразу; убийца тайный: его знает только он сам (fixVariantRole)
+        (d.seekerIds || []).forEach(function (id) { hsSeekerIds[id] = true; });
+        fixVariantRole();
         /* Охота начинается — искатель стартует со своей точки старта, а
            не там, где стоял во время подготовки (мог сам уйти прятаться
            заранее и подсмотреть, куда бегут остальные). Ждём, пока карта
@@ -2110,11 +2209,13 @@
            комнаты она ещё грузится по сети, и respawn() до этого момента
            работал по пустому/старому spawnPt и никуда не телепортировал. */
         var teleportSeeker = function () {
-          if (me.role === 'seeker' && GAME.respawn) GAME.respawn();
+          // убийцу не переносим: появиться у старта на глазах у всех — выдать себя
+          if (me.role === 'seeker' && hsVariant !== 'murder' && GAME.respawn) GAME.respawn();
         };
         if (!STORY) loadServerMap(d.map, teleportSeeker); else teleportSeeker();
         log(d.apoc ? TR('roundStartApoc', 'Раунд начался! Зомби уже идёт за кем-то...')
-                   : TR('roundStart', 'Раунд начался! 2 минуты'));
+          : hsVariant === 'murder' || hsVariant === 'cops' ? variantHint()
+          : TR('roundStart', 'Раунд начался! 2 минуты'));
         if (window.BFSound) BFSound.go();
       } else if (d.phase === 'lobby') {
         setVote(null);
@@ -2134,6 +2235,7 @@
            рулетка ещё крутится, и "пациент ноль" на приземлении рулетки
            опять получал бы ярлык обычного искателя вместо зомби. */
         hsApocRound = !!d.apoc;
+        if (d.variant) hsVariant = d.variant;
         setRole('hider');
         $('gRoleBox').style.display = 'none';
         clearCaught();
@@ -2164,6 +2266,8 @@
       phaseEnds = Date.now() + (Number(d.msLeft) || (d.phase === 'round' ? ROUND_MS : LOBBY_MS));
       // зашли посреди игры — сразу на ту же карту, что у остальных
       if (!STORY) loadServerMap(d.map);
+      hsVariant = d.variant || (d.apoc ? 'zombie' : 'classic');
+      hsSecret = d.role || null;
       if (d.phase === 'round') {
         roulStop();
         // зашли посреди уже идущей охоты — рулетку не видели и не увидим,
@@ -2177,6 +2281,13 @@
           hsSeekerIds[id] = true;
           if (id === socket.id) setRole('seeker');
         });
+        fixVariantRole();
+        // кто уже пойман: выбыл, убит или сидит в тюрьме (Cops and Robbers — и сам замирает)
+        (d.out || []).forEach(function (id) {
+          if (id === socket.id) { me.caught = true; if (hsVariant === 'cops') GAME.frozen = true; }
+          else if (others[id]) others[id].caught = true;
+        });
+        applyColor();
         syncMeIsZombie();
         setVote(d.vote);
       } else {
@@ -2186,7 +2297,11 @@
         // ненадолго показывало бы обычного искателя вместо зомби
         hsApocRound = !!d.apoc;
         clearCaught();
-        if (d.seekerId) {
+        if (hsVariant === 'murder' || hsVariant === 'cops') {
+          (d.seekerIds || []).forEach(function (id) { hsSeekerIds[id] = true; });
+          hsWinnerId = 'variant';
+          fixVariantRole();
+        } else if (d.seekerId) {
           applySeeker(d.seekerId);
           log(TR('roulSeekerIs', 'Искатель: ') + '<b>' + esc(nameOfId(d.seekerId)) + '</b>');
           // классика: догоняем и ожидание на метке, если она есть на карте
@@ -2263,8 +2378,36 @@
     checkAllFinished();
     checkRaceFinish();
 
+    /* Murder Mystery и Cops and Robbers: решает только сервер — заранее никого не помечаем
+       и в чат «caught!» не пишем (выдало бы убийцу). Повтор по той же цели — не чаще раза
+       в 1.2 с: пока сервер не ответил, касание длится десятки кадров. */
+    var special = hsVariant === 'murder' || hsVariant === 'cops';
+    function touching(o) { return Math.abs(o.tx - p.x) < 34 && Math.abs(o.ty - p.y) < 60; }
+    function sendOnce(ev, id) {
+      var now = Date.now();
+      if (now - (touchSentAt[ev + id] || 0) < 1200) return;
+      touchSentAt[ev + id] = now;
+      socket.emit(ev, { targetId: id });
+    }
+    if (MODE === 'hideAndSeek' && phase === 'round' && special && !me.caught && me.role !== 'seeker') {
+      Object.keys(others).forEach(function (id) {
+        var o = others[id];
+        if (!touching(o)) return;
+        // шериф: касание проверяет сервер — убийцу поймает, невиновному ничего не будет
+        if (hsVariant === 'murder' && hsSecret === 'sheriff' && !o.caught) sendOnce('hsCatch', id);
+        // грабитель освобождает пойманного своего
+        if (hsVariant === 'cops' && o.caught && !hsSeekerIds[id]) sendOnce('hsFree', id);
+      });
+    }
     // искатель ловит прячущихся касанием
-    if (MODE === 'hideAndSeek' && me.role === 'seeker' && phase === 'round') {
+    if (MODE === 'hideAndSeek' && me.role === 'seeker' && phase === 'round' && special && !me.caught) {
+      Object.keys(others).forEach(function (id) {
+        var o = others[id];
+        if (o.caught || hsSeekerIds[id] || !touching(o)) return;
+        sendOnce('hsCatch', id);
+      });
+    }
+    if (MODE === 'hideAndSeek' && me.role === 'seeker' && phase === 'round' && !special) {
       Object.keys(others).forEach(function (id) {
         var o = others[id];
         // в охоте укрытие уже не спасает — иначе поймать было бы некого;
@@ -2292,6 +2435,8 @@
       checkAllCaught();
     }
   }, 33);
+
+  var touchSentAt = {};
 
   /* Раунд заканчивается, как только пойманы все. Таймер после этого
      дотикивал впустую: искать было уже некого. */
@@ -2349,7 +2494,9 @@
   function drawMini() {
     var cv = $('gMini');
     if (!cv) return;
-    var show = MODE === 'hideAndSeek' && !VIEW && phase === 'round' && me.role !== 'seeker' && !me.caught && GAME.playing;
+    // в Murder Mystery охотник тайный — показывать на мини-карте нечего
+    var show = MODE === 'hideAndSeek' && !VIEW && phase === 'round' && me.role !== 'seeker' && !me.caught && GAME.playing
+      && hsVariant !== 'murder';
     cv.style.display = show ? 'block' : 'none';
     if (!show) return;
     var now = Date.now();

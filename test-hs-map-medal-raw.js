@@ -90,7 +90,9 @@ function cleanupUsers() {
   seedMap();
   const child = spawn(process.execPath, ['server.js'], {
     cwd: __dirname,
-    env: Object.assign({}, process.env, { PORT: String(PORT), PASSWORD_AUTH: '1', OWNER_ALIASES: OWNER, HS_ROUND_MS: String(HS_ROUND_MS) }),
+    env: Object.assign({}, process.env, { PORT: String(PORT), PASSWORD_AUTH: '1', OWNER_ALIASES: OWNER, HS_ROUND_MS: String(HS_ROUND_MS),
+      // сценарий — классика; при трёх игроках рулетка иначе может выбрать Murder Mystery или Cops and Robbers
+      HS_VARIANT: 'classic' }),
     stdio: ['ignore', 'pipe', 'pipe']
   });
   let childErr = '';

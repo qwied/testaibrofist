@@ -76,7 +76,9 @@ function unseedMap() {
   seedMap();
   const child = spawn(process.execPath, ['server.js'], {
     cwd: __dirname,
-    env: Object.assign({}, process.env, { PORT: String(PORT), OWNER_ALIASES: OWNER, HS_ROUND_MS: '6000' }),
+    env: Object.assign({}, process.env, { PORT: String(PORT), OWNER_ALIASES: OWNER, HS_ROUND_MS: '6000',
+      // сценарий — классика; при трёх игроках рулетка иначе может выбрать Murder Mystery или Cops and Robbers
+      HS_VARIANT: 'classic' }),
     stdio: ['ignore', 'pipe', 'pipe']
   });
   let childErr = '';

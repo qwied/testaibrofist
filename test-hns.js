@@ -112,7 +112,9 @@ ok('путь прячущегося считается с лобби', /st\.lobb
 // добавляет новых по ходу раунда, у каждого путь считается с момента
 // заражения, а не с чужого старта)
 ok('путь каждого искателя считается за раунд от своей отметки',
-    /st\.seekerOdo = new Map\(\[\[st\.seekerId, sp0 \? \(sp0\.odo \|\| 0\) : 0\]\]\);/.test(srv)
+    // отметка на старте раунда — у каждого охотника своя (копов в Cops and Robbers несколько)
+    /const odoOf = \(id\) => \{ const p = gameState\.players\.get\(id\); return p \? \(p\.odo \|\| 0\) : 0; \};/.test(srv)
+    && /st\.seekerOdo = new Map\(hunters\.map\(id => \[id, odoOf\(id\)\]\)\);/.test(srv)
     && /const base = st\.seekerOdo \? \(st\.seekerOdo\.get\(socket\.id\) \|\| 0\) : 0;/.test(srv)
     && /\(player\.odo \|\| 0\) - base < HS_MIN_DIST/.test(srv));
 ok('за всю сессию путь больше не считают', !/if \(\(player\.odo \|\| 0\) < HS_MIN_DIST\) return;/.test(srv));
