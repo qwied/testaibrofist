@@ -1,4 +1,9 @@
 {
   "base": "25d75a873bc66ff260e31429d79dba5850a550f1",
-  "updates": []
+  "updates": [
+    {
+      "title": "Vote for the next map",
+      "text": "In Hide and Seek you can now vote for the next map during the hunt: the map card shows three maps, and the one with the most votes is played next."
+    }
+  ]
 }

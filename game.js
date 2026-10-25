@@ -183,6 +183,17 @@
     + '#gMap .rate{margin-top:7px;display:flex;gap:6px;align-items:center}'
     + '#gMap .rate button{border:1px solid #111827;background:#fff;color:#111827;border-radius:5px;'
     + 'padding:4px 11px;cursor:pointer;font-size:13px}'
+    /* голосование за следующую карту — прямо в карточке карты, только во время охоты */
+    + '#gVote{margin-top:8px;padding-top:7px;border-top:1px solid #e5e7eb}'
+    + '#gVote .t{color:#6b7280;margin-bottom:5px}'
+    + '#gVote button{display:flex;align-items:center;gap:8px;width:100%;margin-top:4px;border:1px solid #d7dee7;'
+    + 'background:#fff;color:#111827;border-radius:6px;padding:4px 8px;cursor:pointer;font:12px sans-serif;text-align:left}'
+    + '#gVote button .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    + '#gVote button .c{font-weight:bold;color:#6b7280}'
+    + '#gVote button.on{background:#111827;border-color:#111827;color:#fff}'
+    + '#gVote button.on .c{color:#e5e7eb}'
+    // на телефоне общая высота кнопок 44px съела бы полэкрана на весь раунд — здесь пониже
+    + 'html.is-mobile #gVote button,html.is-tablet #gVote button{min-height:30px;padding:3px 8px;margin-top:3px}'
     + '#gBanner{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100%;height:100%;z-index:70;display:none;align-items:center;justify-content:center;'
     + 'flex-direction:column;gap:9px;background:rgba(255,255,255,.93);font:16px sans-serif;text-align:center;padding:24px}'
     + '#gBanner h2{margin:0;font-size:25px}'
@@ -397,7 +408,8 @@
     + '<button data-v="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
     + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">'
     + '<path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg></button>'
-    + '<span id="gRating" style="color:#6b7280"></span></div></div>'
+    + '<span id="gRating" style="color:#6b7280"></span></div>'
+    + '<div id="gVote" style="display:none"><div class="t" id="gVoteT">Next map</div><div id="gVoteOpts"></div></div></div>'
     + '<div id="gBanner"><h2 id="gbT"></h2><p id="gbP"></p></div>'
     + '<div id="gRoul"><div id="gRoulView"><div id="gRoulTrack"></div></div>'
     + '<div id="gRoulRes"></div></div>'
@@ -2025,6 +2037,36 @@
     });
 
     // смена фазы: конец рулетки/прятаний — начало охоты и обратно
+    /* ---------- голосование за следующую карту (см. hsOpenVote в server.js) ----------
+       Во время охоты сервер предлагает до трёх карт; голос можно поменять. Победившая
+       карта загрузится в следующем лобби. */
+    var voteState = null, myVote = -1;
+    function renderVote() {
+      var box = $('gVote'), opts = $('gVoteOpts');
+      if (!voteState || !voteState.options || voteState.options.length < 2 || MODE !== 'hideAndSeek') { box.style.display = 'none'; return; }
+      $('gVoteT').textContent = TR('hsVoteTitle', 'Следующая карта');
+      opts.innerHTML = voteState.options.map(function (o, i) {
+        var c = (voteState.counts && voteState.counts[i]) || 0;
+        return '<button data-i="' + i + '"' + (i === myVote ? ' class="on"' : '') + ' title="' + esc(o.mapName + ' — ' + o.author) + '">'
+          + '<span class="nm">' + esc(o.mapName) + '</span><span class="c">' + c + '</span></button>';
+      }).join('');
+      box.style.display = 'block';
+    }
+    function setVote(v) { voteState = v || null; myVote = -1; renderVote(); }
+    $('gVoteOpts').addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('button[data-i]') : null;
+      if (!b || !voteState) return;
+      myVote = Number(b.getAttribute('data-i'));
+      socket.emit('hsVote', { i: myVote });
+      renderVote();
+    });
+    socket.on('hsVote', function (v) { if (MODE === 'hideAndSeek') setVote(v); });
+    socket.on('hsVoteTally', function (d) {
+      if (!voteState || !d || !Array.isArray(d.counts)) return;
+      voteState.counts = d.counts;
+      renderVote();
+    });
+
     socket.on('hsPhase', function (d) {
       hsSync = true; hsEver = true;
       if (MODE !== 'hideAndSeek' || !d || !d.phase) return;
@@ -2057,6 +2099,8 @@
                    : TR('roundStart', 'Раунд начался! 2 минуты'));
         if (window.BFSound) BFSound.go();
       } else if (d.phase === 'lobby') {
+        setVote(null);
+        if (d.voted && d.map) log(TR('hsVoteDone', 'Голосованием выбрана карта: {m}').replace('{m}', '<b>' + esc(d.map.mapName) + '</b>'));
         // дожил до конца раунда прячущимся — личный успех (значения ещё
         // не сброшены нижеидущими строками). Пойманного искатель уже
         // озвучил через checkAllCaught() выше
@@ -2116,7 +2160,9 @@
           if (id === socket.id) setRole('seeker');
         });
         syncMeIsZombie();
+        setVote(d.vote);
       } else {
+        setVote(null);
         // d.apoc здесь тоже уже известен (см. тот же фикс в hsRoulette/
         // hsPhase('lobby') выше) — догоняющему во время apoc-лобби иначе
         // ненадолго показывало бы обычного искателя вместо зомби

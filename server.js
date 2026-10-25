@@ -712,10 +712,50 @@ function hsEndStory(io, room, st) {
    у себя он стоит на платформе. Story-комнаты сюда не попадают: там
    карта задана приглашением (см. story.js) и не меняется всю сессию. */
 function hsPickMap(st) {
+  st.mapVoted = false;
   if (st.storyMap) return;                     // карта из приглашения — не трогаем
+  // за следующую карту голосовали во время охоты — берём победившую (см. hsOpenVote)
+  const won = hsVoteWinner(st);
+  st.vote = null;
+  if (won && require('./maps.js').find(won.author, won.mapName)) {
+    st.map = { author: won.author, mapName: won.mapName };
+    st.mapVoted = true;
+    return;
+  }
   const prev = st.map ? st.map.mapName : '';
   const m = require('./maps.js').randomFor('hideAndSeek', prev);
   st.map = m ? { author: m.author, mapName: m.mapName } : null;
+}
+
+/* Голосование за следующую карту: во время охоты комнате предлагается до
+   HS_VOTE_OPTIONS карт, каждый может выбрать одну (и передумать), а в
+   начале следующего лобби берётся карта с большинством голосов. Ничья —
+   жребий среди лидеров; никто не проголосовал — жребий среди предложенных.
+   Если карт для выбора меньше двух, голосования нет — карту, как и раньше,
+   выбирает сервер. Story-комнаты не голосуют: их карта задана приглашением. */
+const HS_VOTE_OPTIONS = 3;
+function hsOpenVote(io, room, st) {
+  st.vote = null;
+  if (st.storyMap) return;
+  const cand = require('./maps.js').candidatesFor('hideAndSeek', st.map ? st.map.mapName : '', HS_VOTE_OPTIONS);
+  if (cand.length < 2) return;
+  st.vote = { options: cand.map(m => ({ author: m.author, mapName: m.mapName })), votes: new Map() };
+  io.to(room).emit('hsVote', hsVoteState(st));
+}
+function hsVoteCounts(st) {
+  const counts = st.vote.options.map(() => 0);
+  st.vote.votes.forEach((i) => { if (counts[i] !== undefined) counts[i]++; });
+  return counts;
+}
+function hsVoteState(st) {
+  return st && st.vote ? { options: st.vote.options, counts: hsVoteCounts(st) } : null;
+}
+function hsVoteWinner(st) {
+  if (!st.vote || !st.vote.options.length) return null;
+  const counts = hsVoteCounts(st);
+  const best = Math.max.apply(null, counts);
+  const top = st.vote.options.filter((o, i) => counts[i] === best);
+  return top[Math.floor(Math.random() * top.length)];
 }
 // одна и та же подпись карты во всех событиях комнаты
 function hsMapOf(st) {
@@ -772,7 +812,8 @@ function hsStartLobby(io, room, st) {
   // искателя — дальше он охотится и заражает ровно как человек-искатель
   // (см. hsStartRound/hsDoInfect), просто выглядит зомби (см. game.js)
   hsSpin(io, room, st);
-  io.to(room).emit('hsPhase', { phase: 'lobby', msLeft: HS_LOBBY_MS, roundNum: st.roundNum, map: hsMapOf(st), apoc: !!st.apoc });
+  io.to(room).emit('hsPhase', { phase: 'lobby', msLeft: HS_LOBBY_MS, roundNum: st.roundNum, map: hsMapOf(st), apoc: !!st.apoc,
+                                voted: !!st.mapVoted });
   clearTimeout(st.timer);
   st.timer = setTimeout(() => hsStartRound(io, room, st), st.endsAt - Date.now());
 }
@@ -815,6 +856,7 @@ function hsStartRound(io, room, st) {
   st.seekerIds = new Set([st.seekerId]);
   io.to(room).emit('hsPhase', { phase: 'round', msLeft: HS_ROUND_MS,
     seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st), apoc: !!st.apoc });
+  hsOpenVote(io, room, st);
   clearTimeout(st.timer);
   st.timer = setTimeout(() => hsStartLobby(io, room, st), HS_ROUND_MS);
 }
@@ -906,6 +948,7 @@ function hsOnCaught(room, socketId) {
 function hsOnLeave(io, room, leftId) {
   const st = hsRooms.get(room);
   if (!st) return;
+  if (leftId && st.vote && st.vote.votes.delete(leftId)) io.to(room).emit('hsVoteTally', { counts: hsVoteCounts(st) });
   const set = gameState.rooms.get(room);
   if (!set || set.size === 0) {
     clearTimeout(st.timer);
@@ -971,6 +1014,7 @@ io.on('connection', (socket) => {
   const limHsCatch = socketLimiter(8, 30);   // индивидуальных поимок в комнате в раунде немного, но с запасом
   const limRace = socketLimiter(3, 10);      // старт/финиш забега — не гоночный протокол сам по себе
   const limDraw = socketLimiter(2, 6);       // линии на карте — не спамить кистью
+  const limVote = socketLimiter(3, 12);      // голос за следующую карту — можно передумать, но не спамить
   let joinedAt = 0;
 
   /* Замер задержки: клиент присылает свою метку времени, сервер возвращает
@@ -1146,7 +1190,8 @@ io.on('connection', (socket) => {
           // догоняющему нужен весь список охотящихся — не только исходного
           // искателя, но и всех, кого заразили до его входа (см. hsCatch)
           seekerIds: st.seekerIds ? Array.from(st.seekerIds) : [],
-          apoc: !!st.apoc });
+          apoc: !!st.apoc,
+          vote: st.phase === 'round' ? hsVoteState(st) : null });
       }
     }
 
@@ -1273,6 +1318,20 @@ io.on('connection', (socket) => {
   });
 
   // прятки: искатель сообщил, что поймал всех — раунд можно заканчивать досрочно
+  /* Голос за следующую карту (см. hsOpenVote). Только во время охоты и
+     только за одну из предложенных карт; повторный голос заменяет прежний. */
+  socket.on('hsVote', (data) => {
+    if (limVote()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('hideAndSeek:') !== 0) return;
+    const st = hsRooms.get(player.room);
+    if (!st || st.phase !== 'round' || !st.vote) return;
+    const i = Number(data && data.i);
+    if (!Number.isInteger(i) || i < 0 || i >= st.vote.options.length) return;
+    st.vote.votes.set(socket.id, i);
+    io.to(player.room).emit('hsVoteTally', { counts: hsVoteCounts(st) });
+  });
+
   socket.on('hsCaught', () => {
     if (limCaught()) return;
     const player = gameState.players.get(socket.id);

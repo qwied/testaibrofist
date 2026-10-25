@@ -230,17 +230,35 @@ const low = s => String(s || '').toLowerCase();
    и игроки одной комнаты оказывались на разных картах — чужой персонаж
    при этом честно приходил с правильными координатами, но падал на
    другую геометрию и выглядел «парящим в воздухе». */
-function randomFor(mapType, not) {
-  const t = mapType;
-  // без указания режима берём любую карту, иначе — карты владельца
-  // плюс те, что он добавил кнопкой «Добавить в игру» в Maps Browser
-  const pool = !t
+// без указания режима — любая карта, иначе — карты владельца
+// плюс те, что он добавил кнопкой «Добавить в игру» в Maps Browser
+function poolFor(t) {
+  return !t
     ? maps.filter(m => !m.showcase)
     : maps.filter(m => {
         // владелец мог вручную добавить карту в конкретный режим — даже витрину
         if (Array.isArray(m.inGameModes) && m.inGameModes.indexOf(t) !== -1) return true;
         return !m.showcase && isOwnerName(m.author) && m.mapType === t;
       });
+}
+
+/* До n разных карт режима для голосования за следующую карту в прятках
+   (см. hsOpenVote в server.js). Текущую карту предлагаем только тогда,
+   когда без неё выбирать не из чего. */
+function candidatesFor(mapType, not, n) {
+  const pool = poolFor(mapType).slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const x = pool[i]; pool[i] = pool[j]; pool[j] = x;
+  }
+  const others = pool.filter(m => m.mapName !== not);
+  const pick = others.slice(0, n);
+  if (pick.length < Math.min(n, pool.length)) pool.forEach(m => { if (pick.length < n && pick.indexOf(m) === -1) pick.push(m); });
+  return pick;
+}
+
+function randomFor(mapType, not) {
+  const pool = poolFor(mapType);
   if (!pool.length) return null;
   let m = pool[Math.floor(Math.random() * pool.length)];
   // не повторяем ту же карту подряд, если есть выбор
@@ -889,4 +907,4 @@ function newFromFriends(user) {
   return out;
 }
 
-module.exports = { register, reload: load, MODES, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, allMaps, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, renameAuthor };
+module.exports = { register, reload: load, MODES, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, allMaps, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, candidatesFor, renameAuthor };
