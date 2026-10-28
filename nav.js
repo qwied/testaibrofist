@@ -38,7 +38,7 @@
      раньше клик искал ROUTES[переведённый текст], и на любом языке,
      кроме русского и английского, карточка переставала вести куда-либо:
      ни одного перевода не было в ROUTES. */
-  var MODE_ROUTES = { hideAndSeek: 'hide-and-seek', race: 'race', murder: 'murder-mystery', team: 'team-battle', war: 'war', party: 'party' };
+  var MODE_ROUTES = { hideAndSeek: 'hide-and-seek', race: 'race', murder: 'murder-mystery', team: 'team-battle', war: 'war', party: 'party', adventure: 'adventure' };
 
   function go(target) {
     if (typeof target === 'string') { location.href = target; return; }

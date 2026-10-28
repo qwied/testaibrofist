@@ -5,11 +5,11 @@
 <title>AIBrofist</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="AIBrofist game modes: Murder Mystery, Team Battle and War on player-made maps.">
-<link rel="stylesheet" href="ui.css?v=194">
+<link rel="stylesheet" href="ui.css?v=195">
 <script src="offline.js?v=3"></script>
-<script src="theme.js?v=194"></script>
-<script src="device.js?v=194"></script>
-<script src="sound.js?v=194"></script>
+<script src="theme.js?v=195"></script>
+<script src="device.js?v=195"></script>
+<script src="sound.js?v=195"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -85,7 +85,7 @@
 </div>
 
 <script>
-/* Отдельные режимы на главной (Murder Mystery, Team Battle, War, Party): одна страница на все, режим — по
+/* Отдельные режимы на главной (Murder Mystery, Team Battle, War, Party, Adventure): одна страница на все, режим — по
    адресу (см. VARIANT_PAGES в server.js). В игре это комнаты «murder-1» и «team-1», где всегда
    играется свой режим. Ключи перевода ставим до i18n.js — он сам переведёт их при загрузке и
    при смене языка. */
@@ -98,7 +98,9 @@
     'war':            { v: 'war',    name: 'modeWar',    text: 'warText',  img: 'mode-war.png',
                         rules: ['warRule1', 'warRule2', 'warRule3', 'warRule4', 'warRule5', 'warRule6', 'warRuleStart'] },
     'party':          { v: 'party',  name: 'modeParty',  text: 'partyText', img: 'mode-party.png',
-                        rules: ['partyRule1', 'partyRule2', 'partyRule3', 'partyRule4', 'partyRuleStart'] }
+                        rules: ['partyRule1', 'partyRule2', 'partyRule3', 'partyRule4', 'partyRuleStart'] },
+    'adventure':      { v: 'adventure', name: 'modeAdventure', text: 'adventureText', img: 'mode-adventure.png',
+                        rules: ['advRule1', 'advRule2', 'advRule3', 'advRule4', 'advRule5', 'advRuleStart'] }
   };
   var key = location.pathname.replace(/^\/+|\.html$/g, '');
   var c = V[key] || V['murder-mystery'];
@@ -116,15 +118,15 @@
   window.BF_VARIANT_NAME = c.name;
 })();
 </script>
-<link rel="stylesheet" href="mobile.css?v=194">
-<script src="i18n.js?v=194"></script>
-<script src="coin.js?v=194"></script>
-<script src="skinRender.js?v=194"></script>
-<script src="skinAvatar.js?v=194" defer></script>
-<script src="shell.js?v=194"></script>
-<script src="abuseShow.js?v=194" defer></script>
-<script src="account.js?v=194" defer></script>
-<script src="roomList.js?v=194"></script>
+<link rel="stylesheet" href="mobile.css?v=195">
+<script src="i18n.js?v=195"></script>
+<script src="coin.js?v=195"></script>
+<script src="skinRender.js?v=195"></script>
+<script src="skinAvatar.js?v=195" defer></script>
+<script src="shell.js?v=195"></script>
+<script src="abuseShow.js?v=195" defer></script>
+<script src="account.js?v=195" defer></script>
+<script src="roomList.js?v=195"></script>
 <script>
 document.getElementById('mdPlay').onclick = function () {
   location.href = 'game?mode=hideAndSeek&variant=' + window.BF_VARIANT;

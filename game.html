@@ -254,16 +254,16 @@ body.mob #msg h1{font-size:38px}
 body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="offline.js?v=3"></script>
-<script src="device.js?v=194"></script>
-        <script src="sound.js?v=194"></script>
-        <script src="skinRender.js?v=194"></script>
-        <script src="skinCanvas.js?v=194"></script>
-        <script src="gifuct.bundle.js?v=194"></script>
-        <script src="gifPlayer.js?v=194"></script>
-        <script src="coin.js?v=194"></script>
-        <script src="liveText.js?v=194"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=194">
-        <script src="theme.js?v=194"></script>
+<script src="device.js?v=195"></script>
+        <script src="sound.js?v=195"></script>
+        <script src="skinRender.js?v=195"></script>
+        <script src="skinCanvas.js?v=195"></script>
+        <script src="gifuct.bundle.js?v=195"></script>
+        <script src="gifPlayer.js?v=195"></script>
+        <script src="coin.js?v=195"></script>
+        <script src="liveText.js?v=195"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=195">
+        <script src="theme.js?v=195"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -931,6 +931,44 @@ var OUTFIT = {
     rr(w*0.12, -d*0.36, w*0.76, d*0.42, d*0.12); ctx.fill();                  // тулья
     ctx.fillStyle = "#451a03"; ctx.fillRect(w*0.12, -d*0.04, w*0.76, Math.max(1.5, d*0.07));
     if(bh > 0) outfitStar(w*0.68, top + bh*0.2, Math.max(2.5, w*0.15), "#fbbf24");
+  },
+  /* классы «Приключения» (см. adventure.js): воин — шлем с наносником и щит */
+  warrior: function(w, h){
+    var d = w, top = d + h*FIG_GAP, bh = h - top;
+    figure(w, h, "#334155");
+    ctx.fillStyle = "#94a3b8";
+    ctx.beginPath(); ctx.arc(w/2, d*0.46, d*0.56, Math.PI, 0); ctx.closePath(); ctx.fill();   // шлем
+    ctx.fillStyle = "#64748b"; ctx.fillRect(w*0.45, d*0.3, w*0.1, d*0.42);                     // наносник
+    if(bh > 0){
+      ctx.fillStyle = "#b91c1c"; ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = Math.max(1, w*0.06);
+      ctx.beginPath(); ctx.moveTo(w*0.5, top + bh*0.12); ctx.lineTo(w*0.98, top + bh*0.18); ctx.lineTo(w*0.92, top + bh*0.5);
+      ctx.lineTo(w*0.5, top + bh*0.68); ctx.lineTo(w*0.08, top + bh*0.5); ctx.lineTo(w*0.02, top + bh*0.18); ctx.closePath();
+      ctx.fill(); ctx.stroke();                                                                   // щит
+    }
+  },
+  // лучник — зелёный капюшон и колчан со стрелами за спиной
+  archer: function(w, h){
+    var d = w, top = d + h*FIG_GAP, bh = h - top;
+    if(bh > 0){
+      ctx.fillStyle = "#78350f"; ctx.fillRect(w*0.72, top - d*0.1, w*0.26, bh*0.55);              // колчан
+      ctx.fillStyle = "#e5e7eb";
+      [0.76, 0.86].forEach(function(k){ ctx.beginPath(); ctx.moveTo(w*k, top - d*0.1); ctx.lineTo(w*(k+0.05), top - d*0.32); ctx.lineTo(w*(k+0.1), top - d*0.1); ctx.fill(); });
+    }
+    figure(w, h, "#166534");
+    ctx.fillStyle = "#14532d";
+    ctx.beginPath(); ctx.moveTo(-w*0.08, d*0.7); ctx.quadraticCurveTo(w*0.5, -d*0.55, w*1.08, d*0.7);
+    ctx.lineTo(w*0.86, d*0.66); ctx.quadraticCurveTo(w*0.5, d*0.05, w*0.14, d*0.66); ctx.closePath(); ctx.fill();   // капюшон
+    if(bh > 0){ ctx.fillStyle = "#713f12"; ctx.fillRect(0, top + bh*0.5, w, Math.max(2, bh*0.07)); }
+  },
+  // маг — фиолетовая остроконечная шляпа со звездой
+  mage: function(w, h){
+    var d = w, top = d + h*FIG_GAP, bh = h - top;
+    figure(w, h, "#5b21b6");
+    ctx.fillStyle = "#4c1d95";
+    rr(-w*0.28, d*0.02, w*1.56, Math.max(2, d*0.14), d*0.07); ctx.fill();                       // поля
+    ctx.beginPath(); ctx.moveTo(w*0.1, d*0.06); ctx.lineTo(w*0.62, -d*0.95); ctx.lineTo(w*0.92, d*0.06); ctx.closePath(); ctx.fill();
+    outfitStar(w*0.56, -d*0.3, Math.max(2, w*0.12), "#fde047");
+    if(bh > 0){ ctx.fillStyle = "#fde047"; ctx.fillRect(0, top + bh*0.5, w, Math.max(2, bh*0.06)); }
   }
 };
 function drawOutfit(kind, w, h, arg){
@@ -4424,8 +4462,8 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=194"></script>
-        <script src="i18n.js?v=194"></script>
-        <script src="skinAvatar.js?v=194" defer></script>
+<script src="game.js?v=195"></script>
+        <script src="i18n.js?v=195"></script>
+        <script src="skinAvatar.js?v=195" defer></script>
 </body>
 </html>

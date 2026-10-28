@@ -52,6 +52,10 @@
     {
       "title": "Spy race maps",
       "text": "Race maps can now be spy missions: grab the spy flag and carry it to the finish while security cameras sweep the rooms. If a camera sees you, you go back to the checkpoint, and a checkpoint keeps the flag safe. Walls and shelves block a camera's view, some cameras are hidden and only blink. A new Spy Base map shows it all, and the map editor has new Camera and Spy Flag objects for Race."
+    },
+    {
+      "title": "Adventure mode",
+      "text": "Adventure is a new mode in the main menu that you can play alone or as a team against monsters. Pick a class in the lobby: the Warrior with a sword and the most health, the Archer with a long-range bow, or the Mage with fireballs and a heal. Rounds take turns between Bro Tower, where you clear five floors of slimes, skeletons, bats and knights to reach a crowned boss who slams the ground, and Crystal Defense, where waves of enemies march toward a crystal you have to protect. A victory pays coins to the whole team."
     }
   ]
 }

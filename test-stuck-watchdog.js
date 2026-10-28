@@ -33,7 +33,7 @@ const ok = (n, c) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', n);
   ok('состояние сторожа объявлено (включая stuckHeld)',
       /var stuckFrames = 0, stuckAir = 0, stuckHeld = 0, stuckSteer = 0, stuckMinX = 0, stuckMaxX = 0, stuckMinY = 0, stuckMaxY = 0;/.test(src));
   ok('respawn\\(\\) обнуляет окно сторожа (включая stuckHeld)',
-      /function respawn\(\)\{[\s\S]{0,300}stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckSteer = 0; stuckMinX = stuckMaxX = pl\.x; stuckMinY = stuckMaxY = pl\.y;/.test(src));
+      /function respawn\(\)\{[\s\S]{0,800}stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckSteer = 0; stuckMinX = stuckMaxX = pl\.x; stuckMinY = stuckMaxY = pl\.y;/.test(src));
   ok('доля удержания прыжка считается каждый кадр', /if\(keys\.u\) stuckHeld\+\+;/.test(src));
   ok('доля нажатий влево/вправо считается каждый кадр (v4)', /if\(keys\.l \|\| keys\.r\) stuckSteer\+\+;/.test(src));
   ok('сторож живёт только в прятках, вне их — сбрасывается (включая stuckHeld)',
