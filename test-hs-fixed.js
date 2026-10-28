@@ -1,10 +1,12 @@
-/* Отдельные режимы на главной (см. hsFixedOf/hsMapOk в server.js, variant.html): комнаты пряток
-   «murder-1», «cops-1», «ctf-1», «dom-1» всегда играют свой вариант, с двух игроков; одиночке
-   приходит «ждём второго — пока обычные прятки», второй вошедший в лобби сразу перекручивает
-   рулетку на нужный режим. Зомби-карты в такие комнаты не попадают, командным — только карты
-   хотя бы с двумя укрытиями; нет таких карт вовсе — раунд обычный, с пояснением «нет укрытий».
-   Обычный список комнат пряток таких комнат не показывает, список режима — только их.
-   Два своих сервера на копиях репозитория: 3242 — разные карты, 3243 — только карты без укрытий. */
+/* Режимы на главной (см. hsFixedOf/hsPickVariant в server.js, variant.html): Hide and Seek, Race,
+   Murder Mystery и Team Battle. Murder Mystery («murder-N») — с трёх игроков, Team Battle
+   («team-N») — с двух, раунды Capture the Flag и Domination по очереди, только на картах с
+   укрытиями. Пока режиму не хватает игроков или карта не подходит — обычные прятки с пояснением;
+   кто вошёл в лобби последним недостающим — рулетка сразу перекручивается на режим. Зомби-карты в
+   эти комнаты не попадают. В обычных прятках бывают только Classic, Zombie и Cops & Robbers
+   (в большой комнате, два раза подряд — нет). Списки комнат у каждого режима свои.
+   Два своих сервера на копиях репозитория: 3242 — разные карты, 3243 — только карты без укрытий,
+   короткие раунды и Cops & Robbers уже вдвоём (HS_COPS_MIN), чтобы быстро проверить чередование. */
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -26,7 +28,7 @@ function rec(name, data) {
   return { mapName: name, mapType: 'hideAndSeek', mapData: JSON.stringify(data), author: OWNER, date: Date.now(), created: Date.now(),
     rating: 0, votes: {}, boostLikes: 0, boostDislikes: 0, inGameModes: [] };
 }
-function server(port, maps) {
+function server(port, maps, env) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-fixed-'));
   fs.cpSync(ROOT, tmp, { recursive: true, filter: x => {
     const r = path.relative(ROOT, x);
@@ -36,158 +38,180 @@ function server(port, maps) {
   fs.mkdirSync(path.join(tmp, 'data'));
   fs.writeFileSync(path.join(tmp, 'data', 'maps.json'), JSON.stringify(maps));
   const proc = spawn('node', ['server.js'], { cwd: tmp, stdio: 'ignore',
-    env: { ...process.env, PORT: String(port), OWNER_ALIASES: OWNER, HS_LOBBY_MS: '9000', HS_ROUND_MS: '40000' } });
+    env: { ...process.env, PORT: String(port), OWNER_ALIASES: OWNER, HS_VARIANT: '', ...env } });
   return { base: 'http://127.0.0.1:' + port, kill: () => { try { proc.kill(); } catch (e) {} try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {} } };
 }
 
-function player(base, n, name, room) {
+let ipN = 0;
+function player(base, name, room) {
+  const n = ++ipN;
   const s = io(base, { transports: ['websocket'], forceNew: true, extraHeaders: { 'CF-Connecting-IP': '10.27.' + n + '.1' } });
-  const p = { s, name, ev: [], x: 100 + n * 40, y: 486 };
+  const p = { s, name, ev: [], x: 100 + (n % 20) * 40, y: 486 };
   ['hsRoulette', 'hsSecret', 'hsPhase', 'hsState', 'hsFixedWait'].forEach(e => s.on(e, d => p.ev.push({ e, d, t: Date.now() })));
   p.join = () => s.emit('join', { playerName: name, gameMode: 'hideAndSeek', room });
   const hb = setInterval(() => s.connected && s.emit('movePlayer', { position: { x: p.x, y: p.y, w: 30, h: 74 } }), 2000);
   s.on('disconnect', () => clearInterval(hb));
   p.last = (e, f) => p.ev.filter(x => x.e === e && (!f || f(x.d))).pop();
+  p.all = (e, f) => p.ev.filter(x => x.e === e && (!f || f(x.d))).map(x => x.d);
   p.ready = () => new Promise(r => s.connected ? r() : s.once('connect', r));
   return p;
 }
 const getJ = (b, u) => fetch(b + u).then(r => r.json());
+const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); return l && l.d.map ? l.d.map.mapName : null; };
 
 (async () => {
   // зомби-карт больше всех: случайно мимо них отдельные режимы не проскочат
   const A = server(3242, [
     rec('PlainLand', { mode: 'hideAndSeek', objects: base }),
     rec('SpotLand', { mode: 'hideAndSeek', objects: base.concat(spots) }),
-    ...[1, 2, 3, 4, 5, 6].map(i => rec('ZombieLand' + i, { mode: 'hideAndSeek', apoc: true, objects: base.concat(spots, [zombie]) }))]);
-  const B = server(3243, [rec('FlatOne', { mode: 'hideAndSeek', objects: base }), rec('FlatTwo', { mode: 'hideAndSeek', objects: base })]);
+    ...[1, 2, 3, 4, 5, 6].map(i => rec('ZombieLand' + i, { mode: 'hideAndSeek', apoc: true, objects: base.concat(spots, [zombie]) }))],
+    { HS_LOBBY_MS: '9000', HS_ROUND_MS: '14000' });
+  const B = server(3243, [rec('FlatOne', { mode: 'hideAndSeek', objects: base }), rec('FlatTwo', { mode: 'hideAndSeek', objects: base })],
+    { HS_LOBBY_MS: '3000', HS_ROUND_MS: '3000', HS_COPS_MIN: '2' });
   process.on('exit', () => { A.kill(); B.kill(); });
   for (const s of [A, B]) if (!await until(() => fetch(s.base + '/').then(r => r.ok).catch(() => false), 20000)) throw new Error('сервер не поднялся');
 
+  // обычные прятки на B: десять комнат по двое — Cops & Robbers выпадает, но не два раза подряд
+  const hs = [];
+  for (let i = 0; i < 10; i++) hs.push(player(B.base, 'hs_' + i + 'a', 'hsroom' + i), player(B.base, 'hs_' + i + 'b', 'hsroom' + i));
+  await Promise.all(hs.map(p => p.ready()));
+  hs.forEach(p => p.join());
+  // одиночка в team-2 на A: его обычный раунд начнётся раньше, чем придёт второй (см. ниже)
+  const n1 = player(A.base, 'fx_i', 'team-2');
+  await n1.ready(); n1.join();
+
   console.log('Страницы и комнаты:');
-  for (const [page, name] of [['murder-mystery', 'mmText'], ['cops-and-robbers', 'crText'], ['capture-the-flag', 'ctfText'], ['domination', 'domText']]) {
+  for (const [page, name] of [['murder-mystery', 'mmText'], ['team-battle', 'teamText']]) {
     const r = await fetch(A.base + '/' + page);
     const html = await r.text();
     ok(r.ok && html.indexOf("'" + page + "'") !== -1 && html.indexOf(name) !== -1, 'страница /' + page + ' открывается');
   }
+  ok(!/variant\.html|BF_VARIANT/.test(await fetch(A.base + '/cops-and-robbers').then(r => r.text())), 'отдельной страницы Cops & Robbers нет — он в прятках');
   const sm = await fetch(A.base + '/sitemap.xml').then(r => r.text());
-  ok(/\/murder-mystery</.test(sm) && /\/domination</.test(sm), 'новые страницы есть в sitemap');
+  ok(/\/murder-mystery</.test(sm) && /\/team-battle</.test(sm) && !/domination|capture-the-flag/.test(sm), 'в sitemap — две новые страницы');
   const idx = await fetch(A.base + '/').then(r => r.text());
-  ok(['murder', 'cops', 'ctf', 'dom'].every(m => idx.indexOf('data-mode="' + m + '"') !== -1), 'на главной четыре новые карточки');
-  const nav = await fetch(A.base + '/nav.js').then(r => r.text());
-  ok(/murder: 'murder-mystery'/.test(nav) && /dom: 'domination'/.test(nav), 'карточки ведут на страницы режимов');
-  for (const v of ['murder', 'cops', 'ctf', 'dom']) {
-    const b = await getJ(A.base, '/getBestRoom?mode=hideAndSeek&variant=' + v);
-    ok(b.room === v + '-1', 'Играть в ' + v + ' — комната ' + v + '-1', b.room);
+  const modes = (idx.match(/class="card" data-mode="[^"]+"/g) || []).map(x => x.split('"')[3]);
+  ok(modes.join() === 'hideAndSeek,race,murder,team', 'на главной четыре режима', modes.join());
+  const hsPage = await fetch(A.base + '/hide-and-seek').then(r => r.text());
+  ok(/data-i18n="hsRule7"/.test(hsPage), 'в правилах пряток — Cops & Robbers в большой комнате');
+  const bm = await getJ(A.base, '/getBestRoom?mode=hideAndSeek&variant=murder');
+  ok(bm.room === 'murder-1' && bm.players === 0, 'Играть в Murder Mystery — новая комната murder-1', JSON.stringify(bm));
+  const bt = await getJ(A.base, '/getBestRoom?mode=hideAndSeek&variant=team');
+  ok(bt.room === 'team-2' && bt.players === 1, 'Играть в Team Battle — туда, где уже ждут (team-2)', JSON.stringify(bt));
+  for (const v of ['', 'cops', 'ctf', 'zombie']) {
+    const b = await getJ(A.base, '/getBestRoom?mode=hideAndSeek' + (v ? '&variant=' + v : ''));
+    ok(b.room === 'room1', (v || 'без режима') + ' — обычные прятки, room1', b.room);
   }
-  ok((await getJ(A.base, '/getBestRoom?mode=hideAndSeek')).room === 'room1', 'обычные прятки — по-прежнему room1');
-  ok((await getJ(A.base, '/getBestRoom?mode=hideAndSeek&variant=zombie')).room === 'room1', 'чужой вариант в адресе — обычная комната');
 
-  // одиночка в cops-2: его обычный раунд начнётся раньше, чем придёт второй (см. ниже)
-  const n1 = player(A.base, 9, 'fx_i', 'cops-2');
-  await n1.ready(); n1.join();
-
-  console.log('Murder Mystery: один ждёт, второй запускает режим');
-  const m1 = player(A.base, 1, 'fx_a', 'murder-1');
+  console.log('Murder Mystery: с трёх игроков');
+  const m1 = player(A.base, 'fx_a', 'murder-1');
   await m1.ready(); m1.join();
   const solo = await until(() => { const r = m1.last('hsRoulette'); return r && r.d; }, 8000);
-  ok(!!solo && solo.variant === 'classic' && solo.fixed === 'murder' && solo.wait === 'players' && solo.need === 2,
-    'одиночке — обычные прятки и «ждём игроков»', solo && JSON.stringify({ v: solo.variant, f: solo.fixed, w: solo.wait }));
-  const lob1 = m1.last('hsPhase', d => d.phase === 'lobby');
-  ok(!!lob1 && lob1.d.map && !/^ZombieLand/.test(lob1.d.map.mapName), 'зомби-карта в комнату режима не попала', lob1 && lob1.d.map && lob1.d.map.mapName);
-  const t0 = Date.now();
-  const m2 = player(A.base, 2, 'fx_b', 'murder-1');
+  ok(!!solo && solo.variant === 'classic' && solo.fixed === 'murder' && solo.wait === 'players' && solo.need === 3,
+    'одиночке — обычные прятки и «нужно 3 игрока»', solo && JSON.stringify({ v: solo.variant, w: solo.wait, n: solo.need }));
+  ok(!!mapOf(m1) && !/^ZombieLand/.test(mapOf(m1)), 'зомби-карта в комнату режима не попала', mapOf(m1));
+  const m2 = player(A.base, 'fx_b', 'murder-1');
   await m2.ready(); m2.join();
+  const m2s = await until(() => { const r = m2.last('hsState'); return r && r.d; }, 3000);
+  ok(!!m2s && m2s.wait === 'players' && !m1.last('hsRoulette', d => d.variant === 'murder'), 'вдвоём режим ещё ждёт третьего', m2s && m2s.wait);
+  const t0 = Date.now();
+  const m3 = player(A.base, 'fx_c', 'murder-1');
+  await m3.ready(); m3.join();
   const mm = await until(() => { const r = m1.last('hsRoulette', d => d.variant === 'murder'); return r && r.d; }, 4000);
-  ok(!!mm && mm.wait === null && mm.fixed === 'murder', 'второй вошёл — рулетка сразу перекрутилась на Murder Mystery', mm && (Date.now() - t0) + 'мс');
+  ok(!!mm && mm.wait === null && mm.fixed === 'murder', 'третий вошёл — рулетка сразу перекрутилась на Murder Mystery', mm && (Date.now() - t0) + 'мс');
   ok(!m1.last('hsPhase', d => d.phase === 'round'), 'и это то же лобби, раунд ещё не начинался');
-  const m2s = m2.last('hsState');
-  ok(!!m2s && m2s.d.wait === null && !m1.last('hsFixedWait'), 'никому не сказано «режим со следующего раунда» — он начался сразу',
-    m2s && JSON.stringify({ w: m2s.d.wait }));
+  const m3s = m3.last('hsState');
+  ok(!!m3s && m3s.d.wait === null && !m1.last('hsFixedWait'), 'лишних «ждём» и «со следующего раунда» никому', m3s && JSON.stringify({ w: m3s.d.wait }));
   await sleep(400);
-  const roles = [m1, m2].map(p => { const s = p.last('hsSecret'); return s && s.d.role; }).sort().join(',');
-  ok(roles === 'innocent,murderer', 'вдвоём — убийца и невиновный, без шерифа', roles);
-  const rl = await getJ(A.base, '/getRoomList?mode=hideAndSeek');
-  ok(!rl.rooms.some(r => r.room === 'murder-1'), 'в обычном списке комнат пряток комнаты режима нет');
+  const roles = [m1, m2, m3].map(p => { const s = p.last('hsSecret'); return s && s.d.role; }).sort().join(',');
+  ok(roles === 'innocent,murderer,sheriff', 'роли: убийца, шериф и невиновный', roles);
+  ok(!(await getJ(A.base, '/getRoomList?mode=hideAndSeek')).rooms.some(r => r.room === 'murder-1'), 'в обычном списке комнат пряток комнаты режима нет');
   const rlm = await getJ(A.base, '/getRoomList?mode=hideAndSeek&variant=murder');
-  ok(rlm.rooms.length === 1 && rlm.rooms[0].room === 'murder-1' && rlm.rooms[0].players === 2, 'в списке режима — она, с двумя игроками', JSON.stringify(rlm.rooms));
-  ok(!(await getJ(A.base, '/getRoomList?mode=hideAndSeek&variant=cops')).rooms.some(r => r.room === 'murder-1'), 'в списке другого режима её нет');
+  ok(rlm.rooms.length === 1 && rlm.rooms[0].room === 'murder-1' && rlm.rooms[0].players === 3, 'в списке режима — она, с тремя игроками', JSON.stringify(rlm.rooms.map(r => [r.room, r.players])));
+  ok(!(await getJ(A.base, '/getRoomList?mode=hideAndSeek&variant=team')).rooms.some(r => r.room === 'murder-1'), 'в списке Team Battle её нет');
   const best = await getJ(A.base, '/getBestRoom?mode=hideAndSeek&variant=murder');
-  ok(best.room === 'murder-1' && best.players === 2, 'Играть ведёт в уже начатую комнату', JSON.stringify(best));
-  const mr = await until(() => { const r = m1.last('hsPhase', d => d.phase === 'round'); return r && r.d; }, 14000);
-  ok(!!mr && mr.variant === 'murder', 'охота началась как Murder Mystery', mr && mr.variant);
+  ok(best.room === 'murder-1' && best.players === 3, 'Играть ведёт в уже начатую комнату', JSON.stringify(best));
 
-  console.log('Domination и Cops & Robbers: карта с укрытиями, без зомби');
-  const d1 = player(A.base, 3, 'fx_c', 'dom-1'), d2 = player(A.base, 4, 'fx_d', 'dom-1');
-  const c1 = player(A.base, 5, 'fx_e', 'cops-1'), c2 = player(A.base, 6, 'fx_f', 'cops-1');
-  await Promise.all([d1, d2, c1, c2].map(p => p.ready()));
-  d1.join(); c1.join(); await sleep(300); d2.join(); c2.join();
-  const dr = await until(() => { const r = d1.last('hsRoulette', d => d.variant === 'dom'); return r && r.d; }, 6000);
-  ok(!!dr && dr.teams && Object.keys(dr.teams).length === 2 && (dr.points || []).length >= 2, 'Domination: две команды по одному, точки на укрытиях',
-    dr && JSON.stringify({ t: dr.teams && Object.values(dr.teams), p: (dr.points || []).length }));
-  const dl = d1.last('hsPhase', d => d.phase === 'lobby');
-  ok(!!dl && dl.d.map && dl.d.map.mapName === 'SpotLand', 'командному режиму досталась карта с укрытиями (не зомби, не пустая)', dl && dl.d.map && dl.d.map.mapName);
-  const cr = await until(() => { const r = c1.last('hsRoulette', d => d.variant === 'cops'); return r && r.d; }, 6000);
-  ok(!!cr && cr.cops && cr.cops.length === 1, 'Cops & Robbers: вдвоём — один коп и один грабитель', cr && cr.cops && cr.cops.map(c => c.name).join(','));
-  const cl = c1.last('hsPhase', d => d.phase === 'lobby');
-  ok(!!cl && cl.d.map && !/^ZombieLand/.test(cl.d.map.mapName), 'и снова без зомби-карты', cl && cl.d.map && cl.d.map.mapName);
-
-  console.log('Capture the Flag на сервере без карт с укрытиями:');
-  const f1 = player(B.base, 7, 'fx_g', 'ctf-1'), f2 = player(B.base, 8, 'fx_h', 'ctf-1');
-  await Promise.all([f1, f2].map(p => p.ready()));
-  f1.join(); await sleep(300); f2.join();
-  const fw = await until(() => { const r = f1.last('hsFixedWait'); return r && r.d; }, 3000);
-  ok(!!fw && fw.fixed === 'ctf' && fw.wait === 'map', 'второй вошёл, а укрытий нет — первому сказано «на карте нет укрытий»', JSON.stringify(fw));
-  const fs2 = f2.last('hsState');
-  ok(!!fs2 && fs2.d.variant === 'classic' && fs2.d.fixed === 'ctf' && fs2.d.wait === 'map', 'и вошедшему — то же', fs2 && JSON.stringify({ v: fs2.d.variant, w: fs2.d.wait }));
-  ok(!f1.last('hsRoulette', d => d.variant === 'ctf'), 'Capture the Flag без укрытий не запускается');
+  console.log('Team Battle: с двух, Capture the Flag и Domination по очереди');
+  const d1 = player(A.base, 'fx_d', 'team-1'), d2 = player(A.base, 'fx_e', 'team-1');
+  await Promise.all([d1, d2].map(p => p.ready()));
+  d1.join(); await sleep(300); d2.join();
+  const dr = await until(() => { const r = d1.last('hsRoulette', d => d.variant === 'ctf'); return r && r.d; }, 6000);
+  ok(!!dr && dr.teams && Object.values(dr.teams).sort().join() === 'blue,red' && dr.bases, 'первый раунд — Capture the Flag, один на один',
+    dr && JSON.stringify(dr.teams && Object.values(dr.teams)));
+  ok(mapOf(d1) === 'SpotLand', 'карта — с укрытиями (не зомби, не пустая)', mapOf(d1));
+  const dd = await until(() => { const r = d1.last('hsRoulette', d => d.variant === 'dom'); return r && r.d; }, 32000);
+  ok(!!dd && (dd.points || []).length >= 2, 'следующий раунд — Domination, точки на укрытиях', dd && (dd.points || []).length);
 
   console.log('Вошёл посреди обычного раунда:');
-  ok(!!await until(() => n1.last('hsPhase', d => d.phase === 'round'), 14000), 'одиночка в cops-2 уже играет обычный раунд');
-  const n2 = player(A.base, 10, 'fx_j', 'cops-2');
+  // входим в первые секунды обычного раунда одиночки, а не на стыке с лобби
+  ok(!!await until(() => { const l = n1.last('hsPhase'); return l && l.d.phase === 'round' && Date.now() - l.t < 6000; }, 30000),
+    'одиночка в team-2 играет обычный раунд');
+  const n2 = player(A.base, 'fx_j', 'team-2');
   await n2.ready(); n2.join();
   const nw = await until(() => { const r = n1.last('hsFixedWait'); return r && r.d; }, 3000);
   const ns = await until(() => { const r = n2.last('hsState'); return r && r.d; }, 3000);
   ok(!!nw && nw.wait === 'next' && !!ns && ns.wait === 'next' && ns.phase === 'round', 'обоим сказано: режим начнётся со следующего раунда',
     JSON.stringify({ a: nw && nw.wait, b: ns && ns.wait }));
 
+  console.log('Team Battle на сервере без карт с укрытиями:');
+  const f1 = player(B.base, 'fx_g', 'team-1'), f2 = player(B.base, 'fx_h', 'team-1');
+  await Promise.all([f1, f2].map(p => p.ready()));
+  f1.join(); await sleep(300); f2.join();
+  const fw = await until(() => { const r = f1.last('hsFixedWait'); return r && r.d; }, 3000);
+  const fs2 = await until(() => { const r = f2.last('hsState'); return r && r.d; }, 3000);
+  ok(!!fw && fw.wait === 'map' && !!fs2 && fs2.wait === 'map' && fs2.variant === 'classic',
+    'второй вошёл, а укрытий нет — обоим сказано «на карте нет укрытий»', JSON.stringify({ a: fw && fw.wait, b: fs2 && fs2.wait }));
+
+  console.log('Обычные прятки:');
+  // за это время у B прошло несколько раундов
+  const seq = hs.filter((p, i) => i % 2 === 0).map(p => p.all('hsRoulette').map(d => d.variant));
+  const flat = [].concat(...seq);
+  ok(flat.every(v => v === 'classic' || v === 'cops'), 'в прятках только Classic и Cops & Robbers', [...new Set(flat)].join(','));
+  ok(flat.indexOf('cops') !== -1, 'Cops & Robbers выпадает', flat.filter(v => v === 'cops').length + ' из ' + flat.length);
+  ok(seq.every(s => s.every((v, i) => !(v === 'cops' && s[i - 1] === 'cops'))), 'два раза подряд — никогда', seq.map(s => s.map(v => v === 'cops' ? 'K' : 'c').join('')).join(' '));
+
   console.log('Браузер:');
   const browser = await chromium.launch();
   const errs = [];
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { 'CF-Connecting-IP': '10.27.9.9' } });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { 'CF-Connecting-IP': '10.27.200.1' } });
   await ctx.addInitScript(() => { try { localStorage.setItem('bfConsent', '1'); } catch (e) {} });
   const page = await ctx.newPage();
   page.on('pageerror', e => errs.push(e.message.slice(0, 140)));
   await page.goto(A.base + '/', { waitUntil: 'domcontentloaded' });
-  await page.click('.card[data-mode="cops"]');
-  await page.waitForURL(/cops-and-robbers/, { timeout: 8000 }).catch(() => {});
-  ok(/\/cops-and-robbers$/.test(page.url()), 'клик по карточке открывает страницу режима', page.url());
+  const grid = await page.evaluate(() => [...document.querySelectorAll('.card')].map(c => { const r = c.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y)]; }));
+  ok(grid.length === 4 && grid[0][1] === grid[1][1] && grid[2][1] === grid[3][1] && grid[0][0] === grid[2][0] && grid[2][1] > grid[0][1], 'карточки квадратом 2×2', JSON.stringify(grid));
+  await page.click('.card[data-mode="team"]');
+  await page.waitForURL(/team-battle/, { timeout: 8000 }).catch(() => {});
+  ok(/\/team-battle$/.test(page.url()), 'клик по карточке открывает страницу режима', page.url());
   const info = await until(() => page.evaluate(() => {
     const li = [...document.querySelectorAll('#mdList li')];
     const rows = [...document.querySelectorAll('#roomList .rlName')].map(x => x.textContent);
     return li.length === 5 && li.every(x => x.textContent.trim()) && rows.length ? { name: document.getElementById('mdName').textContent, title: document.title, rows } : null;
   }), 8000);
-  ok(!!info && info.name === 'Cops & Robbers' && /Cops & Robbers/.test(info.title), 'название, описание и пять правил переведены', JSON.stringify(info));
-  ok(!!info && info.rows.length === 2 && info.rows.every(r => /^cops-\d+$/.test(r)), 'в списке комнат — только комнаты этого режима', info && info.rows.join(','));
+  ok(!!info && info.name === 'Team Battle' && /Team Battle/.test(info.title), 'название, описание и пять правил переведены', JSON.stringify(info));
+  ok(!!info && info.rows.length === 2 && info.rows.every(r => /^team-\d+$/.test(r)), 'в списке комнат — только комнаты этого режима', info && info.rows.join(','));
   await page.click('#mdPlay');
   await page.waitForURL(/game/, { timeout: 8000 }).catch(() => {});
-  ok(/mode=hideAndSeek&variant=cops/.test(page.url()), 'Играть открывает игру в этом режиме', page.url());
-  await page.evaluate(() => { const b = document.getElementById('gBanner'); if (b) b.style.display = 'none'; });
-  const title = await until(() => page.evaluate(() => /Cops & Robbers/.test(document.title) ? document.title : null), 6000);
+  ok(/mode=hideAndSeek&variant=team/.test(page.url()), 'Играть открывает игру в этом режиме', page.url());
+  const title = await until(() => page.evaluate(() => /Team Battle/.test(document.title) ? document.title : null), 6000);
   ok(!!title, 'вкладка игры называется по режиму', title || await page.evaluate(() => document.title));
-  const joined = await until(async () => (await getJ(A.base, '/getRoomList?mode=hideAndSeek&variant=cops')).rooms.find(r => r.players === 3), 8000);
-  ok(!!joined, 'браузер вошёл в комнату этого режима', joined && JSON.stringify(joined));
-  // одиночка в браузере видит, что режим ждёт второго
-  const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { 'CF-Connecting-IP': '10.27.9.10' } });
+  const joined = await until(async () => (await getJ(A.base, '/getRoomList?mode=hideAndSeek&variant=team')).rooms.find(r => r.players === 3), 8000);
+  ok(!!joined, 'браузер вошёл в комнату этого режима', joined && JSON.stringify([joined.room, joined.players]));
+  // одиночка в своей комнате Team Battle: рулетка режима крутит только варианты этого режима
+  const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { 'CF-Connecting-IP': '10.27.200.2' } });
   const sp = await ctx2.newPage();
   sp.on('pageerror', e => errs.push(e.message.slice(0, 140)));
-  await sp.goto(A.base + '/game.html?mode=hideAndSeek&variant=ctf&room=ctf-1', { waitUntil: 'domcontentloaded' });
-  const waitMsg = await until(() => sp.evaluate(() => { const l = document.getElementById('gLog'); return l && /Capture the Flag starts when there are 2 players/.test(l.textContent) ? l.textContent : null; }), 9000);
+  await sp.goto(A.base + '/game.html?mode=hideAndSeek&variant=team&room=team-7', { waitUntil: 'domcontentloaded' });
+  const waitMsg = await until(() => sp.evaluate(() => { const l = document.getElementById('gLog'); return l && /Team Battle starts when there are 2 players/.test(l.textContent) ? l.textContent : null; }), 9000);
   ok(!!waitMsg, 'одиночке в игре сказано, что режим начнётся со вторым игроком', waitMsg);
+  const pills = await until(() => sp.evaluate(() => { const t = [...document.querySelectorAll('#gRoulTrack .rName')].map(x => x.textContent); return t.length ? [...new Set(t)].sort().join(',') : null; }), 6000);
+  ok(pills === 'Capture the Flag,Classic,Domination', 'рулетка режима — только Classic, Capture the Flag и Domination', pills);
   ok(!(await sp.evaluate(() => !!document.getElementById('gMini'))), 'мини-карты в игре больше нет');
   ok(errs.length === 0, 'без ошибок на страницах', errs.join(' | '));
   await browser.close();
 
-  [m1, m2, d1, d2, c1, c2, f1, f2, n1, n2].forEach(p => p.s.close());
+  hs.concat([m1, m2, m3, d1, d2, f1, f2, n1, n2]).forEach(p => p.s.close());
   console.log(`\n${pass} ✓  ${fail} ✗`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

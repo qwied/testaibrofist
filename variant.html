@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>AIBrofist</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="AIBrofist game modes: Murder Mystery, Cops and Robbers, Capture the Flag and Domination on player-made maps.">
+<meta name="description" content="AIBrofist game modes: Murder Mystery and Team Battle (Capture the Flag and Domination) on player-made maps.">
 <link rel="stylesheet" href="ui.css?v=189">
 <script src="offline.js?v=3"></script>
 <script src="theme.js?v=189"></script>
@@ -85,16 +85,16 @@
 </div>
 
 <script>
-/* Отдельные режимы на главной (Murder Mystery, Cops & Robbers, Capture the Flag, Domination):
-   одна страница на все четыре, режим — по адресу (см. VARIANT_PAGES в server.js). В игре это
-   комнаты пряток «murder-1» и т.п., где всегда играется свой вариант. Ключи перевода ставим
-   до i18n.js — он сам переведёт их при загрузке и при смене языка. */
+/* Отдельные режимы на главной (Murder Mystery, Team Battle): одна страница на оба, режим — по
+   адресу (см. VARIANT_PAGES в server.js). В игре это комнаты «murder-1» и «team-1», где всегда
+   играется свой режим. Ключи перевода ставим до i18n.js — он сам переведёт их при загрузке и
+   при смене языка. */
 (function () {
   var V = {
-    'murder-mystery':   { v: 'murder', name: 'modeMurder', text: 'mmText', img: 'mode-murder.png', rules: ['mmRule1', 'mmRule2', 'mmRule3', 'mmRule4'] },
-    'cops-and-robbers': { v: 'cops',   name: 'modeCops',   text: 'crText', img: 'mode-cops.png',   rules: ['crRule1', 'crRule2', 'crRule3', 'crRule4'] },
-    'capture-the-flag': { v: 'ctf',    name: 'modeCtf',    text: 'ctfText', img: 'mode-ctf.png',   rules: ['ctfRule1', 'ctfRule2', 'ctfRule3', 'ctfRule4'] },
-    'domination':       { v: 'dom',    name: 'modeDom',    text: 'domText', img: 'mode-dom.png',   rules: ['domRule1', 'domRule2', 'domRule3', 'domRule4'] }
+    'murder-mystery': { v: 'murder', name: 'modeMurder', text: 'mmText',   img: 'mode-murder.png',
+                        rules: ['mmRule1', 'mmRule2', 'mmRule3', 'mmRule4', 'mmRuleStart'] },
+    'team-battle':    { v: 'team',   name: 'modeTeam',   text: 'teamText', img: 'mode-team.png',
+                        rules: ['teamRule1', 'teamRule2', 'teamRule3', 'teamRule4', 'teamRuleStart'] }
   };
   var key = location.pathname.replace(/^\/+|\.html$/g, '');
   var c = V[key] || V['murder-mystery'];
@@ -103,7 +103,7 @@
   document.getElementById('mdName').setAttribute('data-i18n', c.name);
   document.getElementById('mdText').setAttribute('data-i18n', c.text);
   var list = document.getElementById('mdList');
-  c.rules.concat(['varRuleStart']).forEach(function (k) {
+  c.rules.forEach(function (k) {
     var li = document.createElement('li');
     li.setAttribute('data-i18n', k);
     list.appendChild(li);

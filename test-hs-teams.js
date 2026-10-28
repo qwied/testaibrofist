@@ -1,8 +1,8 @@
-/* Командные варианты пряток (идеи 2019 года, см. hsTeamSetup/hsDomTick в server.js): Capture the
-   Flag и Domination на обычных картах пряток — базы и точки захвата ставятся на укрытия карты.
-   Вариант задан принудительно (HS_VARIANT), поэтому он во втором раунде: первое лобби комната
-   открывает одна, а командам нужно HS_TEAM_MIN игроков. Два своих сервера на копиях репозитория:
-   3240 — Capture the Flag, 3241 — Domination. */
+/* Team Battle (идеи 2019 года, см. hsTeamSetup/hsDomTick в server.js): Capture the Flag и
+   Domination на обычных картах пряток — базы и точки захвата ставятся на укрытия карты. Комнаты
+   «team-N»; обычно раунды идут по очереди, здесь вариант задан принудительно (HS_VARIANT), чтобы
+   проверить каждый отдельно. Два своих сервера на копиях репозитория: 3240 — Capture the Flag,
+   3241 — Domination. */
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -62,17 +62,19 @@ const at = (spot) => spot.x + 20;            // встать внутрь укр
 
   // ================= Capture the Flag =================
   console.log('Capture the Flag:');
-  const room = 'ctf' + Math.floor(Math.random() * 1e6);
+  const room = 'team-' + Math.floor(Math.random() * 1e6);
   const P = ['ct_a', 'ct_b', 'ct_c', 'ct_d'].map(n => player(C.base, n, room));
   // параллельно — комната Domination (её второй раунд тоже ждать ~10 с лобби + раунд)
-  const droom = 'dom' + Math.floor(Math.random() * 1e6);
+  const droom = 'team-' + Math.floor(Math.random() * 1e6);
   const Q = ['dm_a', 'dm_b', 'dm_c', 'dm_d'].map(n => player(D.base, n, droom));
   await Promise.all(P.concat(Q).map(p => new Promise(r => p.s.once('connect', r))));
   for (const p of P.concat(Q)) { p.join(); await sleep(100); }
   P.concat(Q).forEach(p => p.at(p.x));
 
   const roul = await until(() => P[0].last('hsRoulette', d => d.variant === 'ctf'), 70000);
-  const teams = roul ? roul.teams : {};
+  // рулетка перекручивается, как только вошёл второй; кто вошёл после — в меньшую команду (hsTeams)
+  const full = await until(() => { const t = P[0].last('hsTeams', d => Object.keys(d.teams).length === 4); return t ? t.teams : roul && Object.keys(roul.teams).length === 4 ? roul.teams : null; }, 5000);
+  const teams = full || (roul ? roul.teams : {});
   const reds = P.filter(p => teams[p.s.id] === 'red'), blues = P.filter(p => teams[p.s.id] === 'blue');
   ok(!!roul && reds.length === 2 && blues.length === 2 && roul.winnerId === null, 'рулетка режима — Capture the Flag, команды 2 на 2, искателя нет', roul && JSON.stringify(teams).length + ' байт');
   ok(!!roul && roul.bases.red.x === SPOTS[0].x && roul.bases.blue.x === SPOTS[2].x || !!roul && roul.bases.red.x === SPOTS[2].x && roul.bases.blue.x === SPOTS[0].x,

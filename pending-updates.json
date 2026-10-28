@@ -11,7 +11,7 @@
     },
     {
       "title": "Murder Mystery and Cops & Robbers",
-      "text": "Hide and Seek rounds with three or more players can now be Murder Mystery or Cops & Robbers. In Murder Mystery the murderer and the sheriff are secret: the murderer takes players out by touch, and the sheriff wins by touching the murderer. In Cops & Robbers several cops hunt, caught robbers freeze in place, and other robbers can free them with a touch."
+      "text": "Murder Mystery is a new mode in the main menu: one player is secretly the murderer and takes others out with a touch, and the secret sheriff wins by catching the murderer. It starts from three players. In Hide and Seek, big rooms of six or more now sometimes play Cops & Robbers: a third of the players are cops, caught robbers freeze in place, and other robbers can free them with a touch."
     },
     {
       "title": "Race map rules",
@@ -22,16 +22,16 @@
       "text": "Everyone in a Race room now runs the same map at the same time: a short countdown at the start, then a shared timer, and the next map comes when the time is up or everyone has finished. Map makers can also pick a goal for their Race map: everyone races for points, only the first to finish scores, or last one standing, where running out of lives knocks you out and the last player left wins."
     },
     {
-      "title": "Team rounds: Capture the Flag and Domination",
-      "text": "Hide and Seek rounds with four or more players on maps with hiding spots can now be team rounds. In Capture the Flag the flags stand at the two hiding spots farthest apart: bring the enemy flag to your own to score, three points win. In Domination teams hold capture points at the hiding spots, and every point held scores each second. The team score is shown at the top, and the winning team gets coins."
+      "title": "Team Battle",
+      "text": "Team Battle is a new mode in the main menu for two teams, Red and Blue, starting from two players. Rounds take turns between Capture the Flag and Domination on maps with hiding spots. In Capture the Flag the flags stand at the two hiding spots farthest apart: bring the enemy flag to your own to score, three points win. In Domination teams hold capture points at the hiding spots, and every point held scores each second. The team score is shown at the top, and the winning team gets coins."
     },
     {
       "title": "Role outfits",
       "text": "Roles now have their own looks: cops wear a uniform with a cap and a badge, robbers a mask and a striped shirt, caught robbers an orange prison suit, and team players a headband in their team color. The murderer and the sheriff see their outfit only on themselves, so the roles stay secret. Flags got a proper flagpole with a waving flag, and game messages now stack neatly instead of covering each other."
     },
     {
-      "title": "New modes in the main menu",
-      "text": "Murder Mystery, Cops & Robbers, Capture the Flag and Domination now have their own cards in the main menu, each with its own page, rules and room list. Rooms of these modes always play that mode, starting from two players. Until a second player joins, or if the map has no hiding spots for teams, the room plays classic Hide and Seek and tells you why."
+      "title": "Four modes in the main menu",
+      "text": "The main menu now has four modes: Hide and Seek, Race, Murder Mystery and Team Battle, each with its own page, rules and room list. Until a mode has enough players, or if the map has no hiding spots for teams, its room plays classic Hide and Seek and tells you why."
     }
   ]
 }

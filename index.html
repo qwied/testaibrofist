@@ -168,9 +168,9 @@ body{
    карточки в разумном размере на очень широких экранах. */
 .cards{
     width: 100%;
-    /* шесть режимов — по три в ряд на мониторе (две строки), уже —
-       по две или по одной: auto-fit ниже сам решает */
-    max-width: 940px;
+    /* четыре режима — квадратом 2×2 на мониторе, на узком экране по одному:
+       auto-fit ниже сам решает; ширина такая, чтобы оба ряда влезали по высоте */
+    max-width: 640px;
     margin: 28px auto 0;
     padding: 0 14px;
     display: grid;
@@ -539,29 +539,15 @@ body{
 
                         <div class="cardContainer">
                                 <a href="#" class="card" data-mode="murder">
-                                        <img src="mode-murder.png?v=1" alt="Murder Mystery" loading="lazy">
+                                        <img src="mode-murder.png?v=1" alt="Murder Mystery">
                                         <div data-i18n="modeMurder">Murder Mystery</div>
                                 </a>
                         </div>
 
                         <div class="cardContainer">
-                                <a href="#" class="card" data-mode="cops">
-                                        <img src="mode-cops.png?v=1" alt="Cops &amp; Robbers" loading="lazy">
-                                        <div data-i18n="modeCops">Cops &amp; Robbers</div>
-                                </a>
-                        </div>
-
-                        <div class="cardContainer">
-                                <a href="#" class="card" data-mode="ctf">
-                                        <img src="mode-ctf.png?v=1" alt="Capture the Flag" loading="lazy">
-                                        <div data-i18n="modeCtf">Capture the Flag</div>
-                                </a>
-                        </div>
-
-                        <div class="cardContainer">
-                                <a href="#" class="card" data-mode="dom">
-                                        <img src="mode-dom.png?v=1" alt="Domination" loading="lazy">
-                                        <div data-i18n="modeDom">Domination</div>
+                                <a href="#" class="card" data-mode="team">
+                                        <img src="mode-team.png?v=1" alt="Team Battle">
+                                        <div data-i18n="modeTeam">Team Battle</div>
                                 </a>
                         </div>
                 </div>

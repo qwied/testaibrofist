@@ -4472,7 +4472,7 @@ function inspect(){
      Коллизии у него нет — иначе внутрь не зайти. */
   if(SOLID.indexOf(sel.type) !== -1 && mode === "hideAndSeek")
     chk(TR("chkHideSpot","Укрытие для пряток"), !!sel.hideSpot, function(v){ sel.hideSpot = v; },
-        TR("descHideSpot","Игрок исчезает здесь во время пряток"));
+        TR("descHideSpot","Игрок исчезает здесь во время пряток. В «Командном бою» на укрытиях стоят флаги и точки захвата"));
   if(LINKED.indexOf(sel.type) !== -1 && SOLID.indexOf(sel.type) !== -1)
     chk(TR("chkStartsOpen","Открыт сначала (проходим)"), sel.startsOpen, function(v){ sel.startsOpen = v; });
   if(!passiveEl.querySelector(".pRow"))

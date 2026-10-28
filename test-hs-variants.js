@@ -1,9 +1,9 @@
-/* Варианты пряток (идеи 2019 года, «смешанный режим», см. hsPickVariant в server.js):
-   Murder Mystery — тайные роли, убийца выбивает касанием, шериф ловит убийцу, а убийца, тронувший
-   шерифа, проигрывает сам; Cops and Robbers — копов несколько, пойманный грабитель замирает
-   (GAME.frozen), другой грабитель освобождает его касанием. Вариант задан принудительно (HS_VARIANT),
-   поэтому раунд с ним — второй: первое лобби комната открывает одна, а варианту нужно трое.
-   Два своих сервера на копиях репозитория: 3233 — Murder Mystery, 3234 — Cops and Robbers. */
+/* Murder Mystery и Cops and Robbers (идеи 2019 года, см. hsPickVariant в server.js):
+   Murder Mystery — отдельный режим (комнаты «murder-N»): тайные роли, убийца выбивает касанием,
+   шериф ловит убийцу, а убийца, тронувший шерифа, проигрывает сам; Cops and Robbers — раунд
+   обычных пряток в большой комнате: копов несколько, пойманный грабитель замирает (GAME.frozen),
+   другой грабитель освобождает его касанием. Здесь он задан принудительно (HS_VARIANT), чтобы не
+   ждать жребия. Два своих сервера на копиях репозитория: 3233 — Murder Mystery, 3234 — Cops and Robbers. */
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -63,14 +63,14 @@ async function browserJoin(browser, base, room, ip, errs) {
 const roleText = page => page.evaluate(() => document.getElementById('gRole').textContent);
 
 (async () => {
-  const M = server(3233, 'murder'), C = server(3234, 'cops');
+  const M = server(3233, ''), C = server(3234, 'cops');
   process.on('exit', () => { M.kill(); C.kill(); });
   for (const s of [M, C]) if (!await until(() => fetch(s.base + '/').then(r => r.ok).catch(() => false), 20000)) throw new Error('сервер не поднялся');
   const browser = await chromium.launch();
   const errs = [];
 
   // ================= Murder Mystery =================
-  const mroom = 'mm' + Math.floor(Math.random() * 1e6);
+  const mroom = 'murder-' + Math.floor(Math.random() * 1e6);
   const mp = ['mm_a', 'mm_b', 'mm_c', 'mm_d'].map((nm, i) => player(M.base, i + 1, nm, mroom));
   // ================= Cops and Robbers (параллельно) =================
   const croom = 'cr' + Math.floor(Math.random() * 1e6);
@@ -84,7 +84,8 @@ const roleText = page => page.evaluate(() => document.getElementById('gRole').te
   const mRoul = await until(() => { const r = mp[0].last('hsRoulette', d => d.variant === 'murder'); return r && r.d; }, 60000);
   ok(!!mRoul && mRoul.winnerId === null && mRoul.players.length === 0, 'рулетка режима — Murder Mystery, без рулетки игроков: убийцу не видно', mRoul && JSON.stringify({ w: mRoul.winnerId, n: mRoul.players.length }));
   await sleep(500);
-  const roles = mp.map(p => { const x = p.last('hsSecret'); return x && x.d.role; });
+  // рулетка перекручивается, как только вошёл третий; кто вошёл после — получает роль при входе (hsState)
+  const roles = mp.map(p => { const x = p.last('hsSecret') || p.last('hsState', d => d.role); return x && x.d.role; });
   const by = r => mp[roles.indexOf(r)];
   ok(roles.filter(r => r === 'murderer').length === 1 && roles.filter(r => r === 'sheriff').length === 1 && roles.filter(r => r === 'innocent').length === 2,
     'каждый получил только свою роль: один убийца, один шериф, двое невиновных', roles.join(','));

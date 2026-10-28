@@ -21,8 +21,8 @@
   var VIEW   = q.get('view');                 // просмотр одной карты из Maps Browser
   var VAUTH  = q.get('author');
   var PRACTICE = q.get('practice') === '1';   // Practice Mode — см. Maps Browser
-  // отдельный режим с главной (Murder Mystery и др.) — свои комнаты пряток «murder-1» (см. hsFixedOf в server.js)
-  var VARIANT = /^(murder|cops|ctf|dom)$/.test(q.get('variant') || '') ? q.get('variant') : null;
+  // отдельный режим с главной (Murder Mystery, Team Battle) — свои комнаты «murder-1», «team-1» (см. hsFixedOf в server.js)
+  var VARIANT = /^(murder|team)$/.test(q.get('variant') || '') ? q.get('variant') : null;
   var GOD  = PRACTICE && q.get('god') === '1';   // неуязвимость — подопция Practice, ставится там же
   var FLY  = PRACTICE && q.get('fly') === '1';   // полёт — подопция Practice, ставится там же
 
@@ -31,7 +31,7 @@
      Интерфейс сайта только на английском (см. i18n.js), поэтому здесь
      без словаря — те же строки, что и в нём (hideAndSeek/race). */
   document.title = 'AIBrofist — ' + (MODE === 'race' ? 'Race'
-    : ({ murder: 'Murder Mystery', cops: 'Cops & Robbers', ctf: 'Capture the Flag', dom: 'Domination' })[VARIANT] || 'Hide and Seek');
+    : ({ murder: 'Murder Mystery', team: 'Team Battle' })[VARIANT] || 'Hide and Seek');
 
   var ROUND_MS  = 120000;   // раунд — 2 минуты
   var LOBBY_MS  = 30000;    // ожидание в Hide and Seek — 30 секунд
@@ -1530,18 +1530,24 @@
      искателя и так на него намекала. Короткая — только объявляет режим,
      не отнимает заметную часть времени на прятки (см. onDone ниже: для
      классики за ней сразу следует обычная рулетка искателя). */
-  var VARIANTS = ['classic', 'zombie', 'murder', 'cops', 'ctf', 'dom'];
+  /* Рулетка режима крутит только то, что бывает в этой комнате: в прятках — Classic, Zombie
+     Apocalypse и Cops & Robbers, в Team Battle — Capture the Flag и Domination, в Murder
+     Mystery — он сам (Classic — пока игроков мало, см. hsFixedWait в server.js). */
+  var VARIANTS = { hs: ['classic', 'zombie', 'cops'], murder: ['classic', 'murder'], team: ['classic', 'ctf', 'dom'] };
+  var hsFixed = null;                    // отдельный режим комнаты: 'murder' | 'team' | null
   function variantName(v) {
     return v === 'zombie' ? TR('modeApoc', 'Zombie Apocalypse') : v === 'murder' ? TR('modeMurder', 'Murder Mystery')
       : v === 'cops' ? TR('modeCops', 'Cops & Robbers') : v === 'ctf' ? TR('modeCtf', 'Capture the Flag')
-      : v === 'dom' ? TR('modeDom', 'Domination') : TR('modeClassic', 'Classic');
+      : v === 'dom' ? TR('modeDom', 'Domination') : v === 'team' ? TR('modeTeam', 'Team Battle') : TR('modeClassic', 'Classic');
   }
   function runModeRoulette(variant, onDone) {
     roulStop();
     var box = $('gRoul'), view = $('gRoulView'), track = $('gRoulTrack');
     var res = $('gRoulRes');
-    var list = VARIANTS.map(function (v) { return { name: variantName(v) }; });
-    var winIdx = Math.max(0, VARIANTS.indexOf(variant));
+    var kinds = (VARIANTS[hsFixed] || VARIANTS.hs).slice();
+    if (kinds.indexOf(variant) === -1) kinds.push(variant);
+    var list = kinds.map(function (v) { return { name: variantName(v) }; });
+    var winIdx = kinds.indexOf(variant);
     var special = variant === 'murder' || variant === 'cops' || variant === 'ctf' || variant === 'dom';
 
     banner('', '', false);
@@ -1550,7 +1556,7 @@
     var seq = [], edge = 3;
     while (seq.length < edge) seq = seq.concat(list);
     var startIdx = seq.length;
-    var pass = 6 + Math.floor(Math.random() * 3);   // короче, чем у искателя — исходов всего 4
+    var pass = 6 + Math.floor(Math.random() * 3);   // короче, чем у искателя — исходов всего два-три
     while (seq.length < startIdx + pass) seq = seq.concat(list);
     var target = seq.length + winIdx;
     seq = seq.concat(list);
@@ -2242,6 +2248,7 @@
       hsApocRound = !!d.apoc;
       hsVariant = d.variant || (d.apoc ? 'zombie' : 'classic');
       hsSecret = null;                   // тайная роль придёт следом (hsSecret)
+      hsFixed = d.fixed || null;
       fixedWaitLog(d);
       setRole('hider');
       $('gRoleBox').style.display = 'none';
@@ -2482,6 +2489,7 @@
     socket.on('hsState', function (d) {
       hsSync = true; hsEver = true;
       if (MODE !== 'hideAndSeek' || !d || !d.phase) return;
+      hsFixed = d.fixed || null;
       fixedWaitLog(d);
       $('gTimeBox').style.display = '';
       // друг открыл ссылку Story уже после того, как лимит сессии вышел
