@@ -1333,7 +1333,9 @@ const find = (list, method, re) => list.filter(c => c.method === method && re.te
      rru && rru.body.type === 7 && rru.data.flags === 32768 && /^Правила сервера AIBROFIST 1 Без спама /.test(rru.alt) &&
      buttonsOf(rru.data).length === 0 && !(rru.data.flags & 64) &&
      Array.isArray(rru.data.attachments) && rru.data.attachments.length === 0, rru && rru.alt.slice(0, 60));
-  ok('русский текст — тот же набор из 7 правил и про копящиеся предупреждения', /7 Без чужих IP-адресов/.test(rru.alt) && !/8 /.test(rru.alt) && /Предупреждения копятся/.test(rru.alt));
+  ok('русский текст — тот же набор из 7 правил и про копящиеся предупреждения', /7 Без чужих IP-адресов/.test(rru.alt) &&
+     // восьмого правила нет; «28 окт» в строке «Обновлено …» — дата, а не правило
+     !/(^|\s)8 [A-ZА-ЯЁ]/.test(rru.alt) && /Предупреждения копятся/.test(rru.alt));
   t = Date.now();
   bid = press('U0', 'rules:en');
   await waitFor(() => picAnswer(since(t), bid), 5000);

@@ -37,6 +37,7 @@
   var COLOR_SEEKER = '#1e6fe0';   // цвет модели искателя в классике (см. applyColor)
   var COLOR_CAUGHT = '#f97316';   // цвет модели пойманного в классике (см. applyColor)
   var COLOR_OUT    = '#9ca3af';   // гонка Last bro standing: выбывший до конца раунда
+  var COLOR_TEAM   = { red: '#dc2626', blue: '#2563eb' };   // командные варианты пряток
 
   /* Общие раунды гонки (см. raceRooms в server.js): карту, отсчёт перед стартом и конец раунда
      задаёт сервер — вся комната бежит одно и то же. raceSync — сервер прислал фазу; без неё
@@ -406,6 +407,8 @@
     + '<span><span id="gLblPlayers">Игроков</span>: <b id="gCount">1</b></span>'
     + '<span><span id="gLblPing">Пинг</span>: <b id="gPing">—</b></span>'
     + '<span id="gTimeBox"><span id="gLblTime">Время</span>: <b id="gTime">—</b></span>'
+    // счёт команд в Capture the Flag и Domination (см. renderTeamHud)
+    + '<span id="gTeamBox" style="display:none"></span>'
     // жизни на карте гонки (см. raceLives в движке) — только если карта их задаёт
     + '<span id="gLivesBox" style="display:none"><span id="gLblLives">Жизни</span>: <b id="gLives"></b></span>'
     + '<button id="gDraw" aria-label="Draw" title="Draw an arrow for others to see"><svg viewBox="0 0 24 24" '
@@ -860,13 +863,25 @@
     }).catch(function () {});
 
   // системные сообщения — короткой плашкой, история не хранится
+  /* Сообщения стопкой сразу под шапкой: раньше каждое появлялось в одной и той же точке, и
+     события подряд (карта, флаг, очко) наезжали друг на друга. Одновременно — не больше четырёх. */
   function log(html) {
+    var box = $('gLog');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'gLog';
+      box.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);z-index:62;display:flex;' +
+        'flex-direction:column;align-items:center;gap:5px;pointer-events:none;max-width:calc(100vw - 24px)';
+      document.body.appendChild(box);
+    }
+    var bar = $('gTop');
+    box.style.top = (bar ? Math.round(bar.getBoundingClientRect().bottom) + 6 : 52) + 'px';
     var d = document.createElement('div');
     d.innerHTML = html;
-    d.style.cssText = 'position:fixed;left:50%;top:52px;transform:translateX(-50%);z-index:62;' +
-      'background:rgba(0,0,0,.62);color:#fff;padding:7px 15px;border-radius:16px;' +
-      'font:12.5px sans-serif;pointer-events:none';
-    document.body.appendChild(d);
+    d.style.cssText = 'background:rgba(0,0,0,.62);color:#fff;padding:7px 15px;border-radius:16px;' +
+      'font:12.5px sans-serif;text-align:center';
+    box.appendChild(d);
+    while (box.children.length > 4) box.removeChild(box.firstChild);
     setTimeout(function () { d.remove(); }, 2600);
   }
 
@@ -1168,6 +1183,7 @@
      моделью зомби (см. meIsZombie/figureZombie), поэтому там всегда
      обычный цвет. */
   function applyColor() {
+    if (MODE === 'hideAndSeek' && teamVariant() && myTeam()) { GAME.myColor = COLOR_TEAM[myTeam()]; return; }
     if (MODE === 'hideAndSeek' && !hsApocRound) {
       // убийца в Murder Mystery выглядит как все — его роль тайная
       if (me.role === 'seeker' && hsVariant !== 'murder') { GAME.myColor = COLOR_SEEKER; return; }
@@ -1201,6 +1217,54 @@
      В Murder Mystery роль у каждого своя и тайная — её присылает только сервер (hsSecret). */
   var hsVariant = 'classic';
   var hsSecret = null;            // murderer | sheriff | innocent
+  /* Командные варианты (Capture the Flag, Domination): команда каждого (id -> red|blue), базы —
+     укрытия карты, точки захвата и счёт присылает сервер (hsRoulette/hsPhase/ctfState/domState). */
+  var hsTeams = {}, hsBases = null, hsPoints = null, ctfState = null, domState = null;
+  function teamVariant() { return hsVariant === 'ctf' || hsVariant === 'dom'; }
+  function myTeam() { return socket ? hsTeams[socket.id] || null : null; }
+  function resetTeams() { applyTeamState({}); }
+  // состав команд, базы, точки и счёт — целиком из hsState (вошедший посреди игры)
+  function applyTeamState(d) {
+    hsTeams = d.teams || {}; hsBases = d.bases || null; hsPoints = d.points || null;
+    ctfState = d.ctf || null; domState = d.dom || null;
+    renderTeamHud();
+  }
+  // на базе стоят внизу укрытия, по центру
+  function hsTeamSpawn() {
+    var t = myTeam(), b = t && hsBases && hsBases[t], p = GAME.pl;
+    if (!b || !p || !GAME.teleportTo) return;
+    GAME.teleportTo(b.x + b.w / 2 - p.w / 2, b.y + b.h - p.h);
+  }
+  function teamName(t) { return t === 'red' ? TR('teamRed', 'Красные') : TR('teamBlue', 'Синие'); }
+  /* Наряд роли (см. OUTFIT в game.html): копы, грабители и игроки команд видны всем; убийца и
+     шериф Murder Mystery видят свой наряд только у себя — остальным он не показывается и по сети
+     не уходит. Роли известны, когда рулетка уже назначила их (hsWinnerId) или идёт охота. */
+  function rolesKnown() { return MODE === 'hideAndSeek' && !VIEW && (phase === 'round' || !!hsWinnerId); }
+  function outfitFor(id) {
+    if (!rolesKnown()) return null;
+    if (hsVariant === 'cops') return hsSeekerIds[id] ? { kind: 'cop' } : { kind: 'robber', arg: !!(others[id] && others[id].caught) };
+    if (teamVariant() && hsTeams[id]) return { kind: 'team', arg: COLOR_TEAM[hsTeams[id]] };
+    return null;
+  }
+  function syncMyOutfit() {
+    var o = null;
+    if (rolesKnown() && socket) {
+      if (hsVariant === 'cops') o = me.role === 'seeker' ? { kind: 'cop' } : { kind: 'robber', arg: !!me.caught };
+      else if (teamVariant() && myTeam()) o = { kind: 'team', arg: COLOR_TEAM[myTeam()] };
+      else if (hsVariant === 'murder' && !me.caught && (hsSecret === 'murderer' || hsSecret === 'sheriff')) o = { kind: hsSecret };
+    }
+    GAME.myOutfit = o;
+  }
+  // счёт в шапке: «Red 1 : 0 Blue»
+  function renderTeamHud() {
+    var box = $('gTeamBox');
+    if (!box) return;
+    var sc = (ctfState && ctfState.score) || (domState && domState.score);
+    if (!teamVariant() || !sc) { box.style.display = 'none'; return; }
+    box.style.display = '';
+    box.innerHTML = '<b style="color:' + COLOR_TEAM.red + '">' + esc(teamName('red')) + ' ' + (sc.red | 0) + '</b> : '
+      + '<b style="color:' + COLOR_TEAM.blue + '">' + (sc.blue | 0) + ' ' + esc(teamName('blue')) + '</b>';
+  }
   function syncMeIsZombie() {
     GAME.meIsZombie = !!(hsApocRound && me.role === 'seeker');
   }
@@ -1214,6 +1278,7 @@
       ? (hsApocRound ? TR('roleZombie', 'Зомби')
         : hsVariant === 'murder' ? TR('roleMurderer', 'Убийца')
         : hsVariant === 'cops' ? TR('roleCop', 'Коп') : TR('roleSeeker', 'Искатель'))
+      : teamVariant() ? (myTeam() ? teamName(myTeam()) : '—')
       : (hsVariant === 'murder' ? (hsSecret === 'sheriff' ? TR('roleSheriff', 'Шериф') : TR('roleInnocent', 'Невиновный'))
         : hsVariant === 'cops' ? TR('roleRobber', 'Грабитель') : TR('roleHider', 'Прячется'));
     applyColor();
@@ -1245,6 +1310,7 @@
      а копов сразу несколько. Роль приходит вместе с вариантом (hsRoulette/hsSecret/hsState);
      эта функция только раскладывает её по hsSeekerIds и подписи. */
   function fixVariantRole() {
+    if (teamVariant()) { setRole('hider'); return; }
     if (hsVariant === 'murder') {
       if (hsSecret === 'murderer') hsSeekerIds[socket.id] = true;
       setRole(hsSecret === 'murderer' ? 'seeker' : 'hider');
@@ -1253,11 +1319,14 @@
     }
   }
   function variantRoleText() {
+    if (teamVariant()) return myTeam() === 'blue' ? TR('roulYouBlue', 'Ты в синей команде!') : TR('roulYouRed', 'Ты в красной команде!');
     if (hsVariant === 'cops') return me.role === 'seeker' ? TR('roulYouCop', 'Ты коп!') : TR('roulYouRobber', 'Ты грабитель!');
     return hsSecret === 'murderer' ? TR('roulYouMurderer', 'Ты убийца!')
       : hsSecret === 'sheriff' ? TR('roulYouSheriff', 'Ты шериф!') : TR('roulYouInnocent', 'Ты невиновный!');
   }
   function variantHint() {
+    if (hsVariant === 'ctf') return TR('hintCtf', 'Принеси вражеский флаг к своему. Коснись врага с вашим флагом — флаг вернётся домой.');
+    if (hsVariant === 'dom') return TR('hintDom', 'Стой на точках с командой, чтобы захватить их. Каждая точка приносит очки каждую секунду.');
     if (hsVariant === 'cops') return me.role === 'seeker' ? TR('hintCop', 'Лови грабителей — пойманные замирают на месте.')
       : TR('hintRobber', 'Прячься от копов и касанием освобождай пойманных.');
     return hsSecret === 'murderer' ? TR('hintMurderer', 'Касанием выбивай игроков. Берегись шерифа — его касание тебя поймает!')
@@ -1451,10 +1520,11 @@
      искателя и так на него намекала. Короткая — только объявляет режим,
      не отнимает заметную часть времени на прятки (см. onDone ниже: для
      классики за ней сразу следует обычная рулетка искателя). */
-  var VARIANTS = ['classic', 'zombie', 'murder', 'cops'];
+  var VARIANTS = ['classic', 'zombie', 'murder', 'cops', 'ctf', 'dom'];
   function variantName(v) {
     return v === 'zombie' ? TR('modeApoc', 'Zombie Apocalypse') : v === 'murder' ? TR('modeMurder', 'Murder Mystery')
-      : v === 'cops' ? TR('modeCops', 'Cops & Robbers') : TR('modeClassic', 'Classic');
+      : v === 'cops' ? TR('modeCops', 'Cops & Robbers') : v === 'ctf' ? TR('modeCtf', 'Capture the Flag')
+      : v === 'dom' ? TR('modeDom', 'Domination') : TR('modeClassic', 'Classic');
   }
   function runModeRoulette(variant, onDone) {
     roulStop();
@@ -1462,7 +1532,7 @@
     var res = $('gRoulRes');
     var list = VARIANTS.map(function (v) { return { name: variantName(v) }; });
     var winIdx = Math.max(0, VARIANTS.indexOf(variant));
-    var special = variant === 'murder' || variant === 'cops';
+    var special = variant === 'murder' || variant === 'cops' || variant === 'ctf' || variant === 'dom';
 
     banner('', '', false);
     document.body.classList.add('hasRoulette');
@@ -2172,6 +2242,18 @@
       // от phaseEnds, а не берём д.msLeft как есть: он успел устареть на
       // время показа рулетки режима
       runModeRoulette(hsVariant, function () {
+        if (teamVariant()) {
+          // команды раздал сервер; стоим на своей базе до начала раунда. Пока крутилась рулетка,
+          // мог прийти состав новее (кто-то вошёл — hsTeams) — его не затираем
+          if (!Object.keys(hsTeams).length) hsTeams = d.teams || {};
+          hsBases = d.bases || null; hsPoints = d.points || null;
+          hsWinnerId = 'variant';
+          fixVariantRole(); applyColor();
+          hsTeamSpawn(); GAME.frozen = true;
+          log(variantHint());
+          if (window.BFSound) BFSound.roulLand();
+          return variantRoleText();
+        }
         if (hsVariant === 'murder' || hsVariant === 'cops') {
           // роли раздал сервер: копы — всем (d.cops), убийца и шериф — каждому свою (hsSecret)
           (d.cops || []).forEach(function (c) { hsSeekerIds[c.id] = true; });
@@ -2209,6 +2291,38 @@
       else log(TR('roundOver', 'Раунд окончен'));
     });
 
+    // ---------- командные варианты: состав команд, флаги, точки захвата ----------
+    socket.on('hsTeams', function (d) {
+      if (MODE !== 'hideAndSeek' || !d || !teamVariant()) return;
+      var had = myTeam();
+      hsTeams = d.teams || {};
+      if (myTeam() !== had) { fixVariantRole(); applyColor(); }
+    });
+    socket.on('ctfState', function (d) {
+      if (MODE !== 'hideAndSeek' || !d) return;
+      ctfState = d;
+      renderTeamHud();
+      var e = d.ev, sc = d.score || {};
+      if (!e) return;
+      var who = '<b>' + esc(e.name || '') + '</b>', tn = '<b style="color:' + COLOR_TEAM[e.team] + '">' + esc(teamName(e.team)) + '</b>';
+      if (e.ev === 'take') log(TR('ctfTaken', '{n} схватил флаг: {t}!').replace('{n}', who).replace('{t}', tn));
+      else if (e.ev === 'capture') {
+        log(TR('ctfScored', 'Очко команде {t}! {r} : {b}').replace('{t}', tn).replace('{r}', sc.red | 0).replace('{b}', sc.blue | 0));
+        if (window.BFSound) BFSound.win();
+      } else if (e.ev === 'return') log(TR('ctfReturned', 'Флаг вернулся на базу: {t}').replace('{t}', tn));
+    });
+    socket.on('domState', function (d) {
+      if (MODE !== 'hideAndSeek' || !d) return;
+      var before = domState && domState.points ? domState.points.map(function (p) { return p.owner; }).join() : '';
+      domState = d;
+      renderTeamHud();
+      var now = (d.points || []).map(function (p) { return p.owner; });
+      if (before && before !== now.join()) now.forEach(function (o, i) {
+        if (o && before.split(',')[i] !== o) log(TR('domTaken', 'Точка {p} — у команды {t}!').replace('{p}', 'ABC'.charAt(i))
+          .replace('{t}', '<b style="color:' + COLOR_TEAM[o] + '">' + esc(teamName(o)) + '</b>'));
+      });
+    });
+
     // Murder Mystery: своя тайная роль — приходит только этому игроку
     socket.on('hsSecret', function (d) {
       if (MODE !== 'hideAndSeek' || !d) return;
@@ -2231,6 +2345,12 @@
         log(d.winner === 'murderer' ? TR('mmWinMurderer', 'Убийца {m} выбил всех!').replace('{m}', m)
           : d.winner === 'sheriff' ? TR('mmWinSheriff', 'Невиновные победили — шериф поймал убийцу {m}!').replace('{m}', m)
           : TR('mmWinTime', 'Время вышло — невиновные выжили! Убийцей был {m}.').replace('{m}', m));
+      } else if (d.variant === 'ctf' || d.variant === 'dom') {
+        var sc = d.score || {};
+        log(d.winner ? TR('teamWins', 'Победила команда {t}! {r} : {b}').replace('{t}', '<b style="color:' + COLOR_TEAM[d.winner] + '">' + esc(teamName(d.winner)) + '</b>')
+            .replace('{r}', sc.red | 0).replace('{b}', sc.blue | 0)
+          : TR('teamDraw', 'Ничья! {r} : {b}').replace('{r}', sc.red | 0).replace('{b}', sc.blue | 0));
+        if (window.BFSound && d.winner && d.winner === myTeam()) BFSound.win();
       } else if (d.variant === 'cops') {
         log(d.winner === 'cops' ? TR('copsWin', 'Копы победили — все грабители пойманы!')
           : TR('robbersWin', 'Грабители победили — на свободе: {n}').replace('{n}', String(d.free || 0)));
@@ -2289,7 +2409,12 @@
         if (d.seekerId) applySeeker(d.seekerId);
         // копы — все сразу; убийца тайный: его знает только он сам (fixVariantRole)
         (d.seekerIds || []).forEach(function (id) { hsSeekerIds[id] = true; });
-        fixVariantRole();
+        if (teamVariant()) {
+          hsTeams = d.teams || hsTeams; hsBases = d.bases || hsBases; hsPoints = d.points || hsPoints;
+          ctfState = d.ctf || null; domState = d.dom || null;
+          renderTeamHud();
+        }
+        fixVariantRole(); applyColor();
         /* Охота начинается — искатель стартует со своей точки старта, а
            не там, где стоял во время подготовки (мог сам уйти прятаться
            заранее и подсмотреть, куда бегут остальные). Ждём, пока карта
@@ -2324,6 +2449,7 @@
            опять получал бы ярлык обычного искателя вместо зомби. */
         hsApocRound = !!d.apoc;
         if (d.variant) hsVariant = d.variant;
+        resetTeams();
         setRole('hider');
         $('gRoleBox').style.display = 'none';
         clearCaught();
@@ -2356,6 +2482,7 @@
       if (!STORY) loadServerMap(d.map);
       hsVariant = d.variant || (d.apoc ? 'zombie' : 'classic');
       hsSecret = d.role || null;
+      applyTeamState(d);
       if (d.phase === 'round') {
         roulStop();
         // зашли посреди уже идущей охоты — рулетку не видели и не увидим,
@@ -2385,7 +2512,11 @@
         // ненадолго показывало бы обычного искателя вместо зомби
         hsApocRound = !!d.apoc;
         clearCaught();
-        if (hsVariant === 'murder' || hsVariant === 'cops') {
+        if (teamVariant()) {
+          hsWinnerId = 'variant';
+          fixVariantRole(); applyColor();
+          hsTeamSpawn(); GAME.frozen = true;
+        } else if (hsVariant === 'murder' || hsVariant === 'cops') {
           (d.seekerIds || []).forEach(function (id) { hsSeekerIds[id] = true; });
           hsWinnerId = 'variant';
           fixVariantRole();
@@ -2487,6 +2618,15 @@
         if (hsVariant === 'cops' && o.caught && !hsSeekerIds[id]) sendOnce('hsFree', id);
       });
     }
+    /* Capture the Flag: взять вражеский флаг, донести до своего, вернуть свой у соперника —
+       решает сервер по своим координатам (ctfTouch/ctfTag), здесь только заметить касание. */
+    if (MODE === 'hideAndSeek' && phase === 'round' && hsVariant === 'ctf' && ctfState && hsBases && !GAME.frozen && myTeam()) {
+      var mt = myTeam(), et = mt === 'red' ? 'blue' : 'red', fl = ctfState.flags || {};
+      var nearSpot = function (b) { return b && p.x + p.w > b.x - 20 && p.x < b.x + b.w + 20 && p.y + p.h > b.y - 30 && p.y < b.y + b.h + 30; };
+      if (!fl[et] && nearSpot(hsBases[et])) ctfSend('ctfTouch', { team: et }, et);
+      if (fl[et] === socket.id && !fl[mt] && nearSpot(hsBases[mt])) ctfSend('ctfTouch', { team: mt }, mt);
+      if (fl[mt] && fl[mt] !== socket.id && others[fl[mt]] && touching(others[fl[mt]])) ctfSend('ctfTag', { targetId: fl[mt] }, 'tag');
+    }
     // искатель ловит прячущихся касанием
     if (MODE === 'hideAndSeek' && me.role === 'seeker' && phase === 'round' && special && !me.caught) {
       Object.keys(others).forEach(function (id) {
@@ -2525,6 +2665,72 @@
   }, 33);
 
   var touchSentAt = {};
+  function ctfSend(ev, payload, key) {
+    var now = Date.now();
+    if (now - (touchSentAt[ev + key] || 0) < 600) return;
+    touchSentAt[ev + key] = now;
+    socket.emit(ev, payload);
+  }
+
+  /* ---------- командные варианты на карте: базы и флаги (CTF), точки захвата (Domination) ---------- */
+  // флаг: подставка, древко с шариком, полотнище волной и белая эмблема; x,y — низ древка
+  function drawFlag(ctx, x, y, color, k) {
+    var H = 72 * k, fw = 34 * k, fh = 22 * k, top = y - H + 3 * k;
+    var wv = Math.sin(Date.now() / 220) * 3 * k;
+    ctx.fillStyle = '#4b5563';
+    ctx.fillRect(x - 9 * k, y - 4 * k, 18 * k, 4 * k);
+    ctx.fillStyle = '#6b7280';
+    ctx.fillRect(x - 1.5 * k, y - H, 3 * k, H);
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath(); ctx.arc(x, y - H, 3.2 * k, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5 * k, top);
+    ctx.quadraticCurveTo(x + fw * 0.5, top - wv, x + fw, top + wv * 0.5);
+    ctx.lineTo(x + fw, top + fh + wv * 0.5);
+    ctx.quadraticCurveTo(x + fw * 0.5, top + fh - wv, x + 1.5 * k, top + fh);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.88)';
+    ctx.beginPath(); ctx.arc(x + fw * 0.52, top + fh / 2, 4.6 * k, 0, 6.2832); ctx.fill();
+  }
+  function drawTeamObjects(ctx) {
+    if (MODE !== 'hideAndSeek' || !teamVariant() || !hsBases) return;
+    ctx.save();
+    if (hsVariant === 'ctf') {
+      ['red', 'blue'].forEach(function (t) {
+        var b = hsBases[t];
+        if (!b) return;
+        // база — цветная площадка на земле под укрытием
+        ctx.globalAlpha = 0.14; ctx.fillStyle = COLOR_TEAM[t]; ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.globalAlpha = 0.45; ctx.beginPath(); ctx.ellipse(b.x + b.w / 2, b.y + b.h, b.w / 2 + 14, 7, 0, 0, 6.2832); ctx.fill();
+        ctx.globalAlpha = 1;
+        var c = ctfState && ctfState.flags ? ctfState.flags[t] : null;
+        var who = c && socket && c === socket.id ? GAME.pl : (c ? others[c] : null);
+        // у несущего флаг над головой, иначе — на базе
+        if (who) drawFlag(ctx, who.x + (who.w || 22) / 2, who.y - 4, COLOR_TEAM[t], 0.55);
+        else drawFlag(ctx, b.x + b.w / 2, b.y + b.h, COLOR_TEAM[t], 1);
+      });
+    } else if (hsPoints) {
+      hsPoints.forEach(function (b, i) {
+        var pt = domState && domState.points ? domState.points[i] : null;
+        var col = pt && pt.owner ? COLOR_TEAM[pt.owner] : '#6b7280', cx = b.x + b.w / 2, cy = b.y - 30;
+        ctx.globalAlpha = 0.14; ctx.fillStyle = col; ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.ellipse(cx, b.y + b.h, b.w / 2 + 14, 7, 0, 0, 6.2832); ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = 'rgba(255,255,255,.92)';
+        ctx.beginPath(); ctx.arc(cx, cy, 18, 0, 6.2832); ctx.fill();
+        ctx.strokeStyle = col; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(cx, cy, 18, 0, 6.2832); ctx.stroke();
+        if (pt && pt.by && pt.prog) {                // захват идёт — дуга цветом захватчиков
+          ctx.strokeStyle = COLOR_TEAM[pt.by]; ctx.lineWidth = 6;
+          ctx.beginPath(); ctx.arc(cx, cy, 18, -1.5708, -1.5708 + 6.2832 * Math.min(1, pt.prog / 3)); ctx.stroke();
+        }
+        ctx.fillStyle = col; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('ABC'.charAt(i), cx, cy + 1);
+      });
+    }
+    ctx.restore();
+  }
 
   /* Раунд заканчивается, как только пойманы все. Таймер после этого
      дотикивал впустую: искать было уже некого. */
@@ -2585,7 +2791,7 @@
     if (!cv) return;
     // в Murder Mystery охотник тайный — показывать на мини-карте нечего
     var show = MODE === 'hideAndSeek' && !VIEW && phase === 'round' && me.role !== 'seeker' && !me.caught && GAME.playing
-      && hsVariant !== 'murder';
+      && hsVariant !== 'murder' && !teamVariant();
     cv.style.display = show ? 'block' : 'none';
     if (!show) return;
     var now = Date.now();
@@ -2626,6 +2832,7 @@
 
   GAME.onDraw = function (ctx) {
     drawMini();
+    syncMyOutfit();
     /* Правила видимости пряток в лобби завязаны на рулетку:
 
        пока она крутится — видно ВСЕХ. Это единственный момент, когда
@@ -2659,11 +2866,14 @@
       ctx.translate(o.x, o.y);
       // заражён в apoc-раунде — выглядит зомби, а не обычной фигуркой
       // (см. hsApocRound/hsSeekerIds — тот же набор, что красит полосу под ником)
+      var fit = outfitFor(id);
       if (hsApocRound && hsSeekerIds[id] && GAME.figureZombie) GAME.figureZombie(w, h);
+      else if (fit && GAME.figureOutfit) GAME.figureOutfit(fit.kind, w, h, fit.arg);   // наряд роли варианта
       else GAME.figure(w, h, o.color || COLOR_NORMAL, true, o.skin || null);
       ctx.restore();
       drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74));
     });
+    drawTeamObjects(ctx);
     var p = GAME.pl;
     if (GAME.playing && me.name) {
       // свой ник в укрытии показываем бледным — напоминание, что тебя не видно

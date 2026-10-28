@@ -254,16 +254,16 @@ body.mob #msg h1{font-size:38px}
 body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="offline.js?v=3"></script>
-<script src="device.js?v=187"></script>
-        <script src="sound.js?v=187"></script>
-        <script src="skinRender.js?v=187"></script>
-        <script src="skinCanvas.js?v=187"></script>
-        <script src="gifuct.bundle.js?v=187"></script>
-        <script src="gifPlayer.js?v=187"></script>
-        <script src="coin.js?v=187"></script>
-        <script src="liveText.js?v=187"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=187">
-        <script src="theme.js?v=187"></script>
+<script src="device.js?v=188"></script>
+        <script src="sound.js?v=188"></script>
+        <script src="skinRender.js?v=188"></script>
+        <script src="skinCanvas.js?v=188"></script>
+        <script src="gifuct.bundle.js?v=188"></script>
+        <script src="gifPlayer.js?v=188"></script>
+        <script src="coin.js?v=188"></script>
+        <script src="liveText.js?v=188"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=188">
+        <script src="theme.js?v=188"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -837,6 +837,89 @@ var PAINT = {
     ctx.strokeStyle = C.stone3; ctx.lineWidth = 1.6; ctx.strokeRect(.8,.8,o.w-1.6,o.h-1.6);
   },
 };
+
+/* Наряды ролей в вариантах пряток (см. outfitFor в game.js): коп, грабитель (пойманный — в
+   тюремной робе), игрок команды, а свою тайную роль Murder Mystery — убийцу или шерифа — видишь
+   только ты сам. Как у зомби: силуэт рисует та же figure(), что у игрока, хитбокс не меняется,
+   роль видна по форме, головному убору и знакам. Рисуют в локальных координатах игрока (0,0 → w,h). */
+function outfitStar(cx, cy, r, color){
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for(var i = 0; i < 10; i++){
+    var a = -Math.PI/2 + i*Math.PI/5, rr2 = i % 2 ? r*0.45 : r;
+    ctx.lineTo(cx + Math.cos(a)*rr2, cy + Math.sin(a)*rr2);
+  }
+  ctx.closePath(); ctx.fill();
+}
+var OUTFIT = {
+  // тёмно-синяя форма, фуражка с кокардой, звезда-жетон и ремень
+  cop: function(w, h){
+    var d = w, top = d + h*FIG_GAP, bh = h - top;
+    figure(w, h, "#1e3a8a");
+    ctx.fillStyle = "#0f172a";
+    rr(-w*0.1, -d*0.16, w*1.2, d*0.4, d*0.14); ctx.fill();          // тулья
+    ctx.fillRect(-w*0.16, d*0.2, w*1.32, Math.max(2, d*0.1));      // козырёк
+    ctx.fillStyle = "#fbbf24";
+    ctx.beginPath(); ctx.arc(w/2, d*0.04, Math.max(1.6, d*0.1), 0, 6.2832); ctx.fill();
+    if(bh > 0){
+      outfitStar(w*0.68, top + bh*0.2, Math.max(2.5, w*0.14), "#fbbf24");
+      ctx.fillStyle = "#0f172a"; ctx.fillRect(0, top + bh*0.56, w, Math.max(2, bh*0.07));
+      ctx.fillStyle = "#cbd5e1"; ctx.fillRect(w*0.42, top + bh*0.555, w*0.16, Math.max(2, bh*0.08));
+    }
+  },
+  // полосатая кофта и чёрная маска с прорезями; пойманный — оранжевая роба в полоску
+  robber: function(w, h, jailed){
+    var d = w, top = d + h*FIG_GAP, bh = h - top;
+    figure(w, h, jailed ? "#ea580c" : "#1f2937");
+    ctx.fillStyle = "#6b7280";
+    ctx.beginPath(); ctx.arc(w/2, d/2, d/2, 0, 6.2832); ctx.fill();
+    if(bh > 0){
+      ctx.fillStyle = jailed ? "#ffedd5" : "#e5e7eb";
+      var n = 4, sh = bh / (n*2 + 1);
+      for(var i = 0; i < n; i++) ctx.fillRect(0, top + sh*(2*i + 1), w, sh);
+    }
+    ctx.fillStyle = "#030712";
+    ctx.fillRect(-w*0.06, d*0.3, w*1.12, d*0.26);
+    ctx.fillStyle = "#f9fafb";
+    ctx.beginPath(); ctx.arc(w*0.32, d*0.43, Math.max(1.4, d*0.075), 0, 6.2832); ctx.fill();
+    ctx.beginPath(); ctx.arc(w*0.68, d*0.43, Math.max(1.4, d*0.075), 0, 6.2832); ctx.fill();
+  },
+  // цвет команды, повязка потемнее и белая полоса на груди
+  team: function(w, h, color){
+    var d = w, top = d + h*FIG_GAP, bh = h - top;
+    var dark = color === "#2563eb" ? "#1e3a8a" : "#7f1d1d";
+    figure(w, h, color);
+    ctx.fillStyle = dark;
+    ctx.fillRect(-w*0.04, d*0.2, w*1.08, Math.max(2, d*0.17));
+    ctx.fillStyle = "#f9fafb";
+    ctx.beginPath(); ctx.arc(w*0.34, d*0.52, Math.max(1.3, d*0.07), 0, 6.2832); ctx.fill();
+    ctx.beginPath(); ctx.arc(w*0.66, d*0.52, Math.max(1.3, d*0.07), 0, 6.2832); ctx.fill();
+    if(bh > 0){ ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.fillRect(0, top + bh*0.18, w, Math.max(2, bh*0.08)); }
+  },
+  // только для себя: капюшон и красные глаза — остальные видят обычную фигуру
+  murderer: function(w, h){
+    var d = w;
+    figure(w, h, "#000000");
+    ctx.strokeStyle = "#7f1d1d"; ctx.lineWidth = Math.max(2, d*0.12);
+    ctx.beginPath(); ctx.arc(w/2, d/2, d/2, Math.PI*1.05, Math.PI*1.95); ctx.stroke();
+    ctx.fillStyle = "#ef4444";
+    ctx.fillRect(w*0.26, d*0.42, Math.max(2, d*0.14), Math.max(1.6, d*0.08));
+    ctx.fillRect(w*0.6, d*0.42, Math.max(2, d*0.14), Math.max(1.6, d*0.08));
+  },
+  // только для себя: шляпа и звезда шерифа
+  sheriff: function(w, h){
+    var d = w, top = d + h*FIG_GAP, bh = h - top;
+    figure(w, h, "#000000");
+    ctx.fillStyle = "#92400e";
+    rr(-w*0.32, d*0.02, w*1.64, Math.max(2, d*0.12), d*0.06); ctx.fill();     // поля
+    rr(w*0.12, -d*0.36, w*0.76, d*0.42, d*0.12); ctx.fill();                  // тулья
+    ctx.fillStyle = "#451a03"; ctx.fillRect(w*0.12, -d*0.04, w*0.76, Math.max(1.5, d*0.07));
+    if(bh > 0) outfitStar(w*0.68, top + bh*0.2, Math.max(2.5, w*0.15), "#fbbf24");
+  }
+};
+function drawOutfit(kind, w, h, arg){
+  if(OUTFIT[kind]) OUTFIT[kind](w, h, arg); else figure(w, h, "#000000");
+}
 
 /* ══════════════════════════════════════════════════
    TOOL TABLE
@@ -2791,6 +2874,8 @@ function paintFrame(){
     if(pl.hidden) ctx.globalAlpha = 0.35;
     // заразился в apoc-раунде — сам теперь выглядишь зомби (см. meIsZombie в game.js)
     if(BRIDGE && BRIDGE.meIsZombie) PAINT.zombie({w: pl.w, h: pl.h, _zface: pl.face || 1});
+    // роль варианта пряток — в её наряде (см. outfitFor в game.js)
+    else if(BRIDGE && BRIDGE.myOutfit) drawOutfit(BRIDGE.myOutfit.kind, pl.w, pl.h, BRIDGE.myOutfit.arg);
     else figure(pl.w, pl.h, (BRIDGE && BRIDGE.myColor) || "#000000", true,
            (BRIDGE && BRIDGE.mySkin) || null);
     ctx.restore();
@@ -3887,6 +3972,13 @@ window.GAME = BRIDGE = {
   // классика: искатель ждёт раунд в отмеченном месте, если оно есть на
   // карте (см. teleportToSeekerSpot/applySeeker в game.js)
   seekerWaitSpot: teleportToSeekerSpot,
+  // командные варианты пряток: в лобби команда стоит на своей базе (см. hsTeamSpawn в game.js)
+  teleportTo: function(x, y){
+    if(!isFinite(x) || !isFinite(y)) return;
+    pl.x = x; pl.y = y; pl.vx = 0; pl.vy = 0;
+    pl.rideOn = null; pl.grab = null; grabCd = 0; pl.kick = 0; pl.climb = null; pl.jumpLock = false;
+    stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckSteer = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
+  },
   step: step,                     // один шаг физики — нужен автотестам
   stepAlways: stepAlways,         // тик вне забега — для автотестов
   zoomAt: zoomAt,                   // камера — тесты предела отдаления
@@ -3919,6 +4011,9 @@ window.GAME = BRIDGE = {
   figureZombie: function(w, h){
     PAINT.zombie({w: w, h: h});
   },
+  // чужой игрок в наряде роли (см. OUTFIT) — тоже внутри save/translate чужого игрока
+  myOutfit: null,
+  figureOutfit: function(kind, w, h, arg){ drawOutfit(kind, w, h, arg); },
   get done(){ return done; },
   // Practice Mode включается снаружи (game.js) до старта — см. respawn()
   get practice(){ return practiceMode; },
@@ -4059,8 +4154,8 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=187"></script>
-        <script src="i18n.js?v=187"></script>
-        <script src="skinAvatar.js?v=187" defer></script>
+<script src="game.js?v=188"></script>
+        <script src="i18n.js?v=188"></script>
+        <script src="skinAvatar.js?v=188" defer></script>
 </body>
 </html>

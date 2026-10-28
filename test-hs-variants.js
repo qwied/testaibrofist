@@ -134,6 +134,8 @@ const roleText = page => page.evaluate(() => document.getElementById('gRole').te
   const bJoined = await until(() => { const j = cp[0].ev.filter(x => x.e === 'playerJoined').pop(); return j && j.d && j.d.name && cp.every(p => p.name !== j.d.name) ? j.d : null; }, 10000);
   ok(!!await until(async () => /Robber/.test(await roleText(cpage)), 10000), 'вошедший посреди охоты — Robber', await roleText(cpage));
   ok(!!await until(() => cpage.evaluate(() => document.getElementById('gMini').style.display === 'block'), 4000), 'у грабителя мини-карта с копами');
+  const robFit = await until(() => cpage.evaluate(() => { const f = window.GAME.myOutfit; return f && f.kind === 'robber' && !f.arg ? f : null; }), 2000);
+  ok(!!robFit, 'модель грабителя — маска и полосатая кофта', JSON.stringify(robFit));
 
   const cout = (f) => cp[0].count('hsOut', f);
   cops[0].at(rob[0].x, rob[0].y); await sleep(80);
@@ -158,6 +160,8 @@ const roleText = page => page.evaluate(() => document.getElementById('gRole').te
   cops[1].at(bpos.x, bpos.y); await sleep(150);
   cops[1].s.emit('hsCatch', { targetId: bJoined && bJoined.id });
   ok(!!await until(() => cpage.evaluate(() => window.GAME.frozen === true), 3000), 'браузерного грабителя поймали — GAME.frozen');
+  const jailFit = await until(() => cpage.evaluate(() => { const f = window.GAME.myOutfit; return f && f.kind === 'robber' && f.arg === true ? f : null; }), 2000);
+  ok(!!jailFit, 'модель пойманного — тюремная роба', JSON.stringify(jailFit));
   ok(/arrested/i.test(await cpage.evaluate(() => document.body.innerText)), 'в браузере: «… was arrested»');
   const x0 = await cpage.evaluate(() => window.GAME.pl.x);
   await cpage.keyboard.down('ArrowRight'); await cpage.keyboard.press('ArrowUp'); await sleep(700); await cpage.keyboard.up('ArrowRight');

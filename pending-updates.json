@@ -24,6 +24,14 @@
     {
       "title": "Shared Race rounds",
       "text": "Everyone in a Race room now runs the same map at the same time: a short countdown at the start, then a shared timer, and the next map comes when the time is up or everyone has finished. Map makers can also pick a goal for their Race map: everyone races for points, only the first to finish scores, or last one standing, where running out of lives knocks you out and the last player left wins."
+    },
+    {
+      "title": "Team rounds: Capture the Flag and Domination",
+      "text": "Hide and Seek rounds with four or more players on maps with hiding spots can now be team rounds. In Capture the Flag the flags stand at the two hiding spots farthest apart: bring the enemy flag to your own to score, three points win. In Domination teams hold capture points at the hiding spots, and every point held scores each second. The team score is shown at the top, and the winning team gets coins."
+    },
+    {
+      "title": "Role outfits",
+      "text": "Roles now have their own looks: cops wear a uniform with a cap and a badge, robbers a mask and a striped shirt, caught robbers an orange prison suit, and team players a headband in their team color. The murderer and the sheriff see their outfit only on themselves, so the roles stay secret. Flags got a proper flagpole with a waving flag, and game messages now stack neatly instead of covering each other."
     }
   ]
 }

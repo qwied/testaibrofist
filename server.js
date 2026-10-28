@@ -745,6 +745,9 @@ function hsSpin(io, room, st) {
       const s = rest[Math.floor(Math.random() * rest.length)];
       st.sheriffId = s.id; st.sheriffName = s.name;
     }
+  } else if (hsTeamVariant(st.variant)) {
+    hsTeamSetup(st, members);
+    st.seekerId = null; st.seekerName = '';          // искателя в командных вариантах нет
   } else if (st.variant === 'cops') {
     const k = Math.max(1, Math.floor(members.length / 3));
     const cops = [winner.id];
@@ -757,8 +760,10 @@ function hsSpin(io, room, st) {
     }
     st.copIds = cops;
   }
-  // убийца тайный: ни рулетки с победителем, ни шансов — каждому только его роль (hsSecret)
+  // убийца тайный: ни рулетки с победителем, ни шансов — каждому только его роль (hsSecret);
+  // в командных вариантах победителя рулетки тоже нет — есть команды
   const secret = st.variant === 'murder';
+  const teamVar = hsTeamVariant(st.variant);
   const left = st.endsAt - Date.now();
   if (left < HS_ROULETTE_MS + 2000) {
     st.endsAt = Date.now() + HS_ROULETTE_MS + 2000;
@@ -767,9 +772,10 @@ function hsSpin(io, room, st) {
   }
   io.to(room).emit('hsRoulette', {
     // шанс уходит вместе с составом — клиент рисует его в углу и на карточках
-    players: secret ? [] : members.map((m, i) => ({ id: m.id, name: m.name,
+    players: secret || teamVar ? [] : members.map((m, i) => ({ id: m.id, name: m.name,
                                       chance: Math.round(chances[i] * 1000) / 10 })),
-    winnerId: secret ? null : st.seekerId,
+    winnerId: secret || teamVar ? null : st.seekerId,
+    teams: teamVar ? hsTeamsObj(st) : null, bases: teamVar ? st.bases : null, points: st.domPoints || null,
     variant: st.variant || 'classic',
     cops: st.copIds ? members.filter(m => st.copIds.indexOf(m.id) !== -1) : null,
     duration: HS_ROULETTE_MS,
@@ -829,6 +835,21 @@ function hsCreditMapBest(acct, mapKey, role, ms) {
 
 function hsAwardRoundEnd(io, room, st) {
   const members = st.roundMembers || [];
+  // командные варианты: монеты и очки — победившей команде (кто играл раунд с начала и двигался)
+  if (hsTeamVariant(st.variant) && (st.ctf || st.dom)) {
+    const win = hsTeamWinner(st);
+    if (!win) return;
+    members.forEach((m) => {
+      if (hsTeamOf(st, m.id) !== win) return;
+      const sock = io.sockets.sockets.get(m.id), p = gameState.players.get(m.id);
+      if (!sock || !p || (p.odo || 0) - (m.odo || 0) < HS_MIN_DIST) return;
+      const acct = sessionName(sock.handshake.headers.cookie);
+      if (!acct) return;
+      hsCreditAndNotify(sock, acct, 1 + Math.floor(Math.random() * 5), 'hsWin');
+      accountsRef.creditHsScore(acct, HS_PTS_SURVIVE);
+    });
+    return;
+  }
   const caught = st.caughtSet || new Set();
   const mapKey = st.map ? (st.map.author + '|' + st.map.mapName) : null;
   members.forEach((m) => {
@@ -932,12 +953,17 @@ function hsMapOf(st) {
 function hsApplyApoc(st) {
   st.apoc = false;
   st.hasPoison = false;
+  st.spots = [];
   if (!st.map) return;
   try {
     const rec = require('./maps.js').find(st.map.author, st.map.mapName);
     const data = rec && rec.mapData && JSON.parse(rec.mapData);
-    if (!data || !data.apoc) return;
     const list = (data && (Array.isArray(data) ? data : data.objects)) || [];
+    // укрытия карты — базы и точки командных вариантов (см. hsTeamSetup): до них автор
+    // карты и так рассчитывал добежать
+    st.spots = list.filter(o => o && o.hideSpot === true && Number.isFinite(+o.x) && Number.isFinite(+o.y)).slice(0, 60)
+      .map(o => ({ x: +o.x, y: +o.y, w: Math.max(1, Math.min(2000, +o.w || 1)), h: Math.max(1, Math.min(2000, +o.h || 1)) }));
+    if (!data || !data.apoc) return;
     // яд на зомби-карте заражает прячущегося (см. hsPoisoned)
     st.hasPoison = list.some(o => o && o.deadly === true);
     let zb = null;
@@ -957,24 +983,126 @@ function hsApplyApoc(st) {
                касанием (невиновному его касание ничего не делает), а убийца, сам тронувший
                шерифа, проигрывает;
      cops    — Cops and Robbers: треть комнаты — копы; пойманный грабитель замирает на месте,
-               другой грабитель освобождает его касанием; все пойманы разом — копы победили.
+               другой грабитель освобождает его касанием; все пойманы разом — копы победили;
+     ctf     — Capture the Flag: две команды, флаги на двух самых далёких укрытиях карты;
+               донёс вражеский флаг до своего — очко, HS_CTF_WIN очков — победа;
+     dom     — Domination: до трёх точек захвата на укрытиях; каждая своя точка — очко
+               в секунду, HS_DOM_WIN очков — победа.
+   Командные варианты — только от HS_TEAM_MIN игроков и на картах хотя бы с двумя укрытиями.
    Classic выпадает чаще, один и тот же особый вариант два раунда подряд — нет. HS_VARIANT
-   задаёт вариант принудительно (для тестов), если игроков для него хватает. */
+   задаёт вариант принудительно (для тестов), если игроков и карты для него хватает. */
 const HS_VARIANT_MIN = 3;
+const HS_TEAM_MIN = Number(process.env.HS_TEAM_MIN) || 4;
+const HS_CTF_WIN = 3;
+const HS_DOM_WIN = 120;
+const HS_DOM_TICKS = 3;          // столько секунд одна команда стоит на точке — точка её
+function hsTeamVariant(v) { return v === 'ctf' || v === 'dom'; }
 function hsPickVariant(st, n) {
   if (st.apoc) return 'zombie';
   if (st.storyMap || n < HS_VARIANT_MIN) return 'classic';
+  const teamsOk = n >= HS_TEAM_MIN && (st.spots || []).length >= 2;
   const forced = process.env.HS_VARIANT;
   if (forced === 'classic' || forced === 'murder' || forced === 'cops') return forced;
-  const w = { classic: 2, murder: 1, cops: 1 };
-  if (st.variant === 'murder' || st.variant === 'cops') w[st.variant] = 0;
-  let r = Math.random() * (w.classic + w.murder + w.cops);
-  for (const k of ['classic', 'murder', 'cops']) { r -= w[k]; if (r < 0) return k; }
+  if ((forced === 'ctf' || forced === 'dom') && teamsOk) return forced;
+  const w = { classic: 2, murder: 1, cops: 1, ctf: teamsOk ? 1 : 0, dom: teamsOk ? 1 : 0 };
+  if (st.variant && st.variant !== 'classic' && w[st.variant] !== undefined) w[st.variant] = 0;
+  const keys = Object.keys(w);
+  let r = Math.random() * keys.reduce((a, k) => a + w[k], 0);
+  for (const k of keys) { r -= w[k]; if (r < 0) return k; }
   return 'classic';
+}
+
+/* Команды Capture the Flag и Domination: поровну, в случайном порядке. Базы команд — два
+   самых далёких друг от друга укрытия; у Domination третья точка — укрытие, самое далёкое
+   от обеих баз (если оно не вплотную к ним). */
+function hsSpotC(s) { return { x: s.x + s.w / 2, y: s.y + s.h / 2 }; }
+function hsDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function hsTeamSetup(st, members) {
+  const sp = st.spots;
+  let a = 0, b = 1, best = -1;
+  for (let i = 0; i < sp.length; i++) for (let j = i + 1; j < sp.length; j++) {
+    const d = hsDist(hsSpotC(sp[i]), hsSpotC(sp[j]));
+    if (d > best) { best = d; a = i; b = j; }
+  }
+  st.bases = { red: sp[a], blue: sp[b] };
+  st.domPoints = null;
+  if (st.variant === 'dom') {
+    let k = -1, far = 150;
+    sp.forEach((s, i) => {
+      if (i === a || i === b) return;
+      const m = Math.min(hsDist(hsSpotC(s), hsSpotC(sp[a])), hsDist(hsSpotC(s), hsSpotC(sp[b])));
+      if (m > far) { far = m; k = i; }
+    });
+    st.domPoints = k === -1 ? [sp[a], sp[b]] : [sp[a], sp[k], sp[b]];
+  }
+  const ids = members.map(m => m.id);
+  for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
+  st.teams = new Map();
+  ids.forEach((id, i) => st.teams.set(id, i % 2 ? 'blue' : 'red'));
+}
+/* Кто-то ушёл, пока шло лобби, — команды могли разъехаться (3 на 1). На старте раунда
+   выравниваем: из большей в меньшую, пока разница больше одного. */
+function hsBalanceTeams(st) {
+  const red = [], blue = [];
+  st.teams.forEach((t, id) => (t === 'red' ? red : blue).push(id));
+  let moved = false;
+  while (Math.abs(red.length - blue.length) > 1) {
+    const from = red.length > blue.length ? red : blue, to = from === red ? blue : red;
+    const id = from.splice(Math.floor(Math.random() * from.length), 1)[0];
+    to.push(id);
+    st.teams.set(id, to === red ? 'red' : 'blue');
+    moved = true;
+  }
+  return moved;
+}
+function hsTeamsObj(st) { const o = {}; if (st.teams) st.teams.forEach((t, id) => { o[id] = t; }); return o; }
+function hsTeamOf(st, id) { return st.teams ? st.teams.get(id) || null : null; }
+function hsSmallerTeam(st) {
+  let r = 0, b = 0;
+  st.teams.forEach(t => { if (t === 'red') r++; else b++; });
+  return r <= b ? 'red' : 'blue';
+}
+// игрок стоит у укрытия (по серверным координатам) — с запасом под сетевую задержку
+function hsNearSpot(pos, s) {
+  const w = pos.w || 30, h = pos.h || 74;
+  return pos.x + w > s.x - 30 && pos.x < s.x + s.w + 30 && pos.y + h > s.y - 40 && pos.y < s.y + s.h + 40;
+}
+function hsCtfState(st, ev) { return { flags: { red: st.ctf.flags.red, blue: st.ctf.flags.blue }, score: st.ctf.score, ev: ev || null }; }
+function hsDomState(st) { return { points: st.dom.points, score: st.dom.score }; }
+function hsTeamWinner(st) {
+  const sc = st.ctf ? st.ctf.score : st.dom ? st.dom.score : null;
+  if (!sc) return null;
+  return sc.red > sc.blue ? 'red' : sc.blue > sc.red ? 'blue' : null;
+}
+// Domination: раз в секунду — кто стоит на точках, захват и очки
+function hsDomTick(io, room, st) {
+  if (st.phase !== 'round' || !st.dom || st.caughtSent) return;
+  const members = hsMembers(room);
+  st.domPoints.forEach((s, i) => {
+    const pt = st.dom.points[i];
+    const here = { red: 0, blue: 0 };
+    members.forEach((m) => {
+      const p = gameState.players.get(m.id), t = hsTeamOf(st, m.id);
+      if (p && p.position && t && hsNearSpot(p.position, s)) here[t]++;
+    });
+    const only = here.red && !here.blue ? 'red' : here.blue && !here.red ? 'blue' : null;
+    if (only && pt.owner !== only) {
+      if (pt.by !== only) { pt.by = only; pt.prog = 0; }
+      pt.prog++;
+      if (pt.prog >= HS_DOM_TICKS) { pt.owner = only; pt.prog = 0; pt.by = null; }
+    }
+    if (pt.owner) st.dom.score[pt.owner]++;
+  });
+  io.to(room).emit('domState', hsDomState(st));
+  if (st.dom.score.red >= HS_DOM_WIN || st.dom.score.blue >= HS_DOM_WIN) hsEndRoundEarly(room, st);
 }
 
 /* Итог раунда Murder Mystery и Cops and Robbers — кто победил и кто был убийцей. */
 function hsRevealRound(io, room, st) {
+  if (hsTeamVariant(st.variant) && (st.ctf || st.dom)) {
+    io.to(room).emit('hsReveal', { variant: st.variant, winner: hsTeamWinner(st), score: (st.ctf || st.dom).score });
+    return;
+  }
   if (st.variant !== 'murder' && st.variant !== 'cops') return;
   const free = (st.roundMembers || []).filter(m => !st.caughtSet.has(m.id) && gameState.players.get(m.id)).length;
   if (st.variant === 'murder') {
@@ -1001,6 +1129,8 @@ function hsMurdererCaught(io, room, st) {
 function hsStartLobby(io, room, st) {
   if (st.phase === 'storyEnd') return;   // лимит Story уже вышел — новый раунд не начинаем
   if (st.phase === 'round') { hsAwardRoundEnd(io, room, st); hsRevealRound(io, room, st); }
+  clearInterval(st.domTimer);
+  st.ctf = null; st.dom = null; st.teams = null;
   // Одному тоже можно: hsPick/hsChances сами ставят единственного игрока
   // искателем без жеребьёвки. Ловить в комнате некого — монеты за поимку
   // и за «дожил до конца» не начисляются, roundMembers/caughtSet это уже
@@ -1075,10 +1205,20 @@ function hsStartRound(io, room, st) {
   st.seekerIds = new Set(hunters);
   st.everCaught = new Set();      // Cops and Robbers: награда только за первый арест каждого
   st.murderCaught = false;
+  // командные варианты: путь за раунд (для действий с флагом), флаги, точки захвата
+  st.teamOdo = new Map(hsMembers(room).map(m => [m.id, odoOf(m.id)]));
+  const teamVar = hsTeamVariant(st.variant) && st.teams;
+  if (teamVar) hsBalanceTeams(st);         // новый состав уйдёт всем вместе со стартом (teams ниже)
+  st.ctf = teamVar && st.variant === 'ctf' ? { flags: { red: null, blue: null }, score: { red: 0, blue: 0 } } : null;
+  st.dom = teamVar && st.variant === 'dom' ? { points: st.domPoints.map(() => ({ owner: null, prog: 0, by: null })), score: { red: 0, blue: 0 } } : null;
+  clearInterval(st.domTimer);
+  if (st.dom) st.domTimer = setInterval(() => hsDomTick(io, room, st), 1000);
   const secret = st.variant === 'murder';
   io.to(room).emit('hsPhase', { phase: 'round', msLeft: HS_ROUND_MS,
     seekerId: secret ? null : st.seekerId, seekerName: secret ? '' : st.seekerName,
-    seekerIds: secret ? [] : hunters, variant: st.variant, map: hsMapOf(st), apoc: !!st.apoc });
+    seekerIds: secret ? [] : hunters, variant: st.variant, map: hsMapOf(st), apoc: !!st.apoc,
+    teams: teamVar ? hsTeamsObj(st) : null, bases: teamVar ? st.bases : null, points: st.domPoints || null,
+    ctf: st.ctf ? hsCtfState(st) : null, dom: st.dom ? hsDomState(st) : null });
   hsOpenVote(io, room, st);
   clearTimeout(st.timer);
   st.timer = setTimeout(() => hsStartLobby(io, room, st), HS_ROUND_MS);
@@ -1176,10 +1316,16 @@ function hsOnLeave(io, room, leftId) {
   const st = hsRooms.get(room);
   if (!st) return;
   if (leftId && st.vote && st.vote.votes.delete(leftId)) io.to(room).emit('hsVoteTally', { counts: hsVoteCounts(st) });
+  // командные варианты: ушёл с флагом — флаг возвращается на базу
+  if (leftId && st.ctf) ['red', 'blue'].forEach((t) => {
+    if (st.ctf.flags[t] === leftId) { st.ctf.flags[t] = null; io.to(room).emit('ctfState', hsCtfState(st, { ev: 'return', team: t, name: '' })); }
+  });
+  if (leftId && st.teams && st.teams.delete(leftId)) io.to(room).emit('hsTeams', { teams: hsTeamsObj(st) });
   const set = gameState.rooms.get(room);
   if (!set || set.size === 0) {
     clearTimeout(st.timer);
     clearTimeout(st.storyTimer);
+    clearInterval(st.domTimer);           // иначе такт Domination тикал бы в пустую комнату вечно
     hsRooms.delete(room);
     return;
   }
@@ -1244,6 +1390,7 @@ io.on('connection', (socket) => {
   const limVote = socketLimiter(3, 12);      // голос за следующую карту — можно передумать, но не спамить
   const limPoison = socketLimiter(2, 6);     // касание яда в зомби-раунде — срабатывает раз, дальше уже зомби
   const limFree = socketLimiter(4, 20);      // Cops and Robbers: освободить пойманного грабителя
+  const limCtf = socketLimiter(5, 30);       // Capture the Flag: взять, донести, вернуть флаг
   let joinedAt = 0;
 
   /* Замер задержки: клиент присылает свою метку времени, сервер возвращает
@@ -1414,6 +1561,12 @@ io.on('connection', (socket) => {
             seekerId: st.seekerId, seekerName: st.seekerName, map: hsMapOf(st), apoc: !!st.apoc,
             seekerIds: Array.from(st.seekerIds || []), variant: st.variant });
         }
+        // командный вариант: вошедший — в меньшую команду, путь для флага считаем с этой минуты
+        if (hsTeamVariant(st.variant) && st.teams && !st.teams.has(socket.id)) {
+          st.teams.set(socket.id, hsSmallerTeam(st));
+          if (st.teamOdo) st.teamOdo.set(socket.id, player.odo || 0);
+          io.to(room).emit('hsTeams', { teams: hsTeamsObj(st) });
+        }
         /* Зашёл, пока идёт лобби, — отметку одометра ставим ему прямо
            сейчас: hsStartLobby снял её только с тех, кто уже был в
            комнате, а путь до укрытия он пробежит после этой строки
@@ -1435,6 +1588,8 @@ io.on('connection', (socket) => {
           out: st.phase === 'round' && st.caughtSet ? Array.from(st.caughtSet) : [],
           variant: st.variant || 'classic',
           role: secret ? hsSecretRole(st, socket.id) : null,
+          teams: st.teams ? hsTeamsObj(st) : null, bases: st.teams ? st.bases : null, points: st.teams ? st.domPoints : null,
+          ctf: st.ctf ? hsCtfState(st) : null, dom: st.dom ? hsDomState(st) : null,
           apoc: !!st.apoc,
           vote: st.phase === 'round' ? hsVoteState(st) : null });
       }
@@ -1650,6 +1805,55 @@ io.on('connection', (socket) => {
       hsStat(account, (s) => { s.hsCat = (s.hsCat || 0) + 1; });
     }
     hsDoInfect(io, room, st, targetId, target);
+  });
+
+  /* Capture the Flag: игрок коснулся флага (см. ctfTouch в game.js). Решает сервер по своим
+     координатам: вражеский флаг на базе — взял; несёт вражеский, а свой стоит на базе и он
+     у своей базы — очко команде, вражеский флаг домой. Как у поимки, нужен честный путь за раунд. */
+  socket.on('ctfTouch', (data) => {
+    if (limCtf()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('hideAndSeek:') !== 0 || !player.position) return;
+    const room = player.room, st = hsRooms.get(room);
+    if (!st || st.phase !== 'round' || !st.ctf || st.caughtSent) return;
+    const my = hsTeamOf(st, socket.id);
+    if (!my) return;
+    const enemy = my === 'red' ? 'blue' : 'red';
+    const team = data && (data.team === my || data.team === enemy) ? data.team : null;
+    if (!team || (player.odo || 0) - ((st.teamOdo && st.teamOdo.get(socket.id)) || 0) < HS_MIN_DIST) return;
+    const f = st.ctf.flags;
+    if (team === enemy) {
+      if (f[enemy] || f[my] === socket.id || !hsNearSpot(player.position, st.bases[enemy])) return;
+      f[enemy] = socket.id;
+      io.to(room).emit('ctfState', hsCtfState(st, { ev: 'take', team: enemy, name: player.name }));
+      return;
+    }
+    if (f[enemy] !== socket.id || f[my] || !hsNearSpot(player.position, st.bases[my])) return;
+    f[enemy] = null;
+    st.ctf.score[my]++;
+    io.to(room).emit('ctfState', hsCtfState(st, { ev: 'capture', team: my, name: player.name }));
+    if (account) {
+      hsCreditAndNotify(socket, account, 1, 'hsCatch');
+      accountsRef.creditHsScore(account, HS_PTS_CATCH);
+    }
+    if (st.ctf.score[my] >= HS_CTF_WIN) hsEndRoundEarly(room, st);
+  });
+  // защитник коснулся того, кто несёт флаг его команды, — флаг возвращается на базу
+  socket.on('ctfTag', (data) => {
+    if (limCtf()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('hideAndSeek:') !== 0 || !player.position) return;
+    const room = player.room, st = hsRooms.get(room);
+    if (!st || st.phase !== 'round' || !st.ctf || st.caughtSent) return;
+    const my = hsTeamOf(st, socket.id);
+    const targetId = String((data && data.targetId) || '');
+    if (!my || !targetId || st.ctf.flags[my] !== targetId) return;
+    const target = gameState.players.get(targetId);
+    if (!target || target.room !== room || !target.position) return;
+    const sp = player.position, tp = target.position;
+    if (Math.abs(sp.x - tp.x) > 80 || Math.abs(sp.y - tp.y) > 120) return;
+    st.ctf.flags[my] = null;
+    io.to(room).emit('ctfState', hsCtfState(st, { ev: 'return', team: my, name: player.name }));
   });
 
   /* Cops and Robbers: свободный грабитель касанием освобождает пойманного (см. hsDoInfect —
