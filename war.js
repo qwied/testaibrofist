@@ -10,7 +10,13 @@
        cp     — контрольные точки с оружием: Domination (до пяти точек), выбитый не держит точку;
        bro    — Bro RED: рулетка выбирает одного огромного красного бойца с большим запасом
                 здоровья и тяжёлым ударом, остальные — против него; выбили его — победа бойцов,
-                продержался до конца раунда — победа Bro RED.
+                продержался до конца раунда — победа Bro RED;
+       pirate — Пиратская война («Missile war a.k.a. Pirate mode»): только на картах, где хотя бы
+                две пушки (объект «Пушка» в редакторе), и там — через раунд. Две команды по разные
+                стороны пушек (см. hsPirateSetup в server.js), очко за выбитого, как в tdm.
+     Пушки стреляют ядовитыми ядрами в любом раунде войны: встал рядом — выстрелил, у каждой
+     пушки своя перезарядка. Ядро взрывается облаком яда; кого сбросило в ядовитую воду сразу
+     после попадания — тот выбит стрелком.
      «Add tokens in the map and shopping area where can buy boosts» — жетоны: появляются на
        карте во время раунда (там, где игроки уже ходили, — значит, туда точно можно дойти,
        и на укрытиях), за них в магазине покупаются бусты в прятках и оружие в войне.
@@ -20,7 +26,8 @@
    стоит не дальше, чем достаёт оружие, — по своим координатам игроков. Так же устроены поимка в
    прятках и флаг (см. hsCatch/ctfTouch). */
 
-const WAR_VARIANTS = ['ffa', 'tdm', 'hunger', 'cp', 'bro'];
+const WAR_VARIANTS = ['ffa', 'tdm', 'hunger', 'cp', 'bro', 'pirate'];
+const ROTATION = ['ffa', 'tdm', 'hunger', 'cp', 'bro'];     // pirate — отдельно, на картах с пушками
 function isWar(v) { return WAR_VARIANTS.indexOf(v) !== -1; }
 
 // урон, перезарядка (мс), докуда достаёт от точки выстрела (px), сколько летит снаряд (мс)
@@ -28,8 +35,12 @@ const WEAPONS = {
   fist:  { dmg: 20, cd: 350, reach: 130, life: 600 },
   sling: { dmg: 15, cd: 500, reach: 1000, life: 2500 },
   bomb:  { dmg: 55, cd: 800, reach: 800, life: 3200, radius: 130 },
-  magic: { dmg: 32, cd: 650, reach: 1300, life: 2500 }
+  magic: { dmg: 32, cd: 650, reach: 1300, life: 2500 },
+  // ядро пушки: перезарядка — у каждой пушки своя (см. cannonShot), radius — облако яда
+  cannon: { dmg: 100, cd: 2500, reach: 2600, life: 4500, radius: 110 }
 };
+// стрелять можно, стоя у пушки: от центра бойца до центра пушки не дальше этого; ядро не быстрее v
+const CANNON = { near: 100, nearY: 120, v: 1.6, credit: 5000 };
 const AMMO = ['sling', 'bomb', 'magic'];
 const AMMO_PACK = { sling: 10, bomb: 3, magic: 5 };
 const HP = 100;
@@ -184,30 +195,36 @@ module.exports = function createWar(d) {
     return s.ammo.get(id);
   }
   function alive(st, id) { return !!(st.war && st.war.hp.get(id) > 0 && !st.war.out.has(id)); }
-  const teamWar = (v) => v === 'tdm' || v === 'cp';
+  const teamWar = (v) => v === 'tdm' || v === 'cp' || v === 'pirate';
+  // очко команде за каждого выбитого — команды и пираты (в cp очки дают точки)
+  const killScore = (v) => v === 'tdm' || v === 'pirate';
   function enemies(st, a, b) {
     const v = st.war.v;
     if (teamWar(v)) { const ta = hsTeamOf(st, a), tb = hsTeamOf(st, b); return !!ta && !!tb && ta !== tb; }
     if (v === 'bro') return (a === st.war.bro) !== (b === st.war.bro);
     return true;
   }
-  function feasible(v, n, spots) {
+  function feasible(v, n, spots, guns) {
     if (v === 'tdm') return n >= 4;
     if (v === 'cp') return n >= 4 && spots >= 2;
     if (v === 'bro') return n >= 3;
+    if (v === 'pirate') return n >= 2 && guns >= 2;
     return n >= 2;
   }
-  // раунды войны по очереди; что не подходит по числу игроков или карте — пропускаем
+  /* Раунды войны по очереди; что не подходит по числу игроков или карте — пропускаем. На карте
+     с пушками каждый второй раунд — Пиратская война (карта для неё и строилась), между ними —
+     следующий по очереди. */
   function pick(st, n) {
-    const spots = (st.spots || []).length;
+    const spots = (st.spots || []).length, guns = (st.cannons || []).length;
     const forced = process.env.HS_VARIANT;
-    if (isWar(forced) && feasible(forced, n, spots)) return forced;
-    const i0 = WAR_VARIANTS.indexOf(st.warLast);
-    for (let k = 1; k <= WAR_VARIANTS.length; k++) {
-      const v = WAR_VARIANTS[(i0 + k) % WAR_VARIANTS.length];
-      if (feasible(v, n, spots)) { st.warLast = v; return v; }
+    if (isWar(forced) && feasible(forced, n, spots, guns)) return (st.warPrev = forced);
+    if (st.warPrev !== 'pirate' && feasible('pirate', n, spots, guns)) return (st.warPrev = 'pirate');
+    const i0 = ROTATION.indexOf(st.warLast);
+    for (let k = 1; k <= ROTATION.length; k++) {
+      const v = ROTATION[(i0 + k) % ROTATION.length];
+      if (feasible(v, n, spots, guns)) { st.warLast = v; return (st.warPrev = v); }
     }
-    return 'ffa';
+    return (st.warPrev = 'ffa');
   }
   // где появляется боец: у команды — её база, у остальных — случайное укрытие или старт карты
   function spawnFor(st, id) {
@@ -219,7 +236,8 @@ module.exports = function createWar(d) {
     const w = st.war;
     if (!w) return null;
     const obj = (m) => { const o = {}; m.forEach((v, k) => { o[k] = v; }); return o; };
-    return { v: w.v, hp: obj(w.hp), max: obj(w.max), kills: obj(w.kills), score: w.score, out: Array.from(w.out), bro: w.bro };
+    return { v: w.v, hp: obj(w.hp), max: obj(w.max), kills: obj(w.kills), score: w.score, out: Array.from(w.out), bro: w.bro,
+             guns: (st.cannons || []).map(g => ({ x: g.x, y: g.y, w: g.w, h: g.h })) };
   }
   function start(st, room) {
     clearTimers(st);
@@ -227,7 +245,9 @@ module.exports = function createWar(d) {
     const members = hsMembers(room);
     const w = st.war = { v: st.variant, hp: new Map(), max: new Map(), kills: new Map(), out: new Set(),
                          shots: new Map(), last: new Map(), timers: new Set(), score: {},
-                         bro: st.variant === 'bro' ? st.seekerId : null };
+                         bro: st.variant === 'bro' ? st.seekerId : null,
+                         guns: new Map(),          // номер пушки -> когда стреляла
+                         lastHit: new Map() };     // кого кто последним ранил (см. hazard)
     if (teamWar(w.v)) (st.teamList || []).forEach((t) => { w.score[t] = 0; });
     if (w.v === 'bro') w.score = { bro: 0, fighters: 0 };
     members.forEach((m) => {
@@ -256,6 +276,7 @@ module.exports = function createWar(d) {
   function shot(st, room, socket, data) {
     const id = socket.id, w = st.war;
     if (!w || st.phase !== 'round' || st.caughtSent || !alive(st, id)) return;
+    if (data && data.w === 'cannon') return cannonShot(st, room, socket, data);
     const kind = data && Object.prototype.hasOwnProperty.call(WEAPONS, data.w) ? data.w : null;
     const p = posOf(id);
     if (!kind || !p) return;
@@ -273,6 +294,26 @@ module.exports = function createWar(d) {
     socket.to(room).emit('warShot', { id, w: kind, sid, dir: data.dir === -1 ? -1 : 1,
       x: num(data.x, -1e5, 1e5), y: num(data.y, -1e5, 1e5), vx: num(data.vx, -60, 60), vy: num(data.vy, -60, 60) });
   }
+  /* Выстрел из пушки: боец стоит у неё, пушка перезарядилась, ядро летит не быстрее CANNON.v.
+     Откуда летит — центр самой пушки (по карте сервера), а не то, что прислал клиент. */
+  function cannonShot(st, room, socket, data) {
+    const id = socket.id, w = st.war;
+    const c = Math.floor(num(data.c, -1, 1e3)), g = (st.cannons || [])[c];
+    const p = posOf(id);
+    if (!g || !p) return;
+    const pc = center(p), gx = g.x + g.w / 2, gy = g.y + g.h / 2;
+    if (Math.abs(pc.x - gx) > CANNON.near || Math.abs(pc.y - gy) > CANNON.nearY) return;
+    const now = Date.now();
+    if (now - (w.guns.get(c) || 0) < WEAPONS.cannon.cd * 0.8) return;
+    let vx = num(data.vx, -5, 5), vy = num(data.vy, -5, 5);
+    const sp = Math.hypot(vx, vy);
+    if (!(sp > 0.05)) return;
+    if (sp > CANNON.v) { vx = vx * CANNON.v / sp; vy = vy * CANNON.v / sp; }
+    w.guns.set(c, now);
+    const sid = Math.floor(num(data.sid, 0, 1e9));
+    w.shots.set(id + ':' + sid, { w: 'cannon', t: now, x: gx, y: gy, hit: new Set() });
+    io.to(room).emit('warShot', { id, w: 'cannon', sid, c, x: Math.round(gx), y: Math.round(gy), vx, vy });
+  }
   function hit(st, room, id, data) {
     const w = st.war;
     if (!w || st.phase !== 'round' || st.caughtSent || !data) return;
@@ -287,45 +328,52 @@ module.exports = function createWar(d) {
     const tp = posOf(t), ap = posOf(id);
     if (!tp) return;
     const tc = center(tp);
-    let dmg = WEAPONS[s.w].dmg;
+    let dmg = WEAPONS[s.w].dmg, ox = s.x;          // ox — откуда отбрасывает: от стрелка, а у взрыва — от взрыва
     if (s.w === 'fist') {
       if (!ap) return;
       const ac = center(ap);
       if (Math.abs(ac.x - tc.x) > WEAPONS.fist.reach || Math.abs(ac.y - tc.y) > 140) return;
-    } else if (s.w === 'bomb') {
+    } else if (s.w === 'bomb' || s.w === 'cannon') {
+      const W = WEAPONS[s.w];
       const ex = num(data.x, -1e5, 1e5), ey = num(data.y, -1e5, 1e5);
-      if (Math.hypot(ex - s.x, ey - s.y) > WEAPONS.bomb.reach + 200) return;
+      if (Math.hypot(ex - s.x, ey - s.y) > W.reach + 200) return;
       const dd = Math.hypot(tc.x - ex, tc.y - ey);
-      if (dd > WEAPONS.bomb.radius + 80) return;
-      dmg = Math.round(dmg * (1 - 0.5 * Math.min(1, dd / WEAPONS.bomb.radius)));
+      if (dd > W.radius + 80) return;
+      dmg = Math.round(dmg * (1 - 0.5 * Math.min(1, dd / W.radius)));
+      ox = ex;
     } else if (Math.hypot(tc.x - s.x, tc.y - s.y) > WEAPONS[s.w].reach + 200) return;
     s.hit.add(t);
     if (id === w.bro) dmg = Math.round(dmg * BRO_DMG);
     const sh = st.warAmmo && st.warAmmo.shield.get(t);
     if (sh && sh > Date.now()) dmg = Math.round(dmg / 2);
-    const dir = tc.x >= s.x ? 1 : -1;
-    const k = (s.w === 'bomb' ? 13 : s.w === 'fist' ? 9 : 6) * (id === w.bro ? 1.5 : 1);
-    damage(st, room, t, dmg, id, dir * k, s.w === 'bomb' ? -9 : -6);
+    const dir = tc.x >= ox ? 1 : -1;
+    const k = (s.w === 'cannon' ? 16 : s.w === 'bomb' ? 13 : s.w === 'fist' ? 9 : 6) * (id === w.bro ? 1.5 : 1);
+    damage(st, room, t, dmg, id, dir * k, s.w === 'cannon' ? -12 : s.w === 'bomb' ? -9 : -6);
   }
   function damage(st, room, t, dmg, by, kx, ky) {
     const w = st.war;
     const hp = Math.max(0, (w.hp.get(t) || 0) - dmg);
     w.hp.set(t, hp);
+    if (by && by !== t) w.lastHit.set(t, { by, t: Date.now() });
     io.to(room).emit('warHp', { id: t, hp, by: by || null, kx: kx || 0, ky: ky || 0 });
     if (hp <= 0) down(st, room, t, by);
   }
   // касание яда (см. onHazard в game.js): выбивает сразу, как в гонке
+  // кого только что отбросило ядром или ударом в яд — того выбил ударивший (очко его команде)
   function hazard(st, room, id) {
     if (!st.war || st.phase !== 'round' || st.caughtSent || !alive(st, id)) return;
-    damage(st, room, id, 1e6, null, 0, 0);
+    const lh = st.war.lastHit.get(id);
+    const by = lh && Date.now() - lh.t < CANNON.credit && gameState.players.get(lh.by) ? lh.by : null;
+    damage(st, room, id, 1e6, by, 0, 0);
   }
   function down(st, room, t, by) {
     const w = st.war;
+    w.lastHit.delete(t);
     if (by && by !== t) {
       w.kills.set(by, (w.kills.get(by) || 0) + 1);
       addBank(st, by, KILL_TOKENS);
     }
-    if (by && w.v === 'tdm') { const bt = hsTeamOf(st, by); if (bt && w.score[bt] !== undefined) w.score[bt]++; }
+    if (by && killScore(w.v)) { const bt = hsTeamOf(st, by); if (bt && w.score[bt] !== undefined) w.score[bt]++; }
     if (by && w.v === 'bro') { if (by === w.bro) w.score.bro++; else if (t === w.bro) w.score.fighters++; }
     io.to(room).emit('warDown', { id: t, by: by || null, name: nameOf(t), byName: by ? nameOf(by) : '', kills: by ? w.kills.get(by) : 0, score: w.score });
     if (w.v === 'hunger') w.out.add(t);
@@ -345,7 +393,7 @@ module.exports = function createWar(d) {
     if (!w || st.caughtSent) return;
     let end = false;
     if (w.v === 'ffa') end = Array.from(w.kills.values()).some(k => k >= WAR_FFA_WIN);
-    else if (w.v === 'tdm') end = Object.keys(w.score).some(t => w.score[t] >= WAR_TDM_WIN);
+    else if (killScore(w.v)) end = Object.keys(w.score).some(t => w.score[t] >= WAR_TDM_WIN);
     else if (w.v === 'hunger') end = hsMembers(room).filter(m => alive(st, m.id)).length <= 1;
     else if (w.v === 'bro') end = !alive(st, w.bro);
     if (end) endEarly(room, st);
@@ -362,7 +410,7 @@ module.exports = function createWar(d) {
     else if (w.v === 'hunger') {
       const left = hsMembers(room).filter(m => alive(st, m.id));
       winnerId = left.length === 1 ? left[0].id : top(w.kills);
-    } else if (w.v === 'tdm') {
+    } else if (killScore(w.v)) {
       const ts = Object.keys(w.score), best = Math.max.apply(null, ts.map(t => w.score[t]));
       const lead = ts.filter(t => w.score[t] === best);
       winner = lead.length === 1 && best > 0 ? lead[0] : null;

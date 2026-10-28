@@ -358,15 +358,15 @@ body.mob #toolTip{display:none!important}
 body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=3"></script>
-<script src="device.js?v=191"></script>
-        <script src="sound.js?v=191"></script>
-        <script src="skinRender.js?v=191"></script>
-        <script src="skinCanvas.js?v=191"></script>
-        <script src="gifuct.bundle.js?v=191"></script>
-        <script src="gifPlayer.js?v=191"></script>
-        <script src="coin.js?v=191"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=191">
-        <script src="theme.js?v=191"></script>
+<script src="device.js?v=192"></script>
+        <script src="sound.js?v=192"></script>
+        <script src="skinRender.js?v=192"></script>
+        <script src="skinCanvas.js?v=192"></script>
+        <script src="gifuct.bundle.js?v=192"></script>
+        <script src="gifPlayer.js?v=192"></script>
+        <script src="coin.js?v=192"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=192">
+        <script src="theme.js?v=192"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -917,6 +917,7 @@ var PAINT = {
      "playing && ... seekerSpot" ниже) — на этом месте уже стоит настоящий
      искатель, второй фигуры там быть не должно. */
   seekerSpot: function(o){ figure(o.w, o.h, COLOR_SEEKER); },
+  cannon: function(o){ paintCannon(o); },
   // приёмник — только ориентир для автора карты, в игровую логику не входит
   laserReceiver: function(o){
     ctx.fillStyle = C.stone3; rr(0,0,o.w,o.h,3); ctx.fill();
@@ -985,6 +986,10 @@ var TOOLS = [
      обычный спавн вместе со всеми (см. findSeekerSpot/applySeeker в
      game.js). Без метки — прежнее поведение, искатель сразу на спавне. */
   {t:"seekerSpot", n:"Место искателя", k:"toolSeekerSpot", m:"hideAndSeek"},
+  /* Пушка «Пиратской войны» (идея 2019 года «Missile war»): в раундах режима «Война» у неё
+     встают и стреляют ядовитыми ядрами (см. war.js и fireCannon в game.js). Размер задан
+     движком, лафет всегда стоит ровно; куда смотрит ствол, пока не целятся, — o.aim. */
+  {t:"cannon",     n:"Пушка",       k:"toolCannon",     m:"hideAndSeek"},
   /* Лазер (старая идея из обратной связи) — не отдельный инструмент, а
      галочка «Лазер» на обычном блоке/круге/треугольнике (см. Game
      Properties в inspect() и laserFeeds() в step()): включает связанные
@@ -1020,6 +1025,7 @@ var COLORS = {
   button:INK, lever:INK, laserFeed:INK, laserReceiver:INK,
   zombie:"",                       // мертвец всегда зелёный — красить его нечем и незачем
   seekerSpot:"",                   // всегда синий, как и сам искатель — красить нечем
+  cannon:"",                       // дерево и чугун — рисуется собой
   checkpoint:"", finishline:"", spawn:INK, teleport:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
@@ -1034,8 +1040,9 @@ var SIZES = {
   zombie:[30,100],                 // впритык как у игрока — по прямой просьбе
   seekerSpot:[30,100],              // тоже впритык как у игрока
   checkpoint:[40,104], finishline:[52,126], spawn:[30,100],
-  teleport:[30,100]                 // тоже впритык как у игрока — по прямой просьбе,
+  teleport:[30,100],                // тоже впритык как у игрока — по прямой просьбе,
                                      // растягивать/сжимать нельзя (см. gripAt/num ниже)
+  cannon:[72,44]                    // у всех пушек одна дальность — и размер один
 };
 var SOLID  = ["rect","circle","triangle"];
 /* Раньше яд, шипы и ротатор убивали просто потому, что так называются.
@@ -2710,6 +2717,39 @@ function drawGrid(){
   ctx.moveTo(view.x,0); ctx.lineTo(view.x,VH()); ctx.moveTo(0,view.y); ctx.lineTo(VW(),view.y);
   ctx.stroke();
 }
+/* Пушка: лафет на двух колёсах стоит ровно (поворота у неё нет), ствол смотрит по прицелу —
+   o.aim в градусах (0 — вправо, -45 — вправо-вверх, 180 — влево), а в бою — туда, куда целятся
+   сейчас (o._aim, см. game.js). Пока пушка перезаряжается (o._ready === false), зелёного огонька у жерла нет. */
+function paintCannon(o){
+  var w = o.w, h = o.h, a = o._aim !== undefined ? o._aim : (+o.aim||0)*Math.PI/180;
+  ctx.save();
+  // ствол — первым, лафет закрывает его казённую часть
+  ctx.translate(w*0.5, h*0.4);
+  ctx.rotate(a);
+  ctx.fillStyle = "#1f2937"; ctx.strokeStyle = "#0b1220"; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-w*0.2, -h*0.2); ctx.lineTo(w*0.52, -h*0.15); ctx.lineTo(w*0.52, h*0.15); ctx.lineTo(-w*0.2, h*0.2);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#4b5563"; ctx.fillRect(-w*0.12, -h*0.13, w*0.56, h*0.07);
+  ctx.fillStyle = "#111827"; ctx.fillRect(w*0.48, -h*0.24, w*0.1, h*0.48);
+  ctx.beginPath(); ctx.arc(-w*0.22, 0, h*0.13, 0, 6.2832); ctx.fill();
+  if(o._ready !== false){
+    ctx.fillStyle = "#84cc16";
+    ctx.beginPath(); ctx.arc(w*0.6, 0, h*0.07, 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+  ctx.fillStyle = "#7c4a21"; ctx.strokeStyle = "#4a2a10"; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(w*0.2, h*0.42); ctx.lineTo(w*0.8, h*0.42); ctx.lineTo(w*0.94, h*0.8); ctx.lineTo(w*0.06, h*0.8);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#a16207"; ctx.fillRect(w*0.14, h*0.55, w*0.72, h*0.06);
+  [0.24, 0.76].forEach(function(k){
+    ctx.fillStyle = "#3f2a14";
+    ctx.beginPath(); ctx.arc(w*k, h*0.8, h*0.2, 0, 6.2832); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#ca8a04";
+    ctx.beginPath(); ctx.arc(w*k, h*0.8, h*0.06, 0, 6.2832); ctx.fill();
+  });
+}
 function paint(o, isSel){
   var open = opened(o);
   ctx.save();
@@ -2773,7 +2813,7 @@ function paint(o, isSel){
     ctx.setLineDash([]);
   }
   ctx.restore();
-  if(isSel && o.type !== "spawn" && o.type !== "zombie" && o.type !== "teleport" && o.type !== "seekerSpot"){
+  if(isSel && o.type !== "spawn" && o.type !== "zombie" && o.type !== "teleport" && o.type !== "seekerSpot" && o.type !== "cannon"){
     var k2 = 1/view.s;
     ctx.save();
     ctx.fillStyle = "#fff"; ctx.strokeStyle = "#111827"; ctx.lineWidth = 1.6*k2;
@@ -3321,6 +3361,9 @@ document.getElementById("modes").addEventListener("click", function(e){
       // размер игрока и зомби больше не настраивается — приводим старые объекты
       if(o.type === "spawn"){ o.w = SIZES.spawn[0]; o.h = SIZES.spawn[1]; }
       if(o.type === "zombie" || o.type === "teleport" || o.type === "seekerSpot"){ o.w = SIZES[o.type][0]; o.h = SIZES[o.type][1]; }
+      // пушка: размер задан движком, поворота нет — только прицел ствола (o.aim, градусы)
+      if(o.type === "cannon"){ o.w = SIZES.cannon[0]; o.h = SIZES.cannon[1]; o.rot = 0;
+        o.aim = isFinite(o.aim) ? Math.max(-360, Math.min(360, +o.aim)) : 0; }
       // Платформа, ротатор, батут, яд и шипы стали свойствами обычных
       // объектов — переносим их поведение, чтобы старые карты играли так же
       if(o.type === "platform"){ o.type = "rect"; o.moves = true;
@@ -3420,7 +3463,7 @@ function grips(o){
 function gripAt(x,y){
   // у точки старта, зомби, портала и места искателя ручек нет: их размер
   // задан движком (портал — впритык под игрока, растягивать нельзя)
-  if(!sel || sel.type === "spawn" || sel.type === "zombie" || sel.type === "teleport" || sel.type === "seekerSpot") return null;
+  if(!sel || sel.type === "spawn" || sel.type === "zombie" || sel.type === "teleport" || sel.type === "seekerSpot" || sel.type === "cannon") return null;
   var r = (document.body.classList.contains("mob") ? 15 : 7)/view.s, g = grips(sel);
   for(var i=0;i<g.length;i++) if(Math.abs(x-g[i].x) <= r && Math.abs(y-g[i].y) <= r) return g[i].n;
   return null;
@@ -3700,7 +3743,7 @@ function down(x,y,alt,shift){
   var o = mk(tool, x, y, 1, 1);
   // размер этих типов задан движком с первого кадра — см. move() ниже,
   // где для них перетаскивание двигает объект, а не растягивает
-  if(tool === "spawn" || tool === "zombie" || tool === "teleport" || tool === "seekerSpot"){ o.w = d[0]; o.h = d[1]; }
+  if(tool === "spawn" || tool === "zombie" || tool === "teleport" || tool === "seekerSpot" || tool === "cannon"){ o.w = d[0]; o.h = d[1]; }
   objects.push(o); sel = o;
   if(tool === "teleport") pairTeleport(o);
   if(window.BFSound) BFSound.place();
@@ -3726,7 +3769,7 @@ function move(x,y){
        размера (см. SIZES и down() выше): тащить такой объект при
        постановке — значит двигать его под курсор, а не растягивать
        прямоугольником между двумя точками, как у остальных инструментов. */
-    if(o.type === "spawn" || o.type === "zombie" || o.type === "teleport" || o.type === "seekerSpot"){
+    if(o.type === "spawn" || o.type === "zombie" || o.type === "teleport" || o.type === "seekerSpot" || o.type === "cannon"){
       o.x = snapN(x - o.w/2); o.y = snapN(y - o.h/2);
     } else {
       o.x = snapN(Math.min(drag.ox,x)); o.y = snapN(Math.min(drag.oy,y));
@@ -4383,7 +4426,7 @@ function inspect(){
      же моделью (см. figure() в PAINT.zombie), а растянутый портал либо было
      бы невозможно не задеть, либо наоборот — почти невозможно поймать его
      зоной входа. Портал впритык под игрока по прямой просьбе. */
-  if(sel.type !== "spawn" && sel.type !== "zombie" && sel.type !== "teleport" && sel.type !== "seekerSpot"){
+  if(sel.type !== "spawn" && sel.type !== "zombie" && sel.type !== "teleport" && sel.type !== "seekerSpot" && sel.type !== "cannon"){
     num(TR("lblWidth","Ширина"), sel.w, function(v){ sel.w = Math.max(1,v); });
     num(TR("lblHeight","Высота"), sel.h, function(v){ sel.h = Math.max(1,v); });
     num(TR("lblRotation","Поворот"), sel.rot||0, function(v){ sel.rot = v; });
@@ -4392,6 +4435,9 @@ function inspect(){
     var fixedSize = SIZES[sel.type] || [sel.w, sel.h];
     sr.innerHTML = "<label>" + TR("lblSize","Размер") + "</label><b style='font-size:12px'>" +
                    fixedSize[0] + " x " + fixedSize[1] + "</b>";
+    // у пушки вместо поворота — куда смотрит ствол, пока у неё не целятся
+    if(sel.type === "cannon")
+      num(TR("lblAim","Прицел, °"), +sel.aim||0, function(v){ sel.aim = Math.max(-360, Math.min(360, v)); });
   }
 
   if(sel.type !== "zombie" && sel.type !== "seekerSpot"){   // их не красят — они рисуются собой
@@ -4460,6 +4506,8 @@ function inspect(){
   // не галочка, а короткая подсказка прямо тут, рядом с именем объекта
   if(sel.type === "zombie")
     hint(TR("zombieHint","Обязательная метка для модификации Zombie Apocalypse — без неё её нельзя включить. Самого зомби тут не будет: им становится один из игроков, выбранный рулеткой в начале раунда."));
+  if(sel.type === "cannon")
+    hint(TR("cannonHint","Пушка для режима «Война»: встань рядом и жми F (или кнопку удара), чтобы выстрелить ядовитым ядром; целься мышью или касанием по карте — ядро летит туда, куда указал. Перезарядка 2,5 секунды. Прицел — куда смотрит ствол, пока не целятся: 0 — вправо, -45 — вправо-вверх, 180 — влево. Если на карте две пушки и больше, в «Войне» бывает раунд «Пиратская война»: команды встают по разные стороны пушек."));
   if(sel.type === "seekerSpot")
     hint(TR("seekerSpotHint","Необязательная метка только для классики: здесь искатель ждёт во время пряток, пока не началась охота. С началом раунда он телепортируется на обычную точку старта, как и все."));
 
@@ -4604,7 +4652,7 @@ function inspect(){
      там бы включала свойство, которое физика всё равно игнорирует. Вместо
      того чтобы просто молчать (галочка была здесь секунду назад на Race —
      выглядит как «пропала»), объясняем, куда она делась. */
-  if(["spawn","checkpoint","finishline","zombie","teleport","seekerSpot"].indexOf(sel.type) === -1){
+  if(["spawn","checkpoint","finishline","zombie","teleport","seekerSpot","cannon"].indexOf(sel.type) === -1){
     if(mode !== "hideAndSeek")
       chk(TR("chkDeadly","Яд (убивает)"), sel.deadly, function(v){ sel.deadly = v; },
           TR("descDangerous","Касание мгновенно убивает игрока"));
@@ -4613,8 +4661,11 @@ function inspect(){
     else if(apoc)
       chk(TR("chkDeadlyApoc","Яд (заражает)"), sel.deadly, function(v){ sel.deadly = v; },
           TR("descDangerousApoc","В зомби-раунде прячущийся, коснувшийся яда, становится зомби"));
+    /* Обычная карта пряток: в самих прятках умереть нельзя, но такие карты играются и в режиме
+       «Война» — там яд выбивает бойца (см. hazard в war.js), например море «Пиратской войны». */
     else
-      hint(TR("deadlyHsHint","В Hide and Seek умереть нельзя. Яд здесь работает только в режиме Zombie Apocalypse: кто его коснётся, становится зомби. Включи Zombie Apocalypse над инструментами или переключись на Race, чтобы объект убивал."));
+      chk(TR("chkDeadlyWar","Яд (выбивает в «Войне»)"), sel.deadly, function(v){ sel.deadly = v; },
+          TR("descDangerousWar","В прятках умереть нельзя, а в раундах режима «Война» коснувшийся яда боец выбит и вернётся через пару секунд"));
   }
   /* Бустер: стоя на этой платформе, игрок бежит быстрее или медленнее
      базовой скорости (см. platBoost() в физике). 0 — без изменений,
@@ -4905,6 +4956,9 @@ window.GAME = BRIDGE = {
       // размер игрока и зомби больше не настраивается — приводим старые объекты
       if(o.type === "spawn"){ o.w = SIZES.spawn[0]; o.h = SIZES.spawn[1]; }
       if(o.type === "zombie" || o.type === "teleport" || o.type === "seekerSpot"){ o.w = SIZES[o.type][0]; o.h = SIZES[o.type][1]; }
+      // пушка: размер задан движком, поворота нет — только прицел ствола (o.aim, градусы)
+      if(o.type === "cannon"){ o.w = SIZES.cannon[0]; o.h = SIZES.cannon[1]; o.rot = 0;
+        o.aim = isFinite(o.aim) ? Math.max(-360, Math.min(360, +o.aim)) : 0; }
       // Платформа, ротатор, батут, яд и шипы стали свойствами обычных
       // объектов — переносим их поведение, чтобы старые карты играли так же
       if(o.type === "platform"){ o.type = "rect"; o.moves = true;
@@ -4984,12 +5038,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=191"></script>
-<script src="abuseShow.js?v=191" defer></script>
-<script src="editorHelp.js?v=191"></script>
-<script src="editorAI.js?v=191" defer></script>
-<script src="account.js?v=191" defer></script>
-<script src="owner.js?v=191" defer></script>
+<script src="i18n.js?v=192"></script>
+<script src="abuseShow.js?v=192" defer></script>
+<script src="editorHelp.js?v=192"></script>
+<script src="editorAI.js?v=192" defer></script>
+<script src="account.js?v=192" defer></script>
+<script src="owner.js?v=192" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -5105,7 +5159,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=191" defer></script>
+        <script src="skinAvatar.js?v=192" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */

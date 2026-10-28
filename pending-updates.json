@@ -40,6 +40,10 @@
     {
       "title": "War mode, tokens and the shop",
       "text": "War is a new mode in the main menu with fists, slings, bombs and magic. Rounds take turns: Free for All, Team War with two or four teams, Hunger Games with one life, Control Points and Bro RED, where one huge red fighter takes on everyone. Press F or click to attack, 1-4 to switch weapons, B for the shop; on a phone there is a red attack button. Tokens now lie around the map in War and Hide and Seek: spend them in the shop on ammo, a medkit or a shield in War, or on speed, a super jump, invisibility for hiders and a radar for the seeker in Hide and Seek."
+    },
+    {
+      "title": "Pirate War and cannons",
+      "text": "War rooms now have a Pirate War round on maps with cannons: two teams on two ships fire poison cannonballs where they aim, and knocking someone into the poison water counts as your knockout. A new Pirate Bay map is made for it, and the map editor has a new Cannon object for Hide and Seek maps (poison on these maps knocks fighters out in War rounds)."
     }
   ]
 }

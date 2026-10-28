@@ -40,6 +40,7 @@ const TOOL_MODES = {
   zombie:['hideAndSeek'],       // модификация Zombie Apocalypse — только прятки
   teleport:null,               // пара площадок — есть в обоих режимах, как кнопка/рычаг
   cover:['hideAndSeek'],
+  cannon:['hideAndSeek'],       // пушка «Пиратской войны» — стреляют из неё в режиме «Война»
   checkpoint:['race'],
   // устаревшие типы — принимаем, но в палитре их больше нет
   poison:null, spike:null, bounce:null, platform:null, rotator:null,
@@ -186,9 +187,15 @@ function load() {
 /* Встроенные карты: лежат в репозитории (builtinMaps/) и при запуске сами
    появляются в каталоге от имени автора. showcase — витрина, а не уровень:
    в случайный подбор комнат такая карта не попадает (см. randomFor), её
-   открывают из Maps Browser. ver поднимаем, когда меняем саму карту, —
-   тогда она обновится; свою карту с тем же именем автор не потеряет. */
-const BUILTIN = [{ file: 'serversinfo.json', mapName: 'ServersInfo', author: 'qwied', mapType: 'race', ver: 2 }];
+   открывают из Maps Browser. play — уровень для своего режима (only): он
+   попадает только в комнаты этого режима (см. poolFor и hsMapOk в server.js),
+   даже если автор не владелец сайта. ver поднимаем, когда меняем саму
+   карту, — тогда она обновится; свою карту с тем же именем автор не потеряет. */
+const BUILTIN = [
+  { file: 'serversinfo.json', mapName: 'ServersInfo', author: 'qwied', mapType: 'race', ver: 2 },
+  // «Пиратская война» (см. war.js): два корабля с пушками над ядовитым морем
+  { file: 'piratebay.json', mapName: 'Pirate Bay', author: 'qwied', mapType: 'hideAndSeek', ver: 1, play: true, only: 'war' }
+];
 function seedBuiltin() {
   let changed = false;
   for (const b of BUILTIN) {
@@ -198,13 +205,14 @@ function seedBuiltin() {
     // low() объявлена ниже, а load() зовётся раньше — сравниваем здесь же
     const lc = v => String(v || '').toLowerCase();
     const m = maps.find(x => lc(x.author) === lc(b.author) && lc(x.mapName) === lc(b.mapName));
+    const kind = b.play ? { showcase: false, only: b.only } : { showcase: true };
     if (!m) {
-      maps.push({ mapName: b.mapName, mapType: b.mapType, mapData: data, author: b.author,
+      maps.push(Object.assign({ mapName: b.mapName, mapType: b.mapType, mapData: data, author: b.author,
                   date: Date.now(), created: Date.now(), rating: 0, votes: {}, boostLikes: 0, boostDislikes: 0,
-                  inGameModes: [], showcase: true, builtinVer: b.ver });
+                  inGameModes: [], builtinVer: b.ver }, kind));
       changed = true;
-    } else if (m.showcase && (m.builtinVer || 0) < b.ver) {
-      Object.assign(m, { mapData: data, mapType: b.mapType, builtinVer: b.ver });
+    } else if (m.builtinVer && m.builtinVer < b.ver) {
+      Object.assign(m, { mapData: data, mapType: b.mapType, builtinVer: b.ver }, kind);
       changed = true;
     }
   }
@@ -235,18 +243,21 @@ const low = s => String(s || '').toLowerCase();
 /* pred — необязательный отбор карт (отдельные режимы пряток берут только подходящие, см.
    hsMapOk в server.js); если под него не подошла ни одна, берём весь пул режима — комната
    без карты хуже, чем карта без укрытий. */
+/* Встроенный уровень своего режима (m.only, см. BUILTIN) попадает только туда, где pred его
+   принял: в другие комнаты — нет, даже когда больше брать нечего. */
 function poolFor(t, pred) {
-  if (pred) {
-    const ok = poolFor(t).filter(m => { try { return !!pred(m); } catch (e) { return false; } });
-    if (ok.length) return ok;
-  }
-  return !t
+  const all = !t
     ? maps.filter(m => !m.showcase)
     : maps.filter(m => {
         // владелец мог вручную добавить карту в конкретный режим — даже витрину
         if (Array.isArray(m.inGameModes) && m.inGameModes.indexOf(t) !== -1) return true;
-        return !m.showcase && isOwnerName(m.author) && m.mapType === t;
+        return !m.showcase && (isOwnerName(m.author) || (m.builtinVer && m.only)) && m.mapType === t;
       });
+  if (pred) {
+    const ok = all.filter(m => { try { return !!pred(m); } catch (e) { return false; } });
+    if (ok.length) return ok;
+  }
+  return all.filter(m => !m.only || (Array.isArray(m.inGameModes) && m.inGameModes.indexOf(t) !== -1));
 }
 
 /* До n разных карт режима для голосования за следующую карту в прятках

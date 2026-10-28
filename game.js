@@ -675,7 +675,16 @@
     };
     // война: клик мышью по полю — удар/выстрел (стрелку рисуют только в режиме рисования)
     canvasEl.addEventListener('pointerdown', function (e) {
-      if (!drawMode && e.pointerType === 'mouse' && e.button === 0 && warOn()) { e.preventDefault(); attack(); }
+      if (drawMode || !warOn()) return;
+      // клик мышью: у пушки — выстрел туда, куда кликнули; касание по карте у пушки — то же самое
+      if (e.pointerType === 'mouse' ? e.button === 0 : nearGun() !== -1) {
+        aimPt = toWorld(e.clientX, e.clientY); aimAt = Date.now();
+        e.preventDefault(); attack();
+      }
+    });
+    // прицел пушки идёт за мышью (см. gunVel)
+    canvasEl.addEventListener('pointermove', function (e) {
+      if (e.pointerType === 'mouse' && warOn()) { aimPt = toWorld(e.clientX, e.clientY); aimAt = Date.now(); }
     });
     canvasEl.addEventListener('pointerdown', function (e) {
       if (!drawMode || gDraw.classList.contains('limit') || Date.now() < drawLockUntil) return;
@@ -1292,7 +1301,7 @@
   /* Командные варианты (Capture the Flag, Domination): команда каждого (id -> red|blue), базы —
      укрытия карты, точки захвата и счёт присылает сервер (hsRoulette/hsPhase/ctfState/domState). */
   var hsTeams = {}, hsBases = null, hsPoints = null, ctfState = null, domState = null;
-  function teamVariant() { return hsVariant === 'ctf' || hsVariant === 'dom' || hsVariant === 'tdm' || hsVariant === 'cp'; }
+  function teamVariant() { return hsVariant === 'ctf' || hsVariant === 'dom' || hsVariant === 'tdm' || hsVariant === 'cp' || hsVariant === 'pirate'; }
   function myTeam() { return socket ? hsTeams[socket.id] || null : null; }
   function resetTeams() { applyTeamState({}); }
   // состав команд, базы, точки и счёт — целиком из hsState (вошедший посреди игры)
@@ -1359,7 +1368,7 @@
         + (lead ? ' · ' + esc(TR('warLeadLbl', 'Лидер')) + ': <b>' + esc(nameOfId(lead)) + ' ' + lk + '</b>' : '');
       return;
     }
-    var sc = (war && war.v === 'tdm' ? war.score : null) || (ctfState && ctfState.score) || (domState && domState.score);
+    var sc = (war && (war.v === 'tdm' || war.v === 'pirate') ? war.score : null) || (ctfState && ctfState.score) || (domState && domState.score);
     if (!teamVariant() || !sc) { box.style.display = 'none'; return; }
     box.style.display = '';
     var ts = teamsInPlay(sc);
@@ -1443,6 +1452,7 @@
   function variantHint() {
     if (hsVariant === 'ffa') return TR('hintFfa', 'Выбивай всех: F или клик — удар, 1–4 — оружие, B — магазин. Жетоны лежат на карте.');
     if (hsVariant === 'tdm') return TR('hintTdm', 'Выбивай соперников — каждое очко идёт твоей команде. F — удар, B — магазин.');
+    if (hsVariant === 'pirate') return TR('hintPirate', 'Твоя команда — на своём корабле. Встань у пушки и жми F или клик: ядро летит туда, куда целишься. Ядовитая вода выбивает.');
     if (hsVariant === 'hunger') return TR('hintHunger', 'Одна жизнь на раунд. Собирай жетоны, покупай оружие и останься последним.');
     if (hsVariant === 'cp') return TR('hintCp', 'Держи точки с командой; выбитые соперники точку не держат. F — удар, B — магазин.');
     if (hsVariant === 'bro') return socket && socket.id === broId ? TR('hintBro', 'Ты Bro RED: здоровья много, удар тяжёлый. Продержись до конца раунда!')
@@ -1661,7 +1671,7 @@
      Apocalypse и Cops & Robbers, в Team Battle — Capture the Flag и Domination, в Murder
      Mystery — он сам (Classic — пока игроков мало, см. hsFixedWait в server.js). */
   var VARIANTS = { hs: ['classic', 'zombie', 'cops'], murder: ['classic', 'murder'], team: ['classic', 'ctf', 'dom'],
-                   war: ['classic', 'ffa', 'tdm', 'hunger', 'cp', 'bro'] };
+                   war: ['classic', 'ffa', 'tdm', 'hunger', 'cp', 'bro', 'pirate'] };
   var hsFixed = null;                    // отдельный режим комнаты: 'murder' | 'team' | null
   function variantName(v) {
     return v === 'zombie' ? TR('modeApoc', 'Zombie Apocalypse') : v === 'murder' ? TR('modeMurder', 'Murder Mystery')
@@ -1669,6 +1679,7 @@
       : v === 'dom' ? TR('modeDom', 'Domination') : v === 'team' ? TR('modeTeam', 'Team Battle')
       : v === 'war' ? TR('modeWar', 'War') : v === 'ffa' ? TR('modeFfa', 'Free for All') : v === 'tdm' ? TR('modeTdm', 'Team War')
       : v === 'hunger' ? TR('modeHunger', 'Hunger Games') : v === 'cp' ? TR('modeCp', 'Control Points') : v === 'bro' ? TR('modeBro', 'Bro RED')
+      : v === 'pirate' ? TR('modePirate', 'Pirate War')
       : TR('modeClassic', 'Classic');
   }
   function runModeRoulette(variant, onDone) {
@@ -2525,7 +2536,7 @@
       } else if (d.variant === 'ffa' || d.variant === 'hunger') {
         log(d.winnerName ? TR('warWin', 'Раунд выиграл {n}!').replace('{n}', '<b>' + esc(d.winnerName) + '</b>') : TR('warDraw', 'В этом раунде без победителя.'));
         if (window.BFSound && d.winnerName && d.winnerName === me.name) BFSound.win();
-      } else if (d.variant === 'ctf' || d.variant === 'dom' || d.variant === 'tdm' || d.variant === 'cp') {
+      } else if (d.variant === 'ctf' || d.variant === 'dom' || d.variant === 'tdm' || d.variant === 'cp' || d.variant === 'pirate') {
         var sc = d.score || {};
         log(d.winner ? TR('teamWins', 'Победила команда {t}! {s}').replace('{t}', teamTag(d.winner)).replace('{s}', scoreLine(sc))
           : TR('teamDraw', 'Ничья! {s}').replace('{s}', scoreLine(sc)));
@@ -2999,7 +3010,9 @@
     fist:  { cd: 360, key: 'wpnFist', ru: 'Кулак' },
     sling: { cd: 520, key: 'wpnSling', ru: 'Рогатка', v: 0.95, g: 0.0011, life: 2500, r: 6, color: '#6b7280' },
     bomb:  { cd: 820, key: 'wpnBomb', ru: 'Бомба', v: 0.5, vy: -0.62, g: 0.0019, life: 1400, r: 8, color: '#111827', boom: 130 },
-    magic: { cd: 670, key: 'wpnMagic', ru: 'Магия', v: 1.15, g: 0, life: 2000, r: 9, color: '#f97316' }
+    magic: { cd: 670, key: 'wpnMagic', ru: 'Магия', v: 1.15, g: 0, life: 2000, r: 9, color: '#f97316' },
+    // ядро пушки (см. fireCannon): летит по дуге, взрывается облаком яда
+    cannon: { cd: 2500, key: 'wpnCannon', ru: 'Пушка', v: 1.45, g: 0.0011, life: 4500, r: 11, color: '#3f6212', boom: 110 }
   };
   var WPN_ORDER = ['fist', 'sling', 'bomb', 'magic'];
   // значки оружия на панели (на телефоне — только значок и число, без подписи)
@@ -3036,12 +3049,12 @@
   var hazardSentAt = 0;
   var broId = null;               // Bro RED этого раунда (рулетка в лобби, war.bro в бою)
 
-  function isWarV(v) { return v === 'ffa' || v === 'tdm' || v === 'hunger' || v === 'cp' || v === 'bro'; }
+  function isWarV(v) { return v === 'ffa' || v === 'tdm' || v === 'hunger' || v === 'cp' || v === 'bro' || v === 'pirate'; }
   function warOn() { return MODE === 'hideAndSeek' && !!war && phase === 'round' && isWarV(hsVariant); }
   function warAlive(id) { return !!war && (war.hp[id] | 0) > 0 && (war.out || []).indexOf(id) === -1; }
   function warEnemy(id) {
     if (!war || !socket || id === socket.id) return false;
-    if (war.v === 'tdm' || war.v === 'cp') return !!hsTeams[id] && hsTeams[id] !== myTeam();
+    if (war.v === 'tdm' || war.v === 'cp' || war.v === 'pirate') return !!hsTeams[id] && hsTeams[id] !== myTeam();
     if (war.v === 'bro') return (id === war.bro) !== (socket.id === war.bro);
     return true;
   }
@@ -3051,8 +3064,9 @@
 
   // состояние боя целиком: начало раунда (hsPhase), вход посреди раунда (hsState)
   function warSet(d) {
-    war = d ? { v: d.v, hp: d.hp || {}, max: d.max || {}, kills: d.kills || {}, score: d.score || {}, out: d.out || [], bro: d.bro || null } : null;
-    shots = []; booms = [];
+    war = d ? { v: d.v, hp: d.hp || {}, max: d.max || {}, kills: d.kills || {}, score: d.score || {}, out: d.out || [], bro: d.bro || null,
+                guns: d.guns || [] } : null;
+    shots = []; booms = []; gunFired = {}; gunAimA = {};
     if (!war) { GAME.myAlpha = 1; weapon = 'fist'; }
     syncWarMe();
     renderWarHud();
@@ -3069,6 +3083,9 @@
   /* ---------- атака ---------- */
   function attack() {
     if (!warOn() || !socket || !warAlive(socket.id) || GAME.frozen) return;
+    // у заряженной пушки — выстрел из неё; пока она заряжается — обычный удар
+    var gi = nearGun();
+    if (gi !== -1 && gunReady(gi)) { fireCannon(gi); return; }
     var now = Date.now(), w = weapon;
     if (now - (lastFire[w] || 0) < WPN[w].cd) return;
     if (w !== 'fist' && !(ammo[w] > 0)) {
@@ -3120,13 +3137,13 @@
     if (!shots.length) return;
     shots = shots.filter(function (s) {
       var W = WPN[s.w];
-      if (now - s.born > W.life) { if (s.w === 'bomb') explode(s); return false; }
+      if (now - s.born > W.life) { if (W.boom) explode(s); return false; }
       // шагами не длиннее 8 px — тонкая стена не пропускает снаряд насквозь
       var steps = Math.max(1, Math.ceil(Math.hypot(s.vx * dt, s.vy * dt) / 8));
       for (var k = 0; k < steps; k++) {
         var h = dt / steps;
         s.vy += W.g * h; s.x += s.vx * h; s.y += s.vy * h;
-        if (GAME.solidAt && GAME.solidAt(s.x, s.y)) { if (s.w === 'bomb') explode(s); return false; }
+        if (GAME.solidAt && GAME.solidAt(s.x, s.y)) { if (W.boom) explode(s); return false; }
         if (s.own && hitPlayer(s)) return false;
       }
       return true;
@@ -3140,7 +3157,7 @@
       if (!warEnemy(id) || !warAlive(id)) continue;
       var w = o.w || 30, h = o.h || 100;
       if (s.x + r > o.tx && s.x - r < o.tx + w && s.y + r > o.ty && s.y - r < o.ty + h) {
-        if (s.w === 'bomb') { explode(s); return true; }
+        if (WPN[s.w].boom) { explode(s); return true; }
         socket.emit('warHit', { t: id, sid: s.sid });
         return true;
       }
@@ -3148,16 +3165,109 @@
     return false;
   }
   function explode(s) {
-    booms.push({ x: s.x, y: s.y, t: Date.now() });
+    booms.push({ x: s.x, y: s.y, t: Date.now(), w: s.w });
     if (window.BFSound && BFSound.death) BFSound.death();
     if (!s.own || !socket) return;
-    var R = WPN.bomb.boom;
+    var R = WPN[s.w].boom;
     Object.keys(others).forEach(function (id) {
       var o = others[id];
       if (!warEnemy(id) || !warAlive(id)) return;
       var ox = o.tx + (o.w || 30) / 2, oy = o.ty + (o.h || 100) / 2;
       if (Math.hypot(ox - s.x, oy - s.y) <= R) socket.emit('warHit', { t: id, sid: s.sid, x: Math.round(s.x), y: Math.round(s.y) });
     });
+  }
+
+  /* ---------- пушки (идея 2019 года «Missile war», см. cannonShot в war.js) ----------
+     Встал у пушки — F, клик или кнопка удара стреляют ядовитым ядром. Целятся мышью, а на
+     телефоне — касанием по карте у пушки (касание сразу и стреляет): ядро летит по дуге туда,
+     куда указали, а если туда не долетает — под 45° в ту сторону. Пока не целились — туда,
+     куда смотрит ствол на карте (прицел пушки в редакторе). Номер пушки — её место среди пушек
+     карты, как у сервера (см. hsApplyApoc в server.js). */
+  var GUN = { near: 90, nearY: 110, barrel: 0.58, aimMs: 15000 };
+  var gunFired = {};             // номер пушки -> когда из неё стреляли (свои и чужие выстрелы)
+  var gunAimA = {};              // номер пушки -> куда смотрел ствол при выстреле
+  var aimPt = null, aimAt = 0;   // куда целятся (мир) и когда целились
+  function gunObjs() {
+    var list = GAME.objects || [], out = [];
+    for (var i = 0; i < list.length && out.length < 24; i++) if (list[i].type === 'cannon') out.push(list[i]);
+    return out;
+  }
+  function guns() { return (war && war.guns) || []; }
+  // пушка, у которой стоишь (ближняя по x), или -1
+  function nearGun() {
+    var p = GAME.pl, gs = guns();
+    if (!p || !gs.length) return -1;
+    var cx = p.x + p.w / 2, cy = p.y + p.h / 2, best = -1, bd = Infinity;
+    gs.forEach(function (g, i) {
+      var dx = Math.abs(cx - (g.x + g.w / 2)), dy = Math.abs(cy - (g.y + g.h / 2));
+      if (dx <= GUN.near && dy <= GUN.nearY && dx < bd) { bd = dx; best = i; }
+    });
+    return best;
+  }
+  function gunPivot(g) { return { x: g.x + g.w * 0.5, y: g.y + g.h * 0.4 }; }
+  function gunReady(i) { return Date.now() - (gunFired[i] || 0) >= WPN.cannon.cd; }
+  // скорость ядра: низкой дугой точно в точку прицела, а если не долетит — под 45° в её сторону
+  function gunVel(i) {
+    var W = WPN.cannon, g = guns()[i], pv = gunPivot(g), o = gunObjs()[i];
+    var t = aimPt && Date.now() - aimAt < GUN.aimMs ? aimPt : null;
+    if (!t) { var a0 = ((o && +o.aim) || 0) * Math.PI / 180; return { vx: Math.cos(a0) * W.v, vy: Math.sin(a0) * W.v }; }
+    var dx = t.x - pv.x, up = pv.y - t.y, v = W.v, gr = W.g, side = dx < 0 ? -1 : 1;
+    var x = Math.max(1, Math.abs(dx)), disc = v * v * v * v - gr * (gr * x * x + 2 * up * v * v);
+    var th = disc >= 0 ? Math.atan((v * v - Math.sqrt(disc)) / (gr * x)) : Math.PI / 4;
+    return { vx: side * Math.cos(th) * v, vy: -Math.sin(th) * v };
+  }
+  function fireCannon(i) {
+    var now = Date.now(), g = guns()[i];
+    if (!g || !gunReady(i)) return;
+    gunFired[i] = now;
+    var vel = gunVel(i), pv = gunPivot(g), a = Math.atan2(vel.vy, vel.vx), sid = shotSeq++;
+    gunAimA[i] = a;
+    socket.emit('warShot', { w: 'cannon', c: i, sid: sid, vx: vel.vx, vy: vel.vy });
+    shots.push({ own: true, sid: sid, w: 'cannon', x: pv.x + Math.cos(a) * g.w * GUN.barrel, y: pv.y + Math.sin(a) * g.w * GUN.barrel,
+                 vx: vel.vx, vy: vel.vy, born: now, hit: {} });
+    if (window.BFSound && BFSound.bounce) BFSound.bounce();
+  }
+  // стволы смотрят туда, куда целятся (своя пушка) или куда только что выстрелили (любая)
+  function syncGuns() {
+    var objs = gunObjs(), now = Date.now(), mine = warOn() && socket && warAlive(socket.id) ? nearGun() : -1;
+    objs.forEach(function (o, i) {
+      if (!war) { delete o._aim; delete o._ready; return; }
+      if (i === mine && aimPt && now - aimAt < GUN.aimMs && guns()[i]) { var v = gunVel(i); o._aim = Math.atan2(v.vy, v.vx); }
+      else if (gunAimA[i] !== undefined && now - (gunFired[i] || 0) < 4000) o._aim = gunAimA[i];
+      else delete o._aim;
+      o._ready = gunReady(i);
+    });
+  }
+  // у своей пушки: подсказка, перезарядка и пунктир дуги
+  function drawGunAim(ctx) {
+    var i = warOn() && socket && warAlive(socket.id) ? nearGun() : -1;
+    if (i === -1) return;
+    var g = guns()[i], now = Date.now(), ready = gunReady(i);
+    var lx = g.x + g.w / 2, ly = g.y + g.h - 142;     // над полоской здоровья бойца у пушки
+    ctx.save();
+    ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var touch = /(^| )is-(mobile|tablet)( |$)/.test(document.documentElement.className);
+    var txt = ready ? (touch ? TR('cannonFireTouch', 'Коснись цели или жми удар') : TR('cannonFire', 'F или клик — огонь'))
+      : TR('cannonLoading', 'Заряжается…');
+    var tw = ctx.measureText(txt).width + 16;
+    ctx.fillStyle = 'rgba(17,24,39,.78)';
+    ctx.fillRect(lx - tw / 2, ly - 11, tw, 22);
+    if (!ready) {
+      ctx.fillStyle = '#84cc16';
+      ctx.fillRect(lx - tw / 2, ly + 9, tw * Math.min(1, (now - (gunFired[i] || 0)) / WPN.cannon.cd), 2);
+    }
+    ctx.fillStyle = '#fff'; ctx.fillText(txt, lx, ly);
+    if (ready && aimPt && now - aimAt < GUN.aimMs) {
+      var vel = gunVel(i), pv = gunPivot(g), a = Math.atan2(vel.vy, vel.vx);
+      var x = pv.x + Math.cos(a) * g.w * GUN.barrel, y = pv.y + Math.sin(a) * g.w * GUN.barrel, vx = vel.vx, vy = vel.vy;
+      ctx.fillStyle = 'rgba(101,163,13,.75)';
+      for (var k = 0; k < 40; k++) {
+        for (var j = 0; j < 4; j++) { vy += WPN.cannon.g * 12; x += vx * 12; y += vy * 12; }
+        if (GAME.solidAt && GAME.solidAt(x, y)) break;
+        ctx.beginPath(); ctx.arc(x, y, 3, 0, 6.2832); ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 
   /* ---------- жетоны и бусты ---------- */
@@ -3247,6 +3357,7 @@
   }
   function drawWar(ctx) {
     stepShots();
+    syncGuns();
     var now = Date.now();
     // жетоны на карте — золотые монетки со звездой
     toks.forEach(function (t) {
@@ -3266,9 +3377,11 @@
       var W = WPN[s.w];
       ctx.save();
       if (s.w === 'magic') { ctx.shadowColor = '#fb923c'; ctx.shadowBlur = 14; }
+      if (s.w === 'cannon') { ctx.shadowColor = '#84cc16'; ctx.shadowBlur = 12; }
       ctx.fillStyle = W.color;
       ctx.beginPath(); ctx.arc(s.x, s.y, W.r, 0, 6.2832); ctx.fill();
       if (s.w === 'bomb') { ctx.fillStyle = (now / 90 | 0) % 2 ? '#f97316' : '#fde047'; ctx.beginPath(); ctx.arc(s.x + 3, s.y - W.r - 2, 3, 0, 6.2832); ctx.fill(); }
+      if (s.w === 'cannon') { ctx.fillStyle = '#a3e635'; ctx.beginPath(); ctx.arc(s.x - 3, s.y - 3, 3.5, 0, 6.2832); ctx.fill(); }
       ctx.restore();
     });
     booms = booms.filter(function (b) {
@@ -3277,11 +3390,13 @@
       var k = age / 380;
       ctx.save();
       ctx.globalAlpha = 1 - k;
-      ctx.fillStyle = '#f97316';
-      ctx.beginPath(); ctx.arc(b.x, b.y, WPN.bomb.boom * (0.35 + 0.65 * k), 0, 6.2832); ctx.fill();
+      // ядро пушки — зелёное облако яда, бомба — оранжевая вспышка
+      ctx.fillStyle = b.w === 'cannon' ? '#65a30d' : '#f97316';
+      ctx.beginPath(); ctx.arc(b.x, b.y, WPN[b.w === 'cannon' ? 'cannon' : 'bomb'].boom * (0.35 + 0.65 * k), 0, 6.2832); ctx.fill();
       ctx.restore();
       return true;
     });
+    drawGunAim(ctx);
     if (!war || phase !== 'round' || !socket) return;
     // полоски здоровья, удары и щиты
     var p = GAME.pl;
@@ -3330,6 +3445,17 @@
       if (!d || !d.id || !isWarV(hsVariant)) return;
       if (d.w === 'fist') { swings[d.id] = { t: Date.now(), dir: d.dir || ((d.vx || 0) >= 0 ? 1 : -1) }; return; }
       if (!WPN[d.w]) return;
+      if (d.w === 'cannon') {
+        // сервер шлёт выстрел из пушки всем, и стрелявшему тоже: ему — только перезарядка пушки
+        var gi = d.c | 0, g = guns()[gi];
+        gunFired[gi] = Date.now(); gunAimA[gi] = Math.atan2(+d.vy || 0, +d.vx || 1);
+        if (d.id === socket.id || !g) return;
+        var pv = gunPivot(g), a = gunAimA[gi];
+        shots.push({ own: false, id: d.id, sid: d.sid, w: 'cannon', x: pv.x + Math.cos(a) * g.w * GUN.barrel, y: pv.y + Math.sin(a) * g.w * GUN.barrel,
+                     vx: +d.vx || 0, vy: +d.vy || 0, born: Date.now(), hit: {} });
+        if (window.BFSound && BFSound.bounce) BFSound.bounce();
+        return;
+      }
       shots.push({ own: false, id: d.id, sid: d.sid, w: d.w, x: +d.x || 0, y: +d.y || 0, vx: +d.vx || 0, vy: +d.vy || 0, born: Date.now(), hit: {} });
     });
     socket.on('warHp', function (d) {

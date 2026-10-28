@@ -23,7 +23,7 @@ function server(port) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-warui-'));
   fs.cpSync(ROOT, tmp, { recursive: true, filter: x => {
     const r = path.relative(ROOT, x);
-    return !(/^(node_modules|data|\.git)(\/|$)/.test(r) || /^(dbg_|shot_)/.test(r));
+    return !(/^(node_modules|data|\.git|builtinMaps)(\/|$)/.test(r) || /^(dbg_|shot_)/.test(r));
   } });
   fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(tmp, 'node_modules'));
   fs.mkdirSync(path.join(tmp, 'data'));
@@ -68,8 +68,8 @@ function bot(base, name, room) {
   ok(modes.indexOf('war') !== -1, 'на главной есть карточка «War»', modes.join(','));
   await page.click('.card[data-mode="war"]');
   await page.waitForURL(/\/war$/, { timeout: 8000 }).catch(() => {});
-  const rules = await until(() => page.evaluate(() => { const li = [...document.querySelectorAll('#mdList li')]; return li.length === 6 && li.every(x => x.textContent.trim()) ? document.getElementById('mdName').textContent : null; }), 6000);
-  ok(rules === 'War', 'страница /war: название и шесть правил', rules);
+  const rules = await until(() => page.evaluate(() => { const li = [...document.querySelectorAll('#mdList li')]; return li.length === 7 && li.every(x => x.textContent.trim()) ? document.getElementById('mdName').textContent : null; }), 6000);
+  ok(rules === 'War', 'страница /war: название и семь правил', rules);
   await page.click('#mdPlay');
   await page.waitForURL(/variant=war/, { timeout: 8000 }).catch(() => {});
   const room = await until(async () => { const r = await fetch(S.base + '/getRoomList?mode=hideAndSeek&variant=war').then(r => r.json()); return r.rooms[0] && r.rooms[0].room; }, 8000);

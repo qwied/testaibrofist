@@ -991,6 +991,7 @@ function hsApplyApoc(st) {
   st.apoc = false;
   st.hasPoison = false;
   st.spots = [];
+  st.cannons = [];
   if (!st.map) return;
   try {
     const rec = require('./maps.js').find(st.map.author, st.map.mapName);
@@ -1000,6 +1001,11 @@ function hsApplyApoc(st) {
     // карты и так рассчитывал добежать
     st.spots = list.filter(o => o && o.hideSpot === true && Number.isFinite(+o.x) && Number.isFinite(+o.y)).slice(0, 60)
       .map(o => ({ x: +o.x, y: +o.y, w: Math.max(1, Math.min(2000, +o.w || 1)), h: Math.max(1, Math.min(2000, +o.h || 1)) }));
+    /* пушки «Пиратской войны» (см. war.js) — в том же порядке, что и у клиента в карте (см.
+       gunList в game.js): по номеру пушки клиент и сервер понимают, из какой выстрелили */
+    const fin = (v, lo, hi) => Number.isFinite(+v) ? Math.max(lo, Math.min(hi, +v)) : 0;
+    st.cannons = list.filter(o => o && o.type === 'cannon').slice(0, 24)
+      .map(o => ({ x: fin(o.x, -1e5, 1e5), y: fin(o.y, -1e5, 1e5), w: 72, h: 44, aim: fin(o.aim, -360, 360) }));
     if (!data || !data.apoc || st.fixedVariant) return;
     // яд на зомби-карте заражает прячущегося (см. hsPoisoned)
     st.hasPoison = list.some(o => o && o.deadly === true);
@@ -1045,6 +1051,8 @@ function hsMapOk(st) {
   if (!st.fixedVariant) return null;
   const team = HS_FIXED[st.fixedVariant].team;
   return (m) => {
+    // встроенный уровень другого режима (см. BUILTIN в maps.js) — не сюда
+    if (m.only && m.only !== st.fixedVariant) return false;
     const d = JSON.parse(m.mapData);
     if (!d || d.apoc) return false;
     const list = Array.isArray(d) ? d : (d.objects || []);
@@ -1057,7 +1065,7 @@ const HS_TEAM4_MIN = Number(process.env.HS_TEAM4_MIN) || 8;
 const HS_DOM_WIN = 120;
 const HS_DOM_TICKS = 3;          // столько секунд одна команда стоит на точке — точка её
 // командные варианты: Capture the Flag и Domination, а в войне — команды и контрольные точки
-function hsTeamVariant(v) { return v === 'ctf' || v === 'dom' || v === 'tdm' || v === 'cp'; }
+function hsTeamVariant(v) { return v === 'ctf' || v === 'dom' || v === 'tdm' || v === 'cp' || v === 'pirate'; }
 // идёт ли сейчас вариант своего отдельного режима (у Team Battle их два — ctf и dom)
 function hsFixedIs(st) {
   if (st.fixedVariant === 'war') return war.isWar(st.variant);
@@ -1081,7 +1089,7 @@ function hsPickVariant(st, n) {
     if (hsFixedBlock(st, n)) return 'classic';
     if (st.fixedVariant === 'war') return war.pick(st, n);
     if (!HS_FIXED[st.fixedVariant].team) return st.fixedVariant;
-    if (hsTeamVariant(forced)) return forced;
+    if (forced === 'ctf' || forced === 'dom') return forced;
     // Team Battle: Capture the Flag и Domination по очереди
     st.teamLast = st.teamLast === 'ctf' ? 'dom' : 'ctf';
     return st.teamLast;
@@ -1105,6 +1113,7 @@ function hsDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
    уже выбранных. Точки Domination — базы и ещё одно укрытие, самое далёкое от всех баз (если оно
    не вплотную к ним). */
 function hsTeamSetup(st, members) {
+  if (st.variant === 'pirate') return hsPirateSetup(st, members);
   const sp = st.spots;
   const k = members.length >= HS_TEAM4_MIN && sp.length >= 4 ? 4 : 2;
   let a = 0, b = 1, best = -1;
@@ -1144,10 +1153,38 @@ function hsTeamSetup(st, members) {
     st.domPoints = c === -1 ? pick.map(i => sp[i])
       : k === 2 ? [sp[a], sp[c], sp[b]] : pick.map(i => sp[i]).concat([sp[c]]);
   }
-  const ids = members.map(m => m.id);
+  hsDealTeams(st, members);
+}
+// поровну по командам st.teamList, в случайном порядке
+function hsDealTeams(st, members) {
+  const ids = members.map(m => m.id), k = st.teamList.length;
   for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
   st.teams = new Map();
   ids.forEach((id, i) => st.teams.set(id, st.teamList[i % k]));
+}
+/* «Пиратская война» (см. war.js): две команды — по разные стороны пушек, как два корабля.
+   Пушки делим там, где между соседними по x самый широкий промежуток. База команды — укрытие
+   ближе всех к середине её пушек (каюта корабля), а если такого рядом нет — место у пушки. */
+function hsPirateSetup(st, members) {
+  const g = st.cannons.slice().sort((a, b) => a.x - b.x);
+  let cut = 1, gap = -1;
+  for (let i = 1; i < g.length; i++) if (g[i].x - g[i - 1].x > gap) { gap = g[i].x - g[i - 1].x; cut = i; }
+  st.teamList = HS_TEAM_NAMES.slice(0, 2);
+  st.bases = {};
+  st.domPoints = null;
+  const used = [];
+  [g.slice(0, cut), g.slice(cut)].forEach((side, i) => {
+    const mid = { x: side.reduce((a, q) => a + q.x + q.w / 2, 0) / side.length, y: side.reduce((a, q) => a + q.y + q.h / 2, 0) / side.length };
+    let base = null, bd = 700;
+    (st.spots || []).forEach((s) => { const d = hsDist(hsSpotC(s), mid); if (d < bd && used.indexOf(s) === -1) { bd = d; base = s; } });
+    if (!base) {
+      const q = side.reduce((a, b) => hsDist(hsSpotC(b), mid) < hsDist(hsSpotC(a), mid) ? b : a);
+      base = { x: q.x + q.w / 2 - 40, y: q.y + q.h - 100, w: 80, h: 100 };
+    }
+    used.push(base);
+    st.bases[st.teamList[i]] = base;
+  });
+  hsDealTeams(st, members);
 }
 // игроков в каждой команде
 function hsTeamCounts(st) {

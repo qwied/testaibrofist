@@ -42,7 +42,7 @@ const ok = (n, c) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', n);
 const gjs = fs.readFileSync(__dirname + '/game.js', 'utf8');
 console.log('game.js:');
 ok('WASD (по e.code, не e.key — раскладка не влияет) не открывает чат сам',
-    /if \(e\.code === 'KeyW' \|\| e\.code === 'KeyA' \|\| e\.code === 'KeyD'\) return;\s*\n\s*inp\.focus\(\);/.test(gjs));
+    /if \(e\.code === 'KeyW' \|\| e\.code === 'KeyA' \|\| e\.code === 'KeyD'\) return;\s*\n(?:\s*if \(combatKey\(e\)\) return;[^\n]*\n)?\s*inp\.focus\(\);/.test(gjs));
 ok('пробел по-прежнему не открывает чат (прыжок)', /if \(e\.key === ' '\) return;/.test(gjs));
 ok('поле чата не глотает WASD в propagation (можно двигаться прямо во время набора)',
     /var move = e\.key === 'ArrowLeft' \|\| e\.key === 'ArrowRight' \|\| e\.key === 'ArrowUp' \|\|\s*\n\s*e\.code === 'KeyW' \|\| e\.code === 'KeyA' \|\| e\.code === 'KeyD';\s*\n\s*if \(!move\) e\.stopPropagation\(\);/.test(gjs));
