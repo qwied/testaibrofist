@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <title>AIBrofist</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="AIBrofist game modes: Murder Mystery and Team Battle (Capture the Flag and Domination) on player-made maps.">
-<link rel="stylesheet" href="ui.css?v=190">
+<meta name="description" content="AIBrofist game modes: Murder Mystery, Team Battle and War on player-made maps.">
+<link rel="stylesheet" href="ui.css?v=191">
 <script src="offline.js?v=3"></script>
-<script src="theme.js?v=190"></script>
-<script src="device.js?v=190"></script>
-<script src="sound.js?v=190"></script>
+<script src="theme.js?v=191"></script>
+<script src="device.js?v=191"></script>
+<script src="sound.js?v=191"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -85,7 +85,7 @@
 </div>
 
 <script>
-/* Отдельные режимы на главной (Murder Mystery, Team Battle): одна страница на оба, режим — по
+/* Отдельные режимы на главной (Murder Mystery, Team Battle, War): одна страница на все, режим — по
    адресу (см. VARIANT_PAGES в server.js). В игре это комнаты «murder-1» и «team-1», где всегда
    играется свой режим. Ключи перевода ставим до i18n.js — он сам переведёт их при загрузке и
    при смене языка. */
@@ -94,7 +94,9 @@
     'murder-mystery': { v: 'murder', name: 'modeMurder', text: 'mmText',   img: 'mode-murder.png',
                         rules: ['mmRule1', 'mmRule2', 'mmRule5', 'mmRule3', 'mmRule4', 'mmRuleStart'] },
     'team-battle':    { v: 'team',   name: 'modeTeam',   text: 'teamText', img: 'mode-team.png',
-                        rules: ['teamRule1', 'teamRule2', 'teamRule3', 'teamRule4', 'teamRuleStart'] }
+                        rules: ['teamRule1', 'teamRule2', 'teamRule3', 'teamRule4', 'teamRuleStart'] },
+    'war':            { v: 'war',    name: 'modeWar',    text: 'warText',  img: 'mode-war.png',
+                        rules: ['warRule1', 'warRule2', 'warRule3', 'warRule4', 'warRule5', 'warRuleStart'] }
   };
   var key = location.pathname.replace(/^\/+|\.html$/g, '');
   var c = V[key] || V['murder-mystery'];
@@ -112,15 +114,15 @@
   window.BF_VARIANT_NAME = c.name;
 })();
 </script>
-<link rel="stylesheet" href="mobile.css?v=190">
-<script src="i18n.js?v=190"></script>
-<script src="coin.js?v=190"></script>
-<script src="skinRender.js?v=190"></script>
-<script src="skinAvatar.js?v=190" defer></script>
-<script src="shell.js?v=190"></script>
-<script src="abuseShow.js?v=190" defer></script>
-<script src="account.js?v=190" defer></script>
-<script src="roomList.js?v=190"></script>
+<link rel="stylesheet" href="mobile.css?v=191">
+<script src="i18n.js?v=191"></script>
+<script src="coin.js?v=191"></script>
+<script src="skinRender.js?v=191"></script>
+<script src="skinAvatar.js?v=191" defer></script>
+<script src="shell.js?v=191"></script>
+<script src="abuseShow.js?v=191" defer></script>
+<script src="account.js?v=191" defer></script>
+<script src="roomList.js?v=191"></script>
 <script>
 document.getElementById('mdPlay').onclick = function () {
   location.href = 'game?mode=hideAndSeek&variant=' + window.BF_VARIANT;

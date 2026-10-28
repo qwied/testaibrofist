@@ -88,10 +88,10 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   }
   ok(!/variant\.html|BF_VARIANT/.test(await fetch(A.base + '/cops-and-robbers').then(r => r.text())), 'отдельной страницы Cops & Robbers нет — он в прятках');
   const sm = await fetch(A.base + '/sitemap.xml').then(r => r.text());
-  ok(/\/murder-mystery</.test(sm) && /\/team-battle</.test(sm) && !/domination|capture-the-flag/.test(sm), 'в sitemap — две новые страницы');
+  ok(/\/murder-mystery</.test(sm) && /\/team-battle</.test(sm) && /\/war</.test(sm) && !/domination|capture-the-flag/.test(sm), 'в sitemap — страницы режимов');
   const idx = await fetch(A.base + '/').then(r => r.text());
   const modes = (idx.match(/class="card" data-mode="[^"]+"/g) || []).map(x => x.split('"')[3]);
-  ok(modes.join() === 'hideAndSeek,race,murder,team', 'на главной четыре режима', modes.join());
+  ok(['hideAndSeek', 'race', 'murder', 'team', 'war'].every((m, i) => modes[i] === m), 'на главной режимы по порядку', modes.join());
   const hsPage = await fetch(A.base + '/hide-and-seek').then(r => r.text());
   ok(/data-i18n="hsRule7"/.test(hsPage), 'в правилах пряток — Cops & Robbers в большой комнате');
   const bm = await getJ(A.base, '/getBestRoom?mode=hideAndSeek&variant=murder');
@@ -179,8 +179,15 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   const page = await ctx.newPage();
   page.on('pageerror', e => errs.push(e.message.slice(0, 140)));
   await page.goto(A.base + '/', { waitUntil: 'domcontentloaded' });
-  const grid = await page.evaluate(() => [...document.querySelectorAll('.card')].map(c => { const r = c.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y)]; }));
-  ok(grid.length === 4 && grid[0][1] === grid[1][1] && grid[2][1] === grid[3][1] && grid[0][0] === grid[2][0] && grid[2][1] > grid[0][1], 'карточки квадратом 2×2', JSON.stringify(grid));
+  // ряды карточек: до четырёх в ряд, неполный ряд — по центру страницы с карточками
+  const grid = await page.evaluate(() => {
+    const box = document.querySelector('.cards').getBoundingClientRect();
+    const cs = [...document.querySelectorAll('.card')].map(c => c.getBoundingClientRect());
+    const rows = {};
+    cs.forEach(r => { (rows[Math.round(r.y)] = rows[Math.round(r.y)] || []).push(r); });
+    return { mid: box.x + box.width / 2, rows: Object.keys(rows).map(y => { const rr = rows[y]; return { n: rr.length, c: (rr[0].x + rr[rr.length - 1].right) / 2 }; }) };
+  });
+  ok(grid.rows.length >= 2 && grid.rows.every(r => r.n <= 4 && Math.abs(r.c - grid.mid) < 3), 'карточки рядами до четырёх, каждый ряд по центру', JSON.stringify(grid));
   await page.click('.card[data-mode="team"]');
   await page.waitForURL(/team-battle/, { timeout: 8000 }).catch(() => {});
   ok(/\/team-battle$/.test(page.url()), 'клик по карточке открывает страницу режима', page.url());

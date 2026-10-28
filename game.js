@@ -22,7 +22,7 @@
   var VAUTH  = q.get('author');
   var PRACTICE = q.get('practice') === '1';   // Practice Mode — см. Maps Browser
   // отдельный режим с главной (Murder Mystery, Team Battle) — свои комнаты «murder-1», «team-1» (см. hsFixedOf в server.js)
-  var VARIANT = /^(murder|team)$/.test(q.get('variant') || '') ? q.get('variant') : null;
+  var VARIANT = /^(murder|team|war)$/.test(q.get('variant') || '') ? q.get('variant') : null;
   var GOD  = PRACTICE && q.get('god') === '1';   // неуязвимость — подопция Practice, ставится там же
   var FLY  = PRACTICE && q.get('fly') === '1';   // полёт — подопция Practice, ставится там же
 
@@ -31,7 +31,7 @@
      Интерфейс сайта только на английском (см. i18n.js), поэтому здесь
      без словаря — те же строки, что и в нём (hideAndSeek/race). */
   document.title = 'AIBrofist — ' + (MODE === 'race' ? 'Race'
-    : ({ murder: 'Murder Mystery', team: 'Team Battle' })[VARIANT] || 'Hide and Seek');
+    : ({ murder: 'Murder Mystery', team: 'Team Battle', war: 'War' })[VARIANT] || 'Hide and Seek');
 
   var ROUND_MS  = 120000;   // раунд — 2 минуты
   var LOBBY_MS  = 30000;    // ожидание в Hide and Seek — 30 секунд
@@ -396,6 +396,54 @@
     + 'html.is-mobile #gMsgsPanel,html.is-tablet #gMsgsPanel{'
     + 'bottom:calc(200px + env(safe-area-inset-bottom,0px));left:calc(12px + env(safe-area-inset-left,0px));'
     + 'width:calc(100vw - 24px)}'
+    /* война и жетоны: панель внизу по центру (на телефоне — над кнопками движения) */
+    // по центру через margin:auto и max-content, а не left:50% — иначе ширину режет половина экрана
+    + '#gWar{position:fixed;left:0;right:0;margin:0 auto;width:max-content;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:60;'
+    + 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px);'
+    + 'background:rgba(255,255,255,.94);border:1px solid #d7dee7;border-radius:12px;padding:6px 8px;'
+    + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.45);font:13px sans-serif;color:#111827}'
+    + 'html.is-mobile #gWar,html.is-tablet #gWar{bottom:calc(122px + env(safe-area-inset-bottom,0px));font-size:11px;gap:3px;'
+    + 'padding:4px 5px;flex-wrap:nowrap}'
+    + 'html.is-mobile #gWar .wName,html.is-tablet #gWar .wName,html.is-mobile #gWar .wKey,html.is-tablet #gWar .wKey{display:none}'
+    + 'html.is-mobile .wHp,html.is-tablet .wHp{width:54px;height:24px}'
+    + 'html.is-mobile .wHp em,html.is-tablet .wHp em{line-height:24px;font-size:10px}'
+    + 'html.is-mobile .wSlot,html.is-tablet .wSlot{padding:2px 5px;min-height:30px;display:inline-flex;align-items:center;gap:2px}'
+    + '.wIco{width:15px;height:15px;vertical-align:-3px;margin-right:3px}'
+    + 'html.is-mobile .wIco,html.is-tablet .wIco{margin-right:1px}'
+    + '.wCoin{display:inline-block;width:12px;height:12px;border-radius:50%;background:#fbbf24;border:2px solid #b45309;'
+    + 'vertical-align:-3px;margin-right:4px;box-sizing:border-box}'
+    + '.wHp{position:relative;display:inline-block;width:120px;height:20px;border-radius:6px;background:#e5e7eb;overflow:hidden}'
+    + '.wHp i{position:absolute;left:0;top:0;bottom:0;background:#22c55e;transition:width .15s}'
+    + '.wHp em{position:relative;display:block;text-align:center;font-style:normal;font-weight:700;line-height:20px;font-size:12px}'
+    + '.wSlot{border:1px solid #d7dee7;background:#fff;border-radius:8px;padding:4px 8px;cursor:pointer;font:inherit;color:#111827;'
+    + 'min-height:30px;touch-action:manipulation}'
+    + '.wSlot small{color:#6b7280;margin-right:3px}'
+    + '.wSlot.on{background:#111827;color:#fff;border-color:#111827}'
+    + '.wSlot.on small{color:#d1d5db}'
+    + '.wSlot.empty{opacity:.5}'
+    + '.wTok{white-space:nowrap}.wTok b{color:#b45309}'
+    + '.wShop{border:none;background:#111827;color:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;font:inherit;font-weight:700;'
+    + 'min-height:30px;touch-action:manipulation}'
+    + '.wShop small{opacity:.7;font-weight:400}'
+    + '#gShop{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70;width:min(380px,calc(100vw - 24px));'
+    + 'max-height:calc(100vh - 40px);overflow:auto;background:#fff;border:1px solid #d7dee7;border-radius:14px;'
+    + 'box-shadow:0 20px 50px -20px rgba(15,23,42,.6);font:14px sans-serif;color:#111827;padding:12px}'
+    + '.shHead{display:flex;align-items:center;gap:10px;margin-bottom:8px}'
+    + '.shHead b{font-size:17px}.shHead span{color:#b45309;font-weight:700;margin-left:auto}'
+    + '.shX{border:none;background:#f3f4f6;border-radius:8px;width:32px;height:32px;font-size:20px;cursor:pointer;color:#111827}'
+    + '.shRow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #eef0f3}'
+    + '.shTxt{flex:1;min-width:0}.shTxt b{display:block}.shTxt span{display:block;color:#6b7280;font-size:12.5px}'
+    + '.shBuy{border:none;background:#111827;color:#fff;border-radius:8px;padding:8px 12px;cursor:pointer;font:inherit;font-weight:700;white-space:nowrap}'
+    + '.shBuy:disabled{background:#d1d5db;color:#6b7280;cursor:default}'
+    + '.shHint{color:#6b7280;font-size:12px;margin-top:6px}'
+    /* кнопка удара — между стрелками и прыжком, под большой палец правой руки */
+    + '#gAtk{position:fixed;right:calc(122px + env(safe-area-inset-right,0px));bottom:calc(30px + env(safe-area-inset-bottom,0px));'
+    + 'z-index:61;width:64px;height:64px;border-radius:50%;border:none;'
+    + 'background:#dc2626;color:#fff;align-items:center;justify-content:center;box-shadow:0 8px 20px -10px rgba(15,23,42,.5);'
+    + 'touch-action:none;-webkit-tap-highlight-color:transparent;padding:0}'
+    + '#gAtk svg{width:30px;height:30px;display:block;pointer-events:none}'
+    + '#gAtk:active{transform:scale(.93)}'
+    + 'html:not(.is-mobile):not(.is-tablet) #gAtk{display:none!important}'
     ;
 
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
@@ -452,10 +500,17 @@
     +     '<div id="gMsgsSend"><input id="gMsgsInput" maxlength="400">'
     +       '<button id="gMsgsSendBtn">Send</button></div></div>'
     + '</div>'
+    // война и жетоны: нижняя панель (здоровье, оружие, жетоны), магазин, кнопка удара на телефоне
+    + '<div id="gWar" style="display:none"></div>'
+    + '<div id="gShop" style="display:none"></div>'
+    + '<button id="gAtk" style="display:none" aria-label="Attack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/>'
+    + '<path d="m13 19 6-6"/><path d="m16 16 4 4"/><path d="m19 21 2-2"/></svg></button>'
 );
 
   /* надписи верхней панели обновляются при смене языка */
   function refreshGameLabels() {
+    if (typeof renderWarHud === 'function') { renderWarHud(); renderShop(); }
     $('gLblPlayers').textContent = TR('gPlayers', 'Игроков');
     $('gLblPing').textContent = TR('gPing', 'Пинг');
     $('gLblTime').textContent = TR('gTimeLbl', 'Время');
@@ -618,6 +673,10 @@
         if (drawMode) refreshDrawTargets();
       }
     };
+    // война: клик мышью по полю — удар/выстрел (стрелку рисуют только в режиме рисования)
+    canvasEl.addEventListener('pointerdown', function (e) {
+      if (!drawMode && e.pointerType === 'mouse' && e.button === 0 && warOn()) { e.preventDefault(); attack(); }
+    });
     canvasEl.addEventListener('pointerdown', function (e) {
       if (!drawMode || gDraw.classList.contains('limit') || Date.now() < drawLockUntil) return;
       var p = toWorld(e.clientX, e.clientY);
@@ -1233,7 +1292,7 @@
   /* Командные варианты (Capture the Flag, Domination): команда каждого (id -> red|blue), базы —
      укрытия карты, точки захвата и счёт присылает сервер (hsRoulette/hsPhase/ctfState/domState). */
   var hsTeams = {}, hsBases = null, hsPoints = null, ctfState = null, domState = null;
-  function teamVariant() { return hsVariant === 'ctf' || hsVariant === 'dom'; }
+  function teamVariant() { return hsVariant === 'ctf' || hsVariant === 'dom' || hsVariant === 'tdm' || hsVariant === 'cp'; }
   function myTeam() { return socket ? hsTeams[socket.id] || null : null; }
   function resetTeams() { applyTeamState({}); }
   // состав команд, базы, точки и счёт — целиком из hsState (вошедший посреди игры)
@@ -1268,6 +1327,7 @@
   function rolesKnown() { return MODE === 'hideAndSeek' && !VIEW && (phase === 'round' || !!hsWinnerId); }
   function outfitFor(id) {
     if (!rolesKnown()) return null;
+    if (hsVariant === 'bro' && broId && id === broId) return { kind: 'bro' };
     if (hsVariant === 'cops') return hsSeekerIds[id] ? { kind: 'cop' } : { kind: 'robber', arg: !!(others[id] && others[id].caught) };
     if (teamVariant() && hsTeams[id]) return { kind: 'team', arg: COLOR_TEAM[hsTeams[id]] };
     return null;
@@ -1278,6 +1338,7 @@
       if (hsVariant === 'cops') o = me.role === 'seeker' ? { kind: 'cop' } : { kind: 'robber', arg: !!me.caught };
       else if (teamVariant() && myTeam()) o = { kind: 'team', arg: COLOR_TEAM[myTeam()] };
       else if (hsVariant === 'murder' && !me.caught && (hsSecret === 'murderer' || hsSecret === 'sheriff')) o = { kind: hsSecret };
+      else if (hsVariant === 'bro' && broId && socket.id === broId) o = { kind: 'bro' };
     }
     GAME.myOutfit = o;
   }
@@ -1285,7 +1346,20 @@
   function renderTeamHud() {
     var box = $('gTeamBox');
     if (!box) return;
-    var sc = (ctfState && ctfState.score) || (domState && domState.score);
+    // война без команд: лидер по нокаутам и мои; Bro RED — его здоровье
+    if (war && (war.v === 'ffa' || war.v === 'hunger' || war.v === 'bro') && socket) {
+      box.style.display = '';
+      if (war.v === 'bro') {
+        box.innerHTML = '<b style="color:#dc2626">' + esc(TR('modeBro', 'Bro RED')) + ' ' + Math.max(0, war.hp[war.bro] | 0) + '</b>';
+        return;
+      }
+      var lead = null, lk = 0;
+      Object.keys(war.kills).forEach(function (id) { if ((war.kills[id] | 0) > lk) { lk = war.kills[id] | 0; lead = id; } });
+      box.innerHTML = esc(TR('warKillsLbl', 'Нокауты')) + ': <b>' + (war.kills[socket.id] | 0) + '</b>'
+        + (lead ? ' · ' + esc(TR('warLeadLbl', 'Лидер')) + ': <b>' + esc(nameOfId(lead)) + ' ' + lk + '</b>' : '');
+      return;
+    }
+    var sc = (war && war.v === 'tdm' ? war.score : null) || (ctfState && ctfState.score) || (domState && domState.score);
     if (!teamVariant() || !sc) { box.style.display = 'none'; return; }
     box.style.display = '';
     var ts = teamsInPlay(sc);
@@ -1312,6 +1386,8 @@
         : hsVariant === 'murder' ? TR('roleMurderer', 'Убийца')
         : hsVariant === 'cops' ? TR('roleCop', 'Коп') : TR('roleSeeker', 'Искатель'))
       : teamVariant() ? (myTeam() ? teamName(myTeam()) : '—')
+      : hsVariant === 'bro' ? (socket && socket.id === broId ? TR('roleBro', 'Bro RED') : TR('roleFighter', 'Боец'))
+      : isWarV(hsVariant) ? TR('roleFighter', 'Боец')
       : (hsVariant === 'murder' ? (hsSecret === 'sheriff' ? TR('roleSheriff', 'Шериф') : TR('roleInnocent', 'Невиновный'))
         : hsVariant === 'cops' ? TR('roleRobber', 'Грабитель') : TR('roleHider', 'Прячется'));
     applyColor();
@@ -1353,6 +1429,8 @@
     }
   }
   function variantRoleText() {
+    if (hsVariant === 'ffa') return TR('roulFfa', 'Все против всех!');
+    if (hsVariant === 'hunger') return TR('roulHunger', 'Одна жизнь — останься последним!');
     if (teamVariant()) {
       var mt = myTeam();
       return mt === 'blue' ? TR('roulYouBlue', 'Ты в синей команде!') : mt === 'green' ? TR('roulYouGreen', 'Ты в зелёной команде!')
@@ -1363,6 +1441,12 @@
       : hsSecret === 'sheriff' ? TR('roulYouSheriff', 'Ты шериф!') : TR('roulYouInnocent', 'Ты невиновный!');
   }
   function variantHint() {
+    if (hsVariant === 'ffa') return TR('hintFfa', 'Выбивай всех: F или клик — удар, 1–4 — оружие, B — магазин. Жетоны лежат на карте.');
+    if (hsVariant === 'tdm') return TR('hintTdm', 'Выбивай соперников — каждое очко идёт твоей команде. F — удар, B — магазин.');
+    if (hsVariant === 'hunger') return TR('hintHunger', 'Одна жизнь на раунд. Собирай жетоны, покупай оружие и останься последним.');
+    if (hsVariant === 'cp') return TR('hintCp', 'Держи точки с командой; выбитые соперники точку не держат. F — удар, B — магазин.');
+    if (hsVariant === 'bro') return socket && socket.id === broId ? TR('hintBro', 'Ты Bro RED: здоровья много, удар тяжёлый. Продержись до конца раунда!')
+      : TR('hintBroFighter', 'Все вместе против Bro RED — выбейте его до конца раунда!');
     if (hsVariant === 'ctf') return TR('hintCtf', 'Принеси вражеский флаг к своему. Коснись врага с вашим флагом — флаг вернётся домой.');
     if (hsVariant === 'dom') return TR('hintDom', 'Стой на точках с командой, чтобы захватить их. Каждая точка приносит очки каждую секунду.');
     if (hsVariant === 'cops') return me.role === 'seeker' ? TR('hintCop', 'Лови грабителей — пойманные замирают на месте.')
@@ -1413,6 +1497,20 @@
     return '';
   }
 
+  // Bro RED (война): выпавший на рулетке — Bro RED; искателя нет, все — бойцы
+  function landBro(d, res) {
+    broId = d.winnerId;
+    hsWinnerId = d.winnerId;
+    setRole('hider');
+    if (res) {
+      res.textContent = broId === socket.id ? TR('roulYouBro', 'Ты — Bro RED!')
+        : TR('roulBroIs', '{n} — Bro RED!').replace('{n}', nameOfId(broId));
+      res.classList.add('on');
+    }
+    if (window.BFSound) BFSound.roulLand();
+    log(variantHint());
+    roulTimers.push(setTimeout(roulStop, 2300));
+  }
   function applySeeker(id) {
     hsWinnerId = id;
     hsSeekerIds[id] = true;
@@ -1463,7 +1561,7 @@
     // Если состав рассинхронизирован и победителя вообще нет в списке —
     // анимацию не показать, но роль всё равно нужно назначить: иначе раунд
     // проходит без искателя вообще ни у кого.
-    if (!list.length || winIdx < 0) { applySeeker(d.winnerId); return; }
+    if (!list.length || winIdx < 0) { if (d.variant === 'bro') landBro(d, $('gRoulRes')); else applySeeker(d.winnerId); return; }
 
     banner('', '', false);            // рулетка вместо плашки ожидания
     document.body.classList.add('hasRoulette');   // плашка шанса уступает место рулетке
@@ -1530,6 +1628,7 @@
 
     roulTimers.push(setTimeout(function () {
       pills[target].classList.add('rWin');      // ник искателя выделяется (.rWin)
+      if (d.variant === 'bro') { landBro(d, res); return; }
       applySeeker(d.winnerId);
       if (window.BFSound) BFSound.roulLand();
       if (d.winnerId === socket.id) {
@@ -1561,12 +1660,16 @@
   /* Рулетка режима крутит только то, что бывает в этой комнате: в прятках — Classic, Zombie
      Apocalypse и Cops & Robbers, в Team Battle — Capture the Flag и Domination, в Murder
      Mystery — он сам (Classic — пока игроков мало, см. hsFixedWait в server.js). */
-  var VARIANTS = { hs: ['classic', 'zombie', 'cops'], murder: ['classic', 'murder'], team: ['classic', 'ctf', 'dom'] };
+  var VARIANTS = { hs: ['classic', 'zombie', 'cops'], murder: ['classic', 'murder'], team: ['classic', 'ctf', 'dom'],
+                   war: ['classic', 'ffa', 'tdm', 'hunger', 'cp', 'bro'] };
   var hsFixed = null;                    // отдельный режим комнаты: 'murder' | 'team' | null
   function variantName(v) {
     return v === 'zombie' ? TR('modeApoc', 'Zombie Apocalypse') : v === 'murder' ? TR('modeMurder', 'Murder Mystery')
       : v === 'cops' ? TR('modeCops', 'Cops & Robbers') : v === 'ctf' ? TR('modeCtf', 'Capture the Flag')
-      : v === 'dom' ? TR('modeDom', 'Domination') : v === 'team' ? TR('modeTeam', 'Team Battle') : TR('modeClassic', 'Classic');
+      : v === 'dom' ? TR('modeDom', 'Domination') : v === 'team' ? TR('modeTeam', 'Team Battle')
+      : v === 'war' ? TR('modeWar', 'War') : v === 'ffa' ? TR('modeFfa', 'Free for All') : v === 'tdm' ? TR('modeTdm', 'Team War')
+      : v === 'hunger' ? TR('modeHunger', 'Hunger Games') : v === 'cp' ? TR('modeCp', 'Control Points') : v === 'bro' ? TR('modeBro', 'Bro RED')
+      : TR('modeClassic', 'Classic');
   }
   function runModeRoulette(variant, onDone) {
     roulStop();
@@ -2028,6 +2131,7 @@
      с воркера на старый сервер сокет пересоздаётся, и обработчики
      навешиваются на новый экземпляр без дублирования. */
   function bindNet() {
+    bindWar();                         // война и жетоны (см. bindWar)
 
     socket.on('connect', function () {
       // сервер завёл нас заново: пусть первый же пакет несёт всё, включая скин
@@ -2244,6 +2348,13 @@
        зомби-раунде; повтор не чаще раза в секунду — пока сервер не ответил. */
     var poisonSentAt = 0;
     GAME.onHazard = function () {
+      // война: яд выбивает (решает сервер, см. hazard в war.js)
+      if (warOn() && socket && warAlive(socket.id)) {
+        if (Date.now() - hazardSentAt < 1000) return;
+        hazardSentAt = Date.now();
+        socket.emit('warHazard');
+        return;
+      }
       if (MODE !== 'hideAndSeek' || phase !== 'round' || !hsApocRound) return;
       if (me.role === 'seeker' || me.caught) return;
       if (Date.now() - poisonSentAt < 1000) return;
@@ -2277,6 +2388,9 @@
       hsVariant = d.variant || (d.apoc ? 'zombie' : 'classic');
       hsSecret = null; hsSecretAt = null;   // тайная роль придёт следом (hsSecret)
       hsFixed = d.fixed || null;
+      broId = null;
+      shopOn = !!d.shop;
+      renderWarHud();
       fixedWaitLog(d);
       setRole('hider');
       $('gRoleBox').style.display = 'none';
@@ -2296,6 +2410,13 @@
           hsWinnerId = 'variant';
           fixVariantRole(); applyColor();
           hsTeamSpawn(); GAME.frozen = true;
+          log(variantHint());
+          if (window.BFSound) BFSound.roulLand();
+          return variantRoleText();
+        }
+        if (hsVariant === 'ffa' || hsVariant === 'hunger') {
+          hsWinnerId = 'variant';
+          setRole('hider');
           log(variantHint());
           if (window.BFSound) BFSound.roulLand();
           return variantRoleText();
@@ -2397,7 +2518,14 @@
         log(d.winner === 'murderer' ? TR('mmWinMurderer', 'Убийца {m} выбил всех!').replace('{m}', m)
           : d.winner === 'sheriff' ? TR('mmWinSheriff', 'Невиновные победили — шериф поймал убийцу {m}!').replace('{m}', m)
           : TR('mmWinTime', 'Время вышло — невиновные выжили! Убийцей был {m}.').replace('{m}', m));
-      } else if (d.variant === 'ctf' || d.variant === 'dom') {
+      } else if (d.variant === 'bro') {
+        var bn = '<b>' + esc(d.bro || '') + '</b>';
+        log(d.winner === 'bro' ? TR('broWin', 'Bro RED {n} продержался до конца раунда!').replace('{n}', bn)
+          : TR('broLose', 'Бойцы выбили Bro RED {n}!').replace('{n}', bn));
+      } else if (d.variant === 'ffa' || d.variant === 'hunger') {
+        log(d.winnerName ? TR('warWin', 'Раунд выиграл {n}!').replace('{n}', '<b>' + esc(d.winnerName) + '</b>') : TR('warDraw', 'В этом раунде без победителя.'));
+        if (window.BFSound && d.winnerName && d.winnerName === me.name) BFSound.win();
+      } else if (d.variant === 'ctf' || d.variant === 'dom' || d.variant === 'tdm' || d.variant === 'cp') {
         var sc = d.score || {};
         log(d.winner ? TR('teamWins', 'Победила команда {t}! {s}').replace('{t}', teamTag(d.winner)).replace('{s}', scoreLine(sc))
           : TR('teamDraw', 'Ничья! {s}').replace('{s}', scoreLine(sc)));
@@ -2456,6 +2584,8 @@
         // у apoc нет искателя-человека, applySeeker ниже не позовут вовсе
         hsApocRound = !!d.apoc;
         if (d.variant) hsVariant = d.variant;
+        warSet(isWarV(hsVariant) ? d.war : null);
+        if (war && war.bro) broId = war.bro;
         syncMeIsZombie();
         if (d.seekerId) applySeeker(d.seekerId);
         // копы — все сразу; убийца тайный: его знает только он сам (fixVariantRole)
@@ -2478,7 +2608,7 @@
         };
         if (!STORY) loadServerMap(d.map, teleportSeeker); else teleportSeeker();
         log(d.apoc ? TR('roundStartApoc', 'Раунд начался! Зомби уже идёт за кем-то...')
-          : hsVariant === 'murder' || hsVariant === 'cops' ? variantHint()
+          : hsVariant === 'murder' || hsVariant === 'cops' || isWarV(hsVariant) ? variantHint()
           : TR('roundStart', 'Раунд начался! 2 минуты'));
         // Murder Mystery: первые секунды охоты убийца никого не трогает (см. HS_MURDER_GRACE_MS)
         mmGraceUntil = hsVariant === 'murder' ? Date.now() + (Number(d.grace) || 0) : 0;
@@ -2499,6 +2629,9 @@
         phase = 'lobby';
         phaseEnds = Date.now() + (Number(d.msLeft) || LOBBY_MS);
         hsWinnerId = null;
+        // бой и жетоны раунда кончились; патроны сервер обнуляет с началом лобби
+        toks = []; ammo = { sling: 0, bomb: 0, magic: 0 }; weapon = 'fist';
+        warSet(null);
         /* d.apoc уже известен здесь же (этот hsPhase приходит сразу вслед
            за hsRoulette из той же hsStartLobby на сервере) — выставляем
            сразу, тем же приёмом и по той же причине, что и в обработчике
@@ -2546,6 +2679,11 @@
       hsVariant = d.variant || (d.apoc ? 'zombie' : 'classic');
       hsSecret = d.role || null;
       applyTeamState(d);
+      // жетоны, магазин и бой (см. joinState в war.js)
+      shopOn = !!d.shop; tokBank = d.bank | 0; toks = d.toks || [];
+      if (d.ammo) ammo = d.ammo;
+      broId = d.broId || (d.war && d.war.bro) || null;
+      warSet(d.phase === 'round' && isWarV(hsVariant) ? d.war : null);
       if (d.phase === 'round') {
         roulStop();
         // зашли посреди уже идущей охоты — рулетку не видели и не увидим,
@@ -2583,6 +2721,10 @@
           (d.seekerIds || []).forEach(function (id) { hsSeekerIds[id] = true; });
           hsWinnerId = 'variant';
           fixVariantRole();
+        } else if (isWarV(hsVariant)) {
+          // война: искателя нет, Bro RED известен из broId
+          hsWinnerId = broId || 'variant';
+          setRole('hider');
         } else if (d.seekerId) {
           applySeeker(d.seekerId);
           log(TR('roulSeekerIs', 'Искатель: ') + '<b>' + esc(nameOfId(d.seekerId)) + '</b>');
@@ -2848,6 +2990,419 @@
     }, 1400);
   }
 
+  /* ---------- война и жетоны (см. war.js на сервере) ----------
+     Бой считает этот клиент: удар кулаком и снаряды (рогатка, бомба, магия) летят здесь, и
+     если попали во врага — сервер получает warHit и сам проверяет, было ли это возможно.
+     Чужие выстрелы приходят как warShot и просто рисуются. Жетоны лежат на карте (toks),
+     подбираются касанием, тратятся в магазине (B): в прятках — бусты, в войне — оружие. */
+  var WPN = {
+    fist:  { cd: 360, key: 'wpnFist', ru: 'Кулак' },
+    sling: { cd: 520, key: 'wpnSling', ru: 'Рогатка', v: 0.95, g: 0.0011, life: 2500, r: 6, color: '#6b7280' },
+    bomb:  { cd: 820, key: 'wpnBomb', ru: 'Бомба', v: 0.5, vy: -0.62, g: 0.0019, life: 1400, r: 8, color: '#111827', boom: 130 },
+    magic: { cd: 670, key: 'wpnMagic', ru: 'Магия', v: 1.15, g: 0, life: 2000, r: 9, color: '#f97316' }
+  };
+  var WPN_ORDER = ['fist', 'sling', 'bomb', 'magic'];
+  // значки оружия на панели (на телефоне — только значок и число, без подписи)
+  var WPN_ICON = {
+    fist: '<path d="M7 12V9a2 2 0 0 1 4 0v2M11 11V8a2 2 0 0 1 4 0v3M15 11a2 2 0 0 1 4 0v2a7 7 0 0 1-7 7h-1a6 6 0 0 1-6-6v-1a2 2 0 0 1 4 0"/>',
+    sling: '<path d="M12 21v-8M12 13 6 4M12 13l6-9M6 4c2 3 10 3 12 0"/>',
+    bomb: '<circle cx="11" cy="14" r="7"/><path d="M15.5 9.5 19 6M19 3v2M21 5h-2"/>',
+    magic: '<path d="M12 22c4 0 7-3 7-7 0-5-5-7-5-12-3 2-4 5-4 7-2-1-3-3-3-3-2 3-2 5-2 8 0 4 3 7 7 7z"/>'
+  };
+  function wIcon(w) {
+    return '<svg class="wIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + WPN_ICON[w] + '</svg>';
+  }
+  var SHOP_ITEMS = {
+    speed:  { price: 2, key: 'shopSpeed', ru: 'Скорость', dKey: 'shopSpeedD', dRu: 'Бегаешь на треть быстрее 10 секунд' },
+    jump:   { price: 2, key: 'shopJump', ru: 'Суперпрыжок', dKey: 'shopJumpD', dRu: 'Прыгаешь на треть выше 10 секунд' },
+    invis:  { price: 4, key: 'shopInvis', ru: 'Невидимость', dKey: 'shopInvisD', dRu: 'Тебя не видно 6 секунд (только прячущимся)', hider: true },
+    radar:  { price: 3, key: 'shopRadar', ru: 'Радар', dKey: 'shopRadarD', dRu: 'Стрелка к ближнему прячущемуся 8 секунд (только искателю)', seeker: true },
+    sling:  { price: 3, key: 'shopSling', ru: 'Рогатка ×10', dKey: 'shopSlingD', dRu: '10 камней: летят далеко, 15 урона' },
+    bomb:   { price: 4, key: 'shopBomb', ru: 'Бомба ×3', dKey: 'shopBombD', dRu: '3 бомбы: взрыв задевает всех рядом' },
+    magic:  { price: 5, key: 'shopMagic', ru: 'Магия ×5', dKey: 'shopMagicD', dRu: '5 огненных шаров: быстрые, 32 урона' },
+    heal:   { price: 3, key: 'shopHeal', ru: 'Аптечка', dKey: 'shopHealD', dRu: '+50 здоровья' },
+    shield: { price: 4, key: 'shopShield', ru: 'Щит', dKey: 'shopShieldD', dRu: 'Вдвое меньше урона 10 секунд' }
+  };
+  var SHOP_HS = ['speed', 'jump', 'invis', 'radar'];
+  var SHOP_WAR = ['sling', 'bomb', 'magic', 'heal', 'shield', 'speed', 'jump'];
+  var war = null;                 // состояние боя раунда: { v, hp, max, kills, score, out, bro }
+  var weapon = 'fist', ammo = { sling: 0, bomb: 0, magic: 0 }, lastFire = {}, shotSeq = 1;
+  var shots = [];                 // снаряды в полёте (свои и чужие)
+  var swings = {};                // кто когда махнул кулаком — для анимации
+  var booms = [];                 // вспышки взрывов
+  var toks = [], tokBank = 0, shopOn = false, tokSentAt = {};
+  var myBoost = {};               // мои бусты: item -> до какого времени
+  var boostOf = {};               // видимые всем бусты (невидимость, щит): id -> { item: until }
+  var hazardSentAt = 0;
+  var broId = null;               // Bro RED этого раунда (рулетка в лобби, war.bro в бою)
+
+  function isWarV(v) { return v === 'ffa' || v === 'tdm' || v === 'hunger' || v === 'cp' || v === 'bro'; }
+  function warOn() { return MODE === 'hideAndSeek' && !!war && phase === 'round' && isWarV(hsVariant); }
+  function warAlive(id) { return !!war && (war.hp[id] | 0) > 0 && (war.out || []).indexOf(id) === -1; }
+  function warEnemy(id) {
+    if (!war || !socket || id === socket.id) return false;
+    if (war.v === 'tdm' || war.v === 'cp') return !!hsTeams[id] && hsTeams[id] !== myTeam();
+    if (war.v === 'bro') return (id === war.bro) !== (socket.id === war.bro);
+    return true;
+  }
+  function boostOn(id, item) { var b = boostOf[id]; return !!(b && b[item] && b[item] > Date.now()); }
+  function myBoostOn(item) { return !!(myBoost[item] && myBoost[item] > Date.now()); }
+  function wName(w) { return TR(WPN[w].key, WPN[w].ru); }
+
+  // состояние боя целиком: начало раунда (hsPhase), вход посреди раунда (hsState)
+  function warSet(d) {
+    war = d ? { v: d.v, hp: d.hp || {}, max: d.max || {}, kills: d.kills || {}, score: d.score || {}, out: d.out || [], bro: d.bro || null } : null;
+    shots = []; booms = [];
+    if (!war) { GAME.myAlpha = 1; weapon = 'fist'; }
+    syncWarMe();
+    renderWarHud();
+    renderTeamHud();
+  }
+  // свой вид: выбит — бледный и стоит; иначе — как обычно (невидимость — отдельно, см. tickBoosts)
+  function syncWarMe() {
+    if (!socket) return;
+    var dead = !!war && phase === 'round' && !warAlive(socket.id);
+    GAME.myAlpha = dead ? 0.3 : myBoostOn('invis') ? 0.35 : 1;
+    if (war && phase === 'round') GAME.frozen = dead;
+  }
+
+  /* ---------- атака ---------- */
+  function attack() {
+    if (!warOn() || !socket || !warAlive(socket.id) || GAME.frozen) return;
+    var now = Date.now(), w = weapon;
+    if (now - (lastFire[w] || 0) < WPN[w].cd) return;
+    if (w !== 'fist' && !(ammo[w] > 0)) {
+      log(TR('noAmmo', 'Нет патронов — купи в магазине (B)'));
+      weapon = 'fist'; renderWarHud();
+      return;
+    }
+    lastFire[w] = now;
+    var p = GAME.pl, face = p.face || 1;
+    var cx = p.x + p.w / 2, cy = p.y + p.h * 0.38;
+    var sid = shotSeq++;
+    var vx = 0, vy = 0;
+    if (w === 'fist') swings[socket.id] = { t: now, dir: face };
+    else {
+      ammo[w]--;
+      vx = face * WPN[w].v; vy = WPN[w].vy || (w === 'sling' ? -0.12 : 0);
+    }
+    socket.emit('warShot', { w: w, sid: sid, x: Math.round(cx), y: Math.round(cy), vx: vx, vy: vy, dir: face });
+    if (window.BFSound && BFSound.step) BFSound.step();
+    if (w === 'fist') {
+      // кулак: по врагам прямо перед собой (по последним реальным координатам, см. touching)
+      Object.keys(others).forEach(function (id) {
+        var o = others[id];
+        if (!warEnemy(id) || !warAlive(id)) return;
+        var ox = o.tx + (o.w || 30) / 2, oy = o.ty + (o.h || 100) / 2;
+        var dx = ox - cx, dy = oy - (p.y + p.h / 2);
+        if (dx * face >= -12 && Math.abs(dx) <= 78 && Math.abs(dy) <= 80) socket.emit('warHit', { t: id, sid: sid });
+      });
+    } else shots.push({ own: true, sid: sid, w: w, x: cx, y: cy, vx: vx, vy: vy, born: now, hit: {} });
+    renderWarHud();
+  }
+  function pickWeapon(w) {
+    if (!WPN[w] || !war) return;
+    weapon = w; renderWarHud();
+  }
+  function cycleWeapon() {
+    var i = WPN_ORDER.indexOf(weapon);
+    for (var k = 1; k <= WPN_ORDER.length; k++) {
+      var w = WPN_ORDER[(i + k) % WPN_ORDER.length];
+      if (w === 'fist' || ammo[w] > 0) { pickWeapon(w); return; }
+    }
+  }
+
+  /* ---------- снаряды ---------- */
+  var lastShotStep = 0;
+  function stepShots() {
+    var now = Date.now(), dt = Math.min(50, now - (lastShotStep || now));
+    lastShotStep = now;
+    if (!shots.length) return;
+    shots = shots.filter(function (s) {
+      var W = WPN[s.w];
+      if (now - s.born > W.life) { if (s.w === 'bomb') explode(s); return false; }
+      // шагами не длиннее 8 px — тонкая стена не пропускает снаряд насквозь
+      var steps = Math.max(1, Math.ceil(Math.hypot(s.vx * dt, s.vy * dt) / 8));
+      for (var k = 0; k < steps; k++) {
+        var h = dt / steps;
+        s.vy += W.g * h; s.x += s.vx * h; s.y += s.vy * h;
+        if (GAME.solidAt && GAME.solidAt(s.x, s.y)) { if (s.w === 'bomb') explode(s); return false; }
+        if (s.own && hitPlayer(s)) return false;
+      }
+      return true;
+    });
+  }
+  // свой снаряд задел врага — сообщаем серверу (бомба — взрывается)
+  function hitPlayer(s) {
+    var ids = Object.keys(others), r = WPN[s.w].r;
+    for (var i = 0; i < ids.length; i++) {
+      var o = others[ids[i]], id = ids[i];
+      if (!warEnemy(id) || !warAlive(id)) continue;
+      var w = o.w || 30, h = o.h || 100;
+      if (s.x + r > o.tx && s.x - r < o.tx + w && s.y + r > o.ty && s.y - r < o.ty + h) {
+        if (s.w === 'bomb') { explode(s); return true; }
+        socket.emit('warHit', { t: id, sid: s.sid });
+        return true;
+      }
+    }
+    return false;
+  }
+  function explode(s) {
+    booms.push({ x: s.x, y: s.y, t: Date.now() });
+    if (window.BFSound && BFSound.death) BFSound.death();
+    if (!s.own || !socket) return;
+    var R = WPN.bomb.boom;
+    Object.keys(others).forEach(function (id) {
+      var o = others[id];
+      if (!warEnemy(id) || !warAlive(id)) return;
+      var ox = o.tx + (o.w || 30) / 2, oy = o.ty + (o.h || 100) / 2;
+      if (Math.hypot(ox - s.x, oy - s.y) <= R) socket.emit('warHit', { t: id, sid: s.sid, x: Math.round(s.x), y: Math.round(s.y) });
+    });
+  }
+
+  /* ---------- жетоны и бусты ---------- */
+  function tickWar() {
+    if (!socket || MODE !== 'hideAndSeek') return;
+    var now = Date.now(), p = GAME.pl;
+    // подобрать жетон касанием
+    if (phase === 'round' && toks.length && p && GAME.playing && !(war && !warAlive(socket.id)) && !me.caught) {
+      var cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+      toks.forEach(function (t) {
+        if (Math.abs(cx - t.x) < 32 && Math.abs(cy - t.y) < 60 && now - (tokSentAt[t.id] || 0) > 800) {
+          tokSentAt[t.id] = now;
+          socket.emit('tokTake', { id: t.id });
+        }
+      });
+    }
+    // бусты кончаются сами
+    GAME.speedMul = myBoostOn('speed') ? 1.35 : 1;
+    GAME.jumpMul = myBoostOn('jump') ? 1.3 : 1;
+    if (war || myBoost.invis) syncWarMe();
+  }
+
+  /* ---------- магазин ---------- */
+  function shopList() { return hsFixed === 'war' ? SHOP_WAR : SHOP_HS; }
+  function amHunter() { return me.role === 'seeker'; }
+  function renderShop() {
+    var box = $('gShop');
+    if (!box || box.style.display === 'none') return;
+    var rows = shopList().map(function (k) {
+      var it = SHOP_ITEMS[k];
+      var roleNo = (it.hider && amHunter()) || (it.seeker && !amHunter());
+      var off = roleNo || tokBank < it.price;
+      return '<div class="shRow"><div class="shTxt"><b>' + esc(TR(it.key, it.ru)) + '</b><span>' + esc(TR(it.dKey, it.dRu)) + '</span></div>'
+        + '<button class="shBuy" data-item="' + k + '"' + (off ? ' disabled' : '') + '>' + it.price + ' ' + esc(TR('tokShort', 'жет.')) + '</button></div>';
+    }).join('');
+    box.innerHTML = '<div class="shHead"><b>' + esc(TR('shopTitle', 'Магазин')) + '</b><span>' + esc(TR('tokLbl', 'Жетоны')) + ': ' + tokBank
+      + '</span><button class="shX" aria-label="Close">×</button></div>' + rows
+      + '<div class="shHint">' + esc(TR('shopHint', 'Жетоны лежат на карте — подбирай касанием.')) + '</div>';
+  }
+  function toggleShop(force) {
+    var box = $('gShop');
+    if (!box || !shopOn) return;
+    var show = force === undefined ? box.style.display === 'none' : !!force;
+    box.style.display = show ? '' : 'none';
+    renderShop();
+  }
+
+  /* ---------- нижняя панель: здоровье, оружие, жетоны ---------- */
+  function renderWarHud() {
+    var bar = $('gWar');
+    if (!bar) return;
+    var inWar = MODE === 'hideAndSeek' && hsFixed === 'war' && !!war;
+    if (!shopOn && !inWar) { bar.style.display = 'none'; var a0 = $('gAtk'); if (a0) a0.style.display = 'none'; return; }
+    bar.style.display = '';
+    var html = '';
+    if (inWar && socket) {
+      var hp = war.hp[socket.id] | 0, max = war.max[socket.id] || 100;
+      html += '<span class="wHp"><i style="width:' + Math.round(100 * Math.max(0, hp) / max) + '%"></i><em>'
+        + esc(TR('hpLbl', 'Здоровье')) + ' ' + Math.max(0, hp) + '</em></span>';
+      html += WPN_ORDER.map(function (w, i) {
+        var n = w === 'fist' ? '∞' : String(ammo[w] | 0);
+        return '<button class="wSlot' + (w === weapon ? ' on' : '') + (w !== 'fist' && !(ammo[w] > 0) ? ' empty' : '') + '" data-w="' + w + '" title="' + esc(wName(w)) + '">'
+          + '<small class="wKey">' + (i + 1) + '</small>' + wIcon(w) + '<span class="wName">' + esc(wName(w)) + '</span> <b>' + n + '</b></button>';
+      }).join('');
+    }
+    html += '<span class="wTok"><i class="wCoin"></i><span class="wName">' + esc(TR('tokLbl', 'Жетоны')) + ': </span><b>' + tokBank + '</b></span>';
+    if (shopOn) html += '<button class="wShop" id="gShopBtn">' + esc(TR('shopBtn', 'Магазин')) + ' <small class="wKey">B</small></button>';
+    bar.innerHTML = html;
+    var atk = $('gAtk');
+    if (atk) atk.style.display = inWar ? '' : 'none';
+  }
+
+  /* ---------- рисование ---------- */
+  function drawHpBar(ctx, x, y, w, hp, max) {
+    var W = 36, H = 5, k = Math.max(0, Math.min(1, hp / (max || 100)));
+    ctx.fillStyle = 'rgba(17,24,39,.55)'; ctx.fillRect(x + w / 2 - W / 2 - 1, y - 1, W + 2, H + 2);
+    ctx.fillStyle = k > 0.5 ? '#22c55e' : k > 0.25 ? '#eab308' : '#ef4444';
+    ctx.fillRect(x + w / 2 - W / 2, y, W * k, H);
+  }
+  function drawSwing(ctx, x, y, w, h, sw) {
+    var age = Date.now() - sw.t;
+    if (age > 160) return;
+    var k = Math.sin(Math.PI * age / 160), fx = sw.dir > 0 ? x + w + 4 + 24 * k : x - 4 - 24 * k, fy = y + h * 0.42;
+    ctx.fillStyle = '#111827';
+    ctx.beginPath(); ctx.arc(fx, fy, 9, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.stroke();
+  }
+  function drawWar(ctx) {
+    stepShots();
+    var now = Date.now();
+    // жетоны на карте — золотые монетки со звездой
+    toks.forEach(function (t) {
+      var bob = Math.sin(now / 260 + t.id) * 3;
+      ctx.save();
+      ctx.translate(t.x, t.y + bob);
+      ctx.fillStyle = '#fbbf24'; ctx.strokeStyle = '#b45309'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, 11, 0, 6.2832); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff7d6';
+      ctx.beginPath();
+      for (var i = 0; i < 10; i++) { var a = -1.5708 + i * 0.6283, r = i % 2 ? 2.6 : 6.2; ctx[i ? 'lineTo' : 'moveTo'](r * Math.cos(a), r * Math.sin(a)); }
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    });
+    // снаряды
+    shots.forEach(function (s) {
+      var W = WPN[s.w];
+      ctx.save();
+      if (s.w === 'magic') { ctx.shadowColor = '#fb923c'; ctx.shadowBlur = 14; }
+      ctx.fillStyle = W.color;
+      ctx.beginPath(); ctx.arc(s.x, s.y, W.r, 0, 6.2832); ctx.fill();
+      if (s.w === 'bomb') { ctx.fillStyle = (now / 90 | 0) % 2 ? '#f97316' : '#fde047'; ctx.beginPath(); ctx.arc(s.x + 3, s.y - W.r - 2, 3, 0, 6.2832); ctx.fill(); }
+      ctx.restore();
+    });
+    booms = booms.filter(function (b) {
+      var age = now - b.t;
+      if (age > 380) return false;
+      var k = age / 380;
+      ctx.save();
+      ctx.globalAlpha = 1 - k;
+      ctx.fillStyle = '#f97316';
+      ctx.beginPath(); ctx.arc(b.x, b.y, WPN.bomb.boom * (0.35 + 0.65 * k), 0, 6.2832); ctx.fill();
+      ctx.restore();
+      return true;
+    });
+    if (!war || phase !== 'round' || !socket) return;
+    // полоски здоровья, удары и щиты
+    var p = GAME.pl;
+    Object.keys(others).forEach(function (id) {
+      var o = others[id];
+      if (!warAlive(id) || boostOn(id, 'invis')) return;
+      drawHpBar(ctx, o.x, o.y - 20, o.w || 30, war.hp[id] | 0, war.max[id] || 100);
+      if (swings[id]) drawSwing(ctx, o.x, o.y, o.w || 30, o.h || 100, swings[id]);
+      if (boostOn(id, 'shield')) drawShield(ctx, o.x, o.y, o.w || 30, o.h || 100);
+    });
+    if (p && warAlive(socket.id)) {
+      drawHpBar(ctx, p.x, p.y - 20, p.w, war.hp[socket.id] | 0, war.max[socket.id] || 100);
+      if (swings[socket.id]) drawSwing(ctx, p.x, p.y, p.w, p.h, swings[socket.id]);
+      if (boostOn(socket.id, 'shield')) drawShield(ctx, p.x, p.y, p.w, p.h);
+    }
+  }
+  function drawShield(ctx, x, y, w, h) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(56,189,248,.85)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(x + w / 2, y + h / 2, w * 1.1, h * 0.62, 0, 0, 6.2832); ctx.stroke();
+    ctx.restore();
+  }
+  // радар искателя: стрелка от себя к ближнему непойманному прячущемуся
+  function drawRadar(ctx) {
+    if (!myBoostOn('radar') || phase !== 'round' || !GAME.pl) return;
+    var p = GAME.pl, cx = p.x + p.w / 2, cy = p.y + p.h / 2, best = null, bd = Infinity;
+    Object.keys(others).forEach(function (id) {
+      var o = others[id];
+      if (o.caught || hsSeekerIds[id]) return;
+      var d = Math.hypot(o.tx - cx, o.ty - cy);
+      if (d < bd) { bd = d; best = o; }
+    });
+    if (!best) return;
+    var a = Math.atan2(best.ty + 50 - cy, best.tx + 15 - cx);
+    ctx.save();
+    ctx.translate(cx + Math.cos(a) * 70, cy + Math.sin(a) * 70);
+    ctx.rotate(a);
+    ctx.fillStyle = '#2563eb';
+    ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-8, -10); ctx.lineTo(-3, 0); ctx.lineTo(-8, 10); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  /* ---------- сетевые события ---------- */
+  function bindWar() {
+    socket.on('warShot', function (d) {
+      if (!d || !d.id || !isWarV(hsVariant)) return;
+      if (d.w === 'fist') { swings[d.id] = { t: Date.now(), dir: d.dir || ((d.vx || 0) >= 0 ? 1 : -1) }; return; }
+      if (!WPN[d.w]) return;
+      shots.push({ own: false, id: d.id, sid: d.sid, w: d.w, x: +d.x || 0, y: +d.y || 0, vx: +d.vx || 0, vy: +d.vy || 0, born: Date.now(), hit: {} });
+    });
+    socket.on('warHp', function (d) {
+      if (!d || !d.id || !war) return;
+      war.hp[d.id] = d.hp | 0;
+      if (d.max) war.max[d.id] = d.max;
+      if (d.id === socket.id) {
+        if ((d.kx || d.ky) && GAME.knock) GAME.knock(d.kx || 0, d.ky || 0);
+        if (d.by && window.BFSound && BFSound.death) BFSound.death();
+        renderWarHud();
+      }
+    });
+    socket.on('warDown', function (d) {
+      if (!d || !d.id || !war) return;
+      war.hp[d.id] = 0;
+      if (d.score) war.score = d.score;
+      if (d.by) war.kills[d.by] = d.kills | 0;
+      if (war.v === 'hunger' && war.out.indexOf(d.id) === -1) war.out.push(d.id);
+      var a = '<b>' + esc(d.byName || '') + '</b>', b = '<b>' + esc(d.name || nameOfId(d.id)) + '</b>';
+      if (d.id === socket.id) {
+        log(war.v === 'hunger' ? TR('warOutMe', 'Тебя выбили — ты выбываешь до следующего раунда.')
+          : war.v === 'bro' && socket.id === war.bro ? TR('warBroDownMe', 'Тебя выбили — бойцы победили.')
+          : d.by ? TR('warDownMe', '{n} выбил тебя. Сейчас вернёшься.').replace('{n}', a)
+          : TR('warDownHazard', 'Яд выбил тебя. Сейчас вернёшься.'));
+        if (window.BFSound && BFSound.death) BFSound.death();
+      } else log(d.by ? TR('warKill', '{a} выбил {b}').replace('{a}', a).replace('{b}', b) : TR('warKillHazard', '{b} выбит ядом').replace('{b}', b));
+      syncWarMe(); renderWarHud(); renderTeamHud();
+    });
+    socket.on('warUp', function (d) {
+      if (!d || !d.id || !war) return;
+      war.hp[d.id] = d.hp | 0;
+      if (d.id === socket.id) {
+        GAME.frozen = false;
+        warSpawnAt(d.at);
+        syncWarMe(); renderWarHud();
+      }
+    });
+    socket.on('warSpawn', function (d) { if (d && war) warSpawnAt(d.at); });
+    socket.on('warAmmo', function (d) { if (d && d.ammo) { ammo = d.ammo; renderWarHud(); } });
+    socket.on('toks', function (d) { toks = (d && d.list) || []; });
+    socket.on('tokAdd', function (t) { if (t && t.id) toks.push(t); });
+    socket.on('tokGone', function (d) {
+      if (!d) return;
+      toks = toks.filter(function (t) { return t.id !== d.id; });
+      if (d.by === socket.id && window.BFSound && BFSound.roulTick) BFSound.roulTick();
+    });
+    socket.on('tokBank', function (d) { if (d) { tokBank = d.n | 0; renderWarHud(); renderShop(); } });
+    socket.on('shopOk', function (d) {
+      if (!d || !SHOP_ITEMS[d.item]) return;
+      if (d.ammo) ammo = d.ammo;
+      if (d.ms) myBoost[d.item] = Date.now() + d.ms;
+      if (d.item === 'sling' || d.item === 'bomb' || d.item === 'magic') weapon = d.item;
+      log(TR('shopBought', 'Куплено: {i}').replace('{i}', '<b>' + esc(TR(SHOP_ITEMS[d.item].key, SHOP_ITEMS[d.item].ru)) + '</b>'));
+      if (window.BFSound && BFSound.win) BFSound.win();
+      tickWar(); renderWarHud(); renderShop();
+    });
+    socket.on('shopNo', function (d) {
+      if (!d) return;
+      log(d.why === 'tokens' ? TR('shopNoTokens', 'Не хватает жетонов') : d.why === 'role' ? TR('shopNoRole', 'Это не для твоей роли')
+        : TR('shopNoNow', 'Сейчас это купить нельзя'));
+    });
+    socket.on('boost', function (d) {
+      if (!d || !d.id || !d.item) return;
+      (boostOf[d.id] = boostOf[d.id] || {})[d.item] = Date.now() + (d.ms | 0);
+    });
+  }
+  // где появиться: у укрытия (снизу, по центру) или на обычном старте карты
+  function warSpawnAt(at) {
+    var p = GAME.pl;
+    if (at && GAME.teleportTo && p) GAME.teleportTo(at.x + at.w / 2 - p.w / 2, at.y + at.h - p.h);
+    else if (GAME.respawn) GAME.respawn();
+  }
+
   // ---------- отрисовка чужих игроков ----------
   GAME.onDraw = function (ctx) {
     syncMyOutfit();
@@ -2879,9 +3434,11 @@
          не было видно вообще весь раунд. */
       if (o.hid && hsWait) return;
       if (o.hid && MODE !== 'hideAndSeek') return;
+      if (boostOn(id, 'invis')) return;            // невидимость из магазина
       var w = o.w || 22, h = o.h || 74;
       ctx.save();
       ctx.translate(o.x, o.y);
+      if (war && phase === 'round' && !warAlive(id)) ctx.globalAlpha = 0.25;   // выбит — бледный, пока не вернётся
       // заражён в apoc-раунде — выглядит зомби, а не обычной фигуркой
       // (см. hsApocRound/hsSeekerIds — тот же набор, что красит полосу под ником)
       var fit = outfitFor(id);
@@ -2892,6 +3449,8 @@
       drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74));
     });
     drawTeamObjects(ctx);
+    drawWar(ctx);
+    drawRadar(ctx);
     var p = GAME.pl;
     if (GAME.playing && me.name) {
       // свой ник в укрытии показываем бледным — напоминание, что тебя не видно
@@ -3173,8 +3732,40 @@
     if (e.key.length !== 1) return;
     if (e.key === ' ') return;                  // пробел — прыжок
     if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyD') return;
+    if (combatKey(e)) return;                  // F/J, Q, 1–4, B — бой и магазин, а не чат
     inp.focus();
   });
+  // война и магазин жетонов: клавиши
+  function combatKey(e) {
+    if (MODE !== 'hideAndSeek') return false;
+    if (e.code === 'KeyB') return shopOn;
+    return !!war && /^(KeyF|KeyJ|KeyQ|Digit[1-4])$/.test(e.code);
+  }
+  document.addEventListener('keydown', function (e) {
+    if (document.activeElement === inp || isTypingElsewhere() || e.ctrlKey || e.altKey || e.metaKey) return;
+    if (!combatKey(e) || e.repeat && e.code === 'KeyB') return;
+    e.preventDefault();
+    if (e.code === 'KeyB') toggleShop();
+    else if (e.code === 'KeyF' || e.code === 'KeyJ') attack();
+    else if (e.code === 'KeyQ') cycleWeapon();
+    else pickWeapon(WPN_ORDER[+e.code.slice(5) - 1]);
+  });
+  $('gWar').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.w) pickWeapon(b.dataset.w);
+    else if (b.id === 'gShopBtn') toggleShop();
+  });
+  $('gShop').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    if (b.classList.contains('shX')) toggleShop(false);
+    else if (b.dataset.item && socket) socket.emit('shopBuy', { item: b.dataset.item });
+  });
+  // телефон: кнопка удара (касание не уходит в пад и не открывает чат)
+  $('gAtk').addEventListener('touchstart', function (e) { e.preventDefault(); e.stopPropagation(); attack(); }, { passive: false });
+  $('gAtk').addEventListener('click', function (e) { e.preventDefault(); attack(); });
+  setInterval(tickWar, 100);
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && document.activeElement !== $('gMsg')) {
       if (isTypingElsewhere()) return;
