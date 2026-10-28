@@ -27,11 +27,14 @@ function server(port, variant) {
   fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(tmp, 'node_modules'));
   fs.mkdirSync(path.join(tmp, 'data'));
   const mapData = JSON.stringify({ mode: 'hideAndSeek', objects: [
-    { id: 1, type: 'spawn', x: 300, y: 450, w: 30, h: 100 }, { id: 2, type: 'rect', x: 0, y: 560, w: 3000, h: 80 }] });
+    { id: 1, type: 'spawn', x: 300, y: 450, w: 30, h: 100 }, { id: 2, type: 'rect', x: 0, y: 560, w: 3000, h: 80 },
+    // укрытия — точки появления Murder Mystery; место искателя — тюрьма Cops and Robbers
+    { id: 3, type: 'rect', x: 1200, y: 500, w: 60, h: 60, hideSpot: true }, { id: 4, type: 'rect', x: 2600, y: 500, w: 60, h: 60, hideSpot: true },
+    { id: 5, type: 'seekerSpot', x: 1500, y: 460, w: 30, h: 100 }] });
   fs.writeFileSync(path.join(tmp, 'data', 'maps.json'), JSON.stringify([{ mapName: 'VariantLand', mapType: 'hideAndSeek', mapData,
     author: OWNER, date: Date.now(), created: Date.now(), rating: 0, votes: {}, boostLikes: 0, boostDislikes: 0, inGameModes: [] }]));
   const proc = spawn('node', ['server.js'], { cwd: tmp, stdio: 'ignore',
-    env: { ...process.env, PORT: String(port), OWNER_ALIASES: OWNER, HS_VARIANT: variant, HS_LOBBY_MS: '9500', HS_ROUND_MS: '40000' } });
+    env: { ...process.env, PORT: String(port), OWNER_ALIASES: OWNER, HS_VARIANT: variant, HS_LOBBY_MS: '9500', HS_ROUND_MS: '40000', HS_MURDER_GRACE_MS: '5000' } });
   return { base: 'http://127.0.0.1:' + port, kill: () => { try { proc.kill(); } catch (e) {} try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {} } };
 }
 
@@ -89,10 +92,20 @@ const roleText = page => page.evaluate(() => document.getElementById('gRole').te
   const by = r => mp[roles.indexOf(r)];
   ok(roles.filter(r => r === 'murderer').length === 1 && roles.filter(r => r === 'sheriff').length === 1 && roles.filter(r => r === 'innocent').length === 2,
     'каждый получил только свою роль: один убийца, один шериф, двое невиновных', roles.join(','));
+  // точки появления: у каждого из тех, кто был на рулетке, — своя (старт или одно из укрытий)
+  const ats = mp.map(p => p.last('hsSecret')).filter(Boolean).map(x => x.d.at ? x.d.at.x : 'start');
+  ok(ats.length >= 3 && new Set(ats).size === ats.length, 'каждый появляется в своей точке карты', ats.join(','));
   const mRound = await until(() => { const r = mp[0].last('hsPhase', d => d.phase === 'round' && d.variant === 'murder'); return r && r.d; }, 30000);
   ok(!!mRound && mRound.seekerId === null && mRound.seekerName === '' && mRound.seekerIds.length === 0, 'охота началась, а кто убийца — в событии не сказано');
+  const tRound = Date.now();
+  ok(!!mRound && mRound.grace === 5000, 'в начале охоты сказано, сколько убийца ждёт', mRound && mRound.grace);
   const killer = by('murderer'), sheriff = by('sheriff'), inn = mp.filter((p, i) => roles[i] === 'innocent');
   await Promise.all(mp.map(p => p.walk()));
+  // первые секунды охоты убийца никого не выбивает
+  killer.at(inn[0].x, inn[0].y); await sleep(80);
+  killer.s.emit('hsCatch', { targetId: inn[0].s.id });
+  await sleep(600);
+  ok(mp[0].count('hsOut') === 0, 'в первые секунды охоты убийца никого не выбивает');
   // браузер входит посреди охоты — он невиновный
   const mpage = await browserJoin(browser, M.base, mroom, '10.26.9.9', errs);
   const mRole = await until(async () => { const t = await roleText(mpage); return /Innocent/.test(t) ? t : null; }, 10000);
@@ -106,7 +119,8 @@ const roleText = page => page.evaluate(() => document.getElementById('gRole').te
   inn[1].s.emit('hsCatch', { targetId: inn[0].s.id });
   await sleep(900);
   ok(outs() === 0, 'шериф и невиновный, тронув невиновного, никого не выбивают');
-  // убийца выбивает невиновного
+  // убийца выбивает невиновного — когда время ожидания прошло
+  await sleep(Math.max(0, tRound + 5300 - Date.now()));
   killer.at(inn[0].x, inn[0].y); await sleep(80);
   killer.s.emit('hsCatch', { targetId: inn[0].s.id });
   const out1 = await until(() => { const o = mp[0].last('hsOut'); return o && o.d; }, 3000);
@@ -159,6 +173,8 @@ const roleText = page => page.evaluate(() => document.getElementById('gRole').te
   cops[1].at(bpos.x, bpos.y); await sleep(150);
   cops[1].s.emit('hsCatch', { targetId: bJoined && bJoined.id });
   ok(!!await until(() => cpage.evaluate(() => window.GAME.frozen === true), 3000), 'браузерного грабителя поймали — GAME.frozen');
+  const jail = await until(() => cpage.evaluate(() => Math.abs(window.GAME.pl.x - 1500) < 2 ? { x: window.GAME.pl.x, y: window.GAME.pl.y } : null), 2000);
+  ok(!!jail, 'пойманного отправили в тюрьму — на место искателя', JSON.stringify(jail || await cpage.evaluate(() => window.GAME.pl.x)));
   const jailFit = await until(() => cpage.evaluate(() => { const f = window.GAME.myOutfit; return f && f.kind === 'robber' && f.arg === true ? f : null; }), 2000);
   ok(!!jailFit, 'модель пойманного — тюремная роба', JSON.stringify(jailFit));
   ok(/arrested/i.test(await cpage.evaluate(() => document.body.innerText)), 'в браузере: «… was arrested»');
@@ -166,7 +182,10 @@ const roleText = page => page.evaluate(() => document.getElementById('gRole').te
   await cpage.keyboard.down('ArrowRight'); await cpage.keyboard.press('ArrowUp'); await sleep(700); await cpage.keyboard.up('ArrowRight');
   const x1 = await cpage.evaluate(() => window.GAME.pl.x);
   ok(Math.abs(x1 - x0) < 3, 'пойманный не может ходить', x0.toFixed(1) + ' → ' + x1.toFixed(1));
-  rob[2].at(bpos.x, bpos.y); await sleep(150);
+  // освобождать идут в тюрьму
+  const jp = jail || bpos;
+  await sleep(300);
+  rob[2].at(jp.x, jp.y); await sleep(150);
   rob[2].s.emit('hsFree', { targetId: bJoined && bJoined.id });
   ok(!!await until(() => cpage.evaluate(() => window.GAME.frozen === false), 3000), 'освободили — заморозка снята');
   await cpage.keyboard.down('ArrowRight'); await sleep(500); await cpage.keyboard.up('ArrowRight');

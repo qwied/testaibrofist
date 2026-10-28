@@ -32,6 +32,10 @@
     {
       "title": "Four modes in the main menu",
       "text": "The main menu now has four modes: Hide and Seek, Race, Murder Mystery and Team Battle, each with its own page, rules and room list. Until a mode has enough players, or if the map has no hiding spots for teams, its room plays classic Hide and Seek and tells you why."
+    },
+    {
+      "title": "Murder Mystery, Cops & Robbers and Team Battle details",
+      "text": "In Murder Mystery the murderer cannot take anyone out during the first 20 seconds of the hunt, and everyone starts at a random spot on the map, so nobody can tell who is who from the start. In Cops & Robbers rounds caught robbers are sent to jail at the seeker spot of the map, and other robbers have to break in to free them. Team Battle now plays with four teams, Red, Blue, Green and Yellow, when there are 8 or more players on maps with at least four hiding spots."
     }
   ]
 }

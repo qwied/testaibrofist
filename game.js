@@ -40,7 +40,8 @@
   var COLOR_SEEKER = '#1e6fe0';   // цвет модели искателя в классике (см. applyColor)
   var COLOR_CAUGHT = '#f97316';   // цвет модели пойманного в классике (см. applyColor)
   var COLOR_OUT    = '#9ca3af';   // гонка Last bro standing: выбывший до конца раунда
-  var COLOR_TEAM   = { red: '#dc2626', blue: '#2563eb' };   // командные варианты пряток
+  var COLOR_TEAM   = { red: '#dc2626', blue: '#2563eb', green: '#16a34a', yellow: '#ca8a04' };   // команды Team Battle
+  var TEAM_ORDER   = ['red', 'blue', 'green', 'yellow'];
 
   /* Общие раунды гонки (см. raceRooms в server.js): карту, отсчёт перед стартом и конец раунда
      задаёт сервер — вся комната бежит одно и то же. raceSync — сервер прислал фазу; без неё
@@ -1227,6 +1228,8 @@
      В Murder Mystery роль у каждого своя и тайная — её присылает только сервер (hsSecret). */
   var hsVariant = 'classic';
   var hsSecret = null;            // murderer | sheriff | innocent
+  var hsSecretAt = null;          // Murder Mystery: укрытие, у которого я появляюсь (см. hsSecret)
+  var mmGraceUntil = 0;           // Murder Mystery: до этого момента убийца никого не трогает
   /* Командные варианты (Capture the Flag, Domination): команда каждого (id -> red|blue), базы —
      укрытия карты, точки захвата и счёт присылает сервер (hsRoulette/hsPhase/ctfState/domState). */
   var hsTeams = {}, hsBases = null, hsPoints = null, ctfState = null, domState = null;
@@ -1245,7 +1248,20 @@
     if (!b || !p || !GAME.teleportTo) return;
     GAME.teleportTo(b.x + b.w / 2 - p.w / 2, b.y + b.h - p.h);
   }
-  function teamName(t) { return t === 'red' ? TR('teamRed', 'Красные') : TR('teamBlue', 'Синие'); }
+  function teamName(t) {
+    return t === 'blue' ? TR('teamBlue', 'Синие') : t === 'green' ? TR('teamGreen', 'Зелёные')
+      : t === 'yellow' ? TR('teamYellow', 'Жёлтые') : TR('teamRed', 'Красные');
+  }
+  // команды этого раунда по порядку (две или четыре) — по счёту или по базам
+  function teamsInPlay(sc) {
+    var src = sc || hsBases || {};
+    return TEAM_ORDER.filter(function (t) { return src[t] !== undefined; });
+  }
+  // счёт цифрами через двоеточие: «2 : 1» или «2 : 1 : 0 : 3»
+  function scoreLine(sc) {
+    return teamsInPlay(sc).map(function (t) { return sc[t] | 0; }).join(' : ');
+  }
+  function teamTag(t) { return '<b style="color:' + COLOR_TEAM[t] + '">' + esc(teamName(t)) + '</b>'; }
   /* Наряд роли (см. OUTFIT в game.html): копы, грабители и игроки команд видны всем; убийца и
      шериф Murder Mystery видят свой наряд только у себя — остальным он не показывается и по сети
      не уходит. Роли известны, когда рулетка уже назначила их (hsWinnerId) или идёт охота. */
@@ -1265,15 +1281,22 @@
     }
     GAME.myOutfit = o;
   }
-  // счёт в шапке: «Red 1 : 0 Blue»
+  // счёт в шапке: «Red 1 : 0 Blue», у четырёх команд — «Red 1 · Blue 0 · Green 2 · Yellow 0»
   function renderTeamHud() {
     var box = $('gTeamBox');
     if (!box) return;
     var sc = (ctfState && ctfState.score) || (domState && domState.score);
     if (!teamVariant() || !sc) { box.style.display = 'none'; return; }
     box.style.display = '';
-    box.innerHTML = '<b style="color:' + COLOR_TEAM.red + '">' + esc(teamName('red')) + ' ' + (sc.red | 0) + '</b> : '
-      + '<b style="color:' + COLOR_TEAM.blue + '">' + (sc.blue | 0) + ' ' + esc(teamName('blue')) + '</b>';
+    var ts = teamsInPlay(sc);
+    if (ts.length === 2) {
+      box.innerHTML = '<b style="color:' + COLOR_TEAM[ts[0]] + '">' + esc(teamName(ts[0])) + ' ' + (sc[ts[0]] | 0) + '</b> : '
+        + '<b style="color:' + COLOR_TEAM[ts[1]] + '">' + (sc[ts[1]] | 0) + ' ' + esc(teamName(ts[1])) + '</b>';
+    } else {
+      box.innerHTML = ts.map(function (t) {
+        return '<b style="color:' + COLOR_TEAM[t] + '">' + esc(teamName(t)) + ' ' + (sc[t] | 0) + '</b>';
+      }).join(' · ');
+    }
   }
   function syncMeIsZombie() {
     GAME.meIsZombie = !!(hsApocRound && me.role === 'seeker');
@@ -1303,8 +1326,9 @@
     d = d || {};
     if (id === socket.id) {
       me.caught = true;
-      // Cops and Robbers: пойманный замирает, пока его не освободят (см. frz в game.html)
-      if (d.jail) GAME.frozen = true;
+      /* Cops and Robbers: пойманный замирает, пока его не освободят (см. frz в game.html), — в тюрьме:
+         на метке «Место искателя», если она есть на карте (идея 2019 года: «robber teleports to jail») */
+      if (d.jail) { GAME.frozen = true; if (GAME.seekerWaitSpot) GAME.seekerWaitSpot(); }
       applyColor();
       if (window.BFSound) BFSound.death();
     } else if (others[id]) {
@@ -1329,7 +1353,11 @@
     }
   }
   function variantRoleText() {
-    if (teamVariant()) return myTeam() === 'blue' ? TR('roulYouBlue', 'Ты в синей команде!') : TR('roulYouRed', 'Ты в красной команде!');
+    if (teamVariant()) {
+      var mt = myTeam();
+      return mt === 'blue' ? TR('roulYouBlue', 'Ты в синей команде!') : mt === 'green' ? TR('roulYouGreen', 'Ты в зелёной команде!')
+        : mt === 'yellow' ? TR('roulYouYellow', 'Ты в жёлтой команде!') : TR('roulYouRed', 'Ты в красной команде!');
+    }
     if (hsVariant === 'cops') return me.role === 'seeker' ? TR('roulYouCop', 'Ты коп!') : TR('roulYouRobber', 'Ты грабитель!');
     return hsSecret === 'murderer' ? TR('roulYouMurderer', 'Ты убийца!')
       : hsSecret === 'sheriff' ? TR('roulYouSheriff', 'Ты шериф!') : TR('roulYouInnocent', 'Ты невиновный!');
@@ -2247,7 +2275,7 @@
          на время самого вращения (см. setRole('hider')/clearCaught()). */
       hsApocRound = !!d.apoc;
       hsVariant = d.variant || (d.apoc ? 'zombie' : 'classic');
-      hsSecret = null;                   // тайная роль придёт следом (hsSecret)
+      hsSecret = null; hsSecretAt = null;   // тайная роль придёт следом (hsSecret)
       hsFixed = d.fixed || null;
       fixedWaitLog(d);
       setRole('hider');
@@ -2282,6 +2310,11 @@
           else log(variantHint());
           // коп ждёт на метке искателя, как в классике; убийце туда нельзя — выдаст себя
           if (hsVariant === 'cops' && me.role === 'seeker' && GAME.seekerWaitSpot) GAME.seekerWaitSpot();
+          // Murder Mystery: каждый — в своей случайной точке карты (её выбрал сервер, см. hsSecret)
+          if (hsVariant === 'murder' && hsSecretAt && GAME.teleportTo) {
+            var pp = GAME.pl;
+            GAME.teleportTo(hsSecretAt.x + hsSecretAt.w / 2 - pp.w / 2, hsSecretAt.y + hsSecretAt.h - pp.h);
+          }
           if (window.BFSound) BFSound.roulLand();
           return variantRoleText();
         }
@@ -2322,10 +2355,10 @@
       renderTeamHud();
       var e = d.ev, sc = d.score || {};
       if (!e) return;
-      var who = '<b>' + esc(e.name || '') + '</b>', tn = '<b style="color:' + COLOR_TEAM[e.team] + '">' + esc(teamName(e.team)) + '</b>';
+      var who = '<b>' + esc(e.name || '') + '</b>', tn = teamTag(e.team);
       if (e.ev === 'take') log(TR('ctfTaken', '{n} схватил флаг: {t}!').replace('{n}', who).replace('{t}', tn));
       else if (e.ev === 'capture') {
-        log(TR('ctfScored', 'Очко команде {t}! {r} : {b}').replace('{t}', tn).replace('{r}', sc.red | 0).replace('{b}', sc.blue | 0));
+        log(TR('ctfScored', 'Очко команде {t}! {s}').replace('{t}', tn).replace('{s}', scoreLine(sc)));
         if (window.BFSound) BFSound.win();
       } else if (e.ev === 'return') log(TR('ctfReturned', 'Флаг вернулся на базу: {t}').replace('{t}', tn));
     });
@@ -2336,8 +2369,8 @@
       renderTeamHud();
       var now = (d.points || []).map(function (p) { return p.owner; });
       if (before && before !== now.join()) now.forEach(function (o, i) {
-        if (o && before.split(',')[i] !== o) log(TR('domTaken', 'Точка {p} — у команды {t}!').replace('{p}', 'ABC'.charAt(i))
-          .replace('{t}', '<b style="color:' + COLOR_TEAM[o] + '">' + esc(teamName(o)) + '</b>'));
+        if (o && before.split(',')[i] !== o) log(TR('domTaken', 'Точка {p} — у команды {t}!').replace('{p}', 'ABCDE'.charAt(i))
+          .replace('{t}', teamTag(o)));
       });
     });
 
@@ -2345,6 +2378,7 @@
     socket.on('hsSecret', function (d) {
       if (MODE !== 'hideAndSeek' || !d) return;
       hsSecret = d.role === 'murderer' || d.role === 'sheriff' ? d.role : 'innocent';
+      hsSecretAt = d.at || null;
     });
 
     // Cops and Robbers: пойманного освободили
@@ -2365,9 +2399,8 @@
           : TR('mmWinTime', 'Время вышло — невиновные выжили! Убийцей был {m}.').replace('{m}', m));
       } else if (d.variant === 'ctf' || d.variant === 'dom') {
         var sc = d.score || {};
-        log(d.winner ? TR('teamWins', 'Победила команда {t}! {r} : {b}').replace('{t}', '<b style="color:' + COLOR_TEAM[d.winner] + '">' + esc(teamName(d.winner)) + '</b>')
-            .replace('{r}', sc.red | 0).replace('{b}', sc.blue | 0)
-          : TR('teamDraw', 'Ничья! {r} : {b}').replace('{r}', sc.red | 0).replace('{b}', sc.blue | 0));
+        log(d.winner ? TR('teamWins', 'Победила команда {t}! {s}').replace('{t}', teamTag(d.winner)).replace('{s}', scoreLine(sc))
+          : TR('teamDraw', 'Ничья! {s}').replace('{s}', scoreLine(sc)));
         if (window.BFSound && d.winner && d.winner === myTeam()) BFSound.win();
       } else if (d.variant === 'cops') {
         log(d.winner === 'cops' ? TR('copsWin', 'Копы победили — все грабители пойманы!')
@@ -2447,6 +2480,14 @@
         log(d.apoc ? TR('roundStartApoc', 'Раунд начался! Зомби уже идёт за кем-то...')
           : hsVariant === 'murder' || hsVariant === 'cops' ? variantHint()
           : TR('roundStart', 'Раунд начался! 2 минуты'));
+        // Murder Mystery: первые секунды охоты убийца никого не трогает (см. HS_MURDER_GRACE_MS)
+        mmGraceUntil = hsVariant === 'murder' ? Date.now() + (Number(d.grace) || 0) : 0;
+        if (hsVariant === 'murder' && hsSecret === 'murderer' && d.grace) {
+          log(TR('mmGrace', 'Первые {n} секунд ты никого не можешь выбить.').replace('{n}', String(Math.round(d.grace / 1000))));
+          setTimeout(function () {
+            if (phase === 'round' && hsVariant === 'murder' && hsSecret === 'murderer' && !me.caught) log(TR('mmGraceOver', 'Теперь можно выбивать!'));
+          }, Number(d.grace));
+        }
         if (window.BFSound) BFSound.go();
       } else if (d.phase === 'lobby') {
         setVote(null);
@@ -2643,14 +2684,19 @@
     /* Capture the Flag: взять вражеский флаг, донести до своего, вернуть свой у соперника —
        решает сервер по своим координатам (ctfTouch/ctfTag), здесь только заметить касание. */
     if (MODE === 'hideAndSeek' && phase === 'round' && hsVariant === 'ctf' && ctfState && hsBases && !GAME.frozen && myTeam()) {
-      var mt = myTeam(), et = mt === 'red' ? 'blue' : 'red', fl = ctfState.flags || {};
+      var mt = myTeam(), fl = ctfState.flags || {};
       var nearSpot = function (b) { return b && p.x + p.w > b.x - 20 && p.x < b.x + b.w + 20 && p.y + p.h > b.y - 30 && p.y < b.y + b.h + 30; };
-      if (!fl[et] && nearSpot(hsBases[et])) ctfSend('ctfTouch', { team: et }, et);
-      if (fl[et] === socket.id && !fl[mt] && nearSpot(hsBases[mt])) ctfSend('ctfTouch', { team: mt }, mt);
+      // несут по одному вражескому флагу: какой уже у меня
+      var carry = teamsInPlay(fl).filter(function (t) { return fl[t] === socket.id; })[0];
+      if (!carry) teamsInPlay(fl).forEach(function (et) {
+        if (et !== mt && !fl[et] && nearSpot(hsBases[et])) ctfSend('ctfTouch', { team: et }, et);
+      });
+      else if (!fl[mt] && nearSpot(hsBases[mt])) ctfSend('ctfTouch', { team: mt }, mt);
       if (fl[mt] && fl[mt] !== socket.id && others[fl[mt]] && touching(others[fl[mt]])) ctfSend('ctfTag', { targetId: fl[mt] }, 'tag');
     }
     // искатель ловит прячущихся касанием
-    if (MODE === 'hideAndSeek' && me.role === 'seeker' && phase === 'round' && special && !me.caught) {
+    if (MODE === 'hideAndSeek' && me.role === 'seeker' && phase === 'round' && special && !me.caught
+        && !(hsVariant === 'murder' && Date.now() < mmGraceUntil)) {
       Object.keys(others).forEach(function (id) {
         var o = others[id];
         if (o.caught || hsSeekerIds[id] || !touching(o)) return;
@@ -2719,7 +2765,7 @@
     if (MODE !== 'hideAndSeek' || !teamVariant() || !hsBases) return;
     ctx.save();
     if (hsVariant === 'ctf') {
-      ['red', 'blue'].forEach(function (t) {
+      teamsInPlay().forEach(function (t) {
         var b = hsBases[t];
         if (!b) return;
         // база — цветная площадка на земле под укрытием
@@ -2748,7 +2794,7 @@
           ctx.beginPath(); ctx.arc(cx, cy, 18, -1.5708, -1.5708 + 6.2832 * Math.min(1, pt.prog / 3)); ctx.stroke();
         }
         ctx.fillStyle = col; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('ABC'.charAt(i), cx, cy + 1);
+        ctx.fillText('ABCDE'.charAt(i), cx, cy + 1);
       });
     }
     ctx.restore();
