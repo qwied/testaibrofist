@@ -168,7 +168,9 @@ body{
    карточки в разумном размере на очень широких экранах. */
 .cards{
     width: 100%;
-    max-width: 720px;
+    /* шесть режимов — по три в ряд на мониторе (две строки), уже —
+       по две или по одной: auto-fit ниже сам решает */
+    max-width: 940px;
     margin: 28px auto 0;
     padding: 0 14px;
     display: grid;
@@ -420,11 +422,11 @@ body{
 
 </style>
         <script src="offline.js?v=3"></script>
-<script src="device.js?v=188"></script>
-        <script src="sound.js?v=188"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=188">
-        <link rel="stylesheet" href="ui.css?v=188">
-        <script src="theme.js?v=188"></script>
+<script src="device.js?v=189"></script>
+        <script src="sound.js?v=189"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=189">
+        <link rel="stylesheet" href="ui.css?v=189">
+        <script src="theme.js?v=189"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -534,6 +536,34 @@ body{
                                         <div data-i18n="race">Race</div>
                                 </a>
                         </div>
+
+                        <div class="cardContainer">
+                                <a href="#" class="card" data-mode="murder">
+                                        <img src="mode-murder.png?v=1" alt="Murder Mystery" loading="lazy">
+                                        <div data-i18n="modeMurder">Murder Mystery</div>
+                                </a>
+                        </div>
+
+                        <div class="cardContainer">
+                                <a href="#" class="card" data-mode="cops">
+                                        <img src="mode-cops.png?v=1" alt="Cops &amp; Robbers" loading="lazy">
+                                        <div data-i18n="modeCops">Cops &amp; Robbers</div>
+                                </a>
+                        </div>
+
+                        <div class="cardContainer">
+                                <a href="#" class="card" data-mode="ctf">
+                                        <img src="mode-ctf.png?v=1" alt="Capture the Flag" loading="lazy">
+                                        <div data-i18n="modeCtf">Capture the Flag</div>
+                                </a>
+                        </div>
+
+                        <div class="cardContainer">
+                                <a href="#" class="card" data-mode="dom">
+                                        <img src="mode-dom.png?v=1" alt="Domination" loading="lazy">
+                                        <div data-i18n="modeDom">Domination</div>
+                                </a>
+                        </div>
                 </div>
 
         </div>
@@ -598,15 +628,15 @@ body{
                 overlay.addEventListener('click', closeSignIn);
 
         </script>
-<script src="nav.js?v=188" defer></script>
-        <script src="account.js?v=188" defer></script>
-        <script src="i18n.js?v=188"></script>
-        <script src="owner.js?v=188" defer></script>
-        <script src="coin.js?v=188"></script>
-        <script src="skinRender.js?v=188"></script>
-        <script src="skinAvatar.js?v=188" defer></script>
-        <script src="shell.js?v=188"></script>
-<script src="abuseShow.js?v=188" defer></script>
-        <script src="consent.js?v=188"></script>
+<script src="nav.js?v=189" defer></script>
+        <script src="account.js?v=189" defer></script>
+        <script src="i18n.js?v=189"></script>
+        <script src="owner.js?v=189" defer></script>
+        <script src="coin.js?v=189"></script>
+        <script src="skinRender.js?v=189"></script>
+        <script src="skinAvatar.js?v=189" defer></script>
+        <script src="shell.js?v=189"></script>
+<script src="abuseShow.js?v=189" defer></script>
+        <script src="consent.js?v=189"></script>
 </body>
 </html>

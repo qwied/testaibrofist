@@ -10,10 +10,6 @@
       "text": "In Hide and Seek Zombie rounds, touching poison now turns a hider into a zombie. In classic rounds poison still does nothing. Map makers can mark blocks as poison in the editor when Zombie Apocalypse is on."
     },
     {
-      "title": "Seeker minimap",
-      "text": "Hiders now get a small map in the top left corner during the hunt that shows the level and where the seekers are."
-    },
-    {
       "title": "Murder Mystery and Cops & Robbers",
       "text": "Hide and Seek rounds with three or more players can now be Murder Mystery or Cops & Robbers. In Murder Mystery the murderer and the sheriff are secret: the murderer takes players out by touch, and the sheriff wins by touching the murderer. In Cops & Robbers several cops hunt, caught robbers freeze in place, and other robbers can free them with a touch."
     },
@@ -32,6 +28,10 @@
     {
       "title": "Role outfits",
       "text": "Roles now have their own looks: cops wear a uniform with a cap and a badge, robbers a mask and a striped shirt, caught robbers an orange prison suit, and team players a headband in their team color. The murderer and the sheriff see their outfit only on themselves, so the roles stay secret. Flags got a proper flagpole with a waving flag, and game messages now stack neatly instead of covering each other."
+    },
+    {
+      "title": "New modes in the main menu",
+      "text": "Murder Mystery, Cops & Robbers, Capture the Flag and Domination now have their own cards in the main menu, each with its own page, rules and room list. Rooms of these modes always play that mode, starting from two players. Until a second player joins, or if the map has no hiding spots for teams, the room plays classic Hide and Seek and tells you why."
     }
   ]
 }

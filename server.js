@@ -224,7 +224,8 @@ app.get('/robots.txt', (req, res) => {
 
 app.get('/sitemap.xml', (req, res) => {
   const base = siteOrigin(req);
-  const pages = ['/', '/hide-and-seek', '/race', '/mapsBrowser',
+  const pages = ['/', '/hide-and-seek', '/race', '/murder-mystery', '/cops-and-robbers',
+                 '/capture-the-flag', '/domination', '/mapsBrowser',
                  '/editor', '/leaderboard', '/logs',
                  '/users', '/quests', '/daily', '/clans'];
   res.set('Content-Type', 'application/xml; charset=utf-8');
@@ -290,6 +291,13 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 // те же страницы, но уже по чистому адресу (см. редирект с .html выше)
 app.get(PAGE_FILES.map(p => '/' + p), (req, res) => {
   res.sendFile(path.join(__dirname, req.path.slice(1) + '.html'));
+});
+/* Отдельные режимы на главной — одна страница variant.html на все четыре, режим она берёт
+   из адреса (комнаты «murder-1» и т.п., см. hsFixedOf). */
+const VARIANT_PAGES = ['murder-mystery', 'cops-and-robbers', 'capture-the-flag', 'domination'];
+app.get(VARIANT_PAGES.map(p => '/' + p), (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'variant.html'));
 });
 
 /* Режимов Two Player Adventure и Sandbox в игре нет: страницы удалены,
@@ -367,21 +375,27 @@ app.get(/^\/avatar\//, (req, res) => {
   res.send(AVATAR_PNG);
 });
 
+// отдельный режим пряток (?variant=murder и т.д.) — только его комнаты «murder-N»; обычные прятки их не видят
+function roomVariantOk(mode, key, variant) {
+  return mode !== 'hideAndSeek' || hsFixedOf(key.slice(mode.length + 1)) === variant;
+}
 app.get('/getBestRoom', (req, res) => {
   // чистим как имя комнаты в join: мусор в mode не заводит лишние ключи
   const mode = cleanName(req.query.mode) || 'hideAndSeek';
+  const variant = mode === 'hideAndSeek' ? hsFixedOf(cleanName(req.query.variant) + '-1') : null;
   let best = null, bestCount = -1;
   gameState.rooms.forEach((set, key) => {
-    if (key.indexOf(mode + ':') !== 0) return;
+    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant)) return;
     const n = set.size;
     if (n >= ROOM_FULL) return;
     if (n > bestCount) { bestCount = n; best = key.slice(mode.length + 1); }
   });
   if (!best) {
     // свободных нет — создаём следующую по счёту
+    const prefix = variant ? variant + '-' : 'room';
     let i = 1;
-    while (gameState.rooms.has(mode + ':room' + i)) i++;
-    best = 'room' + i;
+    while (gameState.rooms.has(mode + ':' + prefix + i)) i++;
+    best = prefix + i;
     bestCount = 0;
   }
   res.json({ room: best, players: Math.max(0, bestCount) });
@@ -396,10 +410,11 @@ app.get('/getBestRoom', (req, res) => {
 const ROOM_RECENT_LEFT_MS = 30000;
 app.get('/getRoomList', (req, res) => {
   const mode = cleanName(req.query.mode) || 'hideAndSeek';
+  const variant = mode === 'hideAndSeek' ? hsFixedOf(cleanName(req.query.variant) + '-1') : null;
   const now = Date.now();
   const list = [];
   gameState.rooms.forEach((set, key) => {
-    if (key.indexOf(mode + ':') !== 0) return;
+    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant)) return;
     const n = set.size;
     const status = n >= ROOM_FULL ? 'red'
                  : (now - (roomLeftAt.get(key) || 0) < ROOM_RECENT_LEFT_MS) ? 'yellow'
@@ -777,6 +792,9 @@ function hsSpin(io, room, st) {
     winnerId: secret || teamVar ? null : st.seekerId,
     teams: teamVar ? hsTeamsObj(st) : null, bases: teamVar ? st.bases : null, points: st.domPoints || null,
     variant: st.variant || 'classic',
+    // отдельный режим ещё не начался: мало игроков или на карте нет укрытий
+    fixed: st.fixedVariant || null, need: HS_FIXED_MIN,
+    wait: (st.fixedWait = hsFixedWait(st, members.length)),
     cops: st.copIds ? members.filter(m => st.copIds.indexOf(m.id) !== -1) : null,
     duration: HS_ROULETTE_MS,
     msLeft: st.endsAt - Date.now(),
@@ -905,7 +923,7 @@ function hsPickMap(st) {
     return;
   }
   const prev = st.map ? st.map.mapName : '';
-  const m = require('./maps.js').randomFor('hideAndSeek', prev);
+  const m = require('./maps.js').randomFor('hideAndSeek', prev, hsMapOk(st));
   st.map = m ? { author: m.author, mapName: m.mapName } : null;
 }
 
@@ -919,7 +937,7 @@ const HS_VOTE_OPTIONS = 3;
 function hsOpenVote(io, room, st) {
   st.vote = null;
   if (st.storyMap) return;
-  const cand = require('./maps.js').candidatesFor('hideAndSeek', st.map ? st.map.mapName : '', HS_VOTE_OPTIONS);
+  const cand = require('./maps.js').candidatesFor('hideAndSeek', st.map ? st.map.mapName : '', HS_VOTE_OPTIONS, hsMapOk(st));
   if (cand.length < 2) return;
   st.vote = { options: cand.map(m => ({ author: m.author, mapName: m.mapName })), votes: new Map() };
   io.to(room).emit('hsVote', hsVoteState(st));
@@ -963,7 +981,7 @@ function hsApplyApoc(st) {
     // карты и так рассчитывал добежать
     st.spots = list.filter(o => o && o.hideSpot === true && Number.isFinite(+o.x) && Number.isFinite(+o.y)).slice(0, 60)
       .map(o => ({ x: +o.x, y: +o.y, w: Math.max(1, Math.min(2000, +o.w || 1)), h: Math.max(1, Math.min(2000, +o.h || 1)) }));
-    if (!data || !data.apoc) return;
+    if (!data || !data.apoc || st.fixedVariant) return;
     // яд на зомби-карте заражает прячущегося (см. hsPoisoned)
     st.hasPoison = list.some(o => o && o.deadly === true);
     let zb = null;
@@ -993,11 +1011,43 @@ function hsApplyApoc(st) {
    задаёт вариант принудительно (для тестов), если игроков и карты для него хватает. */
 const HS_VARIANT_MIN = 3;
 const HS_TEAM_MIN = Number(process.env.HS_TEAM_MIN) || 4;
+/* Отдельные режимы на главной — Murder Mystery, Cops & Robbers, Capture the Flag, Domination: это
+   комнаты пряток с названием вида «murder-1», где всегда играется свой вариант (если хватает
+   игроков и карта подходит — см. hsMapOk), а не жребий смешанного режима. Начать можно вдвоём. */
+const HS_FIXED_MIN = 2;
+function hsFixedOf(roomName) {
+  const m = /^(murder|cops|ctf|dom)-\d+$/.exec(String(roomName || ''));
+  return m ? m[1] : null;
+}
+// карты отдельного режима: без Zombie Apocalypse, командным — хотя бы два укрытия
+function hsMapOk(st) {
+  if (!st.fixedVariant) return null;
+  const team = hsTeamVariant(st.fixedVariant);
+  return (m) => {
+    const d = JSON.parse(m.mapData);
+    if (!d || d.apoc) return false;
+    const list = Array.isArray(d) ? d : (d.objects || []);
+    return !team || list.filter(o => o && o.hideSpot === true).length >= 2;
+  };
+}
 const HS_CTF_WIN = 3;
 const HS_DOM_WIN = 120;
 const HS_DOM_TICKS = 3;          // столько секунд одна команда стоит на точке — точка её
 function hsTeamVariant(v) { return v === 'ctf' || v === 'dom'; }
+/* Почему в комнате отдельного режима сейчас обычные прятки: мало игроков, на карте нет
+   укрытий для команд или раунд уже идёт — режим начнётся со следующего. null — режим идёт. */
+function hsFixedWait(st, n) {
+  if (!st.fixedVariant || st.variant === st.fixedVariant) return null;
+  if (n < HS_FIXED_MIN) return 'players';
+  if (hsTeamVariant(st.fixedVariant) && (st.spots || []).length < 2) return 'map';
+  return 'next';
+}
 function hsPickVariant(st, n) {
+  if (st.fixedVariant) {
+    if (n < HS_FIXED_MIN) return 'classic';
+    if (hsTeamVariant(st.fixedVariant) && (st.spots || []).length < 2) return 'classic';
+    return st.fixedVariant;
+  }
   if (st.apoc) return 'zombie';
   if (st.storyMap || n < HS_VARIANT_MIN) return 'classic';
   const teamsOk = n >= HS_TEAM_MIN && (st.spots || []).length >= 2;
@@ -1521,7 +1571,8 @@ io.on('connection', (socket) => {
       if (!st) {
         st = { phase: 'lobby', roundNum: 0, endsAt: 0, timer: null,
                lastSeeker: null, prevSeeker: null,
-               seekerId: null, seekerName: '', caughtSent: false, storyTimer: null };
+               seekerId: null, seekerName: '', caughtSent: false, storyTimer: null,
+               fixedVariant: hsFixedOf(roomName) };
         // Story-приглашение: лимит времени на всю сессию, а не на раунд —
         // отдельный таймер, обрывающий цикл лобби/раунд (см. hsEndStory)
         if (roomName.indexOf('story_') === 0) {
@@ -1575,6 +1626,11 @@ io.on('connection', (socket) => {
           if (!st.lobbyOdo) st.lobbyOdo = new Map();
           st.lobbyOdo.set(socket.id, player.odo || 0);
         }
+        /* Отдельный режим: второй игрок вошёл, пока шло лобби, — рулетка сразу заново, уже этим
+           режимом (ниже); тогда и причину ожидания вошедшему не шлём — режим вот-вот начнётся. */
+        const fixedN = hsMembers(room).length;
+        const fixedRespin = !!st.fixedVariant && st.phase === 'lobby' && st.variant !== st.fixedVariant &&
+          hsPickVariant(st, fixedN) === st.fixedVariant;
         const secret = st.variant === 'murder';
         socket.emit('hsState', { phase: st.phase,
           msLeft: Math.max(0, st.endsAt - Date.now()),
@@ -1591,7 +1647,17 @@ io.on('connection', (socket) => {
           teams: st.teams ? hsTeamsObj(st) : null, bases: st.teams ? st.bases : null, points: st.teams ? st.domPoints : null,
           ctf: st.ctf ? hsCtfState(st) : null, dom: st.dom ? hsDomState(st) : null,
           apoc: !!st.apoc,
-          vote: st.phase === 'round' ? hsVoteState(st) : null });
+          vote: st.phase === 'round' ? hsVoteState(st) : null,
+          fixed: st.fixedVariant || null, need: HS_FIXED_MIN, wait: fixedRespin ? null : hsFixedWait(st, fixedN) });
+        if (fixedRespin) {
+          st.variant = st.fixedVariant;
+          hsSpin(io, room, st);
+        } else if (st.fixedVariant && hsFixedWait(st, fixedN) !== st.fixedWait) {
+          /* причина ожидания сменилась (игроков хватает, но на карте нет укрытий или раунд уже
+             идёт) — говорим остальным; новичку её уже принёс hsState */
+          st.fixedWait = hsFixedWait(st, fixedN);
+          socket.to(room).emit('hsFixedWait', { fixed: st.fixedVariant, need: HS_FIXED_MIN, wait: st.fixedWait });
+        }
       }
     }
 

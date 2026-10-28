@@ -1,4 +1,4 @@
-// ============ СПИСОК КОМНАТ СО СВЕТОФОРОМ (hide-and-seek.html, race.html) ============
+// ============ СПИСОК КОМНАТ СО СВЕТОФОРОМ (hide-and-seek.html, race.html, variant.html) ============
 // Красный — комната полна, жёлтый — кто-то только что вышел (см. /getRoomList
 // на сервере), зелёный — свободно. Клик по строке ведёт в конкретную комнату:
 // game.html?mode=...&room=... уже умеет заходить в заданную комнату напрямую
@@ -65,26 +65,28 @@
     });
   }
 
-  function refresh(el, mode) {
-    fetch('/getRoomList?mode=' + encodeURIComponent(mode), { credentials: 'same-origin' })
+  // variant — отдельный режим пряток (murder, cops, ctf, dom): только его комнаты
+  function refresh(el, mode, variant) {
+    fetch('/getRoomList?mode=' + encodeURIComponent(mode) + (variant ? '&variant=' + encodeURIComponent(variant) : ''), { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) { render(el, mode, d); })
       .catch(function () {});
   }
 
-  function init(el, mode) {
+  function init(el, mode, variant) {
     if (!el) return;
-    refresh(el, mode);
+    refresh(el, mode, variant);
     var timer = setInterval(function () {
       // страницу покинули (SPA-переход или просто ушли) — таймер сам себя гасит
       if (!document.body.contains(el)) { clearInterval(timer); return; }
-      refresh(el, mode);
+      refresh(el, mode, variant);
     }, POLL_MS);
 
     el.addEventListener('click', function (e) {
       var row = e.target.closest ? e.target.closest('.rlRow') : null;
       if (!row || !row.dataset.room) return;
-      location.href = 'game?mode=' + encodeURIComponent(mode) + '&room=' + encodeURIComponent(row.dataset.room);
+      location.href = 'game?mode=' + encodeURIComponent(mode) + (variant ? '&variant=' + encodeURIComponent(variant) : '')
+        + '&room=' + encodeURIComponent(row.dataset.room);
     });
   }
 

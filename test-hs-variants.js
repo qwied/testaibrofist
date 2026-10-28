@@ -96,7 +96,6 @@ const roleText = page => page.evaluate(() => document.getElementById('gRole').te
   const mpage = await browserJoin(browser, M.base, mroom, '10.26.9.9', errs);
   const mRole = await until(async () => { const t = await roleText(mpage); return /Innocent/.test(t) ? t : null; }, 10000);
   ok(!!mRole, 'вошедший посреди охоты — Innocent', mRole || await roleText(mpage));
-  ok(await mpage.evaluate(() => document.getElementById('gMini').style.display !== 'block'), 'мини-карты в Murder Mystery нет: охотник тайный');
 
   const outs = () => mp[0].count('hsOut');
   // шериф трогает невиновного — ничего; невиновный «ловит» — ничего
@@ -133,7 +132,6 @@ const roleText = page => page.evaluate(() => document.getElementById('gRole').te
   const cpage = await browserJoin(browser, C.base, croom, '10.26.8.8', errs);
   const bJoined = await until(() => { const j = cp[0].ev.filter(x => x.e === 'playerJoined').pop(); return j && j.d && j.d.name && cp.every(p => p.name !== j.d.name) ? j.d : null; }, 10000);
   ok(!!await until(async () => /Robber/.test(await roleText(cpage)), 10000), 'вошедший посреди охоты — Robber', await roleText(cpage));
-  ok(!!await until(() => cpage.evaluate(() => document.getElementById('gMini').style.display === 'block'), 4000), 'у грабителя мини-карта с копами');
   const robFit = await until(() => cpage.evaluate(() => { const f = window.GAME.myOutfit; return f && f.kind === 'robber' && !f.arg ? f : null; }), 2000);
   ok(!!robFit, 'модель грабителя — маска и полосатая кофта', JSON.stringify(robFit));
 

@@ -232,7 +232,14 @@ const low = s => String(s || '').toLowerCase();
    другую геометрию и выглядел «парящим в воздухе». */
 // без указания режима — любая карта, иначе — карты владельца
 // плюс те, что он добавил кнопкой «Добавить в игру» в Maps Browser
-function poolFor(t) {
+/* pred — необязательный отбор карт (отдельные режимы пряток берут только подходящие, см.
+   hsMapOk в server.js); если под него не подошла ни одна, берём весь пул режима — комната
+   без карты хуже, чем карта без укрытий. */
+function poolFor(t, pred) {
+  if (pred) {
+    const ok = poolFor(t).filter(m => { try { return !!pred(m); } catch (e) { return false; } });
+    if (ok.length) return ok;
+  }
   return !t
     ? maps.filter(m => !m.showcase)
     : maps.filter(m => {
@@ -245,8 +252,8 @@ function poolFor(t) {
 /* До n разных карт режима для голосования за следующую карту в прятках
    (см. hsOpenVote в server.js). Текущую карту предлагаем только тогда,
    когда без неё выбирать не из чего. */
-function candidatesFor(mapType, not, n) {
-  const pool = poolFor(mapType).slice();
+function candidatesFor(mapType, not, n, pred) {
+  const pool = poolFor(mapType, pred).slice();
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     const x = pool[i]; pool[i] = pool[j]; pool[j] = x;
@@ -257,8 +264,8 @@ function candidatesFor(mapType, not, n) {
   return pick;
 }
 
-function randomFor(mapType, not) {
-  const pool = poolFor(mapType);
+function randomFor(mapType, not, pred) {
+  const pool = poolFor(mapType, pred);
   if (!pool.length) return null;
   let m = pool[Math.floor(Math.random() * pool.length)];
   // не повторяем ту же карту подряд, если есть выбор

@@ -97,7 +97,6 @@ const at = (spot) => spot.x + 20;            // встать внутрь укр
   ok((lbl === 'Red' && col === '#dc2626') || (lbl === 'Blue' && col === '#2563eb'), 'цвет игрока — цвет команды', col);
   const fit = await page.evaluate(() => window.GAME.myOutfit);
   ok(!!fit && fit.kind === 'team' && fit.arg === col, 'модель — игрок команды: повязка и полоса её цвета', JSON.stringify(fit));
-  ok(await page.evaluate(() => document.getElementById('gMini').style.display !== 'block'), 'мини-карты в командных вариантах нет');
 
   const r1 = reds[0], b1 = blues[0];
   const flags = () => (P[0].last('ctfState') || round.ctf).flags;

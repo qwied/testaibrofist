@@ -21,6 +21,8 @@
   var VIEW   = q.get('view');                 // просмотр одной карты из Maps Browser
   var VAUTH  = q.get('author');
   var PRACTICE = q.get('practice') === '1';   // Practice Mode — см. Maps Browser
+  // отдельный режим с главной (Murder Mystery и др.) — свои комнаты пряток «murder-1» (см. hsFixedOf в server.js)
+  var VARIANT = /^(murder|cops|ctf|dom)$/.test(q.get('variant') || '') ? q.get('variant') : null;
   var GOD  = PRACTICE && q.get('god') === '1';   // неуязвимость — подопция Practice, ставится там же
   var FLY  = PRACTICE && q.get('fly') === '1';   // полёт — подопция Practice, ставится там же
 
@@ -28,7 +30,8 @@
      «Map Editor» (страница game.html — это сама игра, а не редактор).
      Интерфейс сайта только на английском (см. i18n.js), поэтому здесь
      без словаря — те же строки, что и в нём (hideAndSeek/race). */
-  document.title = 'AIBrofist — ' + (MODE === 'race' ? 'Race' : 'Hide and Seek');
+  document.title = 'AIBrofist — ' + (MODE === 'race' ? 'Race'
+    : ({ murder: 'Murder Mystery', cops: 'Cops & Robbers', ctf: 'Capture the Flag', dom: 'Domination' })[VARIANT] || 'Hide and Seek');
 
   var ROUND_MS  = 120000;   // раунд — 2 минуты
   var LOBBY_MS  = 30000;    // ожидание в Hide and Seek — 30 секунд
@@ -226,10 +229,6 @@
     + 'html.is-mobile #gExit,html.is-tablet #gExit{padding:9px 14px;font-size:13px}'
     // рисование — квадратный значок 32px: под палец нужно 44
     + 'html.is-mobile #gDraw,html.is-tablet #gDraw{min-width:44px;min-height:44px}'
-    /* мини-карта для прячущихся: где сейчас искатели (идея 2019 года) — левый верхний угол */
-    + '#gMini{position:fixed;left:12px;top:56px;z-index:60;display:none;width:150px;height:90px;'
-    + 'background:rgba(255,255,255,.9);border:1px solid #d7dee7;border-radius:8px;pointer-events:none}'
-    + 'html.is-mobile #gMini,html.is-tablet #gMini{left:8px;top:62px;width:120px;height:72px}'
     + 'html.is-mobile #gMap,html.is-tablet #gMap{bottom:auto;top:46px;right:8px;max-width:56vw;'
     + 'padding:6px 10px;font-size:11.5px}'
     /* твой шанс стать искателем — плашка в правом верхнем углу */
@@ -416,7 +415,6 @@
     + '<line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></button>'
     + '<select id="gDrawTarget" title="Кому показать стрелку" style="display:none"><option value="all">Все</option></select>'
     + '<button id="gExit">Меню</button></div>'
-    + '<canvas id="gMini" width="300" height="180" aria-hidden="true"></canvas>'
     + '<div id="gMap"><div class="n" id="gMapName">Loading map…</div>'
     + '<div class="a" id="gMapAuthor"></div><div class="rate" id="gRate" style="display:none">'
     + '<button data-v="1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
@@ -861,6 +859,18 @@
       hideChatPref = !!(d && d.data && d.data.hideChat);
       if (hideChatPref && msgsBtn) msgsBtn.style.display = 'none';
     }).catch(function () {});
+
+  /* Комната отдельного режима (murder-1 и т.п.), а режим ещё не начался: игроков мало, на карте
+     нет укрытий для команд или раунд уже шёл, когда пришёл второй, — говорим, почему пока
+     обычные прятки (см. hsFixedWait в server.js). */
+  function fixedWaitLog(d) {
+    if (!d || !d.fixed || !d.wait) return;
+    var m = '<b>' + esc(variantName(d.fixed)) + '</b>';
+    if (d.wait === 'players') log(TR('fixedWaitPlayers', '{m} начнётся, когда игроков будет {n}. Пока — обычные прятки.')
+      .replace('{m}', m).replace('{n}', String(d.need || 2)));
+    else if (d.wait === 'map') log(TR('fixedWaitMap', 'На этой карте нет укрытий для режима {m}. Этот раунд — обычные прятки.').replace('{m}', m));
+    else if (d.wait === 'next') log(TR('fixedWaitNext', '{m} начнётся со следующего раунда.').replace('{m}', m));
+  }
 
   // системные сообщения — короткой плашкой, история не хранится
   /* Сообщения стопкой сразу под шапкой: раньше каждое появлялось в одной и той же точке, и
@@ -1995,7 +2005,7 @@
       Promise.all([
         fetch('/iSigned', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return null; }),
         ROOM ? Promise.resolve({ room: ROOM })
-             : fetch('/getBestRoom?mode=' + encodeURIComponent(MODE)).then(function (r) { return r.json(); })
+             : fetch('/getBestRoom?mode=' + encodeURIComponent(MODE) + (VARIANT ? '&variant=' + VARIANT : '')).then(function (r) { return r.json(); })
                  .catch(function () { return { room: 'room1' }; })
       ]).then(function (res) {
         var signed = res[0], pick = res[1];
@@ -2232,6 +2242,7 @@
       hsApocRound = !!d.apoc;
       hsVariant = d.variant || (d.apoc ? 'zombie' : 'classic');
       hsSecret = null;                   // тайная роль придёт следом (hsSecret)
+      fixedWaitLog(d);
       setRole('hider');
       $('gRoleBox').style.display = 'none';
       clearCaught();
@@ -2465,10 +2476,13 @@
       }
     });
 
+    // в комнате отдельного режима сменилась причина, по которой пока идут обычные прятки
+    socket.on('hsFixedWait', function (d) { if (MODE === 'hideAndSeek') fixedWaitLog(d); });
     // подключились посреди раунда/лобби: сервер сразу говорит, кто искатель
     socket.on('hsState', function (d) {
       hsSync = true; hsEver = true;
       if (MODE !== 'hideAndSeek' || !d || !d.phase) return;
+      fixedWaitLog(d);
       $('gTimeBox').style.display = '';
       // друг открыл ссылку Story уже после того, как лимит сессии вышел
       if (d.phase === 'storyEnd') {
@@ -2781,57 +2795,7 @@
   }
 
   // ---------- отрисовка чужих игроков ----------
-  /* ---------- мини-карта с искателями (для прячущихся во время охоты) ----------
-     Контуры карты — по рамкам объектов (без поворота, для мини-карты этого хватает), поверх —
-     ты сам и все, кто сейчас охотится (искатель, зомби, заражённые). Перерисовка 10 раз в секунду. */
-  var miniAt = 0, miniBounds = null, miniObjs = null;
-  var MINI_SKIP = { spawn: 1, zombie: 1, seekerSpot: 1, checkpoint: 1, finishline: 1, text: 1 };
-  function drawMini() {
-    var cv = $('gMini');
-    if (!cv) return;
-    // в Murder Mystery охотник тайный — показывать на мини-карте нечего
-    var show = MODE === 'hideAndSeek' && !VIEW && phase === 'round' && me.role !== 'seeker' && !me.caught && GAME.playing
-      && hsVariant !== 'murder' && !teamVariant();
-    cv.style.display = show ? 'block' : 'none';
-    if (!show) return;
-    var now = Date.now();
-    if (now - miniAt < 100) return;
-    miniAt = now;
-    // сразу под верхней панелью: на телефоне она выше, а длинный текст может её ещё и растянуть
-    var bar = $('gTop'), top = bar ? Math.round(bar.getBoundingClientRect().bottom) + 8 + 'px' : '';
-    if (top && cv.style.top !== top) cv.style.top = top;
-    var objs = GAME.objects || [];
-    if (objs !== miniObjs) {                       // новая карта — пересчитываем рамку мира
-      miniObjs = objs;
-      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-      objs.forEach(function (o) {
-        if (MINI_SKIP[o.type]) return;
-        x0 = Math.min(x0, o.x); y0 = Math.min(y0, o.y);
-        x1 = Math.max(x1, o.x + (o.w || 0)); y1 = Math.max(y1, o.y + (o.h || 0));
-      });
-      miniBounds = isFinite(x0) ? { x: x0 - 60, y: y0 - 160, w: (x1 - x0) + 120, h: (y1 - y0) + 220 } : null;
-    }
-    var c = cv.getContext('2d'), W = cv.width, H = cv.height;
-    c.clearRect(0, 0, W, H);
-    if (!miniBounds) return;
-    var k = Math.min((W - 12) / miniBounds.w, (H - 12) / miniBounds.h);
-    var ox = (W - miniBounds.w * k) / 2 - miniBounds.x * k, oy = (H - miniBounds.h * k) / 2 - miniBounds.y * k;
-    c.fillStyle = '#9ca3af';
-    objs.forEach(function (o) {
-      if (MINI_SKIP[o.type] || o.hideSpot) return;
-      c.fillRect(ox + o.x * k, oy + o.y * k, Math.max(1, (o.w || 0) * k), Math.max(1, (o.h || 0) * k));
-    });
-    function dot(x, y, col, r) { c.fillStyle = col; c.beginPath(); c.arc(ox + x * k, oy + y * k, r, 0, 6.2832); c.fill(); }
-    Object.keys(hsSeekerIds).forEach(function (id) {
-      var o = others[id];
-      if (o) dot(o.x + (o.w || 30) / 2, o.y + (o.h || 74) / 2, hsApocRound ? '#16a34a' : '#ef4444', 7);
-    });
-    var p = GAME.pl;
-    if (p) { dot(p.x + p.w / 2, p.y + p.h / 2, '#ffffff', 8); dot(p.x + p.w / 2, p.y + p.h / 2, '#111827', 6); }
-  }
-
   GAME.onDraw = function (ctx) {
-    drawMini();
     syncMyOutfit();
     /* Правила видимости пряток в лобби завязаны на рулетку:
 
