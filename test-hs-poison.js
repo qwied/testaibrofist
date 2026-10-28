@@ -113,13 +113,14 @@ function server(port, apoc) {
     await ep.mouse.click(cv.x + cv.width / 2, cv.y + cv.height / 2);
     await ep.click('.tab[data-tab="automatic"]');
     const autoText = () => ep.evaluate(() => document.getElementById('automatic').innerText);
-    ok(/only in Zombie Apocalypse/i.test(await autoText()) && !/Poison \(infects\)/.test(await autoText()), 'классика пряток: вместо галочки — подсказка про Zombie Apocalypse');
+    // в самих прятках яд ничего не делает, но такие карты играются и в «Войне» — там он выбивает
+    ok(/Poison \(knocks out in War\)/.test(await autoText()) && !/Poison \(infects\)/.test(await autoText()), 'классика пряток: галочка «яд выбивает в Войне», а не «заражает»');
     await ep.click('.apocBtn[data-apoc="1"]');
     await ep.click('.tab[data-tab="automatic"]');
     ok(/Poison \(infects\)/.test(await autoText()), 'включили Zombie Apocalypse — сразу появилась галочка «Poison (infects)»');
     await ep.click('.apocBtn[data-apoc="0"]');
     await ep.click('.tab[data-tab="automatic"]');
-    ok(!/Poison \(infects\)/.test(await autoText()), 'выключили — галочка снова скрыта');
+    ok(!/Poison \(infects\)/.test(await autoText()) && /Poison \(knocks out in War\)/.test(await autoText()), 'выключили — снова галочка для «Войны»');
     await ectx.close();
   }
 

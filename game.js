@@ -22,7 +22,7 @@
   var VAUTH  = q.get('author');
   var PRACTICE = q.get('practice') === '1';   // Practice Mode — см. Maps Browser
   // отдельный режим с главной (Murder Mystery, Team Battle) — свои комнаты «murder-1», «team-1» (см. hsFixedOf в server.js)
-  var VARIANT = /^(murder|team|war)$/.test(q.get('variant') || '') ? q.get('variant') : null;
+  var VARIANT = /^(murder|team|war|party)$/.test(q.get('variant') || '') ? q.get('variant') : null;
   var GOD  = PRACTICE && q.get('god') === '1';   // неуязвимость — подопция Practice, ставится там же
   var FLY  = PRACTICE && q.get('fly') === '1';   // полёт — подопция Practice, ставится там же
 
@@ -444,6 +444,44 @@
     + '#gAtk svg{width:30px;height:30px;display:block;pointer-events:none}'
     + '#gAtk:active{transform:scale(.93)}'
     + 'html:not(.is-mobile):not(.is-tablet) #gAtk{display:none!important}'
+    /* «Вечеринка»: панель мини-игры поверх карты (см. partySet) */
+    // слева, ниже полосы сообщений под шапкой — они её не перекрывают; на телефоне — по центру
+    + '#gParty{position:fixed;left:12px;top:122px;z-index:62;width:min(420px,calc(100vw - 24px));'
+    + 'max-height:calc(100vh - 210px);overflow:auto;background:#fff;border:1px solid #d7dee7;border-radius:14px;'
+    + 'box-shadow:0 20px 50px -20px rgba(15,23,42,.55);font:14px sans-serif;color:#111827;padding:10px 12px;box-sizing:border-box}'
+    + '@media (max-width:900px){#gParty{left:0;right:0;margin:0 auto}}'
+    + 'html.is-mobile #gParty{left:0;right:0;margin:0 auto;top:50px;width:min(480px,calc(100vw - 24px))}'
+    + '.pHead{display:flex;align-items:baseline;gap:10px}.pHead b{font-size:16px}#gPSub{color:#6b7280;font-size:13px}'
+    + '.pT{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums}'
+    + '.pBar{height:4px;background:#eef0f3;border-radius:4px;margin:6px 0 8px;overflow:hidden}'
+    + '.pBar i{display:block;height:100%;width:100%;background:#111827;transition:width .25s linear}'
+    + '.pQ{font-weight:700;font-size:16px;margin:4px 0 10px;line-height:1.3}'
+    + '.pOpts{display:grid;grid-template-columns:1fr 1fr;gap:8px}'
+    + '.pOpt{display:flex;align-items:center;gap:8px;text-align:left;border:1px solid #d7dee7;background:#f8fafc;border-radius:10px;'
+    + 'padding:10px;cursor:pointer;font:inherit;color:#111827;min-height:46px;touch-action:manipulation}'
+    + '.pOpt small{flex:none;width:22px;height:22px;border-radius:6px;background:#111827;color:#fff;display:flex;align-items:center;'
+    + 'justify-content:center;font-size:12px;font-weight:700}'
+    + '.pOpt.mine{border-color:#111827;box-shadow:inset 0 0 0 1px #111827}.pOpt.ok{background:#dcfce7;border-color:#16a34a}'
+    + '.pOpt.bad{background:#fee2e2;border-color:#dc2626}.pOpt:disabled{cursor:default;color:#111827}'
+    + '.pWord{margin:2px 0 8px}.pHint{font-family:monospace;font-size:18px;letter-spacing:2px}'
+    // в game.html любой canvas растянут поверх страницы (это поле игры) — доске и модели место в панели
+    + '#gParty canvas{position:static;inset:auto}'
+    + '#gPBoard{display:block;width:100%;aspect-ratio:480/300;background:#fff;border:1px solid #d7dee7;border-radius:10px;touch-action:none}'
+    + '#gPGrid{display:block;width:min(240px,60vw);aspect-ratio:1;margin:0 auto;border:1px solid #d7dee7;border-radius:8px;'
+    + 'touch-action:none;image-rendering:pixelated}'
+    + '.pTools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;justify-content:center}'
+    + '.pSw{width:26px;height:26px;border-radius:50%;border:2px solid #d7dee7;cursor:pointer;padding:0}'
+    + '.pSw.on{border-color:#111827;box-shadow:inset 0 0 0 2px #fff}.pErase{background:#fff;font-weight:700;color:#6b7280}'
+    + '.pBtn{border:none;background:#111827;color:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit;font-weight:700}'
+    + '.pBtn.on{background:#4b5563}'
+    + '.pGuess{display:flex;gap:8px;margin-top:8px}.pGuess input{flex:1;min-width:0;border:1px solid #d7dee7;border-radius:8px;'
+    + 'padding:8px 10px;font:inherit;color:#111827;background:#fff}'
+    + '.pMsg{color:#6b7280;font-size:13px;margin-top:6px;min-height:16px;text-align:center}'
+    + '.pStars{display:flex;gap:6px;justify-content:center;margin-top:8px}'
+    + '.pStar{width:40px;height:40px;border-radius:10px;border:1px solid #d7dee7;background:#f8fafc;color:#cbd5e1;font-size:22px;cursor:pointer}'
+    + '.pStar.on{color:#f59e0b;border-color:#f59e0b}.pStar:disabled{opacity:.5;cursor:default}'
+    + '.pScore{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;padding-top:8px;border-top:1px solid #eef0f3;font-size:12.5px;color:#4b5563}'
+    + '.pScore .me{color:#111827;font-weight:700}'
     ;
 
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
@@ -503,6 +541,7 @@
     // война и жетоны: нижняя панель (здоровье, оружие, жетоны), магазин, кнопка удара на телефоне
     + '<div id="gWar" style="display:none"></div>'
     + '<div id="gShop" style="display:none"></div>'
+    + '<div id="gParty" style="display:none"></div>'
     + '<button id="gAtk" style="display:none" aria-label="Attack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
     + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/>'
     + '<path d="m13 19 6-6"/><path d="m16 16 4 4"/><path d="m19 21 2-2"/></svg></button>'
@@ -511,6 +550,7 @@
   /* надписи верхней панели обновляются при смене языка */
   function refreshGameLabels() {
     if (typeof renderWarHud === 'function') { renderWarHud(); renderShop(); }
+    if (typeof partySet === 'function' && party) { partyKey = ''; partySet(party); }
     $('gLblPlayers').textContent = TR('gPlayers', 'Игроков');
     $('gLblPing').textContent = TR('gPing', 'Пинг');
     $('gLblTime').textContent = TR('gTimeLbl', 'Время');
@@ -1396,6 +1436,7 @@
         : hsVariant === 'cops' ? TR('roleCop', 'Коп') : TR('roleSeeker', 'Искатель'))
       : teamVariant() ? (myTeam() ? teamName(myTeam()) : '—')
       : hsVariant === 'bro' ? (socket && socket.id === broId ? TR('roleBro', 'Bro RED') : TR('roleFighter', 'Боец'))
+      : partyGame(hsVariant) ? TR('rolePlayer', 'Игрок')
       : isWarV(hsVariant) ? TR('roleFighter', 'Боец')
       : (hsVariant === 'murder' ? (hsSecret === 'sheriff' ? TR('roleSheriff', 'Шериф') : TR('roleInnocent', 'Невиновный'))
         : hsVariant === 'cops' ? TR('roleRobber', 'Грабитель') : TR('roleHider', 'Прячется'));
@@ -1438,6 +1479,9 @@
     }
   }
   function variantRoleText() {
+    if (hsVariant === 'quiz') return TR('roulQuiz', 'Викторина об игре — отвечай быстрее всех!');
+    if (hsVariant === 'guess') return TR('roulGuess', 'Один рисует — остальные угадывают!');
+    if (hsVariant === 'build') return TR('roulBuild', 'Построй модель на тему!');
     if (hsVariant === 'ffa') return TR('roulFfa', 'Все против всех!');
     if (hsVariant === 'hunger') return TR('roulHunger', 'Одна жизнь — останься последним!');
     if (teamVariant()) {
@@ -1450,6 +1494,9 @@
       : hsSecret === 'sheriff' ? TR('roulYouSheriff', 'Ты шериф!') : TR('roulYouInnocent', 'Ты невиновный!');
   }
   function variantHint() {
+    if (hsVariant === 'quiz') return TR('hintQuiz', 'Отвечай кнопками или клавишами 1–4: чем быстрее верный ответ, тем больше очков.');
+    if (hsVariant === 'guess') return TR('hintGuess', 'Один рисует слово, остальные пишут догадки: чем быстрее угадал, тем больше очков.');
+    if (hsVariant === 'build') return TR('hintBuild', 'Построй модель на тему по клеткам, потом оцени чужие от 1 до 5 звёзд.');
     if (hsVariant === 'ffa') return TR('hintFfa', 'Выбивай всех: F или клик — удар, 1–4 — оружие, B — магазин. Жетоны лежат на карте.');
     if (hsVariant === 'tdm') return TR('hintTdm', 'Выбивай соперников — каждое очко идёт твоей команде. F — удар, B — магазин.');
     if (hsVariant === 'pirate') return TR('hintPirate', 'Твоя команда — на своём корабле. Встань у пушки и жми F или клик: ядро летит туда, куда целишься. Ядовитая вода выбивает.');
@@ -1671,7 +1718,8 @@
      Apocalypse и Cops & Robbers, в Team Battle — Capture the Flag и Domination, в Murder
      Mystery — он сам (Classic — пока игроков мало, см. hsFixedWait в server.js). */
   var VARIANTS = { hs: ['classic', 'zombie', 'cops'], murder: ['classic', 'murder'], team: ['classic', 'ctf', 'dom'],
-                   war: ['classic', 'ffa', 'tdm', 'hunger', 'cp', 'bro', 'pirate'] };
+                   war: ['classic', 'ffa', 'tdm', 'hunger', 'cp', 'bro', 'pirate'],
+                   party: ['classic', 'quiz', 'guess', 'build', 'ffa', 'murder', 'zombie', 'cops'] };
   var hsFixed = null;                    // отдельный режим комнаты: 'murder' | 'team' | null
   function variantName(v) {
     return v === 'zombie' ? TR('modeApoc', 'Zombie Apocalypse') : v === 'murder' ? TR('modeMurder', 'Murder Mystery')
@@ -1680,6 +1728,8 @@
       : v === 'war' ? TR('modeWar', 'War') : v === 'ffa' ? TR('modeFfa', 'Free for All') : v === 'tdm' ? TR('modeTdm', 'Team War')
       : v === 'hunger' ? TR('modeHunger', 'Hunger Games') : v === 'cp' ? TR('modeCp', 'Control Points') : v === 'bro' ? TR('modeBro', 'Bro RED')
       : v === 'pirate' ? TR('modePirate', 'Pirate War')
+      : v === 'party' ? TR('modeParty', 'Вечеринка') : v === 'quiz' ? TR('modeQuiz', 'Викторина')
+      : v === 'guess' ? TR('modeGuess', 'Угадай слово') : v === 'build' ? TR('modeBuild', 'Строительная битва')
       : TR('modeClassic', 'Classic');
   }
   function runModeRoulette(variant, onDone) {
@@ -2143,6 +2193,7 @@
      навешиваются на новый экземпляр без дублирования. */
   function bindNet() {
     bindWar();                         // война и жетоны (см. bindWar)
+    bindParty();                       // «Вечеринка»: мини-игры (см. bindParty)
 
     socket.on('connect', function () {
       // сервер завёл нас заново: пусть первый же пакет несёт всё, включая скин
@@ -2533,6 +2584,12 @@
         var bn = '<b>' + esc(d.bro || '') + '</b>';
         log(d.winner === 'bro' ? TR('broWin', 'Bro RED {n} продержался до конца раунда!').replace('{n}', bn)
           : TR('broLose', 'Бойцы выбили Bro RED {n}!').replace('{n}', bn));
+      } else if (partyGame(d.variant)) {
+        // мини-игра «Вечеринки»: победитель, слово или лучшая модель
+        if (d.variant === 'guess' && d.word) log(TR('partyWordWas', 'Слово: {w}').replace('{w}', '<b>' + esc(inLang(d.word)) + '</b>'));
+        log(d.winnerName ? TR('partyWin', 'Победил {n}!').replace('{n}', '<b>' + esc(d.winnerName) + '</b>')
+          + (d.top && d.top[0] ? ' (' + d.top[0].pts + ')' : '') : TR('warDraw', 'В этом раунде без победителя.'));
+        if (window.BFSound && d.winnerName && d.winnerName === me.name) BFSound.win();
       } else if (d.variant === 'ffa' || d.variant === 'hunger') {
         log(d.winnerName ? TR('warWin', 'Раунд выиграл {n}!').replace('{n}', '<b>' + esc(d.winnerName) + '</b>') : TR('warDraw', 'В этом раунде без победителя.'));
         if (window.BFSound && d.winnerName && d.winnerName === me.name) BFSound.win();
@@ -2588,6 +2645,7 @@
         // «Твой шанс» был про уже прошедшую рулетку — весь раунд эта
         // цифра ничего не значит и не должна висеть поверх охоты
         hideChance();
+        partyReset();                // мини-игра пришлёт свою панель следом (событие party)
         phase = 'round';
         phaseEnds = Date.now() + (Number(d.msLeft) || ROUND_MS);
         clearCaught();
@@ -2619,7 +2677,7 @@
         };
         if (!STORY) loadServerMap(d.map, teleportSeeker); else teleportSeeker();
         log(d.apoc ? TR('roundStartApoc', 'Раунд начался! Зомби уже идёт за кем-то...')
-          : hsVariant === 'murder' || hsVariant === 'cops' || isWarV(hsVariant) ? variantHint()
+          : hsVariant === 'murder' || hsVariant === 'cops' || isWarV(hsVariant) || partyGame(hsVariant) ? variantHint()
           : TR('roundStart', 'Раунд начался! 2 минуты'));
         // Murder Mystery: первые секунды охоты убийца никого не трогает (см. HS_MURDER_GRACE_MS)
         mmGraceUntil = hsVariant === 'murder' ? Date.now() + (Number(d.grace) || 0) : 0;
@@ -2643,6 +2701,7 @@
         // бой и жетоны раунда кончились; патроны сервер обнуляет с началом лобби
         toks = []; ammo = { sling: 0, bomb: 0, magic: 0 }; weapon = 'fist';
         warSet(null);
+        partyReset();
         /* d.apoc уже известен здесь же (этот hsPhase приходит сразу вслед
            за hsRoulette из той же hsStartLobby на сервере) — выставляем
            сразу, тем же приёмом и по той же причине, что и в обработчике
@@ -2695,6 +2754,7 @@
       if (d.ammo) ammo = d.ammo;
       broId = d.broId || (d.war && d.war.bro) || null;
       warSet(d.phase === 'round' && isWarV(hsVariant) ? d.war : null);
+      partyReset();                  // идущая мини-игра придёт следом событием party
       if (d.phase === 'round') {
         roulStop();
         // зашли посреди уже идущей охоты — рулетку не видели и не увидим,
@@ -3291,7 +3351,7 @@
   }
 
   /* ---------- магазин ---------- */
-  function shopList() { return hsFixed === 'war' ? SHOP_WAR : SHOP_HS; }
+  function shopList() { return hsFixed === 'war' || isWarV(hsVariant) ? SHOP_WAR : SHOP_HS; }
   function amHunter() { return me.role === 'seeker'; }
   function renderShop() {
     var box = $('gShop');
@@ -3319,7 +3379,7 @@
   function renderWarHud() {
     var bar = $('gWar');
     if (!bar) return;
-    var inWar = MODE === 'hideAndSeek' && hsFixed === 'war' && !!war;
+    var inWar = MODE === 'hideAndSeek' && (hsFixed === 'war' || isWarV(hsVariant)) && !!war;
     if (!shopOn && !inWar) { bar.style.display = 'none'; var a0 = $('gAtk'); if (a0) a0.style.display = 'none'; return; }
     bar.style.display = '';
     var html = '';
@@ -3527,6 +3587,290 @@
     var p = GAME.pl;
     if (at && GAME.teleportTo && p) GAME.teleportTo(at.x + at.w / 2 - p.w / 2, at.y + at.h - p.h);
     else if (GAME.respawn) GAME.respawn();
+  }
+
+  /* ---------- «Вечеринка» (см. party.js на сервере) ----------
+     Мини-игры идут в панели #gParty поверх карты (по карте при этом можно бегать): викторина —
+     кнопки или клавиши 1–4; угадай слово — рисующий рисует на доске, остальные пишут догадки в поле
+     панели (печать сама уходит туда, а не в чат); строительная битва — поле 12×12 и палитра, потом
+     чужие модели по очереди и оценка звёздами. Всё состояние присылает сервер событием party —
+     панель перерисовывается по нему; доска и поле модели живут отдельно, чтобы не терять рисунок
+     и ввод при каждом обновлении. */
+  var BOARD_COLORS = ['#111827', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7', '#ffffff'];
+  var BUILD_COLORS = ['#111827', '#ffffff', '#ef4444', '#f97316', '#facc15', '#22c55e', '#3b82f6', '#a855f7', '#92400e', '#9ca3af'];
+  var party = null, partyAt = 0, partyKey = '';
+  var board = { strokes: [], c: 0, w: 0, down: false, buf: null, bufNew: false, last: null };
+  var myBuild = '', buildColor = 2, buildSendT = null, buildDown = false;
+  function partyGame(v) { return v === 'quiz' || v === 'guess' || v === 'build'; }
+  function partyOn() { return MODE === 'hideAndSeek' && phase === 'round' && !!party && partyGame(hsVariant); }
+  function inLang(o) { return !o ? '' : (window.I18N && I18N.current === 'ru' ? o.ru : o.en) || o.en || ''; }
+  function partyLeft() { return party ? Math.max(0, party.ms - (Date.now() - partyAt)) : 0; }
+  function amDrawer() { return !!party && party.g === 'guess' && !!socket && party.drawer === socket.id; }
+  // поле догадки — сюда уходит печать во время «Угадай слово» (см. обработчик чата)
+  function partyInput() {
+    if (!partyOn() || party.g !== 'guess' || party.stage !== 'draw' || amDrawer() || party.done) return null;
+    return $('gPGuess');
+  }
+
+  function partySet(d) {
+    party = d || null; partyAt = Date.now();
+    var box = $('gParty');
+    if (!party || !partyGame(hsVariant)) { box.style.display = 'none'; box.innerHTML = ''; partyKey = ''; return; }
+    box.style.display = '';
+    // каркас панели меняется только при смене игры, этапа или роли — иначе обновляем надписи
+    var key = party.g + ':' + party.stage + ':' + (party.g === 'guess' ? (amDrawer() ? 'd' : party.done ? 'ok' : 'g') : '')
+      + (party.g === 'build' ? ':' + party.k : '') + (party.g === 'quiz' ? ':' + party.n : '');
+    if (key !== partyKey) { partyKey = key; partySkeleton(); }
+    partyFill();
+  }
+  function scoreHtml() {
+    return (party.score || []).slice(0, 5).map(function (x, i) {
+      return '<span' + (socket && x.id === socket.id ? ' class="me"' : '') + '>' + (i + 1) + '. ' + esc(x.name) + ' <b>' + x.pts + '</b></span>';
+    }).join('');
+  }
+  function gameTitle(g) {
+    return g === 'quiz' ? TR('modeQuiz', 'Викторина') : g === 'guess' ? TR('modeGuess', 'Угадай слово') : TR('modeBuild', 'Строительная битва');
+  }
+  function partySkeleton() {
+    var box = $('gParty'), g = party.g, h = '';
+    h += '<div class="pHead"><b>' + esc(gameTitle(g)) + '</b><span id="gPSub"></span><span class="pT" id="gPT"></span></div>'
+      + '<div class="pBar"><i id="gPBar"></i></div>';
+    if (g === 'quiz') {
+      h += '<div class="pQ" id="gPQ"></div><div class="pOpts">';
+      for (var i = 0; i < 4; i++) h += '<button class="pOpt" data-i="' + i + '"><small>' + (i + 1) + '</small><span></span></button>';
+      h += '</div>';
+    } else if (g === 'guess') {
+      h += '<div class="pWord" id="gPWord"></div><canvas id="gPBoard" width="480" height="300"></canvas>';
+      if (amDrawer() && party.stage === 'draw') {
+        h += '<div class="pTools">' + BOARD_COLORS.map(function (c, i) {
+          return '<button class="pSw' + (i === board.c ? ' on' : '') + '" data-c="' + i + '" style="background:' + c + '"></button>';
+        }).join('') + '<button class="pBtn" id="gPSize">' + esc(TR('partyThick', 'Толще')) + '</button>'
+          + '<button class="pBtn" id="gPClear">' + esc(TR('partyClear', 'Стереть всё')) + '</button></div>';
+      } else if (party.stage === 'draw' && !party.done) {
+        h += '<form class="pGuess" id="gPForm"><input id="gPGuess" maxlength="40" autocomplete="off" placeholder="'
+          + esc(TR('partyGuessPh', 'Твоя догадка…')) + '"><button class="pBtn">' + esc(TR('partyGuessBtn', 'Ответить')) + '</button></form>';
+      }
+      h += '<div class="pMsg" id="gPMsg"></div>';
+    } else {
+      h += '<div class="pWord" id="gPWord"></div><canvas id="gPGrid" width="240" height="240"></canvas>';
+      if (party.stage === 'build') {
+        h += '<div class="pTools">' + BUILD_COLORS.map(function (c, i) {
+          return '<button class="pSw' + (i === buildColor ? ' on' : '') + '" data-b="' + i + '" style="background:' + c + '"></button>';
+        }).join('') + '<button class="pSw pErase' + (buildColor === -1 ? ' on' : '') + '" data-b="-1" title="' + esc(TR('partyErase', 'Ластик')) + '">×</button></div>';
+      } else if (party.stage === 'vote') {
+        h += '<div class="pStars" id="gPStars">';
+        for (var s = 1; s <= 5; s++) h += '<button class="pStar" data-s="' + s + '">★</button>';
+        h += '</div>';
+      }
+      h += '<div class="pMsg" id="gPMsg"></div>';
+    }
+    h += '<div class="pScore" id="gPScore"></div>';
+    box.innerHTML = h;
+    if (g === 'guess') { board.last = null; redrawBoard(); }
+    if (g === 'build' && party.stage === 'build' && !myBuild) myBuild = party.mine || '';
+  }
+  function partyFill() {
+    var g = party.g, sub = $('gPSub'), word = $('gPWord'), msg = $('gPMsg');
+    if (g === 'quiz') {
+      sub.textContent = TR('partyQOf', 'Вопрос {n} из {of}').replace('{n}', party.n).replace('{of}', party.of);
+      $('gPQ').textContent = inLang(party.q);
+      var opts = document.querySelectorAll('#gParty .pOpt');
+      for (var i = 0; i < opts.length; i++) {
+        opts[i].querySelector('span').textContent = inLang((party.a || [])[i]);
+        opts[i].className = 'pOpt' + (party.mine === i ? ' mine' : '') + (party.right === i ? ' ok' : '')
+          + (party.right !== -1 && party.mine === i && party.right !== i ? ' bad' : '');
+        opts[i].disabled = party.stage !== 'q' || party.mine !== -1;
+      }
+    } else if (g === 'guess') {
+      if (party.stage === 'end') {
+        sub.textContent = '';
+        word.innerHTML = esc(TR('partyWordWas', 'Слово: {w}').replace('{w}', inLang(party.word)));
+      } else if (amDrawer()) {
+        sub.textContent = TR('partyYouDraw', 'Ты рисуешь');
+        word.innerHTML = esc(TR('partyDrawThis', 'Нарисуй:')) + ' <b>' + esc(inLang(party.word)) + '</b>';
+      } else {
+        sub.textContent = TR('partyDraws', 'Рисует {n}').replace('{n}', party.drawerName || '');
+        word.innerHTML = party.done ? esc(TR('partyGotIt', 'Угадал! Слово:')) + ' <b>' + esc(inLang(party.word)) + '</b>'
+          : '<span class="pHint">' + esc(inLang(party.hint)) + '</span>';
+      }
+    } else {
+      sub.textContent = party.stage === 'vote' ? TR('partyModelOf', 'Модель {k} из {of}').replace('{k}', party.k).replace('{of}', party.of)
+        : party.stage === 'end' ? TR('partyBuildEnd', 'Итог') : '';
+      word.innerHTML = esc(TR('partyTheme', 'Тема:')) + ' <b>' + esc(inLang(party.theme)) + '</b>';
+      if (party.stage === 'vote') {
+        msg.textContent = party.own ? TR('partyOwn', 'Это твоя модель — её оценивают другие') : TR('partyRate', 'Оцени модель от 1 до 5 звёзд');
+        var st = document.querySelectorAll('#gParty .pStar');
+        for (var s = 0; s < st.length; s++) { st[s].disabled = !!party.own; st[s].className = 'pStar' + (party.myVote >= s + 1 ? ' on' : ''); }
+      } else if (party.stage === 'end') {
+        msg.innerHTML = party.win ? TR('partyBestModel', 'Лучшая модель — {n}: {p} звёзд').replace('{n}', '<b>' + esc(party.win.name) + '</b>').replace('{p}', party.win.pts)
+          : esc(TR('partyNoModels', 'Моделей не построили'));
+      } else msg.textContent = TR('partyBuildHint', 'Рисуй по клеткам, × — ластик. Модель сохраняется сама.');
+      drawGrid();
+    }
+    $('gPScore').innerHTML = scoreHtml();
+    partyTick();
+  }
+  // таймер и полоса времени этапа
+  function partyTick() {
+    if (!party || !$('gPT')) return;
+    var left = partyLeft(), total = party.g === 'quiz' ? (party.stage === 'q' ? 12000 : 3500) : party.g === 'guess' ? 80000 : party.stage === 'build' ? 60000 : 6000;
+    $('gPT').textContent = Math.ceil(left / 1000) + TR('secShort', ' с');
+    $('gPBar').style.width = Math.max(0, Math.min(100, 100 * left / Math.max(total, party.ms || 1))) + '%';
+  }
+
+  /* --- викторина --- */
+  function partyAnswer(i) {
+    if (!partyOn() || party.g !== 'quiz' || party.stage !== 'q' || party.mine !== -1) return;
+    party.mine = i;
+    socket.emit('partyAns', { i: i });
+    partyFill();
+  }
+
+  /* --- угадай слово: доска --- */
+  function drawSeg(ctx, s, from) {
+    var p = s.p;
+    ctx.strokeStyle = BOARD_COLORS[s.c] || '#111827';
+    ctx.lineWidth = s.c === 7 ? 18 : s.w ? 9 : 4;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    if (from && !s.n) { ctx.moveTo(from[0], from[1]); ctx.lineTo(p[0], p[1]); } else { ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + 0.01, p[1]); }
+    for (var i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]);
+    ctx.stroke();
+    return [p[p.length - 2], p[p.length - 1]];
+  }
+  function redrawBoard() {
+    var cv = $('gPBoard');
+    if (!cv) return;
+    var ctx = cv.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    board.last = null;
+    board.strokes.forEach(function (s) { board.last = drawSeg(ctx, s, board.last); });
+  }
+  function addStroke(s) {
+    board.strokes.push(s);
+    var cv = $('gPBoard');
+    if (cv) board.last = drawSeg(cv.getContext('2d'), s, board.last);
+  }
+  function boardPt(e) {
+    var cv = $('gPBoard'), r = cv.getBoundingClientRect();
+    return [Math.round((e.clientX - r.left) * cv.width / r.width), Math.round((e.clientY - r.top) * cv.height / r.height)];
+  }
+  function flushStroke() {
+    // первый кусок линии может быть и точкой, дальше — только если к перенесённой точке добавились новые
+    if (!board.buf || board.buf.length < (board.bufNew ? 2 : 4)) return;
+    var s = { n: board.bufNew, c: board.c, w: board.w, p: board.buf };
+    socket.emit('partyDraw', s);
+    board.bufNew = false;
+    board.buf = [board.buf[board.buf.length - 2], board.buf[board.buf.length - 1]];
+  }
+  // новый раунд или лобби: панель убираем, доску и модель — с чистого листа
+  function partyReset() { board.strokes = []; board.last = null; board.down = false; myBuild = ''; partySet(null); }
+
+  /* --- строительная битва: поле модели --- */
+  function gridPx() {
+    var n = 144;
+    if (party.stage === 'build') return myBuild && myBuild.length === n ? myBuild : new Array(n + 1).join('.');
+    if (party.stage === 'vote') return party.show || '';
+    return party.win ? party.win.px : '';
+  }
+  function drawGrid() {
+    var cv = $('gPGrid');
+    if (!cv) return;
+    var ctx = cv.getContext('2d'), px = gridPx(), c = 20;
+    ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, 240, 240);
+    for (var i = 0; i < 144; i++) {
+      var ch = px[i];
+      if (ch && ch !== '.') { ctx.fillStyle = BUILD_COLORS[+ch] || '#111827'; ctx.fillRect((i % 12) * c, Math.floor(i / 12) * c, c, c); }
+    }
+    if (party.stage === 'build') {
+      ctx.strokeStyle = 'rgba(15,23,42,.12)'; ctx.lineWidth = 1;
+      for (var k = 1; k < 12; k++) { ctx.beginPath(); ctx.moveTo(k * c + 0.5, 0); ctx.lineTo(k * c + 0.5, 240); ctx.moveTo(0, k * c + 0.5); ctx.lineTo(240, k * c + 0.5); ctx.stroke(); }
+    }
+  }
+  function paintCell(e) {
+    var cv = $('gPGrid'), r = cv.getBoundingClientRect();
+    var x = Math.floor((e.clientX - r.left) * 12 / r.width), y = Math.floor((e.clientY - r.top) * 12 / r.height);
+    if (x < 0 || y < 0 || x > 11 || y > 11) return;
+    var px = gridPx().split(''), ch = buildColor === -1 ? '.' : String(buildColor);
+    if (px[y * 12 + x] === ch) return;
+    px[y * 12 + x] = ch;
+    myBuild = px.join('');
+    drawGrid();
+    clearTimeout(buildSendT);
+    buildSendT = setTimeout(function () { if (partyOn() && party.stage === 'build') socket.emit('partyBuild', { px: myBuild }); }, 250);
+  }
+
+  function bindPartyUi() {
+    var box = $('gParty');
+    box.addEventListener('click', function (e) {
+      var t = e.target.closest('button');
+      if (!t || !party) return;
+      if (t.classList.contains('pOpt')) partyAnswer(+t.dataset.i);
+      else if (t.dataset.c !== undefined) { board.c = +t.dataset.c; partyKey = ''; partySet(party); }
+      else if (t.id === 'gPSize') { board.w = board.w ? 0 : 1; t.classList.toggle('on', !!board.w); }
+      else if (t.id === 'gPClear') { socket.emit('partyClear'); }
+      else if (t.dataset.b !== undefined) { buildColor = +t.dataset.b; partyKey = ''; partySet(party); }
+      else if (t.classList.contains('pStar') && party.stage === 'vote' && !party.own) {
+        party.myVote = +t.dataset.s; socket.emit('partyVote', { s: +t.dataset.s }); partyFill();
+      }
+    });
+    box.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var inpG = $('gPGuess');
+      if (!inpG || !inpG.value.trim()) return;
+      socket.emit('partyGuess', { t: inpG.value.trim() });
+      inpG.value = '';
+    });
+    box.addEventListener('pointerdown', function (e) {
+      if (!party) return;
+      if (e.target.id === 'gPBoard' && amDrawer() && party.stage === 'draw') {
+        e.preventDefault();
+        board.down = true; board.bufNew = true;
+        var p = boardPt(e);
+        board.buf = [p[0], p[1]];
+        addStroke({ n: true, c: board.c, w: board.w, p: [p[0], p[1]] });
+        try { e.target.setPointerCapture(e.pointerId); } catch (x) {}
+      } else if (e.target.id === 'gPGrid' && party.stage === 'build') {
+        e.preventDefault(); buildDown = true; paintCell(e);
+        try { e.target.setPointerCapture(e.pointerId); } catch (x) {}
+      }
+    });
+    box.addEventListener('pointermove', function (e) {
+      if (board.down && e.target.id === 'gPBoard') {
+        var p = boardPt(e);
+        board.buf.push(p[0], p[1]);
+        addStroke({ n: false, c: board.c, w: board.w, p: [p[0], p[1]] });
+        if (board.buf.length >= 70) flushStroke();
+      } else if (buildDown && e.target.id === 'gPGrid') paintCell(e);
+    });
+    var up = function () { if (board.down) { board.down = false; flushStroke(); } buildDown = false; };
+    box.addEventListener('pointerup', up);
+    box.addEventListener('pointercancel', up);
+    // кусок линии уходит на сервер раз в 50 мс, пока ведёшь
+    setInterval(function () { if (board.down) flushStroke(); }, 50);
+    setInterval(partyTick, 250);
+  }
+  function bindParty() {
+    socket.on('party', function (d) {
+      if (!d || MODE !== 'hideAndSeek') return;
+      partySet(d);
+    });
+    socket.on('partyAnswered', function (d) {
+      if (party && party.g === 'quiz' && d) { party.answered = d.n | 0; }
+    });
+    socket.on('partyStroke', function (s) { if (s && s.p && party && party.g === 'guess') addStroke(s); });
+    socket.on('partyStrokes', function (d) { if (d && d.list && party && party.g === 'guess') { board.strokes = d.list.slice(); redrawBoard(); } });
+    socket.on('partyClear', function () { board.strokes = []; redrawBoard(); });
+    socket.on('partyGuessed', function (d) {
+      if (!d) return;
+      log(socket && d.id === socket.id ? TR('partyYouGuessed', 'Ты угадал слово!')
+        : TR('partyGuessedLog', '{n} угадал слово!').replace('{n}', '<b>' + esc(d.name || '') + '</b>'));
+      if (socket && d.id === socket.id && window.BFSound && BFSound.win) BFSound.win();
+    });
+    socket.on('partyNo', function (d) {
+      var m = $('gPMsg');
+      if (m) m.textContent = d && d.close ? TR('partyClose', 'Почти! Проверь буквы.') : TR('partyNotIt', 'Не то слово — пробуй ещё.');
+    });
   }
 
   // ---------- отрисовка чужих игроков ----------
@@ -3859,11 +4203,14 @@
     if (e.key === ' ') return;                  // пробел — прыжок
     if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyD') return;
     if (combatKey(e)) return;                  // F/J, Q, 1–4, B — бой и магазин, а не чат
+    var pg = partyInput();                     // «Угадай слово»: печать — это догадка, а не реплика в чат
+    if (pg) { pg.focus(); return; }
     inp.focus();
   });
   // война и магазин жетонов: клавиши
   function combatKey(e) {
     if (MODE !== 'hideAndSeek') return false;
+    if (partyOn() && party.g === 'quiz' && /^Digit[1-4]$/.test(e.code)) return true;     // ответ викторины
     if (e.code === 'KeyB') return shopOn;
     return !!war && /^(KeyF|KeyJ|KeyQ|Digit[1-4])$/.test(e.code);
   }
@@ -3871,7 +4218,8 @@
     if (document.activeElement === inp || isTypingElsewhere() || e.ctrlKey || e.altKey || e.metaKey) return;
     if (!combatKey(e) || e.repeat && e.code === 'KeyB') return;
     e.preventDefault();
-    if (e.code === 'KeyB') toggleShop();
+    if (partyOn() && party.g === 'quiz' && /^Digit[1-4]$/.test(e.code)) partyAnswer(+e.code.slice(5) - 1);
+    else if (e.code === 'KeyB') toggleShop();
     else if (e.code === 'KeyF' || e.code === 'KeyJ') attack();
     else if (e.code === 'KeyQ') cycleWeapon();
     else pickWeapon(WPN_ORDER[+e.code.slice(5) - 1]);
@@ -3892,6 +4240,7 @@
   $('gAtk').addEventListener('touchstart', function (e) { e.preventDefault(); e.stopPropagation(); attack(); }, { passive: false });
   $('gAtk').addEventListener('click', function (e) { e.preventDefault(); attack(); });
   setInterval(tickWar, 100);
+  bindPartyUi();
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && document.activeElement !== $('gMsg')) {
       if (isTypingElsewhere()) return;

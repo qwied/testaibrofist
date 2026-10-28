@@ -91,7 +91,7 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   ok(/\/murder-mystery</.test(sm) && /\/team-battle</.test(sm) && /\/war</.test(sm) && !/domination|capture-the-flag/.test(sm), 'в sitemap — страницы режимов');
   const idx = await fetch(A.base + '/').then(r => r.text());
   const modes = (idx.match(/class="card" data-mode="[^"]+"/g) || []).map(x => x.split('"')[3]);
-  ok(['hideAndSeek', 'race', 'murder', 'team', 'war'].every((m, i) => modes[i] === m), 'на главной режимы по порядку', modes.join());
+  ok(['hideAndSeek', 'race', 'murder', 'team', 'war', 'party'].every((m, i) => modes[i] === m), 'на главной режимы по порядку', modes.join());
   const hsPage = await fetch(A.base + '/hide-and-seek').then(r => r.text());
   ok(/data-i18n="hsRule7"/.test(hsPage), 'в правилах пряток — Cops & Robbers в большой комнате');
   const bm = await getJ(A.base, '/getBestRoom?mode=hideAndSeek&variant=murder');

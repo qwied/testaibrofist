@@ -27,6 +27,7 @@
    прятках и флаг (см. hsCatch/ctfTouch). */
 
 const WAR_VARIANTS = ['ffa', 'tdm', 'hunger', 'cp', 'bro', 'pirate'];
+const partyGame = require('./party.js').isGame;
 const ROTATION = ['ffa', 'tdm', 'hunger', 'cp', 'bro'];     // pirate — отдельно, на картах с пушками
 function isWar(v) { return WAR_VARIANTS.indexOf(v) !== -1; }
 
@@ -76,8 +77,12 @@ module.exports = function createWar(d) {
   const center = (p) => ({ x: p.x + (p.w || 30) / 2, y: p.y + (p.h || 74) / 2 });
 
   /* ---------- жетоны ---------- */
-  // где жетоны есть: обычные прятки и война; в Story, Murder Mystery и Team Battle — нет
-  function tokensOn(st) { return !st.storyMap && (!st.fixedVariant || st.fixedVariant === 'war'); }
+  // где жетоны есть: обычные прятки, война и раунды Mixed «Вечеринки»; в Story, Murder Mystery,
+  // Team Battle и мини-играх «Вечеринки» — нет
+  function tokensOn(st) {
+    return !st.storyMap && !partyGame(st.variant)
+      && (!st.fixedVariant || st.fixedVariant === 'war' || st.fixedVariant === 'party');
+  }
   function tok(st) {
     if (!st.tok) st.tok = { bank: new Map(), items: [], next: 1, trail: [], trailMap: '', lastAt: new Map(), timer: null };
     return st.tok;
@@ -151,7 +156,8 @@ module.exports = function createWar(d) {
     const item = data && Object.prototype.hasOwnProperty.call(SHOP, data.item) ? data.item : null;
     const no = (why) => io.to(id).emit('shopNo', { item, why });
     if (!item || !tokensOn(st)) return no('closed');
-    const it = SHOP[item], war = st.fixedVariant === 'war';
+    // в войне (и в раунде войны «Вечеринки») — оружие, в прятках — бусты
+    const it = SHOP[item], war = st.fixedVariant === 'war' || isWar(st.variant);
     if (war ? !it.war : !it.hs) return no('closed');
     if (st.phase !== 'round' && st.phase !== 'lobby') return no('phase');
     // кто сейчас охотник: в охоте — заражённые/копы, в лобби — тот, кого выбрала рулетка

@@ -44,6 +44,10 @@
     {
       "title": "Pirate War and cannons",
       "text": "War rooms now have a Pirate War round on maps with cannons: two teams on two ships fire poison cannonballs where they aim, and knocking someone into the poison water counts as your knockout. A new Pirate Bay map is made for it, and the map editor has a new Cannon object for Hide and Seek maps (poison on these maps knocks fighters out in War rounds)."
+    },
+    {
+      "title": "Party mode",
+      "text": "Party is a new mode in the main menu. Rounds take turns between three mini-games and a random round of other modes on a random map: a Quiz about the game with four answers, Guess the Word where one player draws and the rest type guesses, and Build Battle where everyone builds a model on a theme and rates the others with stars. The best player of each mini-game wins coins."
     }
   ]
 }
