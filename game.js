@@ -446,6 +446,8 @@
     + 'html:not(.is-mobile):not(.is-tablet) #gAtk{display:none!important}'
     /* «Приключение»: класс на нижней панели и выбор класса в лобби (см. renderAdvPick) */
     + '.advCls{font-weight:700;padding:0 4px}#gAdvHeal:disabled{background:#9ca3af}'
+    // панель приключения узкая — на телефоне ей место внизу между стрелками и кнопками, а не поверх бойца
+    + 'html.is-mobile #gAdv,html.is-tablet #gAdv{bottom:calc(14px + env(safe-area-inset-bottom,0px))}'
     + '#gAdvPick{position:fixed;left:0;right:0;margin:0 auto;width:min(560px,calc(100vw - 24px));bottom:calc(16px + env(safe-area-inset-bottom,0px));'
     + 'z-index:61;background:#fff;border:1px solid #d7dee7;border-radius:14px;box-shadow:0 20px 50px -20px rgba(15,23,42,.55);'
     + 'font:14px sans-serif;color:#111827;padding:10px 12px;box-sizing:border-box}'

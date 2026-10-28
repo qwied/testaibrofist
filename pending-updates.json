@@ -56,6 +56,10 @@
     {
       "title": "Adventure mode",
       "text": "Adventure is a new mode in the main menu that you can play alone or as a team against monsters. Pick a class in the lobby: the Warrior with a sword and the most health, the Archer with a long-range bow, or the Mage with fireballs and a heal. Rounds take turns between Bro Tower, where you clear five floors of slimes, skeletons, bats and knights to reach a crowned boss who slams the ground, and Crystal Defense, where waves of enemies march toward a crystal you have to protect. A victory pays coins to the whole team."
+    },
+    {
+      "title": "Adventure on phones",
+      "text": "On phones the Adventure health bar now sits at the bottom between the controls, so it no longer covers your fighter."
     }
   ]
 }
