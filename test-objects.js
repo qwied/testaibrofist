@@ -99,8 +99,8 @@ ok('префаб 20x20',          /rect:\[20,20\], circle:\[20,20\], triangle:\[
 ok('игрок 20x60',           /spawn:\[20,60\]/.test(src) && /var pl = \{x:0,y:0,w:20,h:60,/.test(src));
 ok('гравитация 9',          /var gravityScale = 9;/.test(src));
 ok('ползунка нет',          !/id="grav"/.test(src) && !/id="grav"/.test(game));
-ok('размер игрока, зомби, портала, места искателя и пушки не правят',
-   /if\(sel\.type !== "spawn" && sel\.type !== "zombie" && sel\.type !== "teleport" && sel\.type !== "seekerSpot" && sel\.type !== "cannon"\)/.test(src));
+ok('размер игрока, зомби, портала, места искателя, пушки, камеры и флага шпиона не правят',
+   /if\(sel\.type !== "spawn" && sel\.type !== "zombie" && sel\.type !== "teleport" && sel\.type !== "seekerSpot" && sel\.type !== "cannon"\s*&& sel\.type !== "camera" && sel\.type !== "spyFlag"\)/.test(src));
 
 // рикошет вместо батута
 console.log('\nрикошет:');
@@ -178,8 +178,8 @@ const maps=fs.readFileSync(__dirname+'/maps.js','utf8');
 ok('сервер принимает старые карты', /water:null/.test(maps));
 
 console.log('\nразмер игрока:');
-ok('ручек у старта, зомби, портала, места искателя и пушки нет',
-   /sel\.type === "spawn" \|\| sel\.type === "zombie" \|\| sel\.type === "teleport" \|\| sel\.type === "seekerSpot" \|\| sel\.type === "cannon"\) return null/.test(src));
+ok('ручек у старта, зомби, портала, места искателя, пушки, камеры и флага шпиона нет',
+   /sel\.type === "spawn" \|\| sel\.type === "zombie" \|\| sel\.type === "teleport" \|\| sel\.type === "seekerSpot" \|\| sel\.type === "cannon" \|\| sel\.type === "camera" \|\| sel\.type === "spyFlag"\) return null/.test(src));
 ok('рамка без ручек',       /isSel && o\.type !== "spawn"/.test(src));
 
 // прыжок с удержанием

@@ -254,16 +254,16 @@ body.mob #msg h1{font-size:38px}
 body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="offline.js?v=3"></script>
-<script src="device.js?v=193"></script>
-        <script src="sound.js?v=193"></script>
-        <script src="skinRender.js?v=193"></script>
-        <script src="skinCanvas.js?v=193"></script>
-        <script src="gifuct.bundle.js?v=193"></script>
-        <script src="gifPlayer.js?v=193"></script>
-        <script src="coin.js?v=193"></script>
-        <script src="liveText.js?v=193"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=193">
-        <script src="theme.js?v=193"></script>
+<script src="device.js?v=194"></script>
+        <script src="sound.js?v=194"></script>
+        <script src="skinRender.js?v=194"></script>
+        <script src="skinCanvas.js?v=194"></script>
+        <script src="gifuct.bundle.js?v=194"></script>
+        <script src="gifPlayer.js?v=194"></script>
+        <script src="coin.js?v=194"></script>
+        <script src="liveText.js?v=194"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=194">
+        <script src="theme.js?v=194"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -800,6 +800,8 @@ var PAINT = {
      искатель, второй фигуры там быть не должно. */
   seekerSpot: function(o){ figure(o.w, o.h, COLOR_SEEKER); },
   cannon: function(o){ paintCannon(o); },
+  camera: function(o){ paintCamera(o); },
+  spyFlag: function(o){ paintSpyFlag(o); },
   // приёмник — только ориентир для автора карты, в игровую логику не входит
   laserReceiver: function(o){
     ctx.fillStyle = C.stone3; rr(0,0,o.w,o.h,3); ctx.fill();
@@ -978,7 +980,11 @@ var TOOLS = [
      которые их уже используют — просто без своей кнопки в палитре. */
   // только гонка
   {t:"checkpoint", n:"Чекпоинт",    k:"toolCheckpoint", m:"race"},
-  {t:"finishline", n:"Финиш",       k:"toolFinish",     m:"race"}
+  {t:"finishline", n:"Финиш",       k:"toolFinish",     m:"race"},
+  /* «Шпион» (идея 2019 года «Spy mode»): камера ловит взглядом — назад на чекпоинт; флаг шпиона —
+     финиш засчитывается, только если несёшь его (см. spyTick и касания в step) */
+  {t:"camera",     n:"Камера",      k:"toolCamera",     m:"race"},
+  {t:"spyFlag",    n:"Флаг шпиона", k:"toolSpyFlag",    m:"race"}
 ];
 var MODE_OF = {};
 TOOLS.forEach(function(T){ MODE_OF[T.t] = T.m; });
@@ -1003,6 +1009,7 @@ var COLORS = {
   zombie:"",                       // мертвец всегда зелёный — красить его нечем и незачем
   seekerSpot:"",                   // всегда синий, как и сам искатель — красить нечем
   cannon:"",                       // дерево и чугун — рисуется собой
+  camera:"", spyFlag:"",           // рисуются собой
   checkpoint:"", finishline:"", spawn:INK, teleport:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
@@ -1018,7 +1025,8 @@ var SIZES = {
   seekerSpot:[30,100],              // тоже впритык как у игрока
   checkpoint:[40,104], finishline:[52,126], spawn:[30,100],
   teleport:[30,100],                // тоже впритык как у игрока — по прямой просьбе
-  cannon:[72,44]                    // у всех пушек одна дальность — и размер один
+  cannon:[72,44],                   // у всех пушек одна дальность — и размер один
+  camera:[36,26], spyFlag:[34,64]
 };
 var SOLID  = ["rect","circle","triangle"];
 /* Раньше яд, шипы и ротатор убивали просто потому, что так называются.
@@ -1410,6 +1418,7 @@ function play(){
     o._hx = o.x; o._hy = o.y; o._t = 0; o._act = !!o.startsOpen;
     o._reached = false; o._spin = 0; o._squash = 0; o._pulseT = 0; o._hue = 0;
   });
+  pl.flag = false; pl.cpFlag = false;
   respawn();
   document.body.classList.add("play");
   sel = null; inspect(); hideMsg(); last = 0; acc = 0; stat();
@@ -1433,11 +1442,17 @@ function restartRun(){
   });
   var sp = findSpawn();
   if(sp){ spawnPt = {x:sp.x, y:sp.y}; lastSafePos = {x:sp.x, y:sp.y}; }
+  pl.flag = false; pl.cpFlag = false;
   stat(); respawn();
 }
 
 function respawn(){
   var p = (practiceMode && mode === "race") ? lastSafePos : spawnPt;
+  // флаг шпиона: не сохранённый на чекпоинте возвращается на место (в практике — остаётся у игрока)
+  if(!(practiceMode && mode === "race")){
+    if(pl.flag && !pl.cpFlag) spyNote("lost");
+    pl.flag = !!pl.cpFlag;
+  }
   pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
   pl.rideOn = null; pl.grab = null; grabCd = 0; pl.kick = 0; pl.climb = null; pl.jumpLock = false;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckSteer = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
@@ -2497,6 +2512,17 @@ function step(){
       return;
     }
     if(hazard(o)){ die(); return; }
+    // флаг шпиона: коснулся — несёшь; с ним на чекпоинте — сохранён (см. respawn)
+    if(o.type === "spyFlag" && !pl.flag && !pl.dead){
+      pl.flag = true;
+      burst(o.x+o.w/2, o.y+o.h*0.3, 16, "#111827", 3, 34);
+      if(window.BFSound) BFSound.checkpoint();
+      spyNote("flag");
+    }
+    if(o.type === "checkpoint" && pl.flag && !pl.cpFlag){
+      pl.cpFlag = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h}; lastSafePos = {x:spawnPt.x, y:spawnPt.y};
+      spyNote("saved");
+    }
     if(o.type === "checkpoint" && !o._reached){
       o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h}; lastSafePos = {x:spawnPt.x, y:spawnPt.y};
       burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
@@ -2518,7 +2544,8 @@ function step(){
       }
     }
     // Дверь — это выход: игроку достаточно дойти до неё самому.
-    if(o.type === "finishline" && !done){
+    if(o.type === "finishline" && !done && spyLocked()) spyNote("need");
+    if(o.type === "finishline" && !done && !spyLocked()){
       done = true; shake = 6;
       if(window.BFSound) BFSound.finish();
       burst(o.x+o.w/2, o.y+o.h/2, 40, "#fbbf24", 5, 60);
@@ -2534,6 +2561,7 @@ function step(){
     if(o.type === "lever" && !o._latch){ o._act = !o._act; o._latch = true; drive(o); if(window.BFSound) BFSound.toggle(); }
   });
   laserFeeds();
+  spyTick();
   // не внутри опасности прямо сейчас — можно смело вернуть сюда при смерти
   // в Practice Mode (если умер этим же кадром, pl.dead уже true — не трогаем)
   if(!pl.dead) lastSafePos = {x:pl.x, y:pl.y};
@@ -2724,6 +2752,164 @@ function paintCannon(o){
     ctx.beginPath(); ctx.arc(w*k, h*0.8, h*0.06, 0, 6.2832); ctx.fill();
   });
 }
+/* ══════════ ШПИОН (идея 2019 года «Spy mode», гонка) ══════════
+   Камера смотрит конусом и поворачивается туда-сюда: o.aim — середина (градусы), o.sweep — на
+   сколько в каждую сторону, o.range — дальность, o.fov — ширина взгляда. Стены закрывают ей обзор.
+   Кто пробыл у неё на виду CAM_CATCH_MS — пойман: умирает, как от яда (в гонке — назад на
+   чекпоинт). У скрытой камеры (o.hidden) взгляд во время игры не виден — только мигает огонёк.
+   Флаг шпиона на карте один: коснулся — несёшь его; финиш засчитывается только с ним. Умер —
+   флаг возвращается на место, если ты не донёс его до чекпоинта: чекпоинт его «сохраняет».
+   Лазер, который пересекает игрок, и так включает связанные объекты, как кнопка (см. laserFeeds), —
+   из него получается сигнализация. */
+var CAM_PERIOD = 4200, CAM_CATCH_MS = 160, CAM_RAYS = 18;
+function camParams(o){
+  return { sweep: isFinite(o.sweep) ? Math.max(0, Math.min(90, +o.sweep)) : 35,
+           range: isFinite(o.range) ? Math.max(100, Math.min(1500, +o.range)) : 450,
+           fov: isFinite(o.fov) ? Math.max(6, Math.min(80, +o.fov)) : 30 };
+}
+// куда камера смотрит сейчас (радианы); у разных камер — разная фаза, чтобы не качались хором
+function camAngle(o){
+  var t = playing ? timeMs : Date.now();
+  return ((+o.aim || 0) + camParams(o).sweep * Math.sin(2 * Math.PI * t / CAM_PERIOD + (o.id || 0) * 1.7)) * Math.PI / 180;
+}
+function camPivot(o){ return { x: o.x + o.w / 2, y: o.y + o.h * 0.45 }; }
+function camLens(o, a){ var p = camPivot(o); return { x: p.x + Math.cos(a) * o.w * 0.45, y: p.y + Math.sin(a) * o.w * 0.45 }; }
+// сплошные объекты вокруг камеры (на её дальность) — по ним и считается, что ей видно
+function sightList(x, y, r){ return nearby(x - r, y - r, 2 * r, 2 * r).filter(function(w){ return solid(w); }); }
+// докуда виден отрезок: доля пути до первой стены (1 — виден весь)
+function sightT(list, x0, y0, x1, y1){
+  var best = 1;
+  for(var i = 0; i < list.length; i++){
+    var bb = bbox(list[i]);
+    if(segHitsRect(x0, y0, x1, y1, bb[0], bb[1], bb[2] - bb[0], bb[3] - bb[1]) === null) continue;
+    var t = raySegHitsPoly(x0, y0, x1, y1, polyOf(list[i]));
+    if(t !== null && t < best) best = t;
+  }
+  return best;
+}
+function camSeesPlayer(o, c, a, L){
+  var half = c.fov / 2 * Math.PI / 180, cx = pl.x + pl.w / 2;
+  var pts = [[cx, pl.y + 14], [cx, pl.y + pl.h / 2], [cx, pl.y + pl.h - 12]];
+  for(var i = 0; i < pts.length; i++){
+    var dx = pts[i][0] - L.x, dy = pts[i][1] - L.y, d = Math.sqrt(dx * dx + dy * dy);
+    if(d > c.range) continue;
+    var da = Math.atan2(dy, dx) - a;
+    while(da > Math.PI) da -= 2 * Math.PI;
+    while(da < -Math.PI) da += 2 * Math.PI;
+    if(Math.abs(da) > half) continue;
+    if(sightT(o._list, L.x, L.y, pts[i][0], pts[i][1]) > 0.999) return true;
+  }
+  return false;
+}
+function findSpyFlag(){ for(var i = 0; i < objects.length; i++) if(objects[i].type === "spyFlag") return objects[i]; return null; }
+// финиш закрыт: на карте есть флаг шпиона, а игрок его не несёт
+function spyLocked(){ return !pl.flag && !!findSpyFlag(); }
+// каждый кадр игры: камеры смотрят, кого видно
+function spyTick(){
+  for(var i = 0; i < objects.length; i++){
+    var o = objects[i];
+    if(o.type !== "camera") continue;
+    var c = camParams(o), a = camAngle(o), L = camLens(o, a);
+    o._a = a;
+    o._list = sightList(L.x, L.y, c.range);
+    var see = !pl.dead && !done && camSeesPlayer(o, c, a, L);
+    o._sees = see;
+    o._seeT = see ? (o._seeT || 0) + 16.67 : 0;
+    if(see && o._seeT >= CAM_CATCH_MS){
+      o._seeT = 0;
+      if(!godMode) spyNote("seen");
+      die();
+    }
+  }
+}
+// подсказки шпиона: в игре — сообщением страницы (BRIDGE.onSpy), в редакторе — табличкой на секунду
+var spyNoteAt = {}, spyMsgT = null;
+function spyNote(kind){
+  var now = Date.now();
+  if(now - (spyNoteAt[kind] || 0) < 1500) return;
+  spyNoteAt[kind] = now;
+  if(typeof BRIDGE !== "undefined" && BRIDGE && BRIDGE.onSpy){ BRIDGE.onSpy(kind); return; }
+  var M = { flag: TR("spyGotFlag", "Флаг у тебя! Неси его к финишу."), need: TR("spyNeedFlag", "Сначала возьми флаг шпиона — без него финиш не засчитают."),
+            seen: TR("spySeen", "Тебя заметила камера!"), saved: TR("spySaved", "Флаг сохранён на чекпоинте."),
+            lost: TR("spyFlagBack", "Флаг вернулся на место.") };
+  if(!M[kind] || done) return;
+  showMsg(TR("spyTitle", "Шпион"), M[kind]);
+  clearTimeout(spyMsgT);
+  spyMsgT = setTimeout(function(){ if(!done) hideMsg(); }, 1600);
+}
+// взгляды камер — отдельным проходом поверх карты (как лучи лазеров)
+function drawCams(){
+  for(var i = 0; i < objects.length; i++){
+    var o = objects[i];
+    if(o.type !== "camera") continue;
+    var c = camParams(o), a = playing && o._a !== undefined ? o._a : camAngle(o), L = camLens(o, a), half = c.fov / 2 * Math.PI / 180;
+    if(playing && o.hidden && !o._sees) continue;
+    var red = playing && o._sees;
+    ctx.save();
+    ctx.fillStyle = red ? "rgba(239,68,68,.32)" : "rgba(250,204,21,.22)";
+    ctx.strokeStyle = red ? "rgba(220,38,38,.8)" : "rgba(202,138,4,.6)";
+    ctx.lineWidth = 1.5 / view.s;
+    ctx.beginPath(); ctx.moveTo(L.x, L.y);
+    for(var k = 0; k <= CAM_RAYS; k++){
+      var aa = a - half + 2 * half * k / CAM_RAYS, ex = L.x + Math.cos(aa) * c.range, ey = L.y + Math.sin(aa) * c.range;
+      var t = playing && o._list ? sightT(o._list, L.x, L.y, ex, ey) : 1;
+      ctx.lineTo(L.x + (ex - L.x) * t, L.y + (ey - L.y) * t);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // в редакторе — пунктиром крайние положения поворота
+    if(!playing && c.sweep > 0){
+      ctx.setLineDash([6 / view.s, 5 / view.s]);
+      [-1, 1].forEach(function(s){
+        var ea = ((+o.aim || 0) + s * c.sweep) * Math.PI / 180, P = camLens(o, ea);
+        ctx.beginPath(); ctx.moveTo(P.x, P.y); ctx.lineTo(P.x + Math.cos(ea) * c.range, P.y + Math.sin(ea) * c.range); ctx.stroke();
+      });
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+}
+// камера: крепление сверху, корпус с объективом поворачивается туда, куда она смотрит
+function paintCamera(o){
+  var w = o.w, h = o.h, a = playing && o._a !== undefined ? o._a : camAngle(o);
+  ctx.fillStyle = "#4b5563";
+  ctx.fillRect(w * 0.3, 0, w * 0.4, h * 0.18);
+  ctx.save();
+  ctx.translate(w / 2, h * 0.45);
+  ctx.rotate(a);
+  ctx.fillStyle = "#374151"; ctx.strokeStyle = "#111827"; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.rect(-w * 0.32, -h * 0.26, w * 0.72, h * 0.52); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#6b7280"; ctx.fillRect(-w * 0.28, -h * 0.22, w * 0.6, h * 0.1);
+  ctx.fillStyle = "#0f172a";
+  ctx.beginPath(); ctx.arc(w * 0.42, 0, h * 0.2, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = "#38bdf8";
+  ctx.beginPath(); ctx.arc(w * 0.44, -h * 0.04, h * 0.08, 0, 6.2832); ctx.fill();
+  // огонёк: горит красным через раз — по нему и видно скрытую камеру
+  var blink = ((playing ? timeMs : Date.now()) / 450 | 0) % 2 === 0;
+  ctx.fillStyle = blink || (playing && o._sees) ? "#ef4444" : "#7f1d1d";
+  ctx.beginPath(); ctx.arc(-w * 0.2, h * 0.1, h * 0.07, 0, 6.2832); ctx.fill();
+  ctx.restore();
+}
+// полотнище флага шпиона: тёмное, с белым глазом
+function spyCloth(x, y, w, h){
+  ctx.fillStyle = "#111827";
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y + h * 0.1); ctx.lineTo(x + w * 0.85, y + h * 0.5); ctx.lineTo(x + w, y + h * 0.9); ctx.lineTo(x, y + h); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath(); ctx.ellipse(x + w * 0.42, y + h * 0.5, w * 0.24, h * 0.2, 0, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = "#111827";
+  ctx.beginPath(); ctx.arc(x + w * 0.42, y + h * 0.5, h * 0.12, 0, 6.2832); ctx.fill();
+}
+function paintSpyFlag(o){
+  if(playing && pl.flag) return;            // флаг сейчас у игрока — на месте его нет
+  var w = o.w, h = o.h;
+  ctx.fillStyle = "#9ca3af"; ctx.fillRect(w * 0.12, 0, w * 0.1, h);
+  ctx.fillStyle = "#6b7280"; ctx.fillRect(0, h - h * 0.06, w * 0.5, h * 0.06);
+  spyCloth(w * 0.22, h * 0.04, w * 0.78, h * 0.42);
+}
+// флаг за спиной у игрока, который его несёт (рисуется в его системе координат)
+function drawCarriedFlag(w, h){
+  ctx.fillStyle = "#9ca3af"; ctx.fillRect(w * 0.85, -h * 0.28, 3, h * 0.75);
+  spyCloth(w * 0.85 + 3, -h * 0.28, 26, 18);
+}
 function paint(o, isSel){
   var open = opened(o);
   ctx.save();
@@ -2851,6 +3037,7 @@ function paintFrame(){
      от самого объекта. Во время игры путь уже посчитан в laserFeeds();
      вне игры считаем его тут же — так автор карты сразу видит, куда луч
      реально попадёт и от чего отскочит, ещё до нажатия «Играть». */
+  drawCams();
   for(var lfi=0; lfi<objects.length; lfi++){
     var lo = objects[lfi];
     if(lo.type !== "laserFeed" && !lo.laser) continue;
@@ -2937,6 +3124,7 @@ function paintFrame(){
     else if(BRIDGE && BRIDGE.myOutfit) drawOutfit(BRIDGE.myOutfit.kind, pl.w, pl.h, BRIDGE.myOutfit.arg);
     else figure(pl.w, pl.h, (BRIDGE && BRIDGE.myColor) || "#000000", true,
            (BRIDGE && BRIDGE.mySkin) || null);
+    if(pl.flag) drawCarriedFlag(pl.w, pl.h);     // несёт флаг шпиона
     ctx.restore();
   }
   if(BRIDGE && BRIDGE.onDraw){ BRIDGE.viewScale = view.s; BRIDGE.onDraw(ctx); }
@@ -4087,6 +4275,10 @@ window.GAME = BRIDGE = {
   myOutfit: null,
   figureOutfit: function(kind, w, h, arg){ drawOutfit(kind, w, h, arg); },
   get done(){ return done; },
+  // «Шпион»: несёт ли игрок флаг и кого сейчас видят камеры (см. spyTick); onSpy — подсказки игре
+  get spyFlag(){ return !!pl.flag; },
+  get cams(){ return objects.filter(function(o){ return o.type === "camera"; }).map(function(o){ return { sees: !!o._sees, a: o._a }; }); },
+  onSpy: null,
   // Practice Mode включается снаружи (game.js) до старта — см. respawn()
   get practice(){ return practiceMode; },
   set practice(v){ practiceMode = !!v; },
@@ -4169,6 +4361,9 @@ window.GAME = BRIDGE = {
       // пушка: размер задан движком, поворота нет — только прицел ствола (o.aim, градусы)
       if(o.type === "cannon"){ o.w = SIZES.cannon[0]; o.h = SIZES.cannon[1]; o.rot = 0;
         o.aim = isFinite(o.aim) ? Math.max(-360, Math.min(360, +o.aim)) : 0; }
+      // камера и флаг шпиона: размер задан движком; куда смотрит камера — o.aim и camParams
+      if(o.type === "camera" || o.type === "spyFlag"){ o.w = SIZES[o.type][0]; o.h = SIZES[o.type][1]; o.rot = 0;
+        if(o.type === "camera") o.aim = isFinite(o.aim) ? Math.max(-360, Math.min(360, +o.aim)) : 90; }
       // Платформа, ротатор, батут, яд и шипы стали свойствами обычных
       // объектов — переносим их поведение, чтобы старые карты играли так же
       if(o.type === "platform"){ o.type = "rect"; o.moves = true;
@@ -4229,8 +4424,8 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=193"></script>
-        <script src="i18n.js?v=193"></script>
-        <script src="skinAvatar.js?v=193" defer></script>
+<script src="game.js?v=194"></script>
+        <script src="i18n.js?v=194"></script>
+        <script src="skinAvatar.js?v=194" defer></script>
 </body>
 </html>

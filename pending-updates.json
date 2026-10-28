@@ -48,6 +48,10 @@
     {
       "title": "Party mode",
       "text": "Party is a new mode in the main menu. Rounds take turns between three mini-games and a random round of other modes on a random map: a Quiz about the game with four answers, Guess the Word where one player draws and the rest type guesses, and Build Battle where everyone builds a model on a theme and rates the others with stars. The best player of each mini-game wins coins."
+    },
+    {
+      "title": "Spy race maps",
+      "text": "Race maps can now be spy missions: grab the spy flag and carry it to the finish while security cameras sweep the rooms. If a camera sees you, you go back to the checkpoint, and a checkpoint keeps the flag safe. Walls and shelves block a camera's view, some cameras are hidden and only blink. A new Spy Base map shows it all, and the map editor has new Camera and Spy Flag objects for Race."
     }
   ]
 }

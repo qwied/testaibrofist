@@ -41,6 +41,7 @@ const TOOL_MODES = {
   teleport:null,               // пара площадок — есть в обоих режимах, как кнопка/рычаг
   cover:['hideAndSeek'],
   cannon:['hideAndSeek'],       // пушка «Пиратской войны» — стреляют из неё в режиме «Война»
+  camera:['race'], spyFlag:['race'],   // «Шпион» в гонке: камеры и флаг, без которого финиш закрыт
   checkpoint:['race'],
   // устаревшие типы — принимаем, но в палитре их больше нет
   poison:null, spike:null, bounce:null, platform:null, rotator:null,
@@ -187,14 +188,16 @@ function load() {
 /* Встроенные карты: лежат в репозитории (builtinMaps/) и при запуске сами
    появляются в каталоге от имени автора. showcase — витрина, а не уровень:
    в случайный подбор комнат такая карта не попадает (см. randomFor), её
-   открывают из Maps Browser. play — уровень для своего режима (only): он
-   попадает только в комнаты этого режима (см. poolFor и hsMapOk в server.js),
-   даже если автор не владелец сайта. ver поднимаем, когда меняем саму
+   открывают из Maps Browser. play — уровень: он попадает в подбор карт своего
+   типа, даже если автор не владелец сайта, а с only — только в комнаты этого
+   режима (см. poolFor и hsMapOk в server.js). ver поднимаем, когда меняем саму
    карту, — тогда она обновится; свою карту с тем же именем автор не потеряет. */
 const BUILTIN = [
   { file: 'serversinfo.json', mapName: 'ServersInfo', author: 'qwied', mapType: 'race', ver: 2 },
   // «Пиратская война» (см. war.js): два корабля с пушками над ядовитым морем
-  { file: 'piratebay.json', mapName: 'Pirate Bay', author: 'qwied', mapType: 'hideAndSeek', ver: 1, play: true, only: 'war' }
+  { file: 'piratebay.json', mapName: 'Pirate Bay', author: 'qwied', mapType: 'hideAndSeek', ver: 1, play: true, only: 'war' },
+  // гонка-«шпион»: камеры, лазеры, флаг в хранилище — финиш только с флагом (см. spyTick в game.html)
+  { file: 'spybase.json', mapName: 'Spy Base', author: 'qwied', mapType: 'race', ver: 1, play: true }
 ];
 function seedBuiltin() {
   let changed = false;
@@ -251,7 +254,8 @@ function poolFor(t, pred) {
     : maps.filter(m => {
         // владелец мог вручную добавить карту в конкретный режим — даже витрину
         if (Array.isArray(m.inGameModes) && m.inGameModes.indexOf(t) !== -1) return true;
-        return !m.showcase && (isOwnerName(m.author) || (m.builtinVer && m.only)) && m.mapType === t;
+        // встроенный уровень (см. BUILTIN) — в пуле своего режима, даже если автор не владелец
+        return !m.showcase && (isOwnerName(m.author) || !!m.builtinVer) && m.mapType === t;
       });
   if (pred) {
     const ok = all.filter(m => { try { return !!pred(m); } catch (e) { return false; } });
