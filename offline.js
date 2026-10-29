@@ -243,7 +243,11 @@
     if (path === '/whoAmI' || path === '/iSigned') return Promise.resolve(response({ name: user.name, guest: false, data: user, owner: false }));
     if (path === '/getMySettings') return Promise.resolve(response({ status: 'success', data: user.settings || {} }));
     if (path === '/getMyProfile') return Promise.resolve(response({ status: 'success', data: user }));
-    if (path === '/getBestRoom' || path === '/getRoomList') return Promise.resolve(response(path === '/getBestRoom' ? { room: 'local-room-' + (sp.get('mode') || 'race') } : { rooms: [{ room: 'local-room-' + (sp.get('mode') || 'race'), players: 1, names: [user.name], status: 'green' }], limit: 40 }));
+    if (path === '/getBestRoom' || path === '/getRoomList') {
+      // отдельные режимы (Война, Вечеринка, Приключение) живут в комнатах «war-1» и т.п. — см. offlineModes.js
+      var vr = /^(war|party|adventure)$/.test(sp.get('variant') || '') ? sp.get('variant') + '-1' : 'local-room-' + (sp.get('mode') || 'race');
+      return Promise.resolve(response(path === '/getBestRoom' ? { room: vr } : { rooms: [{ room: vr, players: 1, names: [user.name], status: 'green' }], limit: 40 }));
+    }
     if (path === '/getMapsForList' || path === '/getMaps') return Promise.resolve(response(listMaps(sp)));
     if (path === '/getUploadLimit') return Promise.resolve(response({ limit: 3, left: Math.max(0, 3 - Number(user.mapCount || 0)), reward: 10, guest: false }));
     if (path === '/getMapData') {
@@ -366,9 +370,17 @@
       fire('racePhase', { phase: 'round', map: list.length ? list[raceK % list.length] : null, msLeft: 120000, goal: '', roundNum: ++raceK });
       raceT = setTimeout(raceRound, 120000);
     }
+    var modeCtl = null;      // комната отдельного режима из offlineModes.js (Война, Вечеринка, Приключение)
     sock.emit = function (ev, data) {
+      if (modeCtl && ev !== 'join' && modeCtl.on(ev, data)) return sock;
       if (ev === 'join') {
         var user = currentUser();
+        var vm = /^(war|party|adventure)-\d+$/.exec(String(data && data.room || ''));
+        if (vm && window.BFOfflineModes && BFOfflineModes.has(vm[1]) && originalFetch) {
+          BFOfflineModes.start({ sock: sock, fire: fire, name: user.name, variant: vm[1], api: window.BFOffline, raw: originalFetch })
+            .then(function (c) { modeCtl = c; c.join(); }, function () { sock.emit('join', Object.assign({}, data, { room: 'local-room-hideAndSeek' })); });
+          return sock;
+        }
         setTimeout(function () {
           fire('nameFixed', { name: user.name });
           fire('playersList', [{ id: sock.id, name: user.name, nid: 1, position: {} }]);

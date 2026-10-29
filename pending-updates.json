@@ -64,6 +64,10 @@
     {
       "title": "Game modes open on empty servers",
       "text": "Murder Mystery, Team Battle and Party now have their own arena map, so you can enter them even when nobody has published a map yet."
+    },
+    {
+      "title": "Modes on the test site",
+      "text": "Murder Mystery, Team Battle, War, Party and Adventure pages now open on the test site instead of showing an error, and War, Party and Adventure can be played alone against bots."
     }
   ]
 }

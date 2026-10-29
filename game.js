@@ -31,7 +31,7 @@
      Интерфейс сайта только на английском (см. i18n.js), поэтому здесь
      без словаря — те же строки, что и в нём (hideAndSeek/race). */
   document.title = 'AIBrofist — ' + (MODE === 'race' ? 'Race'
-    : ({ murder: 'Murder Mystery', team: 'Team Battle', war: 'War' })[VARIANT] || 'Hide and Seek');
+    : ({ murder: 'Murder Mystery', team: 'Team Battle', war: 'War', party: 'Party', adventure: 'Adventure' })[VARIANT] || 'Hide and Seek');
 
   var ROUND_MS  = 120000;   // раунд — 2 минуты
   var LOBBY_MS  = 30000;    // ожидание в Hide and Seek — 30 секунд
