@@ -8,9 +8,10 @@
   'use strict';
   if (window.BFOfflineModes) return;
 
-  var MIN_PLAYERS = { war: 2, party: 2, adventure: 1 };
-  var BOTS = { war: ['Bot A', 'Bot B', 'Bot C'], party: ['Bot A', 'Bot B', 'Bot C'], adventure: [] };
-  var BUILTIN = { war: ['piratebay.json'], party: ['broarena.json'], adventure: ['brotower.json', 'crystaldefense.json'] };
+  var MIN_PLAYERS = { murder: 3, team: 2, war: 2, party: 2, adventure: 1 };
+  var MURDER_GRACE_MS = 20000, MIN_DIST = 200, CTF_WIN = 3, DOM_WIN = 120, DOM_TICKS = 3;
+  var BOTS = { murder: ['Bot A', 'Bot B', 'Bot C'], team: ['Bot A', 'Bot B', 'Bot C'], war: ['Bot A', 'Bot B', 'Bot C'], party: ['Bot A', 'Bot B', 'Bot C'], adventure: [] };
+  var BUILTIN = { murder: ['broarena.json'], team: ['broarena.json'], war: ['piratebay.json'], party: ['broarena.json'], adventure: ['brotower.json', 'crystaldefense.json'] };
   var LOBBY_MS = 9000, ROULETTE_MS = 3500;
 
   var modsP = null;
@@ -48,7 +49,7 @@
 
     var st = { phase: 'lobby', roundNum: 0, variant: 'classic', fixedVariant: variant, endsAt: 0, map: null, mapData: null,
       spots: [], cannons: [], advMap: null, apoc: false, hasPoison: false, caughtSet: new Set(), caughtSent: false,
-      seekerIds: new Set(), seekerId: null, seekerName: '', teams: null, teamList: null, bases: null, domPoints: null, timer: null };
+      seekerIds: new Set(), seekerId: null, seekerName: '', sheriffId: null, sheriffName: '', ctf: null, dom: null, teams: null, teamList: null, bases: null, domPoints: null, timer: null };
 
     /* ---- поддельный io: комнате и самому игроку — на экран, ботам — в их «мозги» ---- */
     function deliver(ev, d) { try { fire(ev, d); } catch (e) { /* клиент сам разберётся */ } }
@@ -124,31 +125,87 @@
       var ids = Array.from(members); st.teams = new Map();
       ids.forEach(function (id, i) { st.teams.set(id, st.teamList[i % 2]); });
     }
+    // две команды: базы — самые далёкие друг от друга укрытия; у Domination ещё центр между ними (как hsTeamSetup)
+    function teamSetup() {
+      var sp = st.spots, a = 0, b = 1, best = -1;
+      for (var i = 0; i < sp.length; i++) for (var j = i + 1; j < sp.length; j++) {
+        var d = dist(center(sp[i]), center(sp[j])); if (d > best) { best = d; a = i; b = j; }
+      }
+      st.teamList = ['red', 'blue']; st.bases = { red: sp[a], blue: sp[b] }; st.domPoints = null;
+      if (st.variant === 'dom') {
+        var c = -1, far = 150;
+        sp.forEach(function (s, k) { if (k === a || k === b) return; var f = Math.min(dist(center(s), center(sp[a])), dist(center(s), center(sp[b]))); if (f > far) { far = f; c = k; } });
+        st.domPoints = c === -1 ? [sp[a], sp[b]] : [sp[a], sp[c], sp[b]];
+      }
+      var ids = Array.from(members).sort(function () { return Math.random() - 0.5; }); st.teams = new Map();
+      ids.forEach(function (id, k) { st.teams.set(id, st.teamList[k % 2]); });
+    }
+    function nearSpot(pos, s) {
+      var w = pos.w || 30, h = pos.h || 74;
+      return pos.x + w > s.x - 30 && pos.x < s.x + s.w + 30 && pos.y + h > s.y - 40 && pos.y < s.y + s.h + 40;
+    }
+    function ctfState(ev) { return { flags: Object.assign({}, st.ctf.flags), score: st.ctf.score, ev: ev || null }; }
+    function domState() { return { points: st.dom.points, score: st.dom.score }; }
+    function teamWinner() {
+      var sc = st.ctf ? st.ctf.score : st.dom ? st.dom.score : null; if (!sc) return null;
+      var top = Math.max.apply(null, Object.keys(sc).map(function (t) { return sc[t]; }));
+      var lead = Object.keys(sc).filter(function (t) { return sc[t] === top; });
+      return lead.length === 1 ? lead[0] : null;
+    }
+    function domTick() {
+      if (st.phase !== 'round' || !st.dom || st.caughtSent) return;
+      st.domPoints.forEach(function (s, i) {
+        var pt = st.dom.points[i], here = {};
+        st.teamList.forEach(function (t) { here[t] = 0; });
+        Array.from(members).forEach(function (id) { var p = gameState.players.get(id), t = hsTeamOf(st, id); if (p && p.position && t && nearSpot(p.position, s)) here[t]++; });
+        var present = st.teamList.filter(function (t) { return here[t]; }), only = present.length === 1 ? present[0] : null;
+        if (only && pt.owner !== only) { if (pt.by !== only) { pt.by = only; pt.prog = 0; } pt.prog++; if (pt.prog >= DOM_TICKS) { pt.owner = only; pt.prog = 0; pt.by = null; } }
+        if (pt.owner) st.dom.score[pt.owner]++;
+      });
+      deliver('domState', domState());
+      if (st.teamList.some(function (t) { return st.dom.score[t] >= DOM_WIN; })) endEarly(room, st);
+    }
     function teamsObj() { var t = {}; if (st.teams) st.teams.forEach(function (v, id) { t[id] = v; }); return t; }
 
     /* ---- круг раунда ---- */
     function pickVariant() {
+      if (variant === 'murder') return 'murder';
+      if (variant === 'team') return (st.teamLast = st.teamLast === 'ctf' ? 'dom' : 'ctf');
       if (variant === 'war') return war.pick(st, 2);          // 2, чтобы в круг не попали варианты, которым нужны 4 игрока
       if (variant === 'adventure') return adventure.pick(st);
       st.partyLive = true;
       return party.pick(st, members.size, function () { return 'quiz'; });
     }
+    function isTeamV() { return st.variant === 'ctf' || st.variant === 'dom'; }
     function startLobby() {
       if (st.phase === 'round') { award(); reveal(); }
+      clearInterval(st.domTimer); clearInterval(st.chaseT);
       war.lobby(st, room); party.lobby(st, room); adventure.lobby(st, room);
       st.phase = 'lobby'; st.roundNum++; st.caughtSent = false; st.endsAt = Date.now() + LOBBY_MS;
-      st.teams = null; st.bases = null;
+      st.teams = null; st.bases = null; st.domPoints = null; st.ctf = null; st.dom = null; st.murderCaught = false;
+      st.seekerId = null; st.seekerName = ''; st.sheriffId = null; st.sheriffName = '';
       pickMap();
       st.variant = pickVariant();
-      if (war.isWar(st.variant) && st.variant === 'pirate') pirateSetup();
-      bots.forEach(function (b) { place(b, st.bases && st.teams ? st.bases[st.teams.get(b.id)] : null); });
-      deliver('hsRoulette', { players: [], winnerId: null, teams: st.teams ? teamsObj() : null, bases: st.bases, points: null,
+      if (st.variant === 'pirate') pirateSetup();
+      if (isTeamV()) teamSetup();
+      // Murder Mystery: убийца и шериф — по жребию среди всех (как hsSpin), остальные невиновны
+      if (st.variant === 'murder') {
+        var ids = Array.from(members).sort(function () { return Math.random() - 0.5; });
+        st.seekerId = ids[0]; st.sheriffId = ids[1];
+        st.seekerName = gameState.players.get(ids[0]).name; st.sheriffName = gameState.players.get(ids[1]).name;
+      }
+      var spots = [null].concat(st.spots).sort(function () { return Math.random() - 0.5; });
+      bots.forEach(function (b, i) { place(b, st.bases && st.teams ? st.bases[st.teams.get(b.id)] : st.variant === 'murder' ? spots[i % spots.length] : null); });
+      var secret = st.variant === 'murder';
+      deliver('hsRoulette', { players: [], winnerId: null, teams: st.teams ? teamsObj() : null, bases: st.bases, points: st.domPoints,
         variant: st.variant, fixed: variant, need: MIN_PLAYERS[variant], wait: null, cops: null, duration: ROULETTE_MS,
         msLeft: st.endsAt - Date.now(), roundNum: st.roundNum, apoc: false, shop: war.tokensOn(st),
         advCls: variant === 'adventure' ? adventure.classes(st, hsMembers(room)) : null });
+      if (secret) deliver('hsSecret', { role: secretRole(me.id), at: spots[spots.length - 1] });
       deliver('hsPhase', { phase: 'lobby', msLeft: LOBBY_MS, roundNum: st.roundNum, map: map(), apoc: false, voted: false, variant: st.variant });
       clearTimeout(st.timer); st.timer = setTimeout(startRound, LOBBY_MS);
     }
+    function secretRole(id) { return id === st.seekerId ? 'murderer' : id === st.sheriffId ? 'sheriff' : 'innocent'; }
     function roundMs() {
       return party.isGame(st.variant) ? party.roundMs(st, members.size) : adventure.isAdv(st.variant) ? adventure.roundMs(st) : 120000;
     }
@@ -156,13 +213,23 @@
       st.phase = 'round';
       var ms = roundMs();
       st.endsAt = Date.now() + ms; st.roundStartedAt = Date.now();
-      st.roundMembers = hsMembers(room).map(function (m) { var p = gameState.players.get(m.id); m.odo = p ? p.odo : 0; return m; });
-      st.caughtSet = new Set(); st.seekerIds = new Set();
+      var secret = st.variant === 'murder', teamVar = isTeamV();
+      var hunters = secret ? [st.seekerId] : [];
+      st.roundMembers = hsMembers(room).filter(function (m) { return hunters.indexOf(m.id) === -1; })
+        .map(function (m) { var p = gameState.players.get(m.id); m.odo = p ? p.odo : 0; return m; });
+      st.caughtSet = new Set(); st.seekerIds = new Set(hunters);
+      st.startOdo = {}; Array.from(members).forEach(function (id) { st.startOdo[id] = gameState.players.get(id).odo || 0; });
+      var perTeam = function (v) { var o = {}; (st.teamList || []).forEach(function (t) { o[t] = v; }); return o; };
+      st.ctf = teamVar && st.variant === 'ctf' ? { flags: perTeam(null), score: perTeam(0) } : null;
+      st.dom = teamVar && st.variant === 'dom' ? { points: st.domPoints.map(function () { return { owner: null, prog: 0, by: null }; }), score: perTeam(0) } : null;
+      if (st.dom) st.domTimer = setInterval(domTick, 1000);
       war.start(st, room); adventure.start(st, room);
-      deliver('hsPhase', { phase: 'round', msLeft: ms, seekerId: null, seekerName: '', seekerIds: [], variant: st.variant, map: map(), apoc: false,
-        teams: st.teams ? teamsObj() : null, bases: st.bases, points: null, ctf: null, dom: null, grace: 0, war: war.state(st), adv: adventure.state(st) });
+      deliver('hsPhase', { phase: 'round', msLeft: ms, seekerId: null, seekerName: '', seekerIds: secret ? [] : [], variant: st.variant, map: map(), apoc: false,
+        teams: st.teams ? teamsObj() : null, bases: st.bases, points: st.domPoints, ctf: st.ctf ? ctfState() : null, dom: st.dom ? domState() : null,
+        grace: secret ? MURDER_GRACE_MS : 0, war: war.state(st), adv: adventure.state(st) });
       war.spawnAll(st, room); war.tokRoundStart(st, room, members.size);
       party.start(st, room);
+      if (secret) st.chaseT = setInterval(botChase, 200);
       clearTimeout(st.timer); st.timer = setTimeout(startLobby, ms);
     }
     function award() {
@@ -174,6 +241,48 @@
       if (war.isWar(st.variant) && war.reveal(st, room)) return;
       if (party.isGame(st.variant) && party.reveal(st, room)) return;
       if (adventure.isAdv(st.variant) && adventure.reveal(st, room)) return;
+      if (isTeamV() && (st.ctf || st.dom)) { deliver('hsReveal', { variant: st.variant, winner: teamWinner(), score: (st.ctf || st.dom).score }); return; }
+      if (st.variant === 'murder') {
+        var free = (st.roundMembers || []).filter(function (m) { return !st.caughtSet.has(m.id); }).length;
+        deliver('hsReveal', { variant: 'murder', murderer: st.seekerName, sheriff: st.sheriffName, winner: st.murderCaught ? 'sheriff' : free ? 'innocents' : 'murderer' });
+      }
+    }
+
+    /* ---- Murder Mystery: поимка (как hsCatch в server.js) и боты-убийца и шериф ---- */
+    function murdererCaught() {
+      st.murderCaught = true;
+      deliver('hsOut', { id: st.seekerId, name: st.seekerName, murderer: true, by: st.sheriffName });
+      endEarly(room, st);
+    }
+    function doCatch(hunterId, targetId) {
+      if (st.phase !== 'round' || st.variant !== 'murder' || st.caughtSent || st.caughtSet.has(targetId) || targetId === hunterId) return;
+      if (hunterId === st.seekerId && Date.now() - st.roundStartedAt < MURDER_GRACE_MS) return;
+      var sheriff = hunterId === st.sheriffId && !st.caughtSet.has(hunterId);
+      if (sheriff) { if (targetId !== st.seekerId) return; }
+      else if (hunterId !== st.seekerId) return;
+      var hp = gameState.players.get(hunterId), tp = gameState.players.get(targetId);
+      if (!hp || !tp || !hp.position || !tp.position) return;
+      if (Math.abs(hp.position.x - tp.position.x) > 80 || Math.abs(hp.position.y - tp.position.y) > 120) return;
+      if (hunterId === me.id && me.odo - (st.startOdo[me.id] || 0) < MIN_DIST) return;
+      if (sheriff || targetId === st.sheriffId) { murdererCaught(); return; }
+      st.caughtSet.add(targetId);
+      deliver('hsOut', { id: targetId, name: tp.name, jail: false });
+      if (!(st.roundMembers || []).some(function (m) { return !st.caughtSet.has(m.id); })) endEarly(room, st);
+    }
+    // бот-убийца и бот-шериф идут по полу к цели (физики у ботов нет — ходят вдоль своей линии) и «касаются»
+    function botChase() {
+      if (st.phase !== 'round' || st.caughtSent) return;
+      bots.forEach(function (b) {
+        if (st.caughtSet.has(b.id)) return;
+        var targetIds = b.id === st.seekerId ? Array.from(members).filter(function (id) { return id !== b.id && !st.caughtSet.has(id); })
+          : b.id === st.sheriffId && !st.caughtSet.has(b.id) ? [st.seekerId] : [];
+        if (b.id === st.seekerId && Date.now() - st.roundStartedAt < MURDER_GRACE_MS) return;
+        var best = null, bd = 1e9;
+        targetIds.forEach(function (id) { var t = gameState.players.get(id); if (t && t.position) { var d = Math.abs(t.position.x - b.position.x); if (d < bd) { bd = d; best = t; } } });
+        if (!best) return;
+        b.position.x += Math.max(-36, Math.min(36, best.position.x - b.position.x));
+        if (Math.abs(best.position.x - b.position.x) < 50 && Math.abs(best.position.y - b.position.y) < 110) doCatch(b.id, best.id);
+      });
     }
 
     /* ---- боты ---- */
@@ -244,6 +353,9 @@
           if (me.position) { var dd = Math.hypot(pos.x - me.position.x, pos.y - me.position.y); if (dd <= 400) me.odo += dd; }
           me.position = pos; war.track(st, me.id, pos); return true;
         }
+        case 'hsCatch': doCatch(me.id, String(d && d.targetId || '')); return true;
+        case 'ctfTouch': ctfTouch(d); return true;
+        case 'ctfTag': ctfTag(d); return true;
         case 'warShot': war.shot(st, room, sockOf(me.id), d); return true;
         case 'warHit': war.hit(st, room, me.id, d); return true;
         case 'warHazard': war.hazard(st, room, me.id); return true;
@@ -262,13 +374,34 @@
         default: return false;
       }
     }
-    function stop() { clearTimeout(st.timer); clearInterval(snapT); party.lobby(st, room); adventure.lobby(st, room); war.lobby(st, room); }
-    return loadMaps().then(function (r) { recs = r; return { join: join, on: on, stop: stop }; });
+    function ctfTouch(d) {
+      if (st.phase !== 'round' || !st.ctf || st.caughtSent || !me.position) return;
+      var my = hsTeamOf(st, me.id), team = d && st.teamList.indexOf(d.team) !== -1 ? d.team : null;
+      if (!my || !team || me.odo - (st.startOdo[me.id] || 0) < MIN_DIST) return;
+      var f = st.ctf.flags, carried = st.teamList.filter(function (t) { return f[t] === me.id; })[0] || null;
+      if (team !== my) {
+        if (f[team] || carried || !nearSpot(me.position, st.bases[team])) return;
+        f[team] = me.id; deliver('ctfState', ctfState({ ev: 'take', team: team, name: me.name })); return;
+      }
+      if (!carried || f[my] || !nearSpot(me.position, st.bases[my])) return;
+      f[carried] = null; st.ctf.score[my]++;
+      deliver('ctfState', ctfState({ ev: 'capture', team: my, name: me.name }));
+      if (st.ctf.score[my] >= CTF_WIN) endEarly(room, st);
+    }
+    function ctfTag(d) {
+      if (st.phase !== 'round' || !st.ctf || st.caughtSent || !me.position) return;
+      var my = hsTeamOf(st, me.id), tid = String(d && d.targetId || ''), t = gameState.players.get(tid);
+      if (!my || !t || st.ctf.flags[my] !== tid || !t.position) return;
+      if (Math.abs(me.position.x - t.position.x) > 80 || Math.abs(me.position.y - t.position.y) > 120) return;
+      st.ctf.flags[my] = null; deliver('ctfState', ctfState({ ev: 'return', team: my, name: me.name }));
+    }
+    function stop() { clearInterval(st.domTimer); clearInterval(st.chaseT); clearTimeout(st.timer); clearInterval(snapT); party.lobby(st, room); adventure.lobby(st, room); war.lobby(st, room); }
+    return loadMaps().then(function (r) { recs = r; return { join: join, on: on, stop: stop, st: st, me: me, bots: bots, gameState: gameState }; });
   }
 
   /* o: { sock, fire, name, variant, api: BFOffline, raw: настоящий fetch } — обещание с контроллером комнаты */
   window.BFOfflineModes = {
     has: function (variant) { return Object.prototype.hasOwnProperty.call(MIN_PLAYERS, variant); },
-    start: function (o) { return loadMods(o.raw).then(function (mods) { return create(o, mods); }); }
+    start: function (o) { return loadMods(o.raw).then(function (mods) { return create(o, mods); }).then(function (c) { window.BFOfflineModes.room = c; return c; }); }
   };
 })();

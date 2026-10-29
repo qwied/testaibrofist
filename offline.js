@@ -245,7 +245,7 @@
     if (path === '/getMyProfile') return Promise.resolve(response({ status: 'success', data: user }));
     if (path === '/getBestRoom' || path === '/getRoomList') {
       // отдельные режимы (Война, Вечеринка, Приключение) живут в комнатах «war-1» и т.п. — см. offlineModes.js
-      var vr = /^(war|party|adventure)$/.test(sp.get('variant') || '') ? sp.get('variant') + '-1' : 'local-room-' + (sp.get('mode') || 'race');
+      var vr = /^(murder|team|war|party|adventure)$/.test(sp.get('variant') || '') ? sp.get('variant') + '-1' : 'local-room-' + (sp.get('mode') || 'race');
       return Promise.resolve(response(path === '/getBestRoom' ? { room: vr } : { rooms: [{ room: vr, players: 1, names: [user.name], status: 'green' }], limit: 40 }));
     }
     if (path === '/getMapsForList' || path === '/getMaps') return Promise.resolve(response(listMaps(sp)));
@@ -375,7 +375,7 @@
       if (modeCtl && ev !== 'join' && modeCtl.on(ev, data)) return sock;
       if (ev === 'join') {
         var user = currentUser();
-        var vm = /^(war|party|adventure)-\d+$/.exec(String(data && data.room || ''));
+        var vm = /^(murder|team|war|party|adventure)-\d+$/.exec(String(data && data.room || ''));
         if (vm && window.BFOfflineModes && BFOfflineModes.has(vm[1]) && originalFetch) {
           BFOfflineModes.start({ sock: sock, fire: fire, name: user.name, variant: vm[1], api: window.BFOffline, raw: originalFetch })
             .then(function (c) { modeCtl = c; c.join(); }, function () { sock.emit('join', Object.assign({}, data, { room: 'local-room-hideAndSeek' })); });
