@@ -1059,7 +1059,7 @@ function hsMapOk(st) {
   const team = HS_FIXED[st.fixedVariant].team;
   return (m) => {
     // встроенный уровень другого режима (см. BUILTIN в maps.js) — не сюда
-    if (m.only && m.only !== st.fixedVariant) return false;
+    if (m.only && [].concat(m.only).indexOf(st.fixedVariant) === -1) return false;
     const d = JSON.parse(m.mapData);
     // приключение — только на картах с его описанием (HS_VARIANT в тестах выбирает башню или оборону)
     if (st.fixedVariant === 'adventure') {

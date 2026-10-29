@@ -200,7 +200,9 @@ const BUILTIN = [
   { file: 'spybase.json', mapName: 'Spy Base', author: 'qwied', mapType: 'race', ver: 1, play: true },
   // «Приключение» (см. adventure.js): башня в 5 этажей с боссом и оборона кристалла от волн врагов
   { file: 'brotower.json', mapName: 'Bro Tower', author: 'qwied', mapType: 'hideAndSeek', ver: 1, play: true, only: 'adventure' },
-  { file: 'crystaldefense.json', mapName: 'Crystal Defense', author: 'qwied', mapType: 'hideAndSeek', ver: 1, play: true, only: 'adventure' }
+  { file: 'crystaldefense.json', mapName: 'Crystal Defense', author: 'qwied', mapType: 'hideAndSeek', ver: 1, play: true, only: 'adventure' },
+  // общая арена отдельных режимов: без неё в пустой копии сайта Murder Mystery, Team Battle и «Вечеринка» стоят «No maps yet»
+  { file: 'broarena.json', mapName: 'Bro Arena', author: 'qwied', mapType: 'hideAndSeek', ver: 1, play: true, only: ['murder', 'team', 'party'] }
 ];
 function seedBuiltin() {
   let changed = false;

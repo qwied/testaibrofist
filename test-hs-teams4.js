@@ -23,7 +23,7 @@ function server(port) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-teams4-'));
   fs.cpSync(ROOT, tmp, { recursive: true, filter: x => {
     const r = path.relative(ROOT, x);
-    return !(/^(node_modules|data|\.git)(\/|$)/.test(r) || /^(dbg_|shot_)/.test(r));
+    return !(/^(node_modules|data|\.git|builtinMaps)(\/|$)/.test(r) || /^(dbg_|shot_)/.test(r));
   } });
   fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(tmp, 'node_modules'));
   fs.mkdirSync(path.join(tmp, 'data'));

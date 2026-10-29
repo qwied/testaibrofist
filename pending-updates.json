@@ -60,6 +60,10 @@
     {
       "title": "Adventure on phones",
       "text": "On phones the Adventure health bar now sits at the bottom between the controls, so it no longer covers your fighter."
+    },
+    {
+      "title": "Game modes open on empty servers",
+      "text": "Murder Mystery, Team Battle and Party now have their own arena map, so you can enter them even when nobody has published a map yet."
     }
   ]
 }
