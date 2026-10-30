@@ -200,7 +200,7 @@ function load() {
 const BUILTIN = [
   { file: 'serversinfo.json', mapName: 'ServersInfo', author: 'qwied', mapType: 'race', ver: 2 },
   // «Пиратская война» (см. war.js): два корабля с пушками над ядовитым морем
-  { file: 'piratebay.json', mapName: 'Pirate Bay', author: 'qwied', mapType: 'hideAndSeek', ver: 1, play: true, only: 'war' },
+  { file: 'piratebay.json', mapName: 'Pirate Bay', author: 'qwied', mapType: 'hideAndSeek', ver: 2, play: true, only: 'war' },
   // гонка-«шпион»: камеры, лазеры, флаг в хранилище — финиш только с флагом (см. spyTick в game.html)
   { file: 'spybase.json', mapName: 'Spy Base', author: 'qwied', mapType: 'race', ver: 1, play: true },
   // «Приключение» (см. adventure.js): башня в 5 этажей с боссом и оборона кристалла от волн врагов

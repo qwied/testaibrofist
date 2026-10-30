@@ -3,7 +3,6 @@
    сервер повторно проверяет права на каждый запрос, кнопки — лишь удобная обёртка. */
 (function () {
   'use strict';
-  if (window.BFOffline) return;
 
   var me = { owner: false, name: '', ownerName: 'AIBrofist' };
   var inGame = {};          // "автор::карта" -> [режимы]
@@ -629,7 +628,7 @@
     if (document.getElementById('aaScript')) return;
     var sc = document.createElement('script');
     sc.id = 'aaScript';
-    sc.src = 'adminAbuse.js?v=202';
+    sc.src = 'adminAbuse.js?v=203';
     sc.defer = true;
     document.head.appendChild(sc);
   })();

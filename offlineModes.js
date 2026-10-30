@@ -11,7 +11,7 @@
   var MIN_PLAYERS = { classic: 2, murder: 3, team: 2, war: 2, party: 2, adventure: 1 };
   var MURDER_GRACE_MS = 20000, MIN_DIST = 200, CTF_WIN = 3, DOM_WIN = 120, DOM_TICKS = 3;
   /* сколько ботов в комнате — из панели песочницы (offlineServer.js), по умолчанию 3; меньше, чем нужно режиму, не бывает.
-     В «Приключении» они союзники: сами идут к врагам и бьют их (см. botFight). */
+     В «Приключении» они союзники: сами идут к врагам и бьют их (см. botTick). */
   function botNames(variant) {
     var n = 3;
     try { var sb = JSON.parse(localStorage.getItem('aibrofist.local.v2.sandbox') || '{}'); if (sb && sb.bots !== undefined) n = Math.floor(+sb.bots) || 0; } catch (e) {}
@@ -22,6 +22,67 @@
   // обычные прятки берут ещё и все карты пряток песочницы (см. loadMaps)
   var BUILTIN = { classic: ['broarena.json'], murder: ['broarena.json'], team: ['broarena.json'], war: ['piratebay.json'], party: ['broarena.json'], adventure: ['brotower.json', 'crystaldefense.json'] };
   var LOBBY_MS = 9000, ROULETTE_MS = 3500;
+
+  /* ---- физика ботов: та же, что у игрока в game.html (скорость бега MAX_VX, гравитация G() при
+     gravityScale 9, прыжок на JUMP_H, падение быстрее подъёма FALL_MULT, подъём на ступеньку STEP_UP),
+     твёрдые — блок, круг, треугольник (как solid() в game.html) прямоугольником. Боты бегут к цели,
+     прыгают у стены, на уступ и через яму; застрял надолго — перебирается ближе к цели, упал за карту — встаёт на старте. ---- */
+  var TEMPO = 1.2, MAX_VX = 6.2, GRAV = 9 * 0.062 * TEMPO * TEMPO, JUMP_V = -Math.sqrt(2 * GRAV * 155), FALL_MULT = 1.2, STEP_UP = 16;
+  function BotPhys(objects) {
+    var sol = (objects || []).filter(function (o) {
+      return o && (o.type === 'rect' || o.type === 'circle' || o.type === 'triangle') && o.ghost !== true && o.hideSpot !== true && o.deadly !== true && !(o.w <= 0) && !(o.h <= 0);
+    }).map(function (o) { return { x: +o.x, y: +o.y, w: +o.w || 40, h: +o.h || 40 }; });
+    var bottom = sol.reduce(function (m, o) { return Math.max(m, o.y + o.h); }, 600) + 1500;
+    function hitAny(x, y, w, h) {
+      for (var i = 0; i < sol.length; i++) { var o = sol[i]; if (x < o.x + o.w && x + w > o.x && y < o.y + o.h && y + h > o.y) return o; }
+      return null;
+    }
+    // один кадр (1/60 c) для тела b {x,y,w,h,vx,vy,ground}; dir: -1/0/1, jump: хочет прыгнуть
+    function frame(b, dir, jump) {
+      b.vx = dir * MAX_VX;
+      if (jump && b.ground) { b.vy = JUMP_V; b.ground = false; }
+      b.vy += b.vy > 0 ? GRAV * FALL_MULT : GRAV;
+      if (b.vy > 22) b.vy = 22;
+      b.wall = 0;
+      if (b.vx) {
+        var nx = b.x + b.vx, o = hitAny(nx, b.y, b.w, b.h);
+        if (o) {
+          // низкий уступ — шагаем на него, как игрок (STEP_UP)
+          if (b.ground && o.y >= b.y + b.h - STEP_UP && !hitAny(nx, o.y - b.h, b.w, b.h)) { b.x = nx; b.y = o.y - b.h; }
+          else { b.x = b.vx > 0 ? o.x - b.w : o.x + o.w; b.wall = dir; }
+        } else b.x = nx;
+      }
+      var ny = b.y + b.vy, f = hitAny(b.x, ny, b.w, b.h);
+      if (f) { if (b.vy > 0) { b.y = f.y - b.h; b.ground = true; } else b.y = f.y + f.h; b.vy = 0; }
+      else { b.y = ny; b.ground = false; }
+    }
+    // есть ли пол впереди (не яма ли)
+    function floorAhead(b, dir) { return !!hitAny(b.x + dir * (b.w + 20), b.y + b.h, b.w, 160); }
+    /* тик ИИ: ms мс к цели t {x,y} (верхний левый угол тела цели); home — куда встать после падения */
+    function seek(b, t, ms, home) {
+      var frames = Math.max(1, Math.round(ms / 16.667));
+      for (var i = 0; i < frames; i++) {
+        var dx = t ? (t.x - b.x) : 0, dy = t ? (t.y - b.y) : 0;
+        var dir = !t || Math.abs(dx) < 8 ? 0 : dx > 0 ? 1 : -1;
+        var jump = b.ground && dir !== 0 && (b.wall === dir || !floorAhead(b, dir) || (dy < -60 && Math.abs(dx) < 220));
+        if (t && dir === 0 && dy < -60 && b.ground) jump = true;
+        frame(b, dir, jump);
+      }
+      // сторож застревания: стоит на месте, хотя цель далеко — через 4 с встаёт рядом с целью
+      var moved = Math.abs(b.x - (b.lastX === undefined ? b.x : b.lastX)) + Math.abs(b.y - (b.lastY === undefined ? b.y : b.lastY));
+      b.lastX = b.x; b.lastY = b.y;
+      var far = t && Math.abs(t.x - b.x) + Math.abs(t.y - b.y) > 60;
+      b.stuck = moved < 2 && far ? (b.stuck || 0) + ms : 0;
+      if (b.stuck > 4000 && t) {                 // застрял: перебирается на 200 px к цели, выше препятствия
+        b.x += t.x > b.x ? 200 : -200; b.y -= 120;
+        for (var k = 0; k < 20 && hitAny(b.x, b.y, b.w, b.h); k++) b.y -= 40;
+        b.vx = 0; b.vy = 0; b.stuck = 0;
+      }
+      if (b.y > bottom && home) { b.x = home.x + (Math.random() - 0.5) * 60; b.y = home.y - 10; b.vx = 0; b.vy = 0; }
+    }
+    return { seek: seek, frame: frame, solids: sol, bottom: bottom };
+  }
+  window.BFBotPhys = BotPhys;
 
   var modsP = null;
   function loadMods(raw) {
@@ -121,6 +182,7 @@
       st.spots = list.filter(function (x) { return x && x.hideSpot === true; }).slice(0, 60).map(function (x) { return { x: +x.x, y: +x.y, w: +x.w || 1, h: +x.h || 1 }; });
       st.cannons = list.filter(function (x) { return x && x.type === 'cannon'; }).slice(0, 24).map(function (x) { return { x: +x.x, y: +x.y, w: 72, h: 44, aim: +x.aim || 0 }; });
       st.advMap = adventure.parseMap(rec.mapData && rec.mapData.adv) || adventure.fromObjects(list);
+      st.phys = BotPhys(list);
       st.apoc = false;
       var sp = list.filter(function (x) { return x && x.type === 'spawn'; })[0];
       st.spawn = sp ? { x: +sp.x, y: +sp.y } : { x: 100, y: 100 };
@@ -128,6 +190,7 @@
     function place(b, at) {
       var base = at && isFinite(+at.x) ? at : st.spawn;
       b.position = { x: +base.x + (at && at.w ? at.w / 2 - 15 : 0) + Math.round((Math.random() - 0.5) * 60), y: +base.y + (at && at.h ? at.h - 100 : 0), w: 30, h: 100 };
+      b.ph = null;                         // физика бота начнёт с нового места (см. botTick)
     }
 
     /* ---- команды «Пиратской войны» (как hsPirateSetup в server.js) ---- */
@@ -225,7 +288,12 @@
         st.seekerId = pick; st.seekerName = gameState.players.get(pick).name;
       }
       var spots = [null].concat(st.spots).sort(function () { return Math.random() - 0.5; });
-      bots.forEach(function (b, i) { place(b, st.bases && st.teams ? st.bases[st.teams.get(b.id)] : (st.variant === 'murder' || (classic && b.id !== st.seekerId)) ? spots[i % spots.length] : null); });
+      // боты встают на старт и в лобби бегут каждый к своему укрытию (как игроки, которые прячутся)
+      bots.forEach(function (b, i) {
+        b.hideAt = (st.variant === 'murder' || classic) && b.id !== st.seekerId ? spots[i % spots.length] : null;
+        b.goalK = i;
+        place(b, st.bases && st.teams ? st.bases[st.teams.get(b.id)] : null);
+      });
       var secret = st.variant === 'murder';
       var chance = Math.round(100 / members.size);
       deliver('hsRoulette', { players: classic ? Array.from(members).map(function (id) { return { id: id, name: gameState.players.get(id).name, chance: chance }; }) : [],
@@ -261,8 +329,6 @@
         grace: secret ? MURDER_GRACE_MS : 0, war: war.state(st), adv: adventure.state(st) });
       war.spawnAll(st, room); war.tokRoundStart(st, room, members.size);
       party.start(st, room);
-      if (secret || classic) st.chaseT = setInterval(botChase, 200);
-      if (st.adv) st.chaseT = setInterval(botFight, 200);
       clearTimeout(st.timer); st.timer = setTimeout(startLobby, ms);
     }
     function award() {
@@ -319,44 +385,71 @@
       deliver('hsOut', { id: targetId, name: tp.name, jail: false });
       if (!(st.roundMembers || []).some(function (m) { return !st.caughtSet.has(m.id); })) endEarly(room, st);
     }
-    // бот-убийца и бот-шериф идут по полу к цели (физики у ботов нет — ходят вдоль своей линии) и «касаются»
-    function botChase() {
-      if (st.phase !== 'round' || st.caughtSent) return;
-      bots.forEach(function (b) {
-        if (st.caughtSet.has(b.id)) return;
-        var targetIds = b.id === st.seekerId ? Array.from(members).filter(function (id) { return id !== b.id && !st.caughtSet.has(id); })
-          : b.id === st.sheriffId && !st.caughtSet.has(b.id) ? [st.seekerId] : [];
-        if (b.id === st.seekerId && !classic && Date.now() - st.roundStartedAt < MURDER_GRACE_MS) return;
-        var best = null, bd = 1e9;
-        targetIds.forEach(function (id) { var t = gameState.players.get(id); if (t && t.position) { var d = Math.abs(t.position.x - b.position.x); if (d < bd) { bd = d; best = t; } } });
-        if (!best) return;
-        b.position.x += Math.max(-36, Math.min(36, best.position.x - b.position.x));
-        if (Math.abs(best.position.x - b.position.x) < 50 && Math.abs(best.position.y - b.position.y) < 110) doCatch(b.id, best.id);
-      });
-    }
-
-    /* ---- «Приключение»: боты-союзники идут к ближайшему врагу (своего этажа — в первую очередь) и бьют его.
-       Урон, перезарядку, дальность оружия и «упал — встал» считает сам adventure.js, как для игрока. ---- */
+    /* ---- поведение ботов: цель на каждый тик, а бегут они по физике игрока (BotPhys) ---- */
     var WEAPONS = ['sword', 'bow', 'fire'];
-    function botFight() {
-      var a = st.adv;
-      if (st.phase !== 'round' || !a || a.over) return;
+    function bodyOf(b) {
+      if (!b.ph) b.ph = { x: b.position.x, y: b.position.y, w: 30, h: 100, vx: 0, vy: 0, ground: false };
+      return b.ph;
+    }
+    function spotGoal(s2) { return s2 ? { x: s2.x + s2.w / 2 - 15, y: s2.y + s2.h - 100 } : null; }
+    function posGoal(p) { return p && p.position && isFinite(p.position.x) ? { x: p.position.x, y: p.position.y } : null; }
+    function nearest(b, ids) {
+      var best = null, bd = 1e9;
+      ids.forEach(function (id) { var t = gameState.players.get(id); if (t && t.position && isFinite(t.position.x)) { var d = Math.abs(t.position.x - b.position.x) + Math.abs(t.position.y - b.position.y); if (d < bd) { bd = d; best = t; } } });
+      return best;
+    }
+    function hunting(b) {
+      if (st.phase !== 'round' || st.caughtSent || !st.seekerIds) return false;
+      if (b.id === st.seekerId) return classic || Date.now() - st.roundStartedAt >= MURDER_GRACE_MS;
+      return st.variant === 'murder' && b.id === st.sheriffId;
+    }
+    function preyOf(b) {
+      if (b.id === st.sheriffId) return st.caughtSet.has(st.seekerId) ? [] : [st.seekerId];
+      return Array.from(members).filter(function (id) { return id !== b.id && !st.caughtSet.has(id); });
+    }
+    function goalOf(b) {
+      if (st.adv) {
+        var a = st.adv;
+        if (st.phase !== 'round' || a.over || (a.down && a.down.has(b.id))) return null;
+        var e = null, ed = 1e9;
+        a.en.forEach(function (x) { if (x.hp > 0) { var d = Math.abs(x.x - b.position.x) + Math.abs(x.floorY - (b.position.y + 100)) * 3; if (d < ed) { ed = d; e = x; } } });
+        b.foe = e;
+        return e ? { x: e.x - 15 + (b.position.x + 15 < e.x ? -60 : 60), y: e.floorY - 100 } : null;
+      }
+      if (st.caughtSet && st.caughtSet.has(b.id) && st.phase === 'round') return null;
+      if (st.variant === 'murder' || classic) {
+        if (hunting(b)) { var t = nearest(b, preyOf(b)); b.prey = t; return posGoal(t); }
+        if (st.phase === 'round' && classic && st.seekerId) {          // искатель рядом — убегаем от него
+          var sk = gameState.players.get(st.seekerId);
+          if (sk && sk.position && Math.abs(sk.position.x - b.position.x) < 320 && Math.abs(sk.position.y - b.position.y) < 160)
+            return { x: b.position.x + (b.position.x >= sk.position.x ? 500 : -500), y: b.position.y };
+        }
+        return spotGoal(b.hideAt);
+      }
+      if (st.teams && st.bases) {                                    // командный бой: к точкам или от базы к базе
+        var my = st.teams.get(b.id), other = st.teamList.filter(function (x) { return x !== my; })[0];
+        if (st.domPoints && st.domPoints.length) return spotGoal(st.domPoints[(b.goalK + Math.floor(Date.now() / 15000)) % st.domPoints.length]);
+        return spotGoal(Math.floor(Date.now() / 12000 + b.goalK) % 2 ? st.bases[other] : st.bases[my]);
+      }
+      if (war.isWar(st.variant) && me.position && isFinite(me.position.x)) {   // «Война»: держатся на дистанции
+        var dx = me.position.x - b.position.x;
+        return Math.abs(dx) > 260 ? { x: me.position.x - (dx > 0 ? 220 : -220) + (b.goalK % 3) * 30, y: me.position.y } : null;
+      }
+      return null;
+    }
+    function botTick() {
+      if (!st.phys || !sock.connected) return;
+      var home = st.spawn ? { x: st.spawn.x, y: st.spawn.y } : null;
       bots.forEach(function (b) {
-        if (a.down && a.down.has(b.id)) return;
-        var best = null, bd = 1e9;
-        a.en.forEach(function (e) {
-          if (!(e.hp > 0)) return;
-          var d = Math.abs(e.x - (b.position.x + 15)) + Math.abs(e.floorY - (b.position.y + 100)) * 3;
-          if (d < bd) { bd = d; best = e; }
-        });
-        if (!best) return;
-        b.position.y = best.floorY - 100;
-        var want = best.x - 15 + (b.position.x + 15 < best.x ? -70 : 70);
-        b.position.x += Math.max(-26, Math.min(26, want - b.position.x));
-        b.sid = (b.sid || 0) + 1;
-        WEAPONS.forEach(function (w) { adventure.hit(st, room, b.id, { w: w, e: best.id, sid: b.sid }); });
+        var ph = bodyOf(b);
+        st.phys.seek(ph, goalOf(b), 100, home);
+        b.position = { x: Math.round(ph.x), y: Math.round(ph.y), w: 30, h: 100 };
+        // охотник коснулся цели — поимка по правилам режима (doCatch)
+        if (b.prey && hunting(b) && b.prey.position && Math.abs(b.prey.position.x - b.position.x) < 50 && Math.abs(b.prey.position.y - b.position.y) < 110) doCatch(b.id, b.prey.id);
+        if (st.adv && b.foe && st.phase === 'round') { b.sid = (b.sid || 0) + 1; WEAPONS.forEach(function (w) { adventure.hit(st, room, b.id, { w: w, e: b.foe.id, sid: b.sid }); }); }
       });
     }
+    var botT = setInterval(botTick, 100);
 
     /* ---- боты ---- */
     function botSees(id, ev, d) {
@@ -468,7 +561,7 @@
       if (Math.abs(me.position.x - t.position.x) > 80 || Math.abs(me.position.y - t.position.y) > 120) return;
       st.ctf.flags[my] = null; deliver('ctfState', ctfState({ ev: 'return', team: my, name: me.name }));
     }
-    function stop() { clearInterval(st.domTimer); clearInterval(st.chaseT); clearTimeout(st.timer); clearInterval(snapT); party.lobby(st, room); adventure.lobby(st, room); war.lobby(st, room); }
+    function stop() { clearInterval(st.domTimer); clearInterval(st.chaseT); clearInterval(botT); clearTimeout(st.timer); clearInterval(snapT); party.lobby(st, room); adventure.lobby(st, room); war.lobby(st, room); }
     return loadMaps().then(function (r) { recs = r; return { join: join, on: on, stop: stop, st: st, me: me, bots: bots, gameState: gameState }; });
   }
 

@@ -381,8 +381,8 @@
     };
     // общая гонка в песочнице: раунд за раундом по картам песочницы (см. raceRooms в server.js)
     var raceK = 0, raceT = null;
-    /* боты-соперники гонки: бегут от старта к финишу каждый со своей скоростью (физики у них нет —
-       летят по прямой), финишируют со своим местом и попадают в таблицу очков. Сколько — панель Sandbox. */
+    /* боты-соперники гонки: бегут от старта к финишу по физике игрока (BFBotPhys в offlineModes.js),
+       финишируют со своим местом и попадают в таблицу очков. Сколько — панель Sandbox. */
     var ghosts = [], ghostT = null, finishedN = 0, myScore = 0;
     function ghostCount() {
       try { var sb = JSON.parse(localStorage.getItem(PREFIX + 'sandbox') || '{}'); if (sb && sb.bots !== undefined) return Math.max(0, Math.min(39, Math.floor(+sb.bots) || 0)); } catch (e) {}
@@ -395,23 +395,28 @@
     function ghostsStart(map) {
       var objs = (map && map.mapData && map.mapData.objects) || [];
       var sp = objs.filter(function (o) { return o && o.type === 'spawn'; })[0] || { x: 100, y: 400 };
-      var fin = objs.filter(function (o) { return o && o.type === 'finishline'; })[0] || { x: +sp.x + 1200, y: +sp.y };
+      var fin = objs.filter(function (o) { return o && o.type === 'finishline'; })[0] || { x: +sp.x + 1200, y: +sp.y, w: 40, h: 100 };
+      var phys = window.BFBotPhys ? BFBotPhys(objs) : null;
+      var goal = { x: +fin.x + (+fin.w || 40) / 2 - 15, y: +fin.y + (+fin.h || 100) - 100 }, home = { x: +sp.x, y: +sp.y };
       finishedN = 0;
-      ghosts.forEach(function (g) {
-        g.x0 = +sp.x + Math.round((Math.random() - 0.5) * 40); g.y0 = +sp.y;
-        g.x1 = +fin.x + (+fin.w || 40) / 2 - 15; g.y1 = +fin.y + (+fin.h || 100) - 100;
-        g.t0 = Date.now(); g.dur = 25000 + Math.random() * 45000; g.fin = false;
+      ghosts.forEach(function (g, i) {
+        // у каждого своя «манера»: чуть медленнее/быстрее и со своей задержкой старта, как у живых
+        g.b = { x: +sp.x + i * 6, y: +sp.y, w: 30, h: 100, vx: 0, vy: 0, ground: false };
+        g.wait = 300 + Math.random() * 1500; g.skill = 0.9 + Math.random() * 0.1; g.fin = false; g.acc = 0;
       });
       clearInterval(ghostT);
-      if (!ghosts.length) return;
+      if (!ghosts.length || !phys) return;
+      var last = Date.now();
       ghostT = setInterval(function () {
         if (!sock.connected) { clearInterval(ghostT); return; }
-        var t = Date.now();
+        var t = Date.now(), dt = t - last; last = t;
         fire('state', ghosts.map(function (g) {
-          var k = Math.min(1, (t - g.t0) / g.dur);
-          if (k >= 1 && !g.fin) { g.fin = true; g.score++; fire('raceFinished', { id: g.id, name: g.name, place: ++finishedN }); raceScores(); }
-          var hop = Math.abs(Math.sin(k * Math.PI * 14)) * 40 * (1 - k);     // вприпрыжку, чтобы не скользили
-          return { n: g.nid, x: Math.round(g.x0 + (g.x1 - g.x0) * k), y: Math.round(g.y0 + (g.y1 - g.y0) * k - hop), w: 30, h: 100, f: g.fin };
+          if (!g.fin) {
+            g.wait -= dt;
+            if (g.wait <= 0) { g.acc += dt * g.skill; var run = Math.floor(g.acc / 16.667) * 16.667; g.acc -= run; if (run) phys.seek(g.b, goal, run, home); }
+            if (Math.abs(g.b.x - goal.x) < 30 && Math.abs(g.b.y - goal.y) < 110) { g.fin = true; g.score++; fire('raceFinished', { id: g.id, name: g.name, place: ++finishedN }); raceScores(); }
+          }
+          return { n: g.nid, x: Math.round(g.b.x), y: Math.round(g.b.y), w: 30, h: 100, f: g.fin };
         }));
       }, 100);
     }

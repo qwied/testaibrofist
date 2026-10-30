@@ -196,9 +196,12 @@ const connected = (ps) => Promise.all(ps.map(p => new Promise(r => p.s.connected
   ed.on('pageerror', e => errs.push('editor: ' + e.message.slice(0, 160)));
   await ed.goto(S.base + '/editor.html', { waitUntil: 'domcontentloaded' });
   await ed.waitForSelector('.modeBtn[data-mode="hideAndSeek"]', { timeout: 8000 });
-  await ed.click('.modeBtn[data-mode="hideAndSeek"]');
+  await ed.click('.modeBtn[data-kind="hideAndSeek"]');
+  const inHs = await ed.evaluate(() => { const t = document.querySelector('.tool[data-tool="cannon"]'); return t ? t.style.display : 'none'; });
+  ok(inHs === 'none', 'в палитре обычных пряток пушки нет');
+  await ed.click('.modeBtn[data-kind="war"]');
   const shown = await ed.evaluate(() => { const t = document.querySelector('.tool[data-tool="cannon"]'); return t ? t.style.display : 'none'; });
-  ok(shown === 'flex', 'в палитре пряток есть пушка');
+  ok(shown === 'flex', 'в палитре «Войны» есть пушка');
   await ed.click('.tool[data-tool="cannon"]');
   const cv = await ed.evaluate(() => { const r = document.getElementById('c').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   await ed.mouse.move(cv.x, cv.y); await ed.mouse.down(); await ed.mouse.move(cv.x + 120, cv.y + 90); await ed.mouse.up();

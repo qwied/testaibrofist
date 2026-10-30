@@ -8,6 +8,10 @@
     {
       "title": "Bots in every test mode",
       "text": "On the test site, bots now race against you in Race and fight alongside you in Adventure, and owner log images work there too."
+    },
+    {
+      "title": "Smarter test bots and cannon fix",
+      "text": "The cannon is now only in War maps, not in Hide and Seek. On the test site, bots run and jump like players, the sandbox menu is easier to use, you can create and switch between any number of accounts, and the owner's Admin Abuse and Edit buttons are back."
     }
   ]
 }

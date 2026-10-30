@@ -50,7 +50,7 @@
     return out;
   }
   var fs = {
-    existsSync: function (p) { return lsGet('vfs:' + p) !== null || vfsKeys(p + '/').length > 0 || /\/(data|builtinMaps|logimg|abusefile)$/.test(p); },
+    existsSync: function (p) { return lsGet('vfs:' + p) !== null || vfsKeys(p + '/').length > 0 || /\/(data|builtinMaps|logimg|abuse)$/.test(p); },
     mkdirSync: function () {},
     readFileSync: function (p, enc) {
       var v = lsGet('vfs:' + p);
@@ -149,10 +149,12 @@
           var mm = /^sid=([^;]*)/.exec(s); if (!mm) return;
           if (!mm[1] || /Max-Age=0/i.test(s)) lsDel('sid'); else lsSet('sid', mm[1]);
         });
-        // картинки Logs лежат в «файлах» localStorage — статики /logimg/ на хостинге нет, отдаём их прямо в ответе
-        if (typeof body === 'string' && body.indexOf('/logimg/') !== -1) body = body.replace(/\/logimg\/([A-Za-z0-9._-]+)/g, function (all, f) {
-          var v = lsGet('vfs:' + ROOT + '/data/logimg/' + f); if (v === null) return all;
-          var ext = (/\.(\w+)$/.exec(f) || [0, 'png'])[1].toLowerCase(), mime = ext === 'jpg' ? 'image/jpeg' : 'image/' + ext;
+        // картинки Logs и файлы Admin Abuse лежат в «файлах» localStorage — статики /logimg/ и /abusefile/
+        // на хостинге нет, отдаём их прямо в ответе
+        if (typeof body === 'string' && /\/(logimg|abusefile)\//.test(body)) body = body.replace(/\/(logimg|abusefile)\/([A-Za-z0-9._-]+)/g, function (all, dir, f) {
+          var v = lsGet('vfs:' + ROOT + '/data/' + (dir === 'logimg' ? 'logimg' : 'abuse') + '/' + f); if (v === null) return all;
+          var ext = (/\.(\w+)$/.exec(f) || [0, 'png'])[1].toLowerCase();
+          var mime = { jpg: 'image/jpeg', jpeg: 'image/jpeg', mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4' }[ext] || 'image/' + ext;
           return 'data:' + mime + ';base64,' + (v.indexOf('b64:') === 0 ? v.slice(4) : btoa(v));
         });
         resolve(new Response(body, { status: status, headers: { 'Content-Type': type || 'application/json' } }));
@@ -179,12 +181,13 @@
 
   /* ---------- модули сервера: исходники грузим разом, require — синхронно из кэша ---------- */
   var FILES = ['accounts', 'maps', 'ranks', 'quests', 'themes', 'extras', 'messages', 'notifications', 'clans',
-               'userSkins', 'skins', 'dailyRewards', 'serversInfo', 'fsAtomic'];
+               'userSkins', 'skins', 'dailyRewards', 'serversInfo', 'fsAtomic', 'abuse'];
   var BUILTIN = ['serversinfo', 'piratebay', 'spybase', 'brotower', 'crystaldefense', 'broarena'];
   var src = {}, cache = {};
   function env() {
     var sb = sandbox();
-    return { OWNER_NAME: 'System', OWNER_ALIASES: 'System,AIBrofist' + (sb.owner ? ',' + ME : ''), NODE_ENV: 'sandbox', PASSWORD_AUTH: '1' };
+    // права владельца — у того аккаунта песочницы, за который сейчас играешь
+    return { OWNER_NAME: 'System', OWNER_ALIASES: 'System,AIBrofist' + (sb.owner ? ',' + (lsGet('meName') || ME) : ''), NODE_ENV: 'sandbox', PASSWORD_AUTH: '1' };
   }
   var proc = { env: env(), cwd: function () { return ROOT; }, on: function () {}, nextTick: function (f) { Promise.resolve().then(f); }, platform: 'browser', memoryUsage: function () { return { rss: 0, heapUsed: 0 }; }, uptime: function () { return 1; } };
   var STUB = {
@@ -244,6 +247,7 @@
     req('clans').register(app, acc);
     req('themes').register(app, acc);
     req('notifications').register(app, acc);
+    req('abuse').register(app, acc);                 // Admin Abuse владельца: погода, монеты с неба, картинки и музыка
     req('extras').register(app, acc);
     req('dailyRewards').register(app, acc);
     req('quests').register(app, acc);
@@ -286,30 +290,76 @@
     maps: function () { return acc ? req('maps') : null; },
     save: function () { if (acc) acc.save(); flush(); },
     login: login,
+    playAs: function (n) { return playAs(n); },
+    createAccount: function (n) { return createAccount(n); },
     sandbox: sandbox,
     setSandbox: setSandbox
   };
 
-  /* ---------- панель песочницы ---------- */
+  /* ---------- аккаунты песочницы: сколько угодно, вход за любой ---------- */
+  function playAs(name) {
+    var db = acc.getDb(), u = db.users[String(name).toLowerCase()];
+    if (!u) return false;
+    var s2 = rnd(32).toString('hex'), t = Date.now();
+    db.sessions[s2] = { name: u.name, created: t, seen: t };
+    lsSet('sid', s2); lsSet('meName', u.name); acc.save(); flush();
+    return true;
+  }
+  function createAccount(name) {
+    name = String(name || '').trim();
+    var bad = acc.checkName(name);
+    if (bad) return bad;
+    var db = acc.getDb();
+    if (db.users[name.toLowerCase()]) return 'Username «' + name + '» is already taken';
+    db.users[name.toLowerCase()] = { name: name, joined: Date.now(), coins: 0, score: 0, hsScore: 0, friends: [], incoming: [], outgoing: [], avatar: '0', about: '' };
+    acc.save(); flush();
+    return null;
+  }
+  function deleteAccount(name) {
+    var db = acc.getDb(), k = String(name).toLowerCase();
+    delete db.users[k];
+    Object.keys(db.sessions).forEach(function (sid2) { var x = db.sessions[sid2]; if (String(x && x.name || x).toLowerCase() === k) delete db.sessions[sid2]; });
+    Object.values(db.users).forEach(function (u) { ['friends', 'incoming', 'outgoing'].forEach(function (f) { u[f] = (u[f] || []).filter(function (n) { return String(n).toLowerCase() !== k; }); }); });
+    acc.save(); flush();
+  }
+
+  /* ---------- панель песочницы: три вкладки — аккаунт, игра, владелец ---------- */
   function panel() {
     if (document.getElementById('bfSandboxBtn') || !document.body) return;
     var css = document.createElement('style');
     css.textContent =
       '#bfSandboxBtn{position:fixed;left:50%;transform:translateX(-50%);bottom:10px;z-index:2147483000;background:#111827;color:#fff;border:0;border-radius:999px;' +
-      'padding:8px 13px;font:600 12px/1 system-ui,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:.85}' +
+      'padding:8px 14px;font:600 12px/1 system-ui,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:.88;touch-action:none}' +
       '#bfSandboxBtn:hover{opacity:1}' +
-      '#bfSandbox{position:fixed;left:50%;transform:translateX(-50%);bottom:50px;z-index:2147483000;width:330px;max-width:calc(100vw - 24px);max-height:calc(100vh - 70px);overflow:auto;' +
-      'background:#fff;color:#111827;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);padding:14px;font:13px/1.35 system-ui,sans-serif;display:none}' +
-      '#bfSandbox.open{display:block}#bfSandbox h4{margin:0 0 4px;font-size:14px}#bfSandbox .sbHint{color:#6b7280;font-size:11.5px;margin-bottom:10px}' +
-      '#bfSandbox .sbRow{display:flex;gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap}#bfSandbox label{min-width:86px;font-weight:600;font-size:12px}' +
-      '#bfSandbox input[type=number]{width:96px;padding:5px 7px;border:1px solid #d1d5db;border-radius:7px;font:inherit}' +
-      '#bfSandbox button{padding:5px 9px;border:1px solid #d1d5db;background:#f9fafb;border-radius:7px;cursor:pointer;font:600 12px system-ui,sans-serif;color:#111827}' +
-      '#bfSandbox button:hover{background:#eef2f7}#bfSandbox button.go{background:#111827;color:#fff;border-color:#111827}' +
-      '#bfSandbox .sbSep{border-top:1px solid #eef0f3;margin:10px 0}#bfSandbox .sbMsg{color:#16a34a;font-size:12px;min-height:16px;margin-top:6px}';
+      '#bfSandbox{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483001;width:380px;max-width:calc(100vw - 24px);max-height:calc(100vh - 40px);' +
+      'display:none;flex-direction:column;background:#fff;color:#111827;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);font:13px/1.35 system-ui,sans-serif}' +
+      '#bfSandbox.open{display:flex}' +
+      '#bfSandbox .sbHead{display:flex;align-items:center;gap:8px;padding:14px 16px 0}#bfSandbox .sbHead b{font-size:15px;flex:1}' +
+      '#bfSandbox .sbX{border:0;background:#f3f4f6;width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:16px;line-height:1;color:#374151}' +
+      '#bfSandbox .sbTabs{display:flex;gap:4px;padding:10px 16px 0}' +
+      '#bfSandbox .sbTab{flex:1;border:0;background:#f3f4f6;color:#4b5563;padding:7px 0;border-radius:8px;cursor:pointer;font:600 12.5px system-ui,sans-serif}' +
+      '#bfSandbox .sbTab.on{background:#111827;color:#fff}' +
+      '#bfSandbox .sbBody{padding:12px 16px 16px;overflow:auto}' +
+      '#bfSandbox .sbCard{border:1px solid #eef0f3;border-radius:12px;padding:10px 12px;margin-bottom:10px}' +
+      '#bfSandbox .sbTitle{font-weight:700;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}' +
+      '#bfSandbox .sbRow{display:flex;gap:6px;align-items:center;margin:6px 0}#bfSandbox .sbRow>span{min-width:92px;font-weight:600}' +
+      '#bfSandbox input[type=number],#bfSandbox input[type=text]{flex:1;min-width:0;padding:7px 9px;border:1px solid #d1d5db;border-radius:8px;font:inherit;background:#fff;color:#111827}' +
+      '#bfSandbox input[type=range]{flex:1}' +
+      '#bfSandbox button.b{padding:7px 11px;border:1px solid #d1d5db;background:#f9fafb;border-radius:8px;cursor:pointer;font:600 12px system-ui,sans-serif;color:#111827;white-space:nowrap}' +
+      '#bfSandbox button.b:hover{background:#eef2f7}#bfSandbox button.go{background:#111827;color:#fff;border-color:#111827}' +
+      '#bfSandbox button.bad{color:#b91c1c;border-color:#fecaca;background:#fff5f5}' +
+      '#bfSandbox .sbChips{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}' +
+      '#bfSandbox .sbAcc{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #f3f4f6}#bfSandbox .sbAcc:first-child{border-top:0}' +
+      '#bfSandbox .sbAcc .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}#bfSandbox .sbAcc .c{color:#6b7280;font-size:12px}' +
+      '#bfSandbox .sbList{max-height:180px;overflow:auto}' +
+      '#bfSandbox .sbHint{color:#6b7280;font-size:12px;margin-top:4px}' +
+      '#bfSandbox .sbMsg{min-height:16px;font-size:12px;color:#16a34a;padding:0 16px 12px}#bfSandbox .sbMsg.err{color:#b91c1c}' +
+      '#bfSandbox .sbSwitch{display:flex;align-items:center;justify-content:space-between;gap:10px}';
     document.head.appendChild(css);
     var btn = document.createElement('button'); btn.id = 'bfSandboxBtn'; btn.textContent = 'Sandbox'; btn.title = 'Drag to move';
     var box = document.createElement('div'); box.id = 'bfSandbox';
     document.body.appendChild(btn); document.body.appendChild(box);
+
     /* кнопку можно утащить в любое место (запоминается); в игре по умолчанию — над кнопкой сообщений,
        чтобы не закрывать полоску здоровья и подпись карты внизу */
     function putBtn(x, y) {
@@ -320,7 +370,7 @@
     if (saved) putBtn(saved.x * innerWidth, saved.y * innerHeight);
     else if (/\/game(\.html)?$/.test(location.pathname)) putBtn(12, innerHeight - 106);
     var drag = null, moved = false;
-    btn.addEventListener('pointerdown', function (e) { drag = { dx: e.clientX - btn.getBoundingClientRect().left, dy: e.clientY - btn.getBoundingClientRect().top, x: e.clientX, y: e.clientY }; moved = false; btn.setPointerCapture(e.pointerId); });
+    btn.addEventListener('pointerdown', function (e) { var r = btn.getBoundingClientRect(); drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, x: e.clientX, y: e.clientY }; moved = false; btn.setPointerCapture(e.pointerId); });
     btn.addEventListener('pointermove', function (e) {
       if (!drag) return;
       if (!moved && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 5) return;
@@ -330,44 +380,85 @@
       if (drag && moved) { var r = btn.getBoundingClientRect(); lsSet('sandboxBtn', JSON.stringify({ x: r.left / innerWidth, y: r.top / innerHeight })); }
       drag = null;
     });
-    btn.onclick = function () { if (moved) { moved = false; return; } box.classList.toggle('open'); if (box.classList.contains('open')) draw(); };
-    function num(id) { return Math.max(0, Math.floor(Number(document.getElementById(id).value) || 0)); }
-    function msg(t) { var m = document.getElementById('sbMsg'); if (m) m.textContent = t; }
+    function toggle(open) { box.classList.toggle('open', open); if (open) draw(); }
+    btn.onclick = function () { if (moved) { moved = false; return; } toggle(!box.classList.contains('open')); };
+    addEventListener('keydown', function (e) { if (e.key === 'Escape' && box.classList.contains('open')) toggle(false); });
+
+    var tab = lsGet('sandboxTab') || 'account', note = '', noteErr = false;
+    function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+    function fmt(n) { return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+    function num(id) { var e = document.getElementById(id); return Math.max(0, Math.floor(Number(e && e.value) || 0)); }
+    function say(t, err) { note = t; noteErr = !!err; var m = document.getElementById('sbMsg'); if (m) { m.textContent = t; m.className = 'sbMsg' + (err ? ' err' : ''); } }
     function changed(t) {
-      BFOfflineServer.save(); draw(); msg(t);
+      BFOfflineServer.save(); draw(); say(t);
       var u = me(); if (u && window.BFShell && BFShell.refreshCoins) try { BFShell.refreshCoins(u.coins); } catch (e) {}
     }
     function draw() {
-      var u = me() || {}, sb = sandbox();
+      var u = me() || {}, sb = sandbox(), bots = sb.bots === undefined ? 3 : sb.bots, html = '';
+      if (tab === 'account') {
+        var users = Object.values(acc.getDb().users).sort(function (a, b) { return a.name === u.name ? -1 : b.name === u.name ? 1 : a.name.localeCompare(b.name); });
+        html =
+          '<div class="sbCard"><div class="sbTitle">Playing as ' + esc(u.name || '—') + '</div>' +
+          '<div class="sbRow"><span>Coins</span><input type="number" id="sbCoins" value="' + (u.coins || 0) + '"><button class="b go" data-a="coins">Set</button></div>' +
+          '<div class="sbChips"><button class="b" data-add="100">+100</button><button class="b" data-add="1000">+1K</button><button class="b" data-add="100000">+100K</button><button class="b" data-add="1000000">+1M</button></div>' +
+          '<div class="sbRow"><span>Race score</span><input type="number" id="sbScore" value="' + (u.score || 0) + '"><button class="b go" data-a="score">Set</button></div>' +
+          '<div class="sbRow"><span>H&amp;S score</span><input type="number" id="sbHs" value="' + (u.hsScore || 0) + '"><button class="b go" data-a="hs">Set</button></div></div>' +
+          '<div class="sbCard"><div class="sbTitle">Accounts · ' + users.length + '</div>' +
+          '<div class="sbRow"><input type="text" id="sbNew" maxlength="20" placeholder="New account name"><button class="b go" data-a="create">Create</button></div>' +
+          '<div class="sbList">' + users.map(function (x) {
+            var mine = x.name === u.name;
+            return '<div class="sbAcc"><div class="n">' + esc(x.name) + '</div><div class="c">' + fmt(x.coins) + ' coins</div>' +
+              (mine ? '<button class="b" disabled>You</button>' : '<button class="b go" data-play="' + esc(x.name) + '">Play as</button><button class="b bad" data-del="' + esc(x.name) + '" title="Delete">×</button>') + '</div>';
+          }).join('') + '</div></div>';
+      } else if (tab === 'game') {
+        html =
+          '<div class="sbCard"><div class="sbTitle">Bots in rooms</div>' +
+          '<div class="sbRow"><input type="range" id="sbBotsR" min="0" max="39" value="' + bots + '"><input type="number" id="sbBots" min="0" max="39" value="' + bots + '" style="flex:0 0 64px"><button class="b go" data-a="bots">Set</button></div>' +
+          '<div class="sbHint">Rivals in Race, players in Hide and Seek, Murder Mystery, Team Battle, War and Party, allies in Adventure. Applies when you join a room.</div></div>' +
+          '<div class="sbCard"><div class="sbTitle">Shortcuts</div>' +
+          '<div class="sbRow"><button class="b" data-a="unlock" style="flex:1">Unlock all themes and colors</button></div>' +
+          '<div class="sbRow"><button class="b" data-a="limits" style="flex:1">Reset daily reward, quests and limits</button></div></div>';
+      } else {
+        html =
+          '<div class="sbCard"><div class="sbSwitch"><div><b>Owner rights</b><div class="sbHint">For ' + esc(u.name || '—') + ': owner panel, Edit and Admin Abuse.</div></div>' +
+          '<button class="b ' + (sb.owner ? 'go' : '') + '" data-a="owner">' + (sb.owner ? 'On' : 'Off') + '</button></div></div>' +
+          '<div class="sbCard"><div class="sbTitle">Danger zone</div><button class="b bad" data-a="reset" style="width:100%">Reset sandbox (all accounts, maps, clans)</button></div>';
+      }
       box.innerHTML =
-        '<h4>Sandbox</h4><div class="sbHint">Test site only. Everything is stored in this browser.</div>' +
-        '<div class="sbRow"><label>Coins</label><input type="number" id="sbCoins" value="' + (u.coins || 0) + '"><button class="go" data-a="coins">Set</button></div>' +
-        '<div class="sbRow"><button data-add="100">+100</button><button data-add="1000">+1 000</button><button data-add="100000">+100 000</button><button data-add="1000000">+1 000 000</button></div>' +
-        '<div class="sbRow"><label>Race score</label><input type="number" id="sbScore" value="' + (u.score || 0) + '"><button class="go" data-a="score">Set</button></div>' +
-        '<div class="sbRow"><label>H&amp;S score</label><input type="number" id="sbHs" value="' + (u.hsScore || 0) + '"><button class="go" data-a="hs">Set</button></div>' +
-        '<div class="sbSep"></div>' +
-        '<div class="sbRow"><label>Bots in rooms</label><input type="number" id="sbBots" min="0" max="39" value="' + (sb.bots === undefined ? 3 : sb.bots) + '"><button class="go" data-a="bots">Set</button></div>' +
-        '<div class="sbHint">Every mode: rivals in Race, players in Hide and Seek, Murder Mystery, Team Battle, War and Party, allies in Adventure. Applies when you join a room.</div>' +
-        '<div class="sbSep"></div>' +
-        '<div class="sbRow"><button data-a="unlock">Unlock everything</button><button data-a="limits">Reset daily limits</button></div>' +
-        '<div class="sbRow"><button data-a="owner">' + (sb.owner ? 'Owner rights: on' : 'Owner rights: off') + '</button><button data-a="login">Sign in again</button></div>' +
-        '<div class="sbRow"><button data-a="reset">Reset sandbox</button></div>' +
-        '<div class="sbMsg" id="sbMsg"></div>';
+        '<div class="sbHead"><b>Sandbox</b><button class="sbX" data-a="close" title="Close">×</button></div>' +
+        '<div class="sbTabs">' + [['account', 'Account'], ['game', 'Game'], ['admin', 'Admin']].map(function (t) {
+          return '<button class="sbTab' + (tab === t[0] ? ' on' : '') + '" data-tab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+        '<div class="sbBody">' + html + '</div><div class="sbMsg' + (noteErr ? ' err' : '') + '" id="sbMsg">' + esc(note) + '</div>';
+      var r = document.getElementById('sbBotsR'), n = document.getElementById('sbBots');
+      if (r && n) { r.oninput = function () { n.value = r.value; }; n.oninput = function () { r.value = n.value; }; }
+      var nw = document.getElementById('sbNew'); if (nw) nw.onkeydown = function (e) { if (e.key === 'Enter') box.querySelector('[data-a="create"]').click(); };
     }
     box.addEventListener('click', function (e) {
-      var b = e.target.closest('button'); if (!b) return;
+      var b = e.target.closest('button'); if (!b || b.disabled) return;
       var u = me(), sb = sandbox(), a = b.dataset.a;
-      if (b.dataset.add) { if (!u) return; u.coins = (u.coins || 0) + Number(b.dataset.add); return changed('Coins: ' + u.coins); }
-      if (a === 'coins' && u) { u.coins = num('sbCoins'); return changed('Coins: ' + u.coins); }
-      if (a === 'score' && u) { u.score = num('sbScore'); return changed('Race score: ' + u.score); }
-      if (a === 'hs' && u) { u.hsScore = num('sbHs'); return changed('Hide and Seek score: ' + u.hsScore); }
-      if (a === 'bots') { sb.bots = Math.min(39, num('sbBots')); setSandbox(sb); draw(); return msg('Bots: ' + sb.bots + ' (rejoin a room)'); }
+      note = '';
+      if (b.dataset.tab) { tab = b.dataset.tab; lsSet('sandboxTab', tab); return draw(); }
+      if (a === 'close') return toggle(false);
+      if (b.dataset.add) { if (!u) return; u.coins = (u.coins || 0) + Number(b.dataset.add); return changed('Coins: ' + fmt(u.coins)); }
+      if (b.dataset.play) { playAs(b.dataset.play); return location.reload(); }
+      if (b.dataset.del) {
+        if (!confirm('Delete the account «' + b.dataset.del + '»?')) return;
+        deleteAccount(b.dataset.del); draw(); return say('Account deleted');
+      }
+      if (a === 'create') {
+        var nm = (document.getElementById('sbNew').value || '').trim(), err = createAccount(nm);
+        if (err) return say(err, true);
+        draw(); return say('Created «' + nm + '» — press Play as to switch');
+      }
+      if (a === 'coins' && u) { u.coins = num('sbCoins'); return changed('Coins: ' + fmt(u.coins)); }
+      if (a === 'score' && u) { u.score = num('sbScore'); return changed('Race score: ' + fmt(u.score)); }
+      if (a === 'hs' && u) { u.hsScore = num('sbHs'); return changed('Hide and Seek score: ' + fmt(u.hsScore)); }
+      if (a === 'bots') { sb.bots = Math.min(39, num('sbBots')); setSandbox(sb); draw(); return say('Bots: ' + sb.bots + ' — rejoin a room to apply'); }
       if (a === 'unlock' && u) { u.themeUnlocked = true; u.chatColorUnlocked = true; return changed('Themes and colors unlocked'); }
       if (a === 'limits' && u) { u.rewardDay = ''; u.mapDay = 0; u.mapCount = 0; u.questDay = ''; u.coinWin = 0; u.scoreWin = 0; u.hsWin = 0; return changed('Daily reward, quests, map uploads and earning limits reset'); }
       if (a === 'owner') { sb.owner = !sb.owner; setSandbox(sb); flush(); return location.reload(); }
-      if (a === 'login') { login(); return location.reload(); }
       if (a === 'reset') {
-        if (!confirm('Delete all sandbox data in this browser (account, maps, clans, messages)?')) return;
+        if (!confirm('Delete all sandbox data in this browser (accounts, maps, clans, messages)?')) return;
         try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf(LS) === 0) localStorage.removeItem(k); }); } catch (e2) {}
         pending = {}; return location.reload();
       }
