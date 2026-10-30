@@ -479,6 +479,8 @@ function servers(d, lang) {
   };
   return { color: R.COLORS.neutral, parts: [txt('### ' + L('serversTitle') + '  ·  ' + L('onlineN', { n: d.online || 0 })),
     mode('race', L('gRaceMode')), mode('hideAndSeek', L('gHnsMode')),
+    // отдельные режимы — только когда в них кто-то играет, чтобы список не разрастался
+    ...['murder', 'team', 'war', 'party', 'adventure'].filter(k => list.some(r => r.mode === k)).map(k => mode(k, (m[k] && m[k].name) || k)),
     txt(small(L('upTo40') + '  ·  ' + clock(d.at || Date.now())))] };
 }
 const clock = ms => { const d = new Date(ms); return two(d.getUTCHours()) + ':' + two(d.getUTCMinutes()) + ':' + two(d.getUTCSeconds()) + ' UTC'; };

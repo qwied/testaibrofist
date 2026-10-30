@@ -479,8 +479,10 @@ function serversSnapshot() {
       if (top) { const j = top.indexOf('|'); map = top.slice(j + 1) + ' by ' + top.slice(0, j); }
     }
     const live = st && (st.phase === 'lobby' || st.phase === 'round');
+    // комнаты отдельных режимов (murder-1, team-1…) живут под ключом пряток, но показываются своим режимом
+    const roomName = key.slice(i + 1);
     rooms.push({
-      mode, room: key.slice(i + 1), players: players.length, limit: ROOM_FULL,
+      mode: (mode === 'hideAndSeek' && hsFixedOf(roomName)) || mode, room: roomName, players: players.length, limit: ROOM_FULL,
       status: players.length >= ROOM_FULL ? 'full' : now - (roomLeftAt.get(key) || 0) < ROOM_RECENT_LEFT_MS ? 'freeing' : 'open',
       names: players.map(p => p.name), map,
       phase: st ? st.phase : null, endsAt: live ? st.endsAt : null,
@@ -542,6 +544,7 @@ const MAX_ACTIVE_ROOMS = 2000;
    почти наверняка уступит очередь. */
 const HS_LOBBY_MS    = Number(process.env.HS_LOBBY_MS) || 30000;   // рулетка + время спрятаться
 const HS_ROUND_MS    = Number(process.env.HS_ROUND_MS) || 120000;  // охота — 2 минуты
+const HS_WAIT_MS     = Number(process.env.HS_WAIT_MS) || 45000;    // отдельный режим ждёт игроков — короткими кругами
 const HS_ROULETTE_MS = 6800;    // клиентская анимация укладывается в 10 секунд
 /* Сколько пикселей надо реально пройти, чтобы награда за раунд/поимку
    засчиталась. Порог символический — любой играющий человек набирает
@@ -773,7 +776,7 @@ function hsSpin(io, room, st) {
       pool.splice(j, 1);
     }
     st.copIds = cops;
-  } else if ((war.isWar(st.variant) && st.variant !== 'bro') || party.isGame(st.variant) || adventure.isAdv(st.variant)) {
+  } else if (st.variant === 'wait' || (war.isWar(st.variant) && st.variant !== 'bro') || party.isGame(st.variant) || adventure.isAdv(st.variant)) {
     st.seekerId = null; st.seekerName = '';          // в войне и мини-играх искателя нет; в Bro RED победитель жребия — Bro RED
   }
   // убийца тайный: ни рулетки с победителем, ни шансов — каждому только его роль (hsSecret);
@@ -864,6 +867,7 @@ function hsCreditMapBest(acct, mapKey, role, ms) {
 }
 
 function hsAwardRoundEnd(io, room, st) {
+  if (st.variant === 'wait') return;          // ожидание игроков — не раунд, наград нет
   const members = st.roundMembers || [];
   if (party.isGame(st.variant)) { party.award(st, room); return; }
   if (adventure.isAdv(st.variant)) { adventure.award(st, room); return; }
@@ -1103,7 +1107,9 @@ function hsPickVariant(st, n) {
   const forced = process.env.HS_VARIANT;
   if (st.fixedVariant) {
     st.partyLive = false;
-    if (hsFixedBlock(st, n)) return 'classic';
+    /* Отдельный режим — не прятки: пока игроков мало (или на карте нет укрытий для команд), комната
+       ждёт — без искателя, поимок и наград, просто бегать по карте (вариант 'wait', см. hsNoHunt) */
+    if (hsFixedBlock(st, n)) return 'wait';
     if (st.fixedVariant === 'war') return war.pick(st, n);
     if (st.fixedVariant === 'adventure') return adventure.pick(st);
     if (st.fixedVariant === 'party') {
@@ -1141,7 +1147,7 @@ function hsMixPick(st, n) {
   return (st.mixLast = pool[Math.floor(Math.random() * pool.length)]);
 }
 // раунд без искателя: война (кроме Bro RED — там он боец, но искателем его тоже не делаем) и мини-игры
-function hsNoHunt(v) { return war.isWar(v) || party.isGame(v) || adventure.isAdv(v); }
+function hsNoHunt(v) { return v === 'wait' || war.isWar(v) || party.isGame(v) || adventure.isAdv(v); }
 
 /* Команды Capture the Flag и Domination: поровну, в случайном порядке. Базы команд — два
    самых далёких друг от друга укрытия; у Domination третья точка — укрытие, самое далёкое
@@ -1373,7 +1379,7 @@ function hsStartRound(io, room, st) {
   st.phase = 'round';
   // мини-игра «Вечеринки» идёт своё время (см. roundMs в party.js) и кончается сама
   const roundMs = party.isGame(st.variant) ? party.roundMs(st, hsMembers(room).length)
-    : adventure.isAdv(st.variant) ? adventure.roundMs(st) : HS_ROUND_MS;
+    : adventure.isAdv(st.variant) ? adventure.roundMs(st) : st.variant === 'wait' ? HS_WAIT_MS : HS_ROUND_MS;
   st.endsAt = Date.now() + roundMs;
   st.roundStartedAt = Date.now();   // для медалей за время — см. hsDoInfect/hsCreditMapBest
   // снимок пряток на момент старта — только они и только если не пойманы, получат награду в конце
@@ -1848,6 +1854,9 @@ io.on('connection', (socket) => {
         if (fixedRespin) {
           st.variant = hsPickVariant(st, fixedN);
           hsSpin(io, room, st);
+        } else if (st.variant === 'wait' && st.phase === 'round' && !hsFixedBlock(st, fixedN)) {
+          // ждали игроков, и их уже хватает — ожидание кончается сразу, режим начнётся с нового лобби
+          hsEndRoundEarly(room, st);
         } else if (st.fixedVariant && hsFixedWait(st, fixedN) !== st.fixedWait) {
           /* причина ожидания сменилась (игроков хватает, но на карте нет укрытий или раунд уже
              идёт) — говорим остальным; новичку её уже принёс hsState */

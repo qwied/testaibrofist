@@ -60,14 +60,8 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);user-select:none}
 
 /* modes */
-#modes{position:fixed;top:14px;left:14px;display:flex;padding:4px;gap:2px;z-index:11}
-/* пять отдельных режимов — в выпадашке «More modes», чтобы верхняя панель не залезала под инструменты */
-.modeMore{padding:8px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap}
-.modeMore:hover{background:#eef2f8;color:var(--ink)}
-.modeMore.on{background:#111827;color:#fff;box-shadow:0 2px 8px rgba(17,24,39,.3)}
-.modePop{display:none;position:absolute;top:calc(100% + 6px);left:0;flex-direction:column;gap:2px;padding:4px;
-  background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);min-width:170px}
-.modePop.open{display:flex}
+/* все семь режимов — равные кнопки в три строки, чтобы панель не залезала под панель сцены */
+#modes{position:fixed;top:14px;left:14px;display:grid;grid-template-columns:repeat(3,auto);padding:4px;gap:2px;z-index:11}
 .modeBtn{padding:8px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;
   color:var(--muted);transition:.14s;white-space:nowrap}
 .modeBtn:hover{background:#eef2f8;color:var(--ink)}
@@ -76,7 +70,7 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 .modeBtn.on{background:#111827;color:#fff;box-shadow:0 2px 8px rgba(17,24,39,.3)}
 /* Модификация карты — отдельной строкой под режимом: режим решает, какие
    объекты вообще есть, а модификация — по каким правилам в них играют. */
-#apoc{position:fixed;top:62px;left:14px;display:flex;padding:4px;gap:2px;z-index:10}
+#apoc{position:fixed;top:130px;left:14px;display:flex;padding:4px;gap:2px;z-index:10}
 .apocBtn{padding:7px 12px;border-radius:8px;cursor:pointer;font-size:11.5px;font-weight:600;
   color:var(--muted);transition:.14s;white-space:nowrap}
 .apocBtn:hover{background:#eef2f8;color:var(--ink)}
@@ -344,18 +338,24 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
    центру между режимами и кнопкой «на главную» — встаёт сразу под ними,
    в два столбца; свойства — под панелью сцены, над зумом */
 @media (max-height:620px){
-  #tools{top:calc(106px + env(safe-area-inset-top,0px));transform:none;width:86px;
+  #tools{top:calc(174px + env(safe-area-inset-top,0px));transform:none;width:86px;
     flex-direction:row;flex-wrap:wrap;align-content:flex-start;
     max-height:calc(100vh - 178px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
-  body.noApoc #tools{top:calc(62px + env(safe-area-inset-top,0px))}
+  body.noApoc #tools{top:calc(130px + env(safe-area-inset-top,0px))}
   #insp{top:calc(68px + env(safe-area-inset-top,0px));transform:none;
     max-height:calc(100vh - 128px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
+}
+/* семь режимов в три столбца не помещаются слева от панели сцены уже на
+   ноутбуке 1024 px — встают под ней */
+@media (max-width:1100px){
+  #modes{top:68px}
+  #apoc{top:184px}
 }
 /* узкий экран (телефон стоя): режимы не помещаются слева от панели сцены —
    встают под ней */
 @media (max-width:920px){
   #modes{top:68px}
-  #apoc{top:116px}
+  #apoc{top:184px}
   /* по центру через auto-поля: у left:50% ширина ограничена половиной экрана */
   #scene{left:14px;right:14px;transform:none;width:fit-content;margin-left:auto;margin-right:auto;
     flex-wrap:wrap;justify-content:center}
@@ -365,15 +365,15 @@ body.mob #toolTip{display:none!important}
 body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=5"></script>
-<script src="device.js?v=201"></script>
-        <script src="sound.js?v=201"></script>
-        <script src="skinRender.js?v=201"></script>
-        <script src="skinCanvas.js?v=201"></script>
-        <script src="gifuct.bundle.js?v=201"></script>
-        <script src="gifPlayer.js?v=201"></script>
-        <script src="coin.js?v=201"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=201">
-        <script src="theme.js?v=201"></script>
+<script src="device.js?v=202"></script>
+        <script src="sound.js?v=202"></script>
+        <script src="skinRender.js?v=202"></script>
+        <script src="skinCanvas.js?v=202"></script>
+        <script src="gifuct.bundle.js?v=202"></script>
+        <script src="gifPlayer.js?v=202"></script>
+        <script src="coin.js?v=202"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=202">
+        <script src="theme.js?v=202"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -3337,27 +3337,13 @@ document.getElementById("bGrid").classList.add("on");
 
 (function(){
   var box = document.getElementById("modes");
-  var more = document.createElement("div"); more.className = "modeMore"; more.id = "modeMore";
-  var pop = document.createElement("div"); pop.className = "modePop"; pop.id = "modePop";
   ["hideAndSeek","race","murder","team","war","party","adventure"].forEach(function(k,i){
     var d = document.createElement("div");
     d.className = "modeBtn" + (i===0?" on":""); d.textContent = TR(KIND_LABEL[k][0], KIND_LABEL[k][1]);
     d.dataset.mode = KIND_FAMILY[k]; d.dataset.kind = k;
-    (i < 2 ? box : pop).appendChild(d);
+    box.appendChild(d);
   });
-  box.appendChild(more); box.appendChild(pop);
-  more.addEventListener("click", function(e){ e.stopPropagation(); if(!playing) pop.classList.toggle("open"); });
-  document.addEventListener("click", function(e){ if(!box.contains(e.target)) pop.classList.remove("open"); });
 })();
-// кнопка выпадашки: выбран один из пяти режимов — его имя, иначе «More modes»
-function syncMore(){
-  var more = document.getElementById("modeMore");
-  if(!more) return;
-  var extra = mapKind !== "hideAndSeek" && mapKind !== "race";
-  more.textContent = (extra ? TR(KIND_LABEL[mapKind][0], KIND_LABEL[mapKind][1]) : TR("moreModes", "More modes")) + " \u25BE";
-  more.classList.toggle("on", extra);
-}
-syncMore();
 
 /* Модификация — только прятки (см. TOOL_MODES.zombie в maps.js и
    объект "zombie" в TOOLS выше): в гонке зомби не из кого спавнить,
@@ -3414,6 +3400,25 @@ function syncApocBtns(){
    приём работает в обеих копиях движка (editor.html/game.html) без
    отдельной ветки кода под каждую. */
 var IS_GAME_PAGE = /\/?game(\.html)?/i.test(location.pathname);
+/* колонка инструментов стоит по центру слева, но на невысоком экране центр
+   поднимается к панели режимов (их семь, в три строки) — тогда колонка встаёт
+   сразу под ней и прокручивается, а не налезает на кнопки */
+function fitTools(){
+  var t = document.getElementById("tools");
+  if(!t) return;
+  t.style.top = ""; t.style.transform = ""; t.style.maxHeight = "";
+  var bar = 0;
+  ["modes","apoc"].forEach(function(id){
+    var e = document.getElementById(id), r = e && e.getBoundingClientRect();
+    if(r && r.height) bar = Math.max(bar, r.bottom);
+  });
+  if(t.getBoundingClientRect().top < bar + 8){
+    t.style.top = (bar + 8) + "px"; t.style.transform = "none";
+    t.style.maxHeight = Math.max(120, innerHeight - bar - 78) + "px";
+  }
+}
+addEventListener("resize", fitTools);
+addEventListener("load", fitTools);
 function syncApocVisibility(){
   var hs = mode === "hideAndSeek", race = mode === "race";
   var on = (hs || race) && !IS_GAME_PAGE;
@@ -3424,6 +3429,7 @@ function syncApocVisibility(){
   box.querySelectorAll(".rrGrp,.rrBtn,.rrLbl").forEach(function(b){ b.style.display = race ? "" : "none"; });
   // низкий экран: без этой строки инструменты поднимаются на её место
   document.body.classList.toggle("noApoc", !on);
+  fitTools();
 }
 syncApocVisibility();
 document.getElementById("apoc").addEventListener("click", function(e){
@@ -3516,7 +3522,6 @@ function retip(){
   Array.prototype.forEach.call(document.querySelectorAll(".modeBtn"), function(b){
     b.textContent = TR(KIND_LABEL[b.dataset.kind][0], KIND_LABEL[b.dataset.kind][1]);
   });
-  syncMore();
   // вкладки модификации строятся тем же кодом до загрузки i18n.js — без
   // этого «Классика» оставалась по-русски и в английском интерфейсе
   Array.prototype.forEach.call(document.querySelectorAll(".apocBtn"), function(b){
@@ -3595,13 +3600,13 @@ function syncTools(){
     if(t.dataset.tool === "seekerSpot" && apoc) ok = false;
     t.style.display = ok ? "flex" : "none";
   });
+  fitTools();
 }
 syncTools();
 document.getElementById("modes").addEventListener("click", function(e){
   var b = e.target.closest(".modeBtn"); if(!b || playing) return;
   document.querySelectorAll(".modeBtn").forEach(function(x){ x.classList.remove("on"); });
   b.classList.add("on"); mode = b.dataset.mode; mapKind = b.dataset.kind;
-  document.getElementById("modePop").classList.remove("open"); syncMore();
   if(mode !== "hideAndSeek" && apoc){ apoc = false; syncApocBtns(); }
   syncApocVisibility();
   var drop = objects.filter(function(o){ return !allowedHere(o.type); });
@@ -5087,7 +5092,7 @@ document.getElementById("file").addEventListener("change", function(e){
       if(d.gravity !== undefined){
         // гравитация из старой карты игнорируется: она всегда 9
       }
-      document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.kind === mapKind); }); syncMore();
+      document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.kind === mapKind); });
       syncApocBtns();
       syncApocVisibility();
       objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid" && o.type !== "coin" && o.type !== "superGate"; });
@@ -5338,7 +5343,7 @@ requestAnimationFrame(loop);
     .then(function(data){
       if(!data){ dialog(TR("mapNotFoundTitle","Карта не найдена"), TR("mapNotFoundBody","Не удалось загрузить «{name}».").replace("{name}", em), null); return; }
       BRIDGE.loadMap(data);
-      document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.kind === mapKind); }); syncMore();
+      document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.kind === mapKind); });
       syncTools();
       if(!toolOK(tool)) setTool("select");
       sel = null; inspect();
@@ -5354,12 +5359,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=201"></script>
-<script src="abuseShow.js?v=201" defer></script>
-<script src="editorHelp.js?v=201"></script>
-<script src="editorAI.js?v=201" defer></script>
-<script src="account.js?v=201" defer></script>
-<script src="owner.js?v=201" defer></script>
+<script src="i18n.js?v=202"></script>
+<script src="abuseShow.js?v=202" defer></script>
+<script src="editorHelp.js?v=202"></script>
+<script src="editorAI.js?v=202" defer></script>
+<script src="account.js?v=202" defer></script>
+<script src="owner.js?v=202" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -5475,7 +5480,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=201" defer></script>
+        <script src="skinAvatar.js?v=202" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */

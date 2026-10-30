@@ -65,7 +65,7 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
     rec('PlainLand', { mode: 'hideAndSeek', objects: base }),
     rec('SpotLand', { mode: 'hideAndSeek', objects: base.concat(spots) }),
     ...[1, 2, 3, 4, 5, 6].map(i => rec('ZombieLand' + i, { mode: 'hideAndSeek', apoc: true, objects: base.concat(spots, [zombie]) }))],
-    { HS_LOBBY_MS: '9000', HS_ROUND_MS: '14000' });
+    { HS_LOBBY_MS: '9000', HS_ROUND_MS: '14000', HS_WAIT_MS: '14000' });
   const B = server(3243, [rec('FlatOne', { mode: 'hideAndSeek', objects: base }), rec('FlatTwo', { mode: 'hideAndSeek', objects: base })],
     { HS_LOBBY_MS: '3000', HS_ROUND_MS: '3000', HS_COPS_MIN: '2' });
   process.on('exit', () => { A.kill(); B.kill(); });
@@ -107,8 +107,8 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   const m1 = player(A.base, 'fx_a', 'murder-1');
   await m1.ready(); m1.join();
   const solo = await until(() => { const r = m1.last('hsRoulette'); return r && r.d; }, 8000);
-  ok(!!solo && solo.variant === 'classic' && solo.fixed === 'murder' && solo.wait === 'players' && solo.need === 3,
-    'одиночке — обычные прятки и «нужно 3 игрока»', solo && JSON.stringify({ v: solo.variant, w: solo.wait, n: solo.need }));
+  ok(!!solo && solo.variant === 'wait' && solo.fixed === 'murder' && solo.wait === 'players' && solo.need === 3,
+    'одиночка ждёт игроков (не прятки) — «нужно 3 игрока»', solo && JSON.stringify({ v: solo.variant, w: solo.wait, n: solo.need }));
   ok(!!mapOf(m1) && !/^ZombieLand/.test(mapOf(m1)), 'зомби-карта в комнату режима не попала', mapOf(m1));
   const m2 = player(A.base, 'fx_b', 'murder-1');
   await m2.ready(); m2.join();
@@ -143,16 +143,15 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   const dd = await until(() => { const r = d1.last('hsRoulette', d => d.variant === 'dom'); return r && r.d; }, 32000);
   ok(!!dd && (dd.points || []).length >= 2, 'следующий раунд — Domination, точки на укрытиях', dd && (dd.points || []).length);
 
-  console.log('Вошёл посреди обычного раунда:');
-  // входим в первые секунды обычного раунда одиночки, а не на стыке с лобби
+  console.log('Вошёл посреди раунда ожидания:');
+  // входим в первые секунды раунда ожидания одиночки, а не на стыке с лобби
   ok(!!await until(() => { const l = n1.last('hsPhase'); return l && l.d.phase === 'round' && Date.now() - l.t < 6000; }, 30000),
-    'одиночка в team-2 играет обычный раунд');
+    'одиночка в team-2 в раунде ожидания');
   const n2 = player(A.base, 'fx_j', 'team-2');
   await n2.ready(); n2.join();
-  const nw = await until(() => { const r = n1.last('hsFixedWait'); return r && r.d; }, 3000);
-  const ns = await until(() => { const r = n2.last('hsState'); return r && r.d; }, 3000);
-  ok(!!nw && nw.wait === 'next' && !!ns && ns.wait === 'next' && ns.phase === 'round', 'обоим сказано: режим начнётся со следующего раунда',
-    JSON.stringify({ a: nw && nw.wait, b: ns && ns.wait }));
+  // игроков хватает — ожидание не тянется до конца, сразу лобби настоящего Team Battle
+  const nl = await until(() => { const l = n1.last('hsPhase'); return l && l.d.phase === 'lobby' && Date.now() - l.t < 4000 ? l.d : null; }, 5000);
+  ok(!!nl, 'второй вошёл — ожидание кончилось сразу, началось лобби режима');
 
   console.log('Team Battle на сервере без карт с укрытиями:');
   const f1 = player(B.base, 'fx_g', 'team-1'), f2 = player(B.base, 'fx_h', 'team-1');
@@ -160,7 +159,7 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   f1.join(); await sleep(300); f2.join();
   const fw = await until(() => { const r = f1.last('hsFixedWait'); return r && r.d; }, 3000);
   const fs2 = await until(() => { const r = f2.last('hsState'); return r && r.d; }, 3000);
-  ok(!!fw && fw.wait === 'map' && !!fs2 && fs2.wait === 'map' && fs2.variant === 'classic',
+  ok(!!fw && fw.wait === 'map' && !!fs2 && fs2.wait === 'map' && fs2.variant === 'wait',
     'второй вошёл, а укрытий нет — обоим сказано «на карте нет укрытий»', JSON.stringify({ a: fw && fw.wait, b: fs2 && fs2.wait }));
 
   console.log('Обычные прятки:');
@@ -215,7 +214,7 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   const waitMsg = await until(() => sp.evaluate(() => { const l = document.getElementById('gLog'); return l && /Team Battle starts when there are 2 players/.test(l.textContent) ? l.textContent : null; }), 9000);
   ok(!!waitMsg, 'одиночке в игре сказано, что режим начнётся со вторым игроком', waitMsg);
   const pills = await until(() => sp.evaluate(() => { const t = [...document.querySelectorAll('#gRoulTrack .rName')].map(x => x.textContent); return t.length ? [...new Set(t)].sort().join(',') : null; }), 6000);
-  ok(pills === 'Capture the Flag,Classic,Domination', 'рулетка режима — только Classic, Capture the Flag и Domination', pills);
+  ok(pills === 'Capture the Flag,Domination,Waiting for players', 'рулетка режима — только ожидание, Capture the Flag и Domination (без пряток)', pills);
   ok(!(await sp.evaluate(() => !!document.getElementById('gMini'))), 'мини-карты в игре больше нет');
   ok(errs.length === 0, 'без ошибок на страницах', errs.join(' | '));
   await browser.close();

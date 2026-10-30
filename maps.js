@@ -269,10 +269,17 @@ function rawPool(t) {
         return !m.showcase && (isOwnerName(m.author) || !!m.builtinVer) && m.mapType === t;
       });
 }
-/* t — вид карты или несколько видов сразу: комната отдельного режима берёт и свои карты (Map Editor →
-   War и т.п.), и карты пряток (см. hsPickMap в server.js). */
+/* t — вид карты или несколько видов сразу: комната отдельного режима сначала берёт свои карты
+   (Map Editor → War и т.п.), а карты пряток — только если своих подходящих нет (см. hsPickMap в server.js). */
 function poolFor(t, pred) {
   const kinds = Array.isArray(t) ? t : [t];
+  if (kinds.length > 1) {
+    const own = rawPool(kinds[0]).filter(m => {
+      if (m.only && !(Array.isArray(m.inGameModes) && m.inGameModes.indexOf(kinds[0]) !== -1)) return false;
+      try { return !pred || !!pred(m); } catch (e) { return false; }
+    });
+    if (own.length) return own;
+  }
   const seen = new Set(), all = [];
   kinds.forEach(k => rawPool(k).forEach(m => { if (!seen.has(m)) { seen.add(m); all.push(m); } }));
   if (pred) {

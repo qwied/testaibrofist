@@ -87,17 +87,24 @@ function server(port) {
   await until(() => advPh, 25000);
   ok(!!advPh && advPh.map && advPh.map.mapName === 'Editor Tower' && advPh.adv && advPh.adv.v === 'quest' && advPh.adv.floors === 2,
     'комната «Приключения» играет карту из редактора: башня в 2 этажа', advPh && JSON.stringify({ map: advPh.map, v: advPh.adv && advPh.adv.v, f: advPh.adv && advPh.adv.floors }));
+  // на странице Servers и в Discord комната режима — в разделе своего режима, а не в прятках
+  const sv = await fetch(S.base + '/api/servers').then(r => r.json()).catch(() => null);
+  const advRoom = sv && sv.aibrofist.list.find(r => r.room === 'adventure-1');
+  ok(!!advRoom && advRoom.mode === 'adventure' && advRoom.modeName === 'Adventure' && sv.aibrofist.modes.adventure.players === 1 && sv.aibrofist.modes.hideAndSeek.players === 0,
+    'Servers: adventure-1 — в разделе Adventure, не в Hide and Seek', JSON.stringify(advRoom));
   s.close();
 
   console.log('Map Editor:');
   const ed = await open('/editor.html');
   await until(() => ed.evaluate(() => document.querySelectorAll('.modeBtn').length === 7), 8000);
-  const pick = async (k) => { if (!await ed.evaluate((k) => document.querySelector('.modeBtn[data-kind="' + k + '"]').offsetParent !== null, k)) await ed.click('#modeMore'); await ed.click('.modeBtn[data-kind="' + k + '"]'); await sleep(150); };
+  const pick = async (k) => { await ed.click('.modeBtn[data-kind="' + k + '"]'); await sleep(150); };
   const kinds = await ed.evaluate(() => [...document.querySelectorAll('.modeBtn')].map(b => b.dataset.kind));
   ok(kinds.join() === 'hideAndSeek,race,murder,team,war,party,adventure', 'семь режимов карты', kinds.join());
-  // пять отдельных режимов — в выпадашке «More modes»: верхняя панель не залезает под инструменты
-  const lay = await ed.evaluate(() => { const a = document.getElementById('modes').getBoundingClientRect(), b = document.getElementById('scene').getBoundingClientRect(); return { modesRight: Math.round(a.right), sceneLeft: Math.round(b.left) }; });
-  ok(lay.modesRight <= lay.sceneLeft, 'панель режимов не залезает под панель инструментов', JSON.stringify(lay));
+  // все семь режимов — равные кнопки на виду; панель не залезает ни под панель сцены, ни на модификацию
+  const lay = await ed.evaluate(() => { const r = id => document.getElementById(id).getBoundingClientRect(), a = r('modes'), b = r('scene'), c = r('apoc');
+    return { modesRight: Math.round(a.right), sceneLeft: Math.round(b.left), modesBottom: Math.round(a.bottom), apocTop: Math.round(c.top),
+             shown: [...document.querySelectorAll('.modeBtn')].every(e => e.offsetParent !== null) }; });
+  ok(lay.shown && lay.modesRight <= lay.sceneLeft && lay.modesBottom <= lay.apocTop, 'семь режимов видны и не залезают на соседние панели', JSON.stringify(lay));
   const vis = (t) => ed.evaluate((t) => { const e = document.querySelector('.tool[data-tool="' + t + '"]'); return !!e && e.style.display !== 'none'; }, t);
   await pick('adventure');
   ok(await vis('enemy') && await vis('crystal'), 'в «Приключении» есть Враг и Кристалл');
@@ -109,7 +116,7 @@ function server(port) {
   await pick('war');
   const m2 = await ed.evaluate(() => { const m = window.getEditorMap(); return { mode: m.mode, n: JSON.parse(m.data).objects.filter(o => o.type === 'enemy').length }; });
   ok(m2.mode === 'war' && m2.n === 0 && !await vis('enemy') && await vis('cannon'), 'в War врагов нет (убраны с карты), а пушка есть', JSON.stringify(m2));
-  ok(/War/.test(await ed.evaluate(() => document.getElementById('modeMore').textContent)), 'на кнопке выпадашки — выбранный режим');
+  ok(await ed.evaluate(() => document.querySelector('.modeBtn.on').dataset.kind === 'war' && document.querySelectorAll('.modeBtn.on').length === 1), 'выбранный режим подсвечен один');
   await pick('race');
   ok((await ed.evaluate(() => window.getEditorMap().mode)) === 'race' && await vis('checkpoint'), 'гонка — как раньше');
   await ed.close();

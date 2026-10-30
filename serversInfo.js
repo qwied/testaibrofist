@@ -50,7 +50,7 @@ function keyOk(k) {
 }
 
 /* ---------- наша игра ---------- */
-const MODE_NAME = { race: 'Race', hideAndSeek: 'Hide and Seek' };
+const MODE_NAME = { race: 'Race', hideAndSeek: 'Hide and Seek', murder: 'Murder Mystery', team: 'Team Battle', war: 'War', party: 'Party', adventure: 'Adventure' };
 function ours(full) {
   const s = snapshot() || {};
   const rooms = (s.rooms || []).slice().sort((a, b) => b.players - a.players || String(a.room).localeCompare(String(b.room)));

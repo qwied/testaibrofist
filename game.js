@@ -1473,7 +1473,7 @@
         : hsVariant === 'cops' ? TR('roleCop', 'Коп') : TR('roleSeeker', 'Искатель'))
       : teamVariant() ? (myTeam() ? teamName(myTeam()) : '—')
       : hsVariant === 'bro' ? (socket && socket.id === broId ? TR('roleBro', 'Bro RED') : TR('roleFighter', 'Боец'))
-      : partyGame(hsVariant) ? TR('rolePlayer', 'Игрок')
+      : partyGame(hsVariant) || hsVariant === 'wait' ? TR('rolePlayer', 'Игрок')
       : advV(hsVariant) ? clsName(myCls())
       : isWarV(hsVariant) ? TR('roleFighter', 'Боец')
       : (hsVariant === 'murder' ? (hsSecret === 'sheriff' ? TR('roleSheriff', 'Шериф') : TR('roleInnocent', 'Невиновный'))
@@ -1517,6 +1517,7 @@
     }
   }
   function variantRoleText() {
+    if (hsVariant === 'wait') return TR('roulWait', 'Ждём игроков — пока можно побегать по карте.');
     if (hsVariant === 'quest') return TR('roulQuest', 'Поднимись на вершину башни и победи босса!');
     if (hsVariant === 'defense') return TR('roulDefense', 'Защити кристалл от волн врагов!');
     if (hsVariant === 'quiz') return TR('roulQuiz', 'Викторина об игре — отвечай быстрее всех!');
@@ -1534,6 +1535,7 @@
       : hsSecret === 'sheriff' ? TR('roulYouSheriff', 'Ты шериф!') : TR('roulYouInnocent', 'Ты невиновный!');
   }
   function variantHint() {
+    if (hsVariant === 'wait') return TR('hintWait', 'Режим начнётся, когда игроков хватит. Пока — свободная пробежка по карте.');
     if (hsVariant === 'quest') return TR('hintQuest', 'Выбей всех врагов этажа — откроется люк наверх. F или клик — удар, у мага Q — лечение.');
     if (hsVariant === 'defense') return TR('hintDefense', 'Враги идут волнами с обоих краёв — не пускай их к кристаллу. F или клик — удар.');
     if (hsVariant === 'quiz') return TR('hintQuiz', 'Отвечай кнопками или клавишами 1–4: чем быстрее верный ответ, тем больше очков.');
@@ -1758,10 +1760,10 @@
      классики за ней сразу следует обычная рулетка искателя). */
   /* Рулетка режима крутит только то, что бывает в этой комнате: в прятках — Classic, Zombie
      Apocalypse и Cops & Robbers, в Team Battle — Capture the Flag и Domination, в Murder
-     Mystery — он сам (Classic — пока игроков мало, см. hsFixedWait в server.js). */
-  var VARIANTS = { hs: ['classic', 'zombie', 'cops'], murder: ['classic', 'murder'], team: ['classic', 'ctf', 'dom'],
-                   war: ['classic', 'ffa', 'tdm', 'hunger', 'cp', 'bro', 'pirate'],
-                   party: ['classic', 'quiz', 'guess', 'build', 'ffa', 'murder', 'zombie', 'cops'],
+     Mystery — он сам (пока игроков мало — «Ждём игроков», wait: без искателя и поимок, см. hsFixedWait в server.js). */
+  var VARIANTS = { hs: ['classic', 'zombie', 'cops'], murder: ['wait', 'murder'], team: ['wait', 'ctf', 'dom'],
+                   war: ['wait', 'ffa', 'tdm', 'hunger', 'cp', 'bro', 'pirate'],
+                   party: ['wait', 'quiz', 'guess', 'build', 'ffa', 'murder', 'zombie', 'cops'],
                    adventure: ['quest', 'defense'] };
   var hsFixed = null;                    // отдельный режим комнаты: 'murder' | 'team' | null
   function variantName(v) {
@@ -1775,6 +1777,7 @@
       : v === 'guess' ? TR('modeGuess', 'Угадай слово') : v === 'build' ? TR('modeBuild', 'Строительная битва')
       : v === 'adventure' ? TR('modeAdventure', 'Приключение') : v === 'quest' ? TR('modeQuest', 'Башня')
       : v === 'defense' ? TR('modeDefense', 'Оборона кристалла')
+      : v === 'wait' ? TR('modeWait', 'Ждём игроков')
       : TR('modeClassic', 'Classic');
   }
   function runModeRoulette(variant, onDone) {
@@ -2741,7 +2744,7 @@
         };
         if (!STORY) loadServerMap(d.map, teleportSeeker); else teleportSeeker();
         log(d.apoc ? TR('roundStartApoc', 'Раунд начался! Зомби уже идёт за кем-то...')
-          : hsVariant === 'murder' || hsVariant === 'cops' || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant) ? variantHint()
+          : hsVariant === 'wait' || hsVariant === 'murder' || hsVariant === 'cops' || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant) ? variantHint()
           : TR('roundStart', 'Раунд начался! 2 минуты'));
         // Murder Mystery: первые секунды охоты убийца никого не трогает (см. HS_MURDER_GRACE_MS)
         mmGraceUntil = hsVariant === 'murder' ? Date.now() + (Number(d.grace) || 0) : 0;
