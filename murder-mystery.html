@@ -105,7 +105,7 @@
   var key = location.pathname.split('/').pop().replace(/\.html$/, '');
   var c = V[key] || V['murder-mystery'];
   var img = document.getElementById('mdImg');
-  img.src = c.img + '?v=1';
+  img.src = c.img + '?v=2';
   document.getElementById('mdName').setAttribute('data-i18n', c.name);
   document.getElementById('mdText').setAttribute('data-i18n', c.text);
   var list = document.getElementById('mdList');
