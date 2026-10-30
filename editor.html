@@ -60,8 +60,16 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);user-select:none}
 
 /* modes */
-/* все семь режимов — равные кнопки в три строки, чтобы панель не залезала под панель сцены */
-#modes{position:fixed;top:14px;left:14px;display:grid;grid-template-columns:repeat(3,auto);padding:4px;gap:2px;z-index:11}
+/* все семь режимов — равные кнопки в одну строку с обычным ползунком (как карточки режимов
+   на главной): панель кончается до панели сцены, а что не влезло — листается */
+#modes{position:fixed;top:14px;left:14px;display:flex;padding:4px;gap:2px;z-index:11;
+  max-width:calc(50vw - 290px);overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:auto;scrollbar-color:#9ca3af #eef0f3}
+#modes::-webkit-scrollbar{height:12px}
+#modes::-webkit-scrollbar-track{background:#eef0f3;border-radius:6px}
+#modes::-webkit-scrollbar-thumb{background:#9ca3af;border-radius:6px;border:2px solid #eef0f3}
+#modes::-webkit-scrollbar-thumb:hover{background:#6b7280}
+.modeBtn{flex:0 0 auto}
 .modeBtn{padding:8px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;
   color:var(--muted);transition:.14s;white-space:nowrap}
 .modeBtn:hover{background:#eef2f8;color:var(--ink)}
@@ -70,7 +78,7 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 .modeBtn.on{background:#111827;color:#fff;box-shadow:0 2px 8px rgba(17,24,39,.3)}
 /* Модификация карты — отдельной строкой под режимом: режим решает, какие
    объекты вообще есть, а модификация — по каким правилам в них играют. */
-#apoc{position:fixed;top:130px;left:14px;display:flex;padding:4px;gap:2px;z-index:10}
+#apoc{position:fixed;top:78px;left:14px;display:flex;padding:4px;gap:2px;z-index:10}
 .apocBtn{padding:7px 12px;border-radius:8px;cursor:pointer;font-size:11.5px;font-weight:600;
   color:var(--muted);transition:.14s;white-space:nowrap}
 .apocBtn:hover{background:#eef2f8;color:var(--ink)}
@@ -338,24 +346,23 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
    центру между режимами и кнопкой «на главную» — встаёт сразу под ними,
    в два столбца; свойства — под панелью сцены, над зумом */
 @media (max-height:620px){
-  #tools{top:calc(174px + env(safe-area-inset-top,0px));transform:none;width:86px;
+  #tools{top:calc(122px + env(safe-area-inset-top,0px));transform:none;width:86px;
     flex-direction:row;flex-wrap:wrap;align-content:flex-start;
     max-height:calc(100vh - 178px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
-  body.noApoc #tools{top:calc(130px + env(safe-area-inset-top,0px))}
+  body.noApoc #tools{top:calc(78px + env(safe-area-inset-top,0px))}
   #insp{top:calc(68px + env(safe-area-inset-top,0px));transform:none;
     max-height:calc(100vh - 128px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
 }
-/* семь режимов в три столбца не помещаются слева от панели сцены уже на
-   ноутбуке 1024 px — встают под ней */
+/* слева от панели сцены остаётся меньше трёх кнопок — режимы встают под ней во всю ширину */
 @media (max-width:1100px){
-  #modes{top:68px}
-  #apoc{top:184px}
+  #modes{top:68px;max-width:calc(100vw - 28px)}
+  #apoc{top:132px}
 }
 /* узкий экран (телефон стоя): режимы не помещаются слева от панели сцены —
    встают под ней */
 @media (max-width:920px){
   #modes{top:68px}
-  #apoc{top:184px}
+  #apoc{top:132px}
   /* по центру через auto-поля: у left:50% ширина ограничена половиной экрана */
   #scene{left:14px;right:14px;transform:none;width:fit-content;margin-left:auto;margin-right:auto;
     flex-wrap:wrap;justify-content:center}
@@ -3343,7 +3350,19 @@ document.getElementById("bGrid").classList.add("on");
     d.dataset.mode = KIND_FAMILY[k]; d.dataset.kind = k;
     box.appendChild(d);
   });
+  box.addEventListener("wheel", function(e){
+    if(box.scrollWidth <= box.clientWidth) return;
+    var d = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    box.scrollLeft += d; e.preventDefault(); e.stopPropagation();
+  }, {passive:false});
 })();
+// выбранный режим — в видимой части строки с ползунком
+function showModeBtn(){
+  var b = document.querySelector(".modeBtn.on"), box = document.getElementById("modes");
+  if(!b || !box) return;
+  if(b.offsetLeft < box.scrollLeft) box.scrollLeft = b.offsetLeft - 4;
+  else if(b.offsetLeft + b.offsetWidth > box.scrollLeft + box.clientWidth) box.scrollLeft = b.offsetLeft + b.offsetWidth - box.clientWidth + 4;
+}
 
 /* Модификация — только прятки (см. TOOL_MODES.zombie в maps.js и
    объект "zombie" в TOOLS выше): в гонке зомби не из кого спавнить,
@@ -3606,7 +3625,7 @@ syncTools();
 document.getElementById("modes").addEventListener("click", function(e){
   var b = e.target.closest(".modeBtn"); if(!b || playing) return;
   document.querySelectorAll(".modeBtn").forEach(function(x){ x.classList.remove("on"); });
-  b.classList.add("on"); mode = b.dataset.mode; mapKind = b.dataset.kind;
+  b.classList.add("on"); mode = b.dataset.mode; mapKind = b.dataset.kind; showModeBtn();
   if(mode !== "hideAndSeek" && apoc){ apoc = false; syncApocBtns(); }
   syncApocVisibility();
   var drop = objects.filter(function(o){ return !allowedHere(o.type); });
@@ -5092,7 +5111,7 @@ document.getElementById("file").addEventListener("change", function(e){
       if(d.gravity !== undefined){
         // гравитация из старой карты игнорируется: она всегда 9
       }
-      document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.kind === mapKind); });
+      document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.kind === mapKind); }); showModeBtn();
       syncApocBtns();
       syncApocVisibility();
       objects = objects.filter(function(o){ return o.type !== "water" && o.type !== "liquid" && o.type !== "coin" && o.type !== "superGate"; });
@@ -5343,7 +5362,7 @@ requestAnimationFrame(loop);
     .then(function(data){
       if(!data){ dialog(TR("mapNotFoundTitle","Карта не найдена"), TR("mapNotFoundBody","Не удалось загрузить «{name}».").replace("{name}", em), null); return; }
       BRIDGE.loadMap(data);
-      document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.kind === mapKind); });
+      document.querySelectorAll(".modeBtn").forEach(function(b){ b.classList.toggle("on", b.dataset.kind === mapKind); }); showModeBtn();
       syncTools();
       if(!toolOK(tool)) setTool("select");
       sel = null; inspect();
