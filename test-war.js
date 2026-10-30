@@ -113,6 +113,9 @@ const hpOf = (p, id, after) => { const h = p.last('warHp', d => d.id === id, aft
   ok(!!bought && bought.ammo.sling === 10 && a.last('tokBank').n === 0, 'купил рогатку за 3 жетона — 10 выстрелов', JSON.stringify(bought));
   a.s.emit('shopBuy', { item: 'bomb' });
   ok(!!await until(() => a.last('shopNo', d => d.item === 'bomb' && d.why === 'tokens'), 2000), 'на бомбы жетонов не хватает');
+  // стрелок возвращается на своё место: жетон, за которым он ходил, лежит где попало, и оттуда цель
+  // бывает дальше, чем бьёт рогатка (сервер такое попадание справедливо не засчитывает)
+  a.at(700);
   // цель отошла: если сервер ещё не получил её новое место, попадание не засчитано — стреляем ещё раз
   let slingHit = false;
   for (let k = 0; k < 3 && !slingHit; k++) {
