@@ -81,11 +81,17 @@
   if (!Array.isArray(maps) || !maps.length) maps = write('maps', makeMaps());
 
   function currentUser() {
+    // настоящий аккаунт из offlineServer.js, когда он запущен; иначе — простой игрок песочницы
+    var real = window.BFOfflineServer && BFOfflineServer.me();
+    if (real) return real;
     var user = read('user', null);
     if (!user) user = write('user', { name: 'Local Tester', guest: false, coins: 0, score: 0, hsScore: 0, mapDay: '', mapCount: 0, favoriteMaps: [], mapFolders: {}, settings: {} });
     return user;
   }
-  function saveUser(user) { return write('user', user); }
+  function saveUser(user) {
+    if (window.BFOfflineServer && BFOfflineServer.me() === user) { BFOfflineServer.save(); return user; }
+    return write('user', user);
+  }
   function mapKey(author, name) { return String(author) + '\u0000' + String(name); }
   function findMap(author, name) {
     return maps.find(function (m) { return m.author === author && m.mapName === name; }) || null;
@@ -233,7 +239,17 @@
     return null;
   }
 
+  /* Сначала — настоящие маршруты сервера (offlineServer.js), если они загрузились;
+     то, чего у них нет (комнаты, сюжет, Admin Abuse…), отвечает простой API ниже. */
   function localApi(input, init) {
+    if (!window.BFOfflineServer) return simpleApi(input, init);
+    return BFOfflineServer.ready.then(function () {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      var u = new URL(url, location.href);
+      return BFOfflineServer.handle(u.pathname, u.searchParams, (init && init.method || 'GET').toUpperCase(), bodyData(init)) || simpleApi(input, init);
+    });
+  }
+  function simpleApi(input, init) {
     var url = typeof input === 'string' ? input : (input && input.url) || '';
     var path = new URL(url, location.href).pathname;
     var sp = query(url), method = (init && init.method || 'GET').toUpperCase(), data = bodyData(init);
@@ -350,6 +366,7 @@
     if (path === '/messages/start' || path === '/messages/send' || path === '/quests/claim') return Promise.resolve(response({ status: 'success', id: 'local-thread' }));
     if (path === '/maps/seen' || path === '/uploadVote' || path === '/update/set' || path === '/abuse/set' || path === '/abuse/coin') return Promise.resolve(response({ status: 'success' }));
     if (path === '/story/create') return Promise.resolve(response({ status: 'success', room: 'local-story', mode: 'race' }));
+    try { console.warn('[offline] no local endpoint: ' + path); } catch (e) {}
     return Promise.resolve(response({ status: 'error', message: 'Local endpoint not found' }, 404));
   }
 
@@ -374,8 +391,15 @@
     sock.emit = function (ev, data) {
       if (modeCtl && ev !== 'join' && modeCtl.on(ev, data)) return sock;
       if (ev === 'join') {
+        // аккаунт и карты — из offlineServer.js: ждём, пока он поднимется
+        if (window.BFOfflineServer && !sock._srvReady) {
+          BFOfflineServer.ready.then(function () { sock._srvReady = true; sock.emit('join', data); });
+          return sock;
+        }
         var user = currentUser();
         var vm = /^(murder|team|war|party|adventure)-\d+$/.exec(String(data && data.room || ''));
+        // обычные прятки — тоже настоящий круг раунда с ботами (offlineModes.js), кроме сюжета
+        if (!vm && data && data.gameMode === 'hideAndSeek' && !/[?&]story=1/.test(location.search) && window.BFOfflineModes && BFOfflineModes.has('classic')) vm = [null, 'classic'];
         if (vm && window.BFOfflineModes && BFOfflineModes.has(vm[1]) && originalFetch) {
           BFOfflineModes.start({ sock: sock, fire: fire, name: user.name, variant: vm[1], api: window.BFOffline, raw: originalFetch })
             .then(function (c) { modeCtl = c; c.join(); }, function () { sock.emit('join', Object.assign({}, data, { room: 'local-room-hideAndSeek' })); });
@@ -401,7 +425,10 @@
         clearTimeout(raceT);
         raceT = setTimeout(raceRound, 1400);            // финишировал — следующая карта, как на сервере
         sock.localCoins += 1;
-        fire('coinsAwarded', { amount: 1, coins: sock.localCoins, reason: 'offlineRaceFinish' });
+        // монета и очко — на настоящий аккаунт песочницы, если offlineServer.js запущен
+        var A = window.BFOfflineServer && BFOfflineServer.acc(), got = A ? A.creditCoins(currentUser().name, 1) : 1;
+        if (A && A.creditScore) A.creditScore(currentUser().name, 1);
+        fire('coinsAwarded', { amount: got, coins: A ? currentUser().coins : sock.localCoins, reason: 'offlineRaceFinish' });
         fire('raceScores', [{ name: currentUser().name, score: sock.localCoins }]);
       } else if (ev === 'drawLine') {
         fire('drawLineQuota', { left: 999 });
@@ -415,13 +442,39 @@
   }
   if (!window.io) window.io = function () { var s = makeLocalSocket(); setTimeout(function () { s._ls.connect && s._ls.connect.forEach(function (fn) { try { fn(); } catch (e) {} }); }, 0); return s; };
 
+  /* карты: из настоящего maps.js (offlineServer.js), когда он запущен — с данными карты уже объектом */
+  function realMaps() {
+    var M = window.BFOfflineServer && BFOfflineServer.maps();
+    if (!M) return null;
+    return M.allMaps().filter(function (m) { return !m.showcase; }).map(function (m) {
+      var d = m.mapData; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = null; } }
+      return Object.assign({}, m, { mapData: d });
+    });
+  }
+  // идущая на этой странице комната — для Servers в другой вкладке (см. snapshot в offlineServer.js)
+  setInterval(function () {
+    var c = window.BFOfflineModes && BFOfflineModes.room;
+    if (!c || !c.gameState) return;
+    var names = []; c.gameState.players.forEach(function (p) { names.push(p.name); });
+    write('liveRoom', { at: now(), mode: c.st.fixedVariant === 'classic' ? 'hideAndSeek' : c.st.fixedVariant, room: c.st.fixedVariant === 'classic' ? 'local-room' : c.st.fixedVariant + '-1',
+      players: names.length, limit: 40, status: 'open', names: names, map: c.st.map ? c.st.map.mapName + ' by ' + c.st.map.author : null,
+      phase: c.st.phase, endsAt: c.st.endsAt });
+  }, 3000);
   window.BFOffline = {
     enabled: true,
     maps: maps,
+    raw: originalFetch,
     user: currentUser,
     saveUser: saveUser,
-    getMaps: function (mode) { return maps.filter(function (m) { return !mode || m.mapType === mode; }); },
-    findMap: findMap,
+    legacyUser: function () { return read('user', {}) || {}; },
+    legacyMaps: function () { return maps; },
+    liveRoom: function () { var r = read('liveRoom', null); return r && now() - r.at < 10000 ? r : null; },
+    getMaps: function (mode) { var all = realMaps() || maps; return all.filter(function (m) { return !mode || m.mapType === mode; }); },
+    findMap: function (author, name) {
+      var all = realMaps(); if (!all) return findMap(author, name);
+      var lc = function (v) { return String(v || '').toLowerCase(); };
+      return all.filter(function (m) { return lc(m.author) === lc(author) && lc(m.mapName) === lc(name); })[0] || null;
+    },
     api: localApi
   };
   window.fetch = function (input, init) {

@@ -119,8 +119,8 @@ const srv = http.createServer((req, res) => {
   console.log('Вечеринка:');
   const pa = await open('/game.html?mode=party');
   ok(!!await until(async () => /Question 1 of/.test(await text(pa)), 20000), 'пошла викторина');
-  ok(/Bot A/.test(await text(pa)) && /Players: 4/.test(await text(pa)), 'боты в таблице очков');
-  const ans = await until(async () => /Bot [ABC] [1-9]\d{2}/.test(await text(pa)), 16000);
+  ok(/Bot 1/.test(await text(pa)) && /Players: 4/.test(await text(pa)), 'боты в таблице очков');
+  const ans = await until(async () => /Bot \d+ [1-9]\d{2}/.test(await text(pa)), 16000);
   ok(!!ans, 'боты отвечают на вопросы и получают очки');
   await pa.close();
 

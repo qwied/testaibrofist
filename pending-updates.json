@@ -1,4 +1,9 @@
 {
   "base": "9391dace7210a2f76b7193694cdbe375e6f4985d",
-  "updates": []
+  "updates": [
+    {
+      "title": "Test site sandbox",
+      "text": "The test site now works fully without a server and has a sandbox panel for coins, scores, bots and owner tools."
+    }
+  ]
 }

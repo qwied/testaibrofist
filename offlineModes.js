@@ -8,10 +8,20 @@
   'use strict';
   if (window.BFOfflineModes) return;
 
-  var MIN_PLAYERS = { murder: 3, team: 2, war: 2, party: 2, adventure: 1 };
+  var MIN_PLAYERS = { classic: 2, murder: 3, team: 2, war: 2, party: 2, adventure: 1 };
   var MURDER_GRACE_MS = 20000, MIN_DIST = 200, CTF_WIN = 3, DOM_WIN = 120, DOM_TICKS = 3;
-  var BOTS = { murder: ['Bot A', 'Bot B', 'Bot C'], team: ['Bot A', 'Bot B', 'Bot C'], war: ['Bot A', 'Bot B', 'Bot C'], party: ['Bot A', 'Bot B', 'Bot C'], adventure: [] };
-  var BUILTIN = { murder: ['broarena.json'], team: ['broarena.json'], war: ['piratebay.json'], party: ['broarena.json'], adventure: ['brotower.json', 'crystaldefense.json'] };
+  /* сколько ботов в комнате — из панели песочницы (offlineServer.js), по умолчанию 3; меньше, чем нужно режиму, не бывает.
+     В «Приключении» боты не воюют — там их нет. */
+  function botNames(variant) {
+    if (variant === 'adventure') return [];
+    var n = 3;
+    try { var sb = JSON.parse(localStorage.getItem('aibrofist.local.v2.sandbox') || '{}'); if (sb && sb.bots !== undefined) n = Math.floor(+sb.bots) || 0; } catch (e) {}
+    n = Math.max(MIN_PLAYERS[variant] - 1, Math.min(39, n));
+    var out = []; for (var i = 1; i <= n; i++) out.push('Bot ' + i);
+    return out;
+  }
+  // обычные прятки берут ещё и все карты пряток песочницы (см. loadMaps)
+  var BUILTIN = { classic: ['broarena.json'], murder: ['broarena.json'], team: ['broarena.json'], war: ['piratebay.json'], party: ['broarena.json'], adventure: ['brotower.json', 'crystaldefense.json'] };
   var LOBBY_MS = 9000, ROULETTE_MS = 3500;
 
   var modsP = null;
@@ -34,14 +44,14 @@
 
   function create(o, mods) {
     var variant = o.variant, sock = o.sock, fire = o.fire, api = o.api;
-    var room = 'hideAndSeek:' + variant + '-1';
+    var room = 'hideAndSeek:' + variant + '-1', classic = variant === 'classic';
     var gameState = { players: new Map(), rooms: new Map() };
     var members = new Set();
     gameState.rooms.set(room, members);
     var nidK = 1;
     var me = { id: sock.id, name: o.name, nid: nidK++, position: null, odo: 0, room: room, bot: false };
     gameState.players.set(me.id, me); members.add(me.id);
-    var bots = BOTS[variant].map(function (n, i) {
+    var bots = botNames(variant).map(function (n, i) {
       var b = { id: 'local-bot-' + (i + 1), name: n, nid: nidK++, position: { x: 0, y: 0, w: 30, h: 100 }, odo: 0, room: room, bot: true, k: '' };
       gameState.players.set(b.id, b); members.add(b.id);
       return b;
@@ -70,8 +80,19 @@
     function hsMembers(r) { return r === room ? Array.from(members).map(function (id) { return gameState.players.get(id); }).filter(Boolean).map(function (p) { return { id: p.id, name: p.name }; }) : []; }
     function hsTeamOf(s, id) { return s.teams ? s.teams.get(id) || null : null; }
     function endEarly(r, s) { if (s.caughtSent) return; s.caughtSent = true; clearTimeout(s.timer); s.timer = setTimeout(startLobby, 1400); }
+    // монеты и очки за раунд — на настоящий аккаунт песочницы (offlineServer.js), как credit в server.js
+    function credit(sock2, acct, n) {
+      if (sock2 && sock2.id !== undefined && sock2.id !== me.id) return;
+      var A = window.BFOfflineServer && BFOfflineServer.acc(); if (!A) return;
+      var got = A.creditCoins(me.name, n), u = BFOfflineServer.me();
+      if (got) deliver('coinsAwarded', { amount: got, coins: u ? u.coins : 0, reason: 'hsWin' });
+    }
+    function creditScore(sock2, acct, n) {
+      if (sock2 && sock2.id !== undefined && sock2.id !== me.id) return;
+      var A = window.BFOfflineServer && BFOfflineServer.acc(); if (A && A.creditHsScore) A.creditHsScore(me.name, n);
+    }
     var deps = { io: io, gameState: gameState, hsMembers: hsMembers, hsTeamOf: hsTeamOf, sessionName: function () { return null; },
-      credit: function () {}, creditScore: function () {}, endEarly: endEarly };
+      credit: credit, creditScore: creditScore, endEarly: endEarly };
     var party = mods.party(deps), adventure = mods.adventure(deps), war = mods.war(deps);
     var map = function () { return st.map ? { author: st.map.author, mapName: st.map.mapName } : null; };
 
@@ -85,7 +106,11 @@
             comments: [], votes: {}, favorites: {}, inGameModes: [], mapData: data }; api.maps.push(rec); }
           return rec;
         });
-      }));
+      })).then(function (list) {
+        if (!classic) return list;
+        var own = (api.getMaps('hideAndSeek') || []).filter(function (m) { return !m.only && m.mapData && Array.isArray(m.mapData.objects) && list.indexOf(m) === -1; });
+        return list.concat(own);
+      });
     }
     var recs = [], mapK = 0;
     function pickMap() {
@@ -169,6 +194,7 @@
 
     /* ---- круг раунда ---- */
     function pickVariant() {
+      if (classic) return 'classic';
       if (variant === 'murder') return 'murder';
       if (variant === 'team') return (st.teamLast = st.teamLast === 'ctf' ? 'dom' : 'ctf');
       if (variant === 'war') return war.pick(st, 2);          // 2, чтобы в круг не попали варианты, которым нужны 4 игрока
@@ -194,11 +220,18 @@
         st.seekerId = ids[0]; st.sheriffId = ids[1];
         st.seekerName = gameState.players.get(ids[0]).name; st.sheriffName = gameState.players.get(ids[1]).name;
       }
+      // обычные прятки: искатель по жребию (?role=seeker — всегда ты), остальные прячутся
+      if (classic) {
+        var all = Array.from(members), pick = /[?&]role=seeker\b/.test(location.search) ? me.id : all[Math.floor(Math.random() * all.length)];
+        st.seekerId = pick; st.seekerName = gameState.players.get(pick).name;
+      }
       var spots = [null].concat(st.spots).sort(function () { return Math.random() - 0.5; });
-      bots.forEach(function (b, i) { place(b, st.bases && st.teams ? st.bases[st.teams.get(b.id)] : st.variant === 'murder' ? spots[i % spots.length] : null); });
+      bots.forEach(function (b, i) { place(b, st.bases && st.teams ? st.bases[st.teams.get(b.id)] : (st.variant === 'murder' || (classic && b.id !== st.seekerId)) ? spots[i % spots.length] : null); });
       var secret = st.variant === 'murder';
-      deliver('hsRoulette', { players: [], winnerId: null, teams: st.teams ? teamsObj() : null, bases: st.bases, points: st.domPoints,
-        variant: st.variant, fixed: variant, need: MIN_PLAYERS[variant], wait: null, cops: null, duration: ROULETTE_MS,
+      var chance = Math.round(100 / members.size);
+      deliver('hsRoulette', { players: classic ? Array.from(members).map(function (id) { return { id: id, name: gameState.players.get(id).name, chance: chance }; }) : [],
+        winnerId: classic ? st.seekerId : null, teams: st.teams ? teamsObj() : null, bases: st.bases, points: st.domPoints,
+        variant: st.variant, fixed: classic ? null : variant, need: classic ? 0 : MIN_PLAYERS[variant], wait: null, cops: null, duration: ROULETTE_MS,
         msLeft: st.endsAt - Date.now(), roundNum: st.roundNum, apoc: false, shop: war.tokensOn(st),
         advCls: variant === 'adventure' ? adventure.classes(st, hsMembers(room)) : null });
       if (secret) deliver('hsSecret', { role: secretRole(me.id), at: spots[spots.length - 1] });
@@ -214,7 +247,7 @@
       var ms = roundMs();
       st.endsAt = Date.now() + ms; st.roundStartedAt = Date.now();
       var secret = st.variant === 'murder', teamVar = isTeamV();
-      var hunters = secret ? [st.seekerId] : [];
+      var hunters = secret || classic ? [st.seekerId] : [];
       st.roundMembers = hsMembers(room).filter(function (m) { return hunters.indexOf(m.id) === -1; })
         .map(function (m) { var p = gameState.players.get(m.id); m.odo = p ? p.odo : 0; return m; });
       st.caughtSet = new Set(); st.seekerIds = new Set(hunters);
@@ -224,15 +257,21 @@
       st.dom = teamVar && st.variant === 'dom' ? { points: st.domPoints.map(function () { return { owner: null, prog: 0, by: null }; }), score: perTeam(0) } : null;
       if (st.dom) st.domTimer = setInterval(domTick, 1000);
       war.start(st, room); adventure.start(st, room);
-      deliver('hsPhase', { phase: 'round', msLeft: ms, seekerId: null, seekerName: '', seekerIds: secret ? [] : [], variant: st.variant, map: map(), apoc: false,
+      deliver('hsPhase', { phase: 'round', msLeft: ms, seekerId: classic ? st.seekerId : null, seekerName: classic ? st.seekerName : '', seekerIds: classic ? [st.seekerId] : [], variant: st.variant, map: map(), apoc: false,
         teams: st.teams ? teamsObj() : null, bases: st.bases, points: st.domPoints, ctf: st.ctf ? ctfState() : null, dom: st.dom ? domState() : null,
         grace: secret ? MURDER_GRACE_MS : 0, war: war.state(st), adv: adventure.state(st) });
       war.spawnAll(st, room); war.tokRoundStart(st, room, members.size);
       party.start(st, room);
-      if (secret) st.chaseT = setInterval(botChase, 200);
+      if (secret || classic) st.chaseT = setInterval(botChase, 200);
       clearTimeout(st.timer); st.timer = setTimeout(startLobby, ms);
     }
     function award() {
+      // обычные прятки: не пойманный прячущийся и искатель, поймавший всех, получают монеты (как hsAwardRoundEnd)
+      if (classic) {
+        var left = (st.roundMembers || []).filter(function (m) { return !st.caughtSet.has(m.id); });
+        if (me.id === st.seekerId ? !left.length : !st.caughtSet.has(me.id)) { credit(null, null, 1 + Math.floor(Math.random() * 5)); creditScore(null, null, 1); }
+        return;
+      }
       if (party.isGame(st.variant)) { party.award(st, room); return; }
       if (adventure.isAdv(st.variant)) { adventure.award(st, room); return; }
       if (war.isWar(st.variant) && st.war) war.award(st, room, function () { return true; });
@@ -255,7 +294,18 @@
       endEarly(room, st);
     }
     function doCatch(hunterId, targetId) {
-      if (st.phase !== 'round' || st.variant !== 'murder' || st.caughtSent || st.caughtSet.has(targetId) || targetId === hunterId) return;
+      if (st.phase !== 'round' || (st.variant !== 'murder' && !classic) || st.caughtSent || st.caughtSet.has(targetId) || targetId === hunterId) return;
+      if (classic) {
+        if (hunterId !== st.seekerId) return;
+        var h2 = gameState.players.get(hunterId), t2 = gameState.players.get(targetId);
+        if (!h2 || !t2 || !h2.position || !t2.position) return;
+        if (Math.abs(h2.position.x - t2.position.x) > 80 || Math.abs(h2.position.y - t2.position.y) > 120) return;
+        if (hunterId === me.id && me.odo - (st.startOdo[me.id] || 0) < MIN_DIST) return;
+        st.caughtSet.add(targetId);
+        deliver('hsOut', { id: targetId, name: t2.name, jail: false });
+        if (!(st.roundMembers || []).some(function (m) { return !st.caughtSet.has(m.id); })) endEarly(room, st);
+        return;
+      }
       if (hunterId === st.seekerId && Date.now() - st.roundStartedAt < MURDER_GRACE_MS) return;
       var sheriff = hunterId === st.sheriffId && !st.caughtSet.has(hunterId);
       if (sheriff) { if (targetId !== st.seekerId) return; }
@@ -276,7 +326,7 @@
         if (st.caughtSet.has(b.id)) return;
         var targetIds = b.id === st.seekerId ? Array.from(members).filter(function (id) { return id !== b.id && !st.caughtSet.has(id); })
           : b.id === st.sheriffId && !st.caughtSet.has(b.id) ? [st.seekerId] : [];
-        if (b.id === st.seekerId && Date.now() - st.roundStartedAt < MURDER_GRACE_MS) return;
+        if (b.id === st.seekerId && !classic && Date.now() - st.roundStartedAt < MURDER_GRACE_MS) return;
         var best = null, bd = 1e9;
         targetIds.forEach(function (id) { var t = gameState.players.get(id); if (t && t.position) { var d = Math.abs(t.position.x - b.position.x); if (d < bd) { bd = d; best = t; } } });
         if (!best) return;
@@ -341,7 +391,7 @@
       deliver('playersList', playersList());
       deliver('hsState', { phase: 'lobby', msLeft: LOBBY_MS, roundNum: 0, seekerId: null, seekerName: '', map: null, broId: null, seekerIds: [], out: [],
         variant: 'classic', role: null, teams: null, bases: null, points: null, ctf: null, dom: null, apoc: false, vote: null,
-        fixed: variant, need: MIN_PLAYERS[variant], wait: null, advCls: variant === 'adventure' ? adventure.classes(st, hsMembers(room)) : null });
+        fixed: classic ? null : variant, need: classic ? 0 : MIN_PLAYERS[variant], wait: null, advCls: variant === 'adventure' ? adventure.classes(st, hsMembers(room)) : null });
       startLobby();
     }
 
