@@ -356,7 +356,7 @@
       '#bfSandbox .sbMsg{min-height:16px;font-size:12px;color:#16a34a;padding:0 16px 12px}#bfSandbox .sbMsg.err{color:#b91c1c}' +
       '#bfSandbox .sbSwitch{display:flex;align-items:center;justify-content:space-between;gap:10px}';
     document.head.appendChild(css);
-    var btn = document.createElement('button'); btn.id = 'bfSandboxBtn'; btn.textContent = 'Sandbox'; btn.title = 'Drag to move';
+    var btn = document.createElement('button'); btn.id = 'bfSandboxBtn'; btn.textContent = 'TestPanel'; btn.title = 'Drag to move';
     var box = document.createElement('div'); box.id = 'bfSandbox';
     document.body.appendChild(btn); document.body.appendChild(box);
 
@@ -425,7 +425,7 @@
           '<div class="sbCard"><div class="sbTitle">Danger zone</div><button class="b bad" data-a="reset" style="width:100%">Reset sandbox (all accounts, maps, clans)</button></div>';
       }
       box.innerHTML =
-        '<div class="sbHead"><b>Sandbox</b><button class="sbX" data-a="close" title="Close">×</button></div>' +
+        '<div class="sbHead"><b>TestPanel</b><button class="sbX" data-a="close" title="Close">×</button></div>' +
         '<div class="sbTabs">' + [['account', 'Account'], ['game', 'Game'], ['admin', 'Admin']].map(function (t) {
           return '<button class="sbTab' + (tab === t[0] ? ' on' : '') + '" data-tab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
         '<div class="sbBody">' + html + '</div><div class="sbMsg' + (noteErr ? ' err' : '') + '" id="sbMsg">' + esc(note) + '</div>';

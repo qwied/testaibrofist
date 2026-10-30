@@ -12,6 +12,10 @@
     {
       "title": "Smarter test bots and cannon fix",
       "text": "The cannon is now only in War maps, not in Hide and Seek. On the test site, bots run and jump like players, the sandbox menu is easier to use, you can create and switch between any number of accounts, and the owner's Admin Abuse and Edit buttons are back."
+    },
+    {
+      "title": "TestPanel",
+      "text": "The test site's sandbox menu is now called TestPanel."
     }
   ]
 }

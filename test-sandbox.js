@@ -1,5 +1,5 @@
 /* Песочница testaibrofist без сервера (как на GitHub Pages): настоящие серверные модули в браузере
-   (offlineServer.js) и панель Sandbox — монеты, права владельца, смена ника, боты в комнатах.
+   (offlineServer.js) и панель TestPanel — монеты, права владельца, смена ника, боты в комнатах.
    Свой статический сервер без server.js: 3257. Запуск: node test-sandbox.js */
 const http = require('http'), fs = require('fs'), path = require('path');
 const { chromium } = require(process.env.PW || '/opt/node22/lib/node_modules/playwright');
