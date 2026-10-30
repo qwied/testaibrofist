@@ -11,11 +11,11 @@
      фактором масштаба. Теперь полноразмерный масштаб 1:1, а колонки
      Play/Vote доступны свайпом вбок внутри каждой строки, как и раньше. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=200">
+<link rel="stylesheet" href="ui.css?v=201">
 <script src="offline.js?v=5"></script>
-<script src="theme.js?v=200"></script>
-<script src="device.js?v=200"></script>
-<script src="sound.js?v=200"></script>
+<script src="theme.js?v=201"></script>
+<script src="device.js?v=201"></script>
+<script src="sound.js?v=201"></script>
 <style>
 .mbFilters{display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:9px;margin-bottom:6px;align-items:center}
 .mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
@@ -221,6 +221,11 @@
       <option value="" data-i18n="modeAll">Режим: все</option>
       <option value="hideAndSeek" data-i18n="hideAndSeek">Прятки</option>
       <option value="race" data-i18n="race">Гонка</option>
+      <option value="murder" data-i18n="modeMurder">Murder Mystery</option>
+      <option value="team" data-i18n="modeTeam">Team Battle</option>
+      <option value="war" data-i18n="modeWar">War</option>
+      <option value="party" data-i18n="modeParty">Party</option>
+      <option value="adventure" data-i18n="modeAdventure">Adventure</option>
     </select>
     <input class="bfInput" id="mbAuthor" data-i18n-ph="colAuthor" placeholder="Автор">
     <select class="bfSelect" id="mbSort">
@@ -262,15 +267,15 @@
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=200">
-<script src="i18n.js?v=200"></script>
-<script src="coin.js?v=200"></script>
-<script src="skinRender.js?v=200"></script>
-<script src="skinAvatar.js?v=200" defer></script>
-<script src="shell.js?v=200"></script>
-<script src="abuseShow.js?v=200" defer></script>
-<script src="account.js?v=200" defer></script>
-<script src="owner.js?v=200" defer></script>
+<link rel="stylesheet" href="mobile.css?v=201">
+<script src="i18n.js?v=201"></script>
+<script src="coin.js?v=201"></script>
+<script src="skinRender.js?v=201"></script>
+<script src="skinAvatar.js?v=201" defer></script>
+<script src="shell.js?v=201"></script>
+<script src="abuseShow.js?v=201" defer></script>
+<script src="account.js?v=201" defer></script>
+<script src="owner.js?v=201" defer></script>
 <script>
 (function () {
   'use strict';

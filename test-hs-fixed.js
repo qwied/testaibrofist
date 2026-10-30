@@ -202,7 +202,7 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   ok(!!info && info.rows.length === 2 && info.rows.every(r => /^team-\d+$/.test(r)), 'в списке комнат — только комнаты этого режима', info && info.rows.join(','));
   await page.click('#mdPlay');
   await page.waitForURL(/game/, { timeout: 8000 }).catch(() => {});
-  ok(/mode=hideAndSeek&variant=team/.test(page.url()), 'Играть открывает игру в этом режиме', page.url());
+  ok(/[?&]mode=team(&|$)/.test(page.url()) && !/variant=/.test(page.url()), 'Играть открывает игру в этом режиме — режим прямо в ссылке (mode=team)', page.url());
   const title = await until(() => page.evaluate(() => /Team Battle/.test(document.title) ? document.title : null), 6000);
   ok(!!title, 'вкладка игры называется по режиму', title || await page.evaluate(() => document.title));
   const joined = await until(async () => (await getJ(A.base, '/getRoomList?mode=hideAndSeek&variant=team')).rooms.find(r => r.players === 3), 8000);

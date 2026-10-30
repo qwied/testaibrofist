@@ -946,7 +946,8 @@ function hsPickMap(st) {
     return;
   }
   const prev = st.map ? st.map.mapName : '';
-  const m = require('./maps.js').randomFor('hideAndSeek', prev, hsMapOk(st));
+  // комната отдельного режима берёт и карты своего вида (Map Editor → War и т.п.), и карты пряток
+  const m = require('./maps.js').randomFor(st.fixedVariant ? [st.fixedVariant, 'hideAndSeek'] : 'hideAndSeek', prev, hsMapOk(st));
   st.map = m ? { author: m.author, mapName: m.mapName } : null;
 }
 
@@ -960,7 +961,7 @@ const HS_VOTE_OPTIONS = 3;
 function hsOpenVote(io, room, st) {
   st.vote = null;
   if (st.storyMap) return;
-  const cand = require('./maps.js').candidatesFor('hideAndSeek', st.map ? st.map.mapName : '', HS_VOTE_OPTIONS, hsMapOk(st));
+  const cand = require('./maps.js').candidatesFor(st.fixedVariant ? [st.fixedVariant, 'hideAndSeek'] : 'hideAndSeek', st.map ? st.map.mapName : '', HS_VOTE_OPTIONS, hsMapOk(st));
   if (cand.length < 2) return;
   st.vote = { options: cand.map(m => ({ author: m.author, mapName: m.mapName })), votes: new Map() };
   io.to(room).emit('hsVote', hsVoteState(st));
@@ -1012,7 +1013,7 @@ function hsApplyApoc(st) {
     st.cannons = list.filter(o => o && o.type === 'cannon').slice(0, 24)
       .map(o => ({ x: fin(o.x, -1e5, 1e5), y: fin(o.y, -1e5, 1e5), w: 72, h: 44, aim: fin(o.aim, -360, 360) }));
     // приключение: этажи и враги или волны (см. adventure.js) — их пишет только встроенная карта
-    st.advMap = data && !Array.isArray(data) ? adventure.parseMap(data.adv) : null;
+    st.advMap = data && !Array.isArray(data) ? (adventure.parseMap(data.adv) || adventure.fromObjects(list)) : null;
     if (!data || !data.apoc || (st.fixedVariant && st.fixedVariant !== 'party')) return;
     // яд на зомби-карте заражает прячущегося (см. hsPoisoned)
     st.hasPoison = list.some(o => o && o.deadly === true);
@@ -1063,7 +1064,7 @@ function hsMapOk(st) {
     const d = JSON.parse(m.mapData);
     // приключение — только на картах с его описанием (HS_VARIANT в тестах выбирает башню или оборону)
     if (st.fixedVariant === 'adventure') {
-      const am = adventure.parseMap(d && d.adv);
+      const am = (d && adventure.parseMap(d.adv)) || adventure.fromObjects(d && (Array.isArray(d) ? d : d.objects));
       return !!am && (!adventure.isAdv(process.env.HS_VARIANT) || am.kind === process.env.HS_VARIANT);
     }
     if (!d || (d.apoc && st.fixedVariant !== 'party')) return false;

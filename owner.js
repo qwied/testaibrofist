@@ -8,8 +8,9 @@
   var me = { owner: false, name: '', ownerName: 'AIBrofist' };
   var inGame = {};          // "автор::карта" -> [режимы]
   // режимов, кроме этих двух, в игре нет
-  var MODES = ['hideAndSeek', 'race'];
-  var MODE_RU = { hideAndSeek: 'Hide and Seek', race: 'Race' };
+  var MODES = ['hideAndSeek', 'race', 'murder', 'team', 'war', 'party', 'adventure'];
+  var MODE_RU = { hideAndSeek: 'Hide and Seek', race: 'Race', murder: 'Murder Mystery', team: 'Team Battle',
+                  war: 'War', party: 'Party', adventure: 'Adventure' };
   var T = function (k, fallback) {
     return (window.I18N && window.I18N.t(k) !== k) ? I18N.t(k) : (fallback || k);
   };
@@ -628,7 +629,7 @@
     if (document.getElementById('aaScript')) return;
     var sc = document.createElement('script');
     sc.id = 'aaScript';
-    sc.src = 'adminAbuse.js?v=200';
+    sc.src = 'adminAbuse.js?v=201';
     sc.defer = true;
     document.head.appendChild(sc);
   })();

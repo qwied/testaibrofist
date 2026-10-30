@@ -175,7 +175,7 @@ const GAMES = ['quiz', 'guess', 'build'];
   const rules = await until(() => page.evaluate(() => { const li = [...document.querySelectorAll('#mdList li')]; return li.length === 5 && li.every(x => x.textContent.trim()) ? document.getElementById('mdName').textContent : null; }), 6000);
   ok(rules === 'Party', 'страница /party: название и пять правил', rules);
   await page.click('#mdPlay');
-  await page.waitForURL(/variant=party/, { timeout: 8000 }).catch(() => {});
+  await page.waitForURL(/mode=party/, { timeout: 8000 }).catch(() => {});
   const room2 = await until(async () => { const r = await fetch(S.base + '/getRoomList?mode=hideAndSeek&variant=party').then(r => r.json()); return r.rooms[0] && r.rooms[0].room; }, 8000);
   ok(!!room2, 'браузер в комнате «Вечеринки»', room2);
   const C = bot(S.base, 'pt_c', room2);

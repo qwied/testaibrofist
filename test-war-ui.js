@@ -71,7 +71,7 @@ function bot(base, name, room) {
   const rules = await until(() => page.evaluate(() => { const li = [...document.querySelectorAll('#mdList li')]; return li.length === 7 && li.every(x => x.textContent.trim()) ? document.getElementById('mdName').textContent : null; }), 6000);
   ok(rules === 'War', 'страница /war: название и семь правил', rules);
   await page.click('#mdPlay');
-  await page.waitForURL(/variant=war/, { timeout: 8000 }).catch(() => {});
+  await page.waitForURL(/mode=war/, { timeout: 8000 }).catch(() => {});
   const room = await until(async () => { const r = await fetch(S.base + '/getRoomList?mode=hideAndSeek&variant=war').then(r => r.json()); return r.rooms[0] && r.rooms[0].room; }, 8000);
   ok(!!room, 'браузер в комнате войны', room);
   const B = bot(S.base, 'bot_b', room);

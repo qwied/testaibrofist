@@ -50,7 +50,7 @@ function register(app, acc) {
        пряток, а их может быть всего несколько. Теперь выбирать можно
        ЛЮБУЮ карту из Maps Browser, а режим сессии определяет она сама —
        так и рассинхрона «карта не того режима» больше не бывает. */
-    const mode = m.mapType;
+    const mode = maps.familyOf ? maps.familyOf(m.mapType) : m.mapType;   // карта War и т.п. — это прятки со своим видом
     if (ALLOWED_MODES.indexOf(mode) === -1)
       return res.json({ status: 'error', message: 'This map is not playable in Story Mode' });
 

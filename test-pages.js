@@ -63,7 +63,7 @@ const srv = http.createServer((req, res) => {
   await pg.close();
 
   console.log('Murder Mystery:');
-  const mu = await open('/game.html?mode=hideAndSeek&variant=murder');
+  const mu = await open('/game.html?mode=murder');
   ok(!!await until(async () => /Bro Arena/.test(await text(mu)) && /Players: 4/.test(await text(mu)), 20000), 'карта «Bro Arena», с тремя ботами');
   ok(!!await until(async () => /Murderer|Sheriff|Innocent/i.test(await text(mu)), 20000), 'тайная роль выдана (убийца, шериф или невиновный)');
   // поимка: делаем игрока убийцей, ждём конца «20 секунд мира», подводим к боту — тот выбывает; шериф-бот, тронув убийцу, выигрывает
@@ -89,7 +89,7 @@ const srv = http.createServer((req, res) => {
   await mu.close();
 
   console.log('Team Battle:');
-  const tb = await open('/game.html?mode=hideAndSeek&variant=team');
+  const tb = await open('/game.html?mode=team');
   ok(!!await until(async () => /Bro Arena/.test(await text(tb)) && /Players: 4/.test(await text(tb)), 20000), 'карта «Bro Arena», с тремя ботами');
   ok(!!await until(async () => /Red[^\n]*Blue|Red \d+ : \d+ Blue/.test(await text(tb)), 25000), 'две команды, счёт на экране');
   // захват флага: берём вражеский флаг у его базы, несём к своей — очко
@@ -111,13 +111,13 @@ const srv = http.createServer((req, res) => {
   await tb.close();
 
   console.log('Война:');
-  const w = await open('/game.html?mode=hideAndSeek&variant=war');
+  const w = await open('/game.html?mode=war');
   ok(!!await until(async () => /Pirate Bay/.test(await text(w)) && /HP \d+/.test(await text(w)), 20000), 'карта «Pirate Bay», полоска здоровья — бой идёт');
   ok(/Players: 4/.test(await text(w)), 'в комнате трое ботов (Players: 4)');
   await w.close();
 
   console.log('Вечеринка:');
-  const pa = await open('/game.html?mode=hideAndSeek&variant=party');
+  const pa = await open('/game.html?mode=party');
   ok(!!await until(async () => /Question 1 of/.test(await text(pa)), 20000), 'пошла викторина');
   ok(/Bot A/.test(await text(pa)) && /Players: 4/.test(await text(pa)), 'боты в таблице очков');
   const ans = await until(async () => /Bot [ABC] [1-9]\d{2}/.test(await text(pa)), 16000);
@@ -125,7 +125,7 @@ const srv = http.createServer((req, res) => {
   await pa.close();
 
   console.log('Приключение:');
-  const ad = await open('/game.html?mode=hideAndSeek&variant=adventure');
+  const ad = await open('/game.html?mode=adventure');
   ok(!!await until(async () => /Floor 1\/5|Wave/.test(await text(ad)) && /Bro Tower|Crystal Defense/.test(await text(ad)), 25000), 'башня или оборона: идёт приключение, враги на этаже');
   ok(/HP \d+/.test(await text(ad)), 'здоровье класса на экране');
   await ad.close();

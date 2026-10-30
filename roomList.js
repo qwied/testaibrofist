@@ -85,8 +85,8 @@
     el.addEventListener('click', function (e) {
       var row = e.target.closest ? e.target.closest('.rlRow') : null;
       if (!row || !row.dataset.room) return;
-      location.href = 'game?mode=' + encodeURIComponent(mode) + (variant ? '&variant=' + encodeURIComponent(variant) : '')
-        + '&room=' + encodeURIComponent(row.dataset.room);
+      // отдельный режим — сам в ссылке: game?mode=murder&room=murder-1
+      location.href = 'game?mode=' + encodeURIComponent(variant || mode) + '&room=' + encodeURIComponent(row.dataset.room);
     });
   }
 

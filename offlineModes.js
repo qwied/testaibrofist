@@ -89,14 +89,14 @@
     }
     var recs = [], mapK = 0;
     function pickMap() {
-      var pool = recs.filter(function (r) { return variant !== 'adventure' || adventure.parseMap(r.mapData && r.mapData.adv); });
+      var pool = recs.filter(function (r) { return variant !== 'adventure' || adventure.parseMap(r.mapData && r.mapData.adv) || adventure.fromObjects(r.mapData && r.mapData.objects); });
       var rec = pool[mapK++ % pool.length];
       st.map = { author: rec.author, mapName: rec.mapName };
       var list = (rec.mapData && rec.mapData.objects) || [];
       st.mapData = rec.mapData;
       st.spots = list.filter(function (x) { return x && x.hideSpot === true; }).slice(0, 60).map(function (x) { return { x: +x.x, y: +x.y, w: +x.w || 1, h: +x.h || 1 }; });
       st.cannons = list.filter(function (x) { return x && x.type === 'cannon'; }).slice(0, 24).map(function (x) { return { x: +x.x, y: +x.y, w: 72, h: 44, aim: +x.aim || 0 }; });
-      st.advMap = adventure.parseMap(rec.mapData && rec.mapData.adv);
+      st.advMap = adventure.parseMap(rec.mapData && rec.mapData.adv) || adventure.fromObjects(list);
       st.apoc = false;
       var sp = list.filter(function (x) { return x && x.type === 'spawn'; })[0];
       st.spawn = sp ? { x: +sp.x, y: +sp.y } : { x: 100, y: 100 };

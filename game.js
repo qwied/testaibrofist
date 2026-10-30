@@ -16,13 +16,25 @@
 
   var q      = new URLSearchParams(location.search);
   var STORY  = q.get('story') === '1';        // приватная комната по приглашению — см. story.html
-  var MODE   = q.get('mode') || 'hideAndSeek';   // Story работает и в Race, и в Hide and Seek — режим решает сама ссылка
+  /* Отдельные режимы — прямо в ссылке: game?mode=murder (а не mode=hideAndSeek&variant=murder). Внутри игры
+     это те же прятки со своей комнатой (см. hsFixedOf в server.js), поэтому MODE остаётся hideAndSeek, а сам
+     режим — VARIANT. Старые ссылки с variant= работают и переписываются в адресной строке на новый вид. */
+  var KIND_RE = /^(murder|team|war|party|adventure)$/;
+  var MODE_Q = q.get('mode') || 'hideAndSeek';
+  var MODE   = KIND_RE.test(MODE_Q) ? 'hideAndSeek' : MODE_Q;   // Story работает и в Race, и в Hide and Seek — режим решает сама ссылка
   var ROOM   = q.get('room') || null;
   var VIEW   = q.get('view');                 // просмотр одной карты из Maps Browser
   var VAUTH  = q.get('author');
   var PRACTICE = q.get('practice') === '1';   // Practice Mode — см. Maps Browser
   // отдельный режим с главной (Murder Mystery, Team Battle) — свои комнаты «murder-1», «team-1» (см. hsFixedOf в server.js)
-  var VARIANT = /^(murder|team|war|party|adventure)$/.test(q.get('variant') || '') ? q.get('variant') : null;
+  var VARIANT = KIND_RE.test(MODE_Q) ? MODE_Q : KIND_RE.test(q.get('variant') || '') ? q.get('variant') : null;
+  if (VARIANT && q.get('variant') && window.history && history.replaceState) {
+    try {
+      var q2 = new URLSearchParams(location.search);
+      q2.set('mode', VARIANT); q2.delete('variant');
+      history.replaceState(null, '', location.pathname + '?' + q2.toString() + location.hash);
+    } catch (e) {}
+  }
   var GOD  = PRACTICE && q.get('god') === '1';   // неуязвимость — подопция Practice, ставится там же
   var FLY  = PRACTICE && q.get('fly') === '1';   // полёт — подопция Practice, ставится там же
 

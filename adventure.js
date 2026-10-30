@@ -66,6 +66,38 @@ function parseMap(raw) {
            spawns: (Array.isArray(raw.spawns) ? raw.spawns : []).slice(0, 4).map(x => fin(x, -1e5, 1e5, 0)), start: pt(raw.start), waves };
 }
 
+/* Приключение из Map Editor: у карты нет описания adv — собираем его из объектов «Враг» и «Кристалл».
+   Есть кристалл — оборона: пол — низ кристалла, враги отмечают края, откуда идут волны, и кто в них;
+   волн пять, с каждой врагов больше. Нет кристалла — башня: враги на одной высоте (низ метки) — этаж,
+   этажи снизу вверх; на первом игроки начинают у точки старта, на следующих — у края этажа. */
+function fromObjects(list) {
+  const objs = Array.isArray(list) ? list : [];
+  const foes = objs.filter(o => o && o.type === 'enemy' && Number.isFinite(+o.x) && Number.isFinite(+o.y)).slice(0, 60)
+    .map(o => ({ k: Object.prototype.hasOwnProperty.call(KINDS, o.foe) ? o.foe : 'slime', x: +o.x + (+o.w || 40) / 2, y: +o.y + (+o.h || 64) }));
+  if (!foes.length) return null;
+  const sp = objs.find(o => o && o.type === 'spawn');
+  const crystal = objs.find(o => o && o.type === 'crystal');
+  if (crystal) {
+    const cw = +crystal.w || 90, cx = +crystal.x + cw / 2, gy = +crystal.y + (+crystal.h || 120);
+    const xs = foes.map(f => f.x);
+    const kinds = foes.map(f => f.k);
+    const waves = [1, 1.5, 2, 2.5, 3].map(m => { const w = []; for (let i = 0; i < Math.min(12, Math.round(kinds.length * m)); i++) w.push(kinds[i % kinds.length]); return w; });
+    return parseMap({ kind: 'defense', ground: { y: gy, x0: Math.min(cx, Math.min.apply(null, xs)) - 60, x1: Math.max(cx, Math.max.apply(null, xs)) + 60 },
+      core: { x: cx, w: cw, hp: 30 }, spawns: xs.slice(0, 4),
+      start: sp ? { x: +sp.x, y: +sp.y } : { x: cx - 15, y: gy - 100 }, waves });
+  }
+  const groups = [];
+  foes.slice().sort((a, b) => b.y - a.y).forEach((f) => {
+    const g = groups.find(q => Math.abs(q.y - f.y) <= 40);
+    if (g) g.list.push(f); else groups.push({ y: f.y, list: [f] });
+  });
+  return parseMap({ kind: 'quest', floors: groups.slice(0, 8).map((g, i) => {
+    const xs = g.list.map(f => f.x), x0 = Math.min.apply(null, xs) - 420, x1 = Math.max.apply(null, xs) + 420;
+    return { y: g.y, x0, x1, gate: null, enemies: g.list.map(f => ({ k: f.k, x: f.x })),
+             start: i === 0 && sp ? { x: +sp.x, y: +sp.y } : { x: x0 + 60, y: g.y - 100 } };
+  }) });
+}
+
 module.exports = function createAdventure(d) {
   const { io, gameState, hsMembers, sessionName, credit, creditScore, endEarly } = d;
   const num = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
@@ -390,8 +422,9 @@ module.exports = function createAdventure(d) {
              allGates: a.meta.floors ? a.meta.floors.map(f => f.gate).filter(Boolean) : [],
              core: a.core, wave: a.wave + 1, waves: a.waves ? a.waves.length : 0, cls: obj(st.advClass || new Map()) };
   }
-  return { isAdv, parseMap, pick, roundMs, classes, classOf, pickClass, start, lobby, tick, shot, hit, heal, reveal, award, join, leave,
+  return { isAdv, parseMap, fromObjects, pick, roundMs, classes, classOf, pickClass, start, lobby, tick, shot, hit, heal, reveal, award, join, leave,
            state, KINDS, CLASSES, WPN, HEAL };
 };
 module.exports.isAdv = isAdv;
 module.exports.parseMap = parseMap;
+module.exports.fromObjects = fromObjects;
