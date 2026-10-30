@@ -20,7 +20,7 @@
     var cache = {};
     var req = function (name) { if (name === './party.js') return cache.party; throw new Error('require ' + name); };
     var run = function (file) {
-      return raw(file).then(function (r) { if (!r.ok) throw new Error(file + ' ' + r.status); return r.text(); }).then(function (src) {
+      return raw(file, { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error(file + ' ' + r.status); return r.text(); }).then(function (src) {
         var m = { exports: {} };
         new Function('module', 'exports', 'require', 'process', src)(m, m.exports, req, { env: {} });   // eslint-disable-line no-new-func
         return m.exports;
@@ -78,7 +78,7 @@
     /* ---- карты: встроенные уровни режима (builtinMaps/) кладём в карты песочницы ---- */
     function loadMaps() {
       return Promise.all(BUILTIN[variant].map(function (f) {
-        return o.raw('builtinMaps/' + f).then(function (r) { return r.json(); }).then(function (data) {
+        return o.raw('builtinMaps/' + f, { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (data) {
           var name = { 'piratebay.json': 'Pirate Bay', 'broarena.json': 'Bro Arena', 'brotower.json': 'Bro Tower', 'crystaldefense.json': 'Crystal Defense' }[f];
           var rec = api.findMap('qwied', name);
           if (!rec) { rec = { mapName: name, author: 'qwied', mapType: 'hideAndSeek', date: Date.now(), rating: 5, likes: 0, dislikes: 0, commentCount: 0,

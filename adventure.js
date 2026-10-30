@@ -16,12 +16,12 @@
    возвращается через ADV.respawn в начале текущего этажа (в обороне — у кристалла). */
 
 const KINDS = {
-  slime:    { hp: 40,  dmg: 8,  spd: 60,  w: 44, h: 32,  reach: 26, core: 1, fly: 0 },
+  slime:    { hp: 40,  dmg: 8,  spd: 60,  w: 26, h: 60,  reach: 26, core: 1, fly: 0 },
   skeleton: { hp: 60,  dmg: 12, spd: 85,  w: 30, h: 96,  reach: 36, core: 2, fly: 0 },
-  bat:      { hp: 28,  dmg: 7,  spd: 150, w: 40, h: 26,  reach: 30, core: 1, fly: 62 },
-  knight:   { hp: 130, dmg: 18, spd: 60,  w: 38, h: 104, reach: 46, core: 3, fly: 0 },
-  ogre:     { hp: 320, dmg: 22, spd: 45,  w: 70, h: 150, reach: 60, core: 6, fly: 0 },
-  boss:     { hp: 520, dmg: 26, spd: 70,  w: 90, h: 200, reach: 70, core: 10, fly: 0 }
+  bat:      { hp: 28,  dmg: 7,  spd: 150, w: 24, h: 40,  reach: 30, core: 1, fly: 62 },
+  knight:   { hp: 130, dmg: 18, spd: 60,  w: 30, h: 100, reach: 46, core: 3, fly: 0 },
+  ogre:     { hp: 320, dmg: 22, spd: 45,  w: 46, h: 150, reach: 60, core: 6, fly: 0 },
+  boss:     { hp: 520, dmg: 26, spd: 70,  w: 60, h: 200, reach: 70, core: 10, fly: 0 }
 };
 const CLASSES = { warrior: { hp: 170, w: 'sword' }, archer: { hp: 110, w: 'bow' }, mage: { hp: 95, w: 'fire' } };
 const CLASS_ORDER = ['warrior', 'archer', 'mage'];

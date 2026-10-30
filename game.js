@@ -3943,8 +3943,9 @@
     bow:   { cd: 480, v: 1.3, g: 0.0007, life: 1600, r: 5, color: '#78350f' },
     fire:  { cd: 720, v: 0.95, g: 0, life: 1600, r: 10, color: '#f97316', boom: 95 }
   };
-  var ADV_KIND = { slime: { w: 44, h: 32 }, skeleton: { w: 30, h: 96 }, bat: { w: 40, h: 26 }, knight: { w: 38, h: 104 },
-                   ogre: { w: 70, h: 150 }, boss: { w: 90, h: 200 } };
+  // размеры — те же, что KINDS в adventure.js: все враги — человечки пропорций игрока (как зомби), только ростом разные
+  var ADV_KIND = { slime: { w: 26, h: 60 }, skeleton: { w: 30, h: 96 }, bat: { w: 24, h: 40 }, knight: { w: 30, h: 100 },
+                   ogre: { w: 46, h: 150 }, boss: { w: 60, h: 200 } };
   var ADV_HEAL_CD = 8000;
   var adv = null;                // состояние раунда: { v, hp, max, down, kills, en, floor, floors, gates, allGates, core, wave, waves }
   var advCls = {};               // у кого какой класс (лобби и раунд)
@@ -4054,44 +4055,45 @@
     if (e.dir < 0) { ctx.translate(w, 0); ctx.scale(-1, 1); }
     var lunge = e.atkAt && now - e.atkAt < 220 ? Math.sin(Math.PI * (now - e.atkAt) / 220) * 10 : 0;
     ctx.translate(lunge, 0);
+    /* Враги нарисованы так же, как игроки и зомби (см. OUTFIT в game.html): тот же силуэт figure() —
+       круглая голова и прямоугольное тело — одним цветом, без свечения, а вид — по мелким деталям:
+       квадратные глаза, как у зомби, и маленький знак на голове. Ударили — силуэт на миг светлеет. */
+    var col = { slime: '#22c55e', skeleton: '#d1d5db', bat: '#3b0764', knight: '#64748b', ogre: '#4d7c0f', boss: '#7c3aed' }[e.k];
+    var d = w, eyeS = Math.max(2, d * 0.17), eyeY = d * 0.42;
+    var eyes = function (c) {
+      ctx.fillStyle = c;
+      ctx.fillRect(w / 2 - d * 0.27 - eyeS / 2, eyeY, eyeS, eyeS);
+      ctx.fillRect(w / 2 + d * 0.27 - eyeS / 2, eyeY, eyeS, eyeS);
+    };
+    if (e.k === 'bat') {
+      // крылышки у головы — маленькие, как рожки у Bro RED, и чуть машут
+      var flap = Math.sin(now / 90 + e.id) * d * 0.12;
+      ctx.fillStyle = hit ? '#fecaca' : '#2e1065';
+      ctx.beginPath(); ctx.moveTo(w * 0.1, d * 0.45); ctx.lineTo(-w * 0.45, d * 0.15 - flap); ctx.lineTo(-w * 0.2, d * 0.75); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(w * 0.9, d * 0.45); ctx.lineTo(w * 1.45, d * 0.15 - flap); ctx.lineTo(w * 1.2, d * 0.75); ctx.closePath(); ctx.fill();
+    }
+    GAME.figure(w, h, hit ? '#fecaca' : col, true, null);
     if (e.k === 'slime') {
-      var sq = 1 + Math.sin(now / 160 + e.id) * 0.06;
-      ctx.fillStyle = hit ? '#fecaca' : '#22c55e';
-      ctx.beginPath(); ctx.ellipse(w / 2, h - h * 0.45 * sq, w / 2, h * 0.5 * sq, 0, Math.PI, 0); ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.beginPath(); ctx.ellipse(w * 0.32, h * 0.38, w * 0.1, h * 0.12, 0, 0, 6.2832); ctx.fill();
-      ctx.fillStyle = '#052e16'; ctx.fillRect(w * 0.58, h * 0.42, 4, 6); ctx.fillRect(w * 0.76, h * 0.42, 4, 6);
+      eyes('#052e16');
+      ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(w * 0.3, d * 0.28, Math.max(1.5, d * 0.1), 0, 6.2832); ctx.fill();
+    } else if (e.k === 'skeleton') {
+      eyes('#111827');
     } else if (e.k === 'bat') {
-      var flap = Math.sin(now / 70 + e.id) * h * 0.5;
-      ctx.fillStyle = hit ? '#fecaca' : '#3b0764';
-      ctx.beginPath(); ctx.moveTo(w / 2, h * 0.5); ctx.lineTo(0, h * 0.2 - flap); ctx.lineTo(w * 0.2, h * 0.7); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(w / 2, h * 0.5); ctx.lineTo(w, h * 0.2 - flap); ctx.lineTo(w * 0.8, h * 0.7); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.arc(w / 2, h * 0.55, h * 0.32, 0, 6.2832); ctx.fill();
-      ctx.fillStyle = '#ef4444'; ctx.fillRect(w * 0.52, h * 0.45, 3, 3); ctx.fillRect(w * 0.62, h * 0.45, 3, 3);
-    } else {
-      // гуманоиды: скелет, рыцарь, огр, босс — голова и тело, как у игроков, в своих цветах
-      var col = { skeleton: '#e5e7eb', knight: '#64748b', ogre: '#4d7c0f', boss: '#7c3aed' }[e.k];
-      if (hit) col = '#fecaca';
-      if (e.k === 'boss') { ctx.shadowColor = 'rgba(168,85,247,.8)'; ctx.shadowBlur = 20; }
-      GAME.figure(w, h, col, true, null);
-      ctx.shadowBlur = 0;
-      var d = w;
-      if (e.k === 'skeleton') {
-        ctx.fillStyle = '#111827'; ctx.fillRect(w * 0.3, d * 0.36, w * 0.14, d * 0.16); ctx.fillRect(w * 0.58, d * 0.36, w * 0.14, d * 0.16);
-        ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = 2;
-        for (var r = 0; r < 4; r++) { ctx.beginPath(); ctx.moveTo(w * 0.15, d * 1.35 + r * 9); ctx.lineTo(w * 0.85, d * 1.35 + r * 9); ctx.stroke(); }
-      } else if (e.k === 'knight') {
-        ctx.fillStyle = '#334155'; ctx.fillRect(w * 0.1, d * 0.38, w * 0.8, d * 0.12);
-        ctx.fillStyle = '#cbd5e1'; ctx.fillRect(w + 2, h * 0.35, 5, h * 0.42);
-      } else if (e.k === 'ogre') {
-        ctx.fillStyle = '#fde68a'; ctx.beginPath(); ctx.moveTo(w * 0.3, d * 0.7); ctx.lineTo(w * 0.36, d * 0.55); ctx.lineTo(w * 0.42, d * 0.7); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(w * 0.6, d * 0.7); ctx.lineTo(w * 0.66, d * 0.55); ctx.lineTo(w * 0.72, d * 0.7); ctx.fill();
-        ctx.fillStyle = '#7f1d1d'; ctx.fillRect(w * 0.3, d * 0.36, 6, 6); ctx.fillRect(w * 0.62, d * 0.36, 6, 6);
-      } else if (e.k === 'boss') {
-        ctx.fillStyle = '#fbbf24';
-        ctx.beginPath(); ctx.moveTo(w * 0.18, d * 0.12); ctx.lineTo(w * 0.24, -d * 0.22); ctx.lineTo(w * 0.38, d * 0.02); ctx.lineTo(w * 0.5, -d * 0.28);
-        ctx.lineTo(w * 0.62, d * 0.02); ctx.lineTo(w * 0.76, -d * 0.22); ctx.lineTo(w * 0.82, d * 0.12); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#fde047'; ctx.fillRect(w * 0.28, d * 0.4, w * 0.14, d * 0.1); ctx.fillRect(w * 0.58, d * 0.4, w * 0.14, d * 0.1);
-      }
+      eyes('#ef4444');
+    } else if (e.k === 'knight') {
+      // забрало — тёмная полоса через глаза, как повязка у команды
+      ctx.fillStyle = '#1e293b'; ctx.fillRect(-w * 0.04, d * 0.34, w * 1.08, Math.max(2, d * 0.17));
+      ctx.fillStyle = '#e2e8f0'; ctx.fillRect(w * 0.45, -d * 0.12, w * 0.1, d * 0.16);
+    } else if (e.k === 'ogre') {
+      eyes('#7f1d1d');
+      ctx.fillStyle = '#fde68a';
+      ctx.fillRect(w * 0.3, d * 0.66, Math.max(2, d * 0.08), d * 0.12); ctx.fillRect(w * 0.62, d * 0.66, Math.max(2, d * 0.08), d * 0.12);
+    } else if (e.k === 'boss') {
+      // корона — размером с фуражку копа
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath(); ctx.moveTo(w * 0.12, d * 0.08); ctx.lineTo(w * 0.12, -d * 0.2); ctx.lineTo(w * 0.31, -d * 0.04); ctx.lineTo(w * 0.5, -d * 0.24);
+      ctx.lineTo(w * 0.69, -d * 0.04); ctx.lineTo(w * 0.88, -d * 0.2); ctx.lineTo(w * 0.88, d * 0.08); ctx.closePath(); ctx.fill();
+      eyes('#fde047');
     }
     ctx.restore();
     // полоска здоровья над врагом
