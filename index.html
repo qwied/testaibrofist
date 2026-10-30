@@ -194,10 +194,15 @@ body{
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     scroll-behavior: smooth;
-    padding: 6px 4px 16px;
-    scrollbar-width: none;              /* своя полоса прокрутки — ползунок ниже */
+    padding: 6px 4px 14px;
+    /* обычная полоса прокрутки под строкой — её ползунок тянут мышью */
+    scrollbar-width: auto;
+    scrollbar-color: #9ca3af #eef0f3;
 }
-.cardsTrack::-webkit-scrollbar{ display: none; }
+.cardsTrack::-webkit-scrollbar{ height: 12px; }
+.cardsTrack::-webkit-scrollbar-track{ background: #eef0f3; border-radius: 6px; }
+.cardsTrack::-webkit-scrollbar-thumb{ background: #9ca3af; border-radius: 6px; border: 2px solid #eef0f3; }
+.cardsTrack::-webkit-scrollbar-thumb:hover{ background: #6b7280; }
 .cards .cardContainer{
     flex: 0 0 auto;
     width: 240px;
@@ -217,12 +222,6 @@ body{
     transition: opacity .15s ease;
 }
 .cardsArrow:disabled{ opacity: .3; cursor: default; }
-.cardsSlider{
-    width: min(420px, 80%);
-    margin: 0 auto;
-    accent-color: #111827;
-    cursor: pointer;
-}
 /* узкий экран: карточки поменьше, стрелки прячем — там листают пальцем или ползунком */
 @media (max-width: 640px){
     .cards .cardContainer{ width: 156px; }
@@ -559,7 +558,7 @@ body{
                         </div>
                 </div>
 
-                <!-- Game mode cards: все режимы одной строкой, листаются ползунком, стрелками, колесом и пальцем -->
+                <!-- Game mode cards: все режимы одной строкой с обычной полосой прокрутки; листаются ещё стрелками, колесом и пальцем -->
                 <div class="cards">
                     <div class="cardsStrip">
                     <button type="button" class="cardsArrow cardsPrev" aria-label="Previous modes">&#8249;</button>
@@ -609,7 +608,6 @@ body{
                     </div>
                     <button type="button" class="cardsArrow cardsNext" aria-label="Next modes">&#8250;</button>
                     </div>
-                    <input type="range" class="cardsSlider" id="cardsSlider" min="0" max="1000" value="0" aria-label="Scroll game modes">
                 </div>
 
         </div>
@@ -675,26 +673,17 @@ body{
 
         </script>
 <script>
-/* Строка режимов: ползунок, стрелки и колесо мыши двигают одну и ту же прокрутку строки,
-   а ползунок и стрелки следят за ней (листают и пальцем) */
+/* Строка режимов: стрелки и колесо мыши листают ту же прокрутку, что и полоса под строкой */
 (function () {
-  var track = document.getElementById('cardsTrack'), slider = document.getElementById('cardsSlider');
-  if (!track || !slider) return;
+  var track = document.getElementById('cardsTrack');
+  if (!track) return;
   var prev = document.querySelector('.cardsPrev'), next = document.querySelector('.cardsNext');
   var max = function () { return Math.max(0, track.scrollWidth - track.clientWidth); };
   var step = function () { var c = track.querySelector('.cardContainer'); return c ? c.getBoundingClientRect().width + 18 : 240; };
   function sync() {
-    var m = max();
-    slider.style.visibility = m > 2 ? '' : 'hidden';          // всё и так видно — ползунок не нужен
-    slider.value = m ? Math.round(track.scrollLeft / m * 1000) : 0;
     if (prev) prev.disabled = track.scrollLeft <= 2;
-    if (next) next.disabled = track.scrollLeft >= m - 2;
+    if (next) next.disabled = track.scrollLeft >= max() - 2;
   }
-  slider.addEventListener('input', function () {
-    track.style.scrollBehavior = 'auto';
-    track.scrollLeft = slider.value / 1000 * max();
-    track.style.scrollBehavior = '';
-  });
   if (prev) prev.onclick = function () { track.scrollBy({ left: -step(), behavior: 'smooth' }); };
   if (next) next.onclick = function () { track.scrollBy({ left: step(), behavior: 'smooth' }); };
   track.addEventListener('wheel', function (e) {
