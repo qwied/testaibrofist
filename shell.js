@@ -11,6 +11,16 @@
 (function () {
   'use strict';
 
+  /* Главная — рядом с текущей страницей, а не корень сайта: тестовый сайт на GitHub Pages лежит в подпапке
+     (qwied.github.io/testaibrofist/), и «/» уводил на чужой корень — «страница не доступна». Файлом (file://)
+     — сам index.html. Ссылки «на главную» с href="/" на странице переписываем так же. */
+  function homeUrl() { return location.protocol === 'file:' ? 'index.html' : './'; }
+  window.BFHome = homeUrl;
+  function fixHomeLinks() {
+    Array.prototype.forEach.call(document.querySelectorAll('a[href="/"]'), function (a) { a.setAttribute('href', homeUrl()); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fixHomeLinks); else fixHomeLinks();
+
   function svg(paths, extra) {
     return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" '
       + 'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"' + (extra || '') + '>'
@@ -161,7 +171,7 @@
     head.id = 'bfHead';
 
     var brand = el('a', 'bfBrand', MARK + '<b>AIBROFIST</b>');
-    brand.href = '/';
+    brand.href = homeUrl();
     head.appendChild(brand);
 
     var nav = el('nav', 'bfNav');
@@ -277,7 +287,7 @@
         closeAll(null);
         if (window.bfOpenAuth) window.bfOpenAuth();
         else if (window.BFAuth && BFAuth.open) BFAuth.open();
-        else location.href = '/';
+        else location.href = homeUrl();
       };
       box.appendChild(inBtn);
       return;

@@ -46,6 +46,16 @@ const srv = http.createServer((req, res) => {
   };
   const text = (p) => p.evaluate(() => (document.body ? document.body.innerText : ''));
 
+  console.log('Логотип и «на главную»:');
+  const lg = await open('/party');
+  await until(() => lg.evaluate(() => !!document.querySelector('.bfBrand')), 5000);
+  ok(await lg.evaluate(() => document.querySelector('.bfBrand').getAttribute('href') === './' && document.querySelector('.mdBack').getAttribute('href') === './'),
+    'логотип и «на главную» ведут на главную рядом со страницей, а не в корень сайта (на Pages сайт в подпапке)');
+  await lg.click('.bfBrand');
+  ok(!!await until(async () => /\/(index\.html)?$/.test(new URL(lg.url()).pathname) && await lg.evaluate(() => document.querySelectorAll('.card[data-mode]').length === 7), 6000),
+    'клик по логотипу открывает главное меню с семью режимами', lg.url());
+  await lg.close();
+
   console.log('Страница режима:');
   const pg = await open('/party');
   await until(async () => /Party/i.test(await pg.evaluate(() => (document.getElementById('mdName') || {}).textContent || '')), 5000);

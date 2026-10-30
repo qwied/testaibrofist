@@ -80,6 +80,10 @@
     {
       "title": "New enemy and character looks",
       "text": "Adventure enemies got detailed new looks: a slime, a skeleton with a sword, a bat, a knight with a shield, an orc with an axe and a crowned boss with a staff. Team members now wear their own hats, the mage carries a staff, and character models no longer have eyes."
+    },
+    {
+      "title": "Easier main menu",
+      "text": "The main menu now fits on one screen: Hide and Seek and Race at the top, the other five modes in one row below. The logo always takes you back to the main menu."
     }
   ]
 }

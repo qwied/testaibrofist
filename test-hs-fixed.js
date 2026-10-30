@@ -179,7 +179,7 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   const page = await ctx.newPage();
   page.on('pageerror', e => errs.push(e.message.slice(0, 140)));
   await page.goto(A.base + '/', { waitUntil: 'domcontentloaded' });
-  // ряды карточек: до четырёх в ряд, неполный ряд — по центру страницы с карточками
+  // ряды карточек: сверху две основные (Hide and Seek, Race), ниже одним рядом пять остальных — оба по центру
   const grid = await page.evaluate(() => {
     const box = document.querySelector('.cards').getBoundingClientRect();
     const cs = [...document.querySelectorAll('.card')].map(c => c.getBoundingClientRect());
@@ -187,7 +187,7 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
     cs.forEach(r => { (rows[Math.round(r.y)] = rows[Math.round(r.y)] || []).push(r); });
     return { mid: box.x + box.width / 2, rows: Object.keys(rows).map(y => { const rr = rows[y]; return { n: rr.length, c: (rr[0].x + rr[rr.length - 1].right) / 2 }; }) };
   });
-  ok(grid.rows.length >= 2 && grid.rows.every(r => r.n <= 4 && Math.abs(r.c - grid.mid) < 3), 'карточки рядами до четырёх, каждый ряд по центру', JSON.stringify(grid));
+  ok(grid.rows.length === 2 && grid.rows[0].n === 2 && grid.rows[1].n === 5 && grid.rows.every(r => Math.abs(r.c - grid.mid) < 3), 'карточки: две основные сверху, пять режимов рядом ниже, каждый ряд по центру', JSON.stringify(grid));
   await page.click('.card[data-mode="team"]');
   await page.waitForURL(/team-battle/, { timeout: 8000 }).catch(() => {});
   ok(/\/team-battle$/.test(page.url()), 'клик по карточке открывает страницу режима', page.url());

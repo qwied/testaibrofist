@@ -609,7 +609,8 @@
     // просмотр карты из Maps Browser идёt внутри её iframe (см. VIEW выше) —
     // там некуда уходить своей навигацией, просто просим родителя закрыть окно
     if (VIEW && window.parent !== window) { window.parent.postMessage({ type: 'bfClosePractice' }, location.origin); return; }
-    location.href = '/';
+    // главная — рядом с игрой, а не корень сайта (см. homeUrl в shell.js: тестовый сайт лежит в подпапке)
+    location.href = location.protocol === 'file:' ? 'index.html' : './';
   };
 
 
