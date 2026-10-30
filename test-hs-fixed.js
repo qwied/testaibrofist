@@ -183,7 +183,7 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   const grid = await page.evaluate(() => {
     const ys = [...document.querySelectorAll('.card')].map(c => Math.round(c.getBoundingClientRect().y));
     const t = document.getElementById('cardsTrack');
-    return { n: ys.length, rows: new Set(ys).size, slider: getComputedStyle(t).overflowX === 'auto' && t.offsetHeight > t.clientHeight };
+    return { n: ys.length, rows: new Set(ys).size, slider: getComputedStyle(t).overflowX === 'auto' && t.scrollWidth > t.clientWidth && getComputedStyle(t).scrollbarWidth !== 'none' };
   });
   ok(grid.n === 7 && grid.rows === 1 && grid.slider, 'режимы — одной строкой, под ней обычная полоса прокрутки', JSON.stringify(grid));
   await page.click('.cardsNext');
