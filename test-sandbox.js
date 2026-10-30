@@ -28,6 +28,11 @@ const srv = http.createServer((req, res) => {
     ok(gc.status === 'success', 'владелец выдаёт монеты другому', JSON.stringify(gc));
     await o.waitForTimeout(1500);
     ok(await o.evaluate(() => !!document.querySelector('script[src*="owner.js"]')), 'инструменты владельца подключились');
+  console.log('Картинка в Logs:');
+    const lg = o;
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const up = await lg.evaluate((d) => fetch('/log/upload', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(d) + '&w=1&h=1' }).then(r => r.json()), png);
+    ok(up.status === 'success' && /^data:image\/png;base64,/.test(up.url), 'картинка загружается и отдаётся из браузера', JSON.stringify(up).slice(0, 120));
     await o.close(); }
   console.log('Панель песочницы:');
   const a = await open('avatar.html');
@@ -72,6 +77,24 @@ const srv = http.createServer((req, res) => {
   const after = await r.evaluate(() => new Promise(res => { const s = io(); s.on('coinsAwarded', d => res(d)); s.emit('raceFinish', {}); }));
   ok(after && after.coins === before + 1, 'финиш гонки: +1 монета на аккаунт', JSON.stringify({ before, after }));
   await r.close();
+
+  console.log('Боты-соперники в Race:');
+  const rr = await open('game.html?mode=race');
+  const fin = await until(rr, () => { const m = document.body.innerText.match(/Players: (\d+)/); return m && +m[1] > 1 ? m : null; }, 15000);
+  ok(fin && +fin[1] === 8, 'в гонке ты + 7 ботов', fin && fin[0]);
+  const place = await until(rr, () => /Bot \d+ (finished|финишировал)/.test(document.body.innerText) ? 1 : null, 75000);
+  ok(!!place, 'боты добегают до финиша', place);
+  await rr.evaluate(() => { localStorage.setItem('aibrofist.local.v2.sandbox', JSON.stringify(Object.assign(JSON.parse(localStorage.getItem('aibrofist.local.v2.sandbox') || '{}'), { bots: 3 }))); });
+  await rr.close();
+
+  console.log('Боты-союзники в Adventure:');
+  const av = await open('game.html?mode=adventure');
+  const hits = await until(av, () => { const c = window.BFOfflineModes && BFOfflineModes.room; if (!c || !c.st.adv) return null;
+    let by = 0; c.st.adv.kills.forEach((v, k) => { if (/^local-bot-/.test(k)) by += v; });
+    const hurt = c.st.adv.en.some(e => e.hp < e.max) || by > 0; return hurt ? { bots: c.bots.length, kills: by } : null; }, 45000);
+  ok(!!hits && hits.bots === 3, 'боты ранят и убивают врагов', JSON.stringify(hits));
+  await av.close();
+
 
   ok(errs.length === 0, 'ошибок скриптов нет', errs.join(' | '));
   console.log(`\n${pass} ok, ${fail} fail`);

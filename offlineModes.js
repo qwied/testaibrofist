@@ -11,9 +11,8 @@
   var MIN_PLAYERS = { classic: 2, murder: 3, team: 2, war: 2, party: 2, adventure: 1 };
   var MURDER_GRACE_MS = 20000, MIN_DIST = 200, CTF_WIN = 3, DOM_WIN = 120, DOM_TICKS = 3;
   /* сколько ботов в комнате — из панели песочницы (offlineServer.js), по умолчанию 3; меньше, чем нужно режиму, не бывает.
-     В «Приключении» боты не воюют — там их нет. */
+     В «Приключении» они союзники: сами идут к врагам и бьют их (см. botFight). */
   function botNames(variant) {
-    if (variant === 'adventure') return [];
     var n = 3;
     try { var sb = JSON.parse(localStorage.getItem('aibrofist.local.v2.sandbox') || '{}'); if (sb && sb.bots !== undefined) n = Math.floor(+sb.bots) || 0; } catch (e) {}
     n = Math.max(MIN_PLAYERS[variant] - 1, Math.min(39, n));
@@ -263,6 +262,7 @@
       war.spawnAll(st, room); war.tokRoundStart(st, room, members.size);
       party.start(st, room);
       if (secret || classic) st.chaseT = setInterval(botChase, 200);
+      if (st.adv) st.chaseT = setInterval(botFight, 200);
       clearTimeout(st.timer); st.timer = setTimeout(startLobby, ms);
     }
     function award() {
@@ -332,6 +332,29 @@
         if (!best) return;
         b.position.x += Math.max(-36, Math.min(36, best.position.x - b.position.x));
         if (Math.abs(best.position.x - b.position.x) < 50 && Math.abs(best.position.y - b.position.y) < 110) doCatch(b.id, best.id);
+      });
+    }
+
+    /* ---- «Приключение»: боты-союзники идут к ближайшему врагу (своего этажа — в первую очередь) и бьют его.
+       Урон, перезарядку, дальность оружия и «упал — встал» считает сам adventure.js, как для игрока. ---- */
+    var WEAPONS = ['sword', 'bow', 'fire'];
+    function botFight() {
+      var a = st.adv;
+      if (st.phase !== 'round' || !a || a.over) return;
+      bots.forEach(function (b) {
+        if (a.down && a.down.has(b.id)) return;
+        var best = null, bd = 1e9;
+        a.en.forEach(function (e) {
+          if (!(e.hp > 0)) return;
+          var d = Math.abs(e.x - (b.position.x + 15)) + Math.abs(e.floorY - (b.position.y + 100)) * 3;
+          if (d < bd) { bd = d; best = e; }
+        });
+        if (!best) return;
+        b.position.y = best.floorY - 100;
+        var want = best.x - 15 + (b.position.x + 15 < best.x ? -70 : 70);
+        b.position.x += Math.max(-26, Math.min(26, want - b.position.x));
+        b.sid = (b.sid || 0) + 1;
+        WEAPONS.forEach(function (w) { adventure.hit(st, room, b.id, { w: w, e: best.id, sid: b.sid }); });
       });
     }
 

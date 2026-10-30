@@ -149,6 +149,12 @@
           var mm = /^sid=([^;]*)/.exec(s); if (!mm) return;
           if (!mm[1] || /Max-Age=0/i.test(s)) lsDel('sid'); else lsSet('sid', mm[1]);
         });
+        // картинки Logs лежат в «файлах» localStorage — статики /logimg/ на хостинге нет, отдаём их прямо в ответе
+        if (typeof body === 'string' && body.indexOf('/logimg/') !== -1) body = body.replace(/\/logimg\/([A-Za-z0-9._-]+)/g, function (all, f) {
+          var v = lsGet('vfs:' + ROOT + '/data/logimg/' + f); if (v === null) return all;
+          var ext = (/\.(\w+)$/.exec(f) || [0, 'png'])[1].toLowerCase(), mime = ext === 'jpg' ? 'image/jpeg' : 'image/' + ext;
+          return 'data:' + mime + ';base64,' + (v.indexOf('b64:') === 0 ? v.slice(4) : btoa(v));
+        });
         resolve(new Response(body, { status: status, headers: { 'Content-Type': type || 'application/json' } }));
       }
       var res = { req: req, locals: {},
@@ -301,10 +307,30 @@
       '#bfSandbox button:hover{background:#eef2f7}#bfSandbox button.go{background:#111827;color:#fff;border-color:#111827}' +
       '#bfSandbox .sbSep{border-top:1px solid #eef0f3;margin:10px 0}#bfSandbox .sbMsg{color:#16a34a;font-size:12px;min-height:16px;margin-top:6px}';
     document.head.appendChild(css);
-    var btn = document.createElement('button'); btn.id = 'bfSandboxBtn'; btn.textContent = 'Sandbox';
+    var btn = document.createElement('button'); btn.id = 'bfSandboxBtn'; btn.textContent = 'Sandbox'; btn.title = 'Drag to move';
     var box = document.createElement('div'); box.id = 'bfSandbox';
     document.body.appendChild(btn); document.body.appendChild(box);
-    btn.onclick = function () { box.classList.toggle('open'); if (box.classList.contains('open')) draw(); };
+    /* кнопку можно утащить в любое место (запоминается); в игре по умолчанию — над кнопкой сообщений,
+       чтобы не закрывать полоску здоровья и подпись карты внизу */
+    function putBtn(x, y) {
+      x = Math.max(4, Math.min(innerWidth - btn.offsetWidth - 4, x)); y = Math.max(4, Math.min(innerHeight - btn.offsetHeight - 4, y));
+      btn.style.left = x + 'px'; btn.style.top = y + 'px'; btn.style.bottom = 'auto'; btn.style.transform = 'none';
+    }
+    var saved = null; try { saved = JSON.parse(lsGet('sandboxBtn') || 'null'); } catch (e) {}
+    if (saved) putBtn(saved.x * innerWidth, saved.y * innerHeight);
+    else if (/\/game(\.html)?$/.test(location.pathname)) putBtn(12, innerHeight - 106);
+    var drag = null, moved = false;
+    btn.addEventListener('pointerdown', function (e) { drag = { dx: e.clientX - btn.getBoundingClientRect().left, dy: e.clientY - btn.getBoundingClientRect().top, x: e.clientX, y: e.clientY }; moved = false; btn.setPointerCapture(e.pointerId); });
+    btn.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      if (!moved && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 5) return;
+      moved = true; putBtn(e.clientX - drag.dx, e.clientY - drag.dy);
+    });
+    btn.addEventListener('pointerup', function () {
+      if (drag && moved) { var r = btn.getBoundingClientRect(); lsSet('sandboxBtn', JSON.stringify({ x: r.left / innerWidth, y: r.top / innerHeight })); }
+      drag = null;
+    });
+    btn.onclick = function () { if (moved) { moved = false; return; } box.classList.toggle('open'); if (box.classList.contains('open')) draw(); };
     function num(id) { return Math.max(0, Math.floor(Number(document.getElementById(id).value) || 0)); }
     function msg(t) { var m = document.getElementById('sbMsg'); if (m) m.textContent = t; }
     function changed(t) {
@@ -321,7 +347,7 @@
         '<div class="sbRow"><label>H&amp;S score</label><input type="number" id="sbHs" value="' + (u.hsScore || 0) + '"><button class="go" data-a="hs">Set</button></div>' +
         '<div class="sbSep"></div>' +
         '<div class="sbRow"><label>Bots in rooms</label><input type="number" id="sbBots" min="0" max="39" value="' + (sb.bots === undefined ? 3 : sb.bots) + '"><button class="go" data-a="bots">Set</button></div>' +
-        '<div class="sbHint">Hide and Seek, Murder Mystery, Team Battle, War and Party. Applies when you join a room.</div>' +
+        '<div class="sbHint">Every mode: rivals in Race, players in Hide and Seek, Murder Mystery, Team Battle, War and Party, allies in Adventure. Applies when you join a room.</div>' +
         '<div class="sbSep"></div>' +
         '<div class="sbRow"><button data-a="unlock">Unlock everything</button><button data-a="limits">Reset daily limits</button></div>' +
         '<div class="sbRow"><button data-a="owner">' + (sb.owner ? 'Owner rights: on' : 'Owner rights: off') + '</button><button data-a="login">Sign in again</button></div>' +

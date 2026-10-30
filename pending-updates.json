@@ -4,6 +4,10 @@
     {
       "title": "Test site sandbox",
       "text": "The test site now works fully without a server and has a sandbox panel for coins, scores, bots and owner tools."
+    },
+    {
+      "title": "Bots in every test mode",
+      "text": "On the test site, bots now race against you in Race and fight alongside you in Adventure, and owner log images work there too."
     }
   ]
 }

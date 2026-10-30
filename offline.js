@@ -381,10 +381,46 @@
     };
     // общая гонка в песочнице: раунд за раундом по картам песочницы (см. raceRooms в server.js)
     var raceK = 0, raceT = null;
+    /* боты-соперники гонки: бегут от старта к финишу каждый со своей скоростью (физики у них нет —
+       летят по прямой), финишируют со своим местом и попадают в таблицу очков. Сколько — панель Sandbox. */
+    var ghosts = [], ghostT = null, finishedN = 0, myScore = 0;
+    function ghostCount() {
+      try { var sb = JSON.parse(localStorage.getItem(PREFIX + 'sandbox') || '{}'); if (sb && sb.bots !== undefined) return Math.max(0, Math.min(39, Math.floor(+sb.bots) || 0)); } catch (e) {}
+      return 3;
+    }
+    function raceScores() {
+      var list = [{ name: currentUser().name, score: myScore }].concat(ghosts.map(function (g) { return { name: g.name, score: g.score }; }));
+      fire('raceScores', list.sort(function (a, b) { return b.score - a.score; }));
+    }
+    function ghostsStart(map) {
+      var objs = (map && map.mapData && map.mapData.objects) || [];
+      var sp = objs.filter(function (o) { return o && o.type === 'spawn'; })[0] || { x: 100, y: 400 };
+      var fin = objs.filter(function (o) { return o && o.type === 'finishline'; })[0] || { x: +sp.x + 1200, y: +sp.y };
+      finishedN = 0;
+      ghosts.forEach(function (g) {
+        g.x0 = +sp.x + Math.round((Math.random() - 0.5) * 40); g.y0 = +sp.y;
+        g.x1 = +fin.x + (+fin.w || 40) / 2 - 15; g.y1 = +fin.y + (+fin.h || 100) - 100;
+        g.t0 = Date.now(); g.dur = 25000 + Math.random() * 45000; g.fin = false;
+      });
+      clearInterval(ghostT);
+      if (!ghosts.length) return;
+      ghostT = setInterval(function () {
+        if (!sock.connected) { clearInterval(ghostT); return; }
+        var t = Date.now();
+        fire('state', ghosts.map(function (g) {
+          var k = Math.min(1, (t - g.t0) / g.dur);
+          if (k >= 1 && !g.fin) { g.fin = true; g.score++; fire('raceFinished', { id: g.id, name: g.name, place: ++finishedN }); raceScores(); }
+          var hop = Math.abs(Math.sin(k * Math.PI * 14)) * 40 * (1 - k);     // вприпрыжку, чтобы не скользили
+          return { n: g.nid, x: Math.round(g.x0 + (g.x1 - g.x0) * k), y: Math.round(g.y0 + (g.y1 - g.y0) * k - hop), w: 30, h: 100, f: g.fin };
+        }));
+      }, 100);
+    }
     function raceRound() {
       clearTimeout(raceT);
       var list = (window.BFOffline && BFOffline.getMaps('race')) || [];
-      fire('racePhase', { phase: 'round', map: list.length ? list[raceK % list.length] : null, msLeft: 120000, goal: '', roundNum: ++raceK });
+      var map = list.length ? list[raceK % list.length] : null;
+      fire('racePhase', { phase: 'round', map: map, msLeft: 120000, goal: '', roundNum: ++raceK });
+      ghostsStart(map);
       raceT = setTimeout(raceRound, 120000);
     }
     var modeCtl = null;      // комната отдельного режима из offlineModes.js (Война, Вечеринка, Приключение)
@@ -407,7 +443,10 @@
         }
         setTimeout(function () {
           fire('nameFixed', { name: user.name });
-          fire('playersList', [{ id: sock.id, name: user.name, nid: 1, position: {} }]);
+          var race = data && data.gameMode === 'race' && !/[?&]story=1/.test(location.search);
+          ghosts = [];
+          if (race) for (var gi = 1; gi <= ghostCount(); gi++) ghosts.push({ id: 'local-racer-' + gi, name: 'Bot ' + gi, nid: gi + 1, score: 0 });
+          fire('playersList', [{ id: sock.id, name: user.name, nid: 1, position: {} }].concat(ghosts.map(function (g) { return { id: g.id, name: g.name, nid: g.nid, position: {} }; })));
           if (data && data.gameMode === 'hideAndSeek') {
             var bot = { id: 'local-seeker-bot', name: 'Local Seeker Bot', chance: 50 };
             var winner = new URLSearchParams(location.search).get('role') === 'seeker' ? sock.id : bot.id;
@@ -421,7 +460,7 @@
       } else if (ev === 'pingCheck') {
         fire('pongCheck', data);
       } else if (ev === 'raceFinish') {
-        fire('raceFinished', { id: sock.id, name: currentUser().name, place: 1 });
+        fire('raceFinished', { id: sock.id, name: currentUser().name, place: ++finishedN });
         clearTimeout(raceT);
         raceT = setTimeout(raceRound, 1400);            // финишировал — следующая карта, как на сервере
         sock.localCoins += 1;
@@ -429,7 +468,7 @@
         var A = window.BFOfflineServer && BFOfflineServer.acc(), got = A ? A.creditCoins(currentUser().name, 1) : 1;
         if (A && A.creditScore) A.creditScore(currentUser().name, 1);
         fire('coinsAwarded', { amount: got, coins: A ? currentUser().coins : sock.localCoins, reason: 'offlineRaceFinish' });
-        fire('raceScores', [{ name: currentUser().name, score: sock.localCoins }]);
+        myScore++; raceScores();
       } else if (ev === 'drawLine') {
         fire('drawLineQuota', { left: 999 });
       } else if (ev === 'sendChat') {
