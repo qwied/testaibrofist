@@ -3943,9 +3943,9 @@
     bow:   { cd: 480, v: 1.3, g: 0.0007, life: 1600, r: 5, color: '#78350f' },
     fire:  { cd: 720, v: 0.95, g: 0, life: 1600, r: 10, color: '#f97316', boom: 95 }
   };
-  // размеры — те же, что KINDS в adventure.js: все враги — человечки пропорций игрока (как зомби), только ростом разные
-  var ADV_KIND = { slime: { w: 26, h: 60 }, skeleton: { w: 30, h: 96 }, bat: { w: 24, h: 40 }, knight: { w: 30, h: 100 },
-                   ogre: { w: 46, h: 150 }, boss: { w: 60, h: 200 } };
+  // размеры — те же, что KINDS в adventure.js (по ним считаются попадания)
+  var ADV_KIND = { slime: { w: 40, h: 46 }, skeleton: { w: 34, h: 96 }, bat: { w: 56, h: 30 }, knight: { w: 44, h: 100 },
+                   ogre: { w: 52, h: 116 }, boss: { w: 72, h: 190 } };
   var ADV_HEAL_CD = 8000;
   var adv = null;                // состояние раунда: { v, hp, max, down, kills, en, floor, floors, gates, allGates, core, wave, waves }
   var advCls = {};               // у кого какой класс (лобби и раунд)
@@ -4055,45 +4055,84 @@
     if (e.dir < 0) { ctx.translate(w, 0); ctx.scale(-1, 1); }
     var lunge = e.atkAt && now - e.atkAt < 220 ? Math.sin(Math.PI * (now - e.atkAt) / 220) * 10 : 0;
     ctx.translate(lunge, 0);
-    /* Враги нарисованы так же, как игроки и зомби (см. OUTFIT в game.html): тот же силуэт figure() —
-       круглая голова и прямоугольное тело — одним цветом, без свечения, а вид — по мелким деталям:
-       квадратные глаза, как у зомби, и маленький знак на голове. Ударили — силуэт на миг светлеет. */
-    var col = { slime: '#22c55e', skeleton: '#d1d5db', bat: '#3b0764', knight: '#64748b', ogre: '#4d7c0f', boss: '#7c3aed' }[e.k];
-    var d = w, eyeS = Math.max(2, d * 0.17), eyeY = d * 0.42;
-    var eyes = function (c) {
-      ctx.fillStyle = c;
-      ctx.fillRect(w / 2 - d * 0.27 - eyeS / 2, eyeY, eyeS, eyeS);
-      ctx.fillRect(w / 2 + d * 0.27 - eyeS / 2, eyeY, eyeS, eyeS);
+    /* Враги — плоские фигурки с гранями (светлая и тёмная сторона), как на рисунке режима: слизень-капля,
+       скелет с мечом, летучая мышь, рыцарь со щитом, орк с топором и босс в плаще с короной и посохом.
+       Рисуются в своём хитбоксе w×h (лицом вправо, разворот — выше). Ударили — на миг весь светлеет. */
+    var P = hit ? function () { return '#fecaca'; } : function (c) { return c; };
+    var R = function (c, x0, y0, ww, hh) { ctx.fillStyle = P(c); ctx.fillRect(x0, y0, ww, hh); };
+    var rr = function (x0, y0, ww, hh, r) {
+      r = Math.min(r, ww / 2, hh / 2);
+      ctx.beginPath(); ctx.moveTo(x0 + r, y0); ctx.arcTo(x0 + ww, y0, x0 + ww, y0 + hh, r); ctx.arcTo(x0 + ww, y0 + hh, x0, y0 + hh, r);
+      ctx.arcTo(x0, y0 + hh, x0, y0, r); ctx.arcTo(x0, y0, x0 + ww, y0, r); ctx.closePath();
     };
-    if (e.k === 'bat') {
-      // крылышки у головы — маленькие, как рожки у Bro RED, и чуть машут
-      var flap = Math.sin(now / 90 + e.id) * d * 0.12;
-      ctx.fillStyle = hit ? '#fecaca' : '#2e1065';
-      ctx.beginPath(); ctx.moveTo(w * 0.1, d * 0.45); ctx.lineTo(-w * 0.45, d * 0.15 - flap); ctx.lineTo(-w * 0.2, d * 0.75); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(w * 0.9, d * 0.45); ctx.lineTo(w * 1.45, d * 0.15 - flap); ctx.lineTo(w * 1.2, d * 0.75); ctx.closePath(); ctx.fill();
-    }
-    GAME.figure(w, h, hit ? '#fecaca' : col, true, null);
+    var poly = function (c, pts) { ctx.fillStyle = P(c); ctx.beginPath(); ctx.moveTo(pts[0], pts[1]); for (var i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]); ctx.closePath(); ctx.fill(); };
     if (e.k === 'slime') {
-      eyes('#052e16');
-      ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(w * 0.3, d * 0.28, Math.max(1.5, d * 0.1), 0, 6.2832); ctx.fill();
+      var sq = 1 + Math.sin(now / 160 + e.id) * 0.05, top = h * (1 - sq);
+      ctx.fillStyle = P('#2f8f3a');
+      ctx.beginPath(); ctx.moveTo(0, h); ctx.lineTo(0, h * 0.5); ctx.quadraticCurveTo(0, top, w / 2, top); ctx.quadraticCurveTo(w, top, w, h * 0.5); ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
+      R('#23702c', 0, h * 0.86, w, h * 0.14);
+      ctx.fillStyle = P('rgba(255,255,255,.28)'); ctx.beginPath(); ctx.ellipse(w * 0.26, top + h * 0.22, w * 0.08, h * 0.1, 0, 0, 6.2832); ctx.fill();
+      R('#0f2a14', w * 0.3, h * 0.42, w * 0.12, h * 0.2); R('#0f2a14', w * 0.58, h * 0.42, w * 0.12, h * 0.2);
     } else if (e.k === 'skeleton') {
-      eyes('#111827');
+      var B = '#e5e7eb', S = '#c4c8cf', D = '#374151';
+      R(S, w * 0.3, h * 0.66, w * 0.14, h * 0.32); R(S, w * 0.56, h * 0.66, w * 0.14, h * 0.32);          // ноги
+      R(B, w * 0.26, h * 0.6, w * 0.48, h * 0.08);                                                    // таз
+      R(B, w * 0.47, h * 0.3, w * 0.06, h * 0.32);                                                    // позвоночник
+      for (var rb = 0; rb < 3; rb++) R(B, w * 0.22, h * (0.32 + rb * 0.08), w * 0.56, h * 0.045);     // рёбра
+      R(S, w * 0.1, h * 0.32, w * 0.1, h * 0.26); R(S, w * 0.8, h * 0.32, w * 0.1, h * 0.24);          // руки
+      ctx.fillStyle = P(B); rr(w * 0.14, 0, w * 0.72, h * 0.27, w * 0.12); ctx.fill();                // череп
+      R(D, w * 0.28, h * 0.08, w * 0.14, h * 0.09); R(D, w * 0.58, h * 0.08, w * 0.14, h * 0.09);
+      R(D, w * 0.47, h * 0.19, w * 0.06, h * 0.04);
+      poly('#9ca3af', [w * 0.86, h * 0.56, w * 1.28, h * 0.12, w * 1.36, h * 0.16, w * 0.94, h * 0.6]);  // меч
+      R('#1f2937', w * 0.78, h * 0.54, w * 0.24, h * 0.04);
     } else if (e.k === 'bat') {
-      eyes('#ef4444');
+      var flap = Math.sin(now / 80 + e.id) * h * 0.35;
+      poly('#3b2a5c', [w * 0.4, h * 0.3, 0, h * 0.5 - flap, w * 0.1, h * 0.62, w * 0.2, h * 0.56, w * 0.28, h * 0.72, w * 0.4, h * 0.6]);
+      poly('#3b2a5c', [w * 0.6, h * 0.3, w, h * 0.5 - flap, w * 0.9, h * 0.62, w * 0.8, h * 0.56, w * 0.72, h * 0.72, w * 0.6, h * 0.6]);
+      poly('#1f1630', [w * 0.36, h * 0.18, w * 0.4, 0, w * 0.46, h * 0.16, w * 0.54, h * 0.16, w * 0.6, 0, w * 0.64, h * 0.18, w * 0.64, h * 0.8, w * 0.5, h, w * 0.36, h * 0.8]);
+      R('#ef4444', w * 0.42, h * 0.36, w * 0.05, h * 0.18); R('#ef4444', w * 0.53, h * 0.36, w * 0.05, h * 0.18);
     } else if (e.k === 'knight') {
-      // забрало — тёмная полоса через глаза, как повязка у команды
-      ctx.fillStyle = '#1e293b'; ctx.fillRect(-w * 0.04, d * 0.34, w * 1.08, Math.max(2, d * 0.17));
-      ctx.fillStyle = '#e2e8f0'; ctx.fillRect(w * 0.45, -d * 0.12, w * 0.1, d * 0.16);
+      var A = '#8b929e', AD = '#6b7280';
+      R('#374151', w * 0.22, h * 0.68, w * 0.22, h * 0.32); R('#374151', w * 0.52, h * 0.68, w * 0.22, h * 0.32);   // ноги
+      R(AD, w * 0.2, h * 0.3, w * 0.56, h * 0.4); R(A, w * 0.2, h * 0.3, w * 0.28, h * 0.4);              // латы
+      R('#374151', w * 0.2, h * 0.62, w * 0.56, h * 0.05);                                            // пояс
+      ctx.fillStyle = P(A); rr(w * 0.18, 0, w * 0.6, h * 0.3, w * 0.14); ctx.fill();                // шлем
+      R('#1f2937', w * 0.24, h * 0.1, w * 0.48, h * 0.1);
+      R(A, w * 0.34, h * 0.1, w * 0.04, h * 0.1); R(A, w * 0.46, h * 0.1, w * 0.04, h * 0.1); R(A, w * 0.58, h * 0.1, w * 0.04, h * 0.1);
+      poly('#9ca3af', [w * 0.04, h * 0.95, w * -0.06, h * 0.9, w * 0.14, h * 0.58, w * 0.22, h * 0.62]);   // меч
+      poly('#9ca3af', [w * 0.58, h * 0.36, w * 1.08, h * 0.36, w * 1.08, h * 0.6, w * 0.83, h * 0.78, w * 0.58, h * 0.6]);   // щит
+      poly('#4b5563', [w * 0.64, h * 0.4, w * 1.02, h * 0.4, w * 1.02, h * 0.58, w * 0.83, h * 0.72, w * 0.64, h * 0.58]);
     } else if (e.k === 'ogre') {
-      eyes('#7f1d1d');
-      ctx.fillStyle = '#fde68a';
-      ctx.fillRect(w * 0.3, d * 0.66, Math.max(2, d * 0.08), d * 0.12); ctx.fillRect(w * 0.62, d * 0.66, Math.max(2, d * 0.08), d * 0.12);
+      var G = '#6aa84f', GD = '#4f8a3a';
+      R('#3f2e22', w * 0.22, h * 0.7, w * 0.22, h * 0.22); R('#3f2e22', w * 0.54, h * 0.7, w * 0.22, h * 0.22);    // штаны
+      R('#2d2018', w * 0.2, h * 0.92, w * 0.26, h * 0.08); R('#2d2018', w * 0.52, h * 0.92, w * 0.26, h * 0.08);   // сапоги
+      R(GD, w * 0.04, h * 0.36, w * 0.14, h * 0.3); R(GD, w * 0.82, h * 0.36, w * 0.14, h * 0.3);          // руки
+      R('#6b4f3a', w * 0.16, h * 0.34, w * 0.68, h * 0.38);                                          // рубаха
+      poly('#4a3527', [w * 0.18, h * 0.36, w * 0.28, h * 0.36, w * 0.84, h * 0.66, w * 0.84, h * 0.72, w * 0.74, h * 0.72, w * 0.18, h * 0.44]);   // перевязь
+      R('#3f2e22', w * 0.16, h * 0.64, w * 0.68, h * 0.06); R('#d6c7a1', w * 0.44, h * 0.645, w * 0.1, h * 0.05);
+      poly(G, [w * 0.22, h * 0.08, 0, h * 0.02, w * 0.18, h * 0.2]); poly(G, [w * 0.78, h * 0.08, w, h * 0.02, w * 0.82, h * 0.2]);   // уши
+      ctx.fillStyle = P(G); rr(w * 0.2, 0, w * 0.6, h * 0.32, w * 0.12); ctx.fill();               // голова
+      poly('#1a2e12', [w * 0.3, h * 0.12, w * 0.44, h * 0.15, w * 0.44, h * 0.19, w * 0.3, h * 0.17]);
+      poly('#1a2e12', [w * 0.7, h * 0.12, w * 0.56, h * 0.15, w * 0.56, h * 0.19, w * 0.7, h * 0.17]);
+      poly('#f3f4f6', [w * 0.34, h * 0.27, w * 0.38, h * 0.21, w * 0.42, h * 0.27]); poly('#f3f4f6', [w * 0.58, h * 0.27, w * 0.62, h * 0.21, w * 0.66, h * 0.27]);
+      R('#5b3a1e', w * 0.92, h * 0.12, w * 0.07, h * 0.6);                                          // топор
+      poly('#9ca3af', [w * 0.99, h * 0.12, w * 1.26, h * 0.04, w * 1.3, h * 0.32, w * 0.99, h * 0.26]);
     } else if (e.k === 'boss') {
-      // корона — размером с фуражку копа
-      ctx.fillStyle = '#fbbf24';
-      ctx.beginPath(); ctx.moveTo(w * 0.12, d * 0.08); ctx.lineTo(w * 0.12, -d * 0.2); ctx.lineTo(w * 0.31, -d * 0.04); ctx.lineTo(w * 0.5, -d * 0.24);
-      ctx.lineTo(w * 0.69, -d * 0.04); ctx.lineTo(w * 0.88, -d * 0.2); ctx.lineTo(w * 0.88, d * 0.08); ctx.closePath(); ctx.fill();
-      eyes('#fde047');
+      var C1 = '#241d36', C2 = '#6d28d9', Gd = '#d4a017';
+      R('#5b3a1e', w * 0.94, h * 0.14, w * 0.06, h * 0.86);                                        // посох
+      poly('#8b5cf6', [w * 0.97, 0, w * 1.08, h * 0.07, w * 0.97, h * 0.14, w * 0.86, h * 0.07]);
+      R(Gd, w * 0.9, h * 0.14, w * 0.14, h * 0.02);
+      poly(C1, [w * 0.18, h * 0.3, w * 0.82, h * 0.3, w * 0.96, h, w * 0.04, h]);                   // плащ
+      poly(C2, [w * 0.38, h * 0.34, w * 0.62, h * 0.34, w * 0.66, h, w * 0.34, h]);                 // фиолетовая полоса
+      poly(Gd, [w * 0.18, h * 0.3, w * 0.82, h * 0.3, w * 0.5, h * 0.4]);                           // золотой воротник
+      poly(C1, [w * 0.26, h * 0.3, w * 0.74, h * 0.3, w * 0.5, h * 0.36]);
+      ctx.fillStyle = P(C1); rr(w * 0.26, h * 0.08, w * 0.48, h * 0.22, w * 0.1); ctx.fill();    // голова в капюшоне
+      poly(Gd, [w * 0.3, h * 0.17, w * 0.44, h * 0.19, w * 0.44, h * 0.22, w * 0.32, h * 0.21]);   // глаза
+      poly(Gd, [w * 0.7, h * 0.17, w * 0.56, h * 0.19, w * 0.56, h * 0.22, w * 0.68, h * 0.21]);
+      poly(Gd, [w * 0.28, h * 0.12, w * 0.04, h * 0.02, w * 0.1, h * 0.13, w * 0.26, h * 0.18]);   // рога
+      poly(Gd, [w * 0.72, h * 0.12, w * 0.96, h * 0.02, w * 0.9, h * 0.13, w * 0.74, h * 0.18]);
+      poly(Gd, [w * 0.32, h * 0.1, w * 0.32, h * 0.03, w * 0.41, h * 0.07, w * 0.5, h * 0.01, w * 0.59, h * 0.07, w * 0.68, h * 0.03, w * 0.68, h * 0.1]);   // корона
+      poly('#8b5cf6', [w * 0.5, h * 0.035, w * 0.54, h * 0.065, w * 0.5, h * 0.095, w * 0.46, h * 0.065]);
     }
     ctx.restore();
     // полоска здоровья над врагом

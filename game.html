@@ -255,16 +255,16 @@ body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="offline.js?v=5"></script>
         <script src="offlineModes.js?v=3"></script>
-<script src="device.js?v=198"></script>
-        <script src="sound.js?v=198"></script>
-        <script src="skinRender.js?v=198"></script>
-        <script src="skinCanvas.js?v=198"></script>
-        <script src="gifuct.bundle.js?v=198"></script>
-        <script src="gifPlayer.js?v=198"></script>
-        <script src="coin.js?v=198"></script>
-        <script src="liveText.js?v=198"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=198">
-        <script src="theme.js?v=198"></script>
+<script src="device.js?v=199"></script>
+        <script src="sound.js?v=199"></script>
+        <script src="skinRender.js?v=199"></script>
+        <script src="skinCanvas.js?v=199"></script>
+        <script src="gifuct.bundle.js?v=199"></script>
+        <script src="gifPlayer.js?v=199"></script>
+        <script src="coin.js?v=199"></script>
+        <script src="liveText.js?v=199"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=199">
+        <script src="theme.js?v=199"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -775,12 +775,11 @@ var PAINT = {
      куда идёт заражённый. Хитбокс впритык как у игрока (см.
      SIZES.zombie) — силуэт рисуем той же figure(), что и игрока, чтобы
      форма совпадала буквально, а не просто размером; зомби узнаётся по
-     цвету, квадратным красным глазам и рваному краю одежды. */
+     цвету и рваному краю одежды (глаз у моделей нет). */
   zombie: function(o){
     var w = o.w, h = o.h;
     if(o._zface < 0){ ctx.translate(w, 0); ctx.scale(-1, 1); }
     figure(w, h, "#55722c");
-    var headD = w;
     ctx.fillStyle = "#3f5720";
     ctx.beginPath();
     ctx.moveTo(0, h*0.62);
@@ -789,10 +788,6 @@ var PAINT = {
     ctx.lineTo(w*0.14, h*0.9);
     ctx.lineTo(0, h);
     ctx.closePath(); ctx.fill();
-    var eyeS = Math.max(2, headD*0.17), eyeY = headD*0.42;
-    ctx.fillStyle = "#b91c1c";
-    ctx.fillRect(w/2 - headD*0.27 - eyeS/2, eyeY, eyeS, eyeS);
-    ctx.fillRect(w/2 + headD*0.27 - eyeS/2, eyeY, eyeS, eyeS);
   },
   /* Место ожидания искателя (классика) — та же модель, тот же приём, что
      у мертвеца выше, просто цвет искателя (COLOR_SEEKER), а не зелёный.
@@ -855,8 +850,9 @@ function outfitStar(cx, cy, r, color){
   }
   ctx.closePath(); ctx.fill();
 }
+// глаз у моделей нет: роль видна по цвету, головному убору и знаку на груди
 var OUTFIT = {
-  // тёмно-синяя форма, фуражка с кокардой, звезда-жетон и ремень
+  // тёмно-синяя форма, фуражка с золотым значком, звезда-жетон
   cop: function(w, h){
     var d = w, top = d + h*FIG_GAP, bh = h - top;
     figure(w, h, "#1e3a8a");
@@ -864,112 +860,106 @@ var OUTFIT = {
     rr(-w*0.1, -d*0.16, w*1.2, d*0.4, d*0.14); ctx.fill();          // тулья
     ctx.fillRect(-w*0.16, d*0.2, w*1.32, Math.max(2, d*0.1));      // козырёк
     ctx.fillStyle = "#fbbf24";
-    ctx.beginPath(); ctx.arc(w/2, d*0.04, Math.max(1.6, d*0.1), 0, 6.2832); ctx.fill();
-    if(bh > 0){
-      outfitStar(w*0.68, top + bh*0.2, Math.max(2.5, w*0.14), "#fbbf24");
-      ctx.fillStyle = "#0f172a"; ctx.fillRect(0, top + bh*0.56, w, Math.max(2, bh*0.07));
-      ctx.fillStyle = "#cbd5e1"; ctx.fillRect(w*0.42, top + bh*0.555, w*0.16, Math.max(2, bh*0.08));
-    }
+    ctx.beginPath(); ctx.moveTo(w*0.42, -d*0.06); ctx.lineTo(w*0.58, -d*0.06); ctx.lineTo(w*0.58, d*0.08);
+    ctx.lineTo(w*0.5, d*0.16); ctx.lineTo(w*0.42, d*0.08); ctx.closePath(); ctx.fill();   // значок-щиток
+    if(bh > 0) outfitStar(w*0.5, top + bh*0.22, Math.max(2.5, w*0.17), "#fbbf24");
   },
-  // полосатая кофта и чёрная маска с прорезями; пойманный — оранжевая роба в полоску
+  // серая голова и кофта в полоску; пойманный — оранжевый, роба в оранжево-белую полоску
   robber: function(w, h, jailed){
     var d = w, top = d + h*FIG_GAP, bh = h - top;
-    figure(w, h, jailed ? "#ea580c" : "#1f2937");
-    ctx.fillStyle = "#6b7280";
+    figure(w, h, jailed ? "#f97316" : "#1f2937");
+    ctx.fillStyle = jailed ? "#f97316" : "#6b7280";
     ctx.beginPath(); ctx.arc(w/2, d/2, d/2, 0, 6.2832); ctx.fill();
     if(bh > 0){
-      ctx.fillStyle = jailed ? "#ffedd5" : "#e5e7eb";
+      ctx.fillStyle = jailed ? "#fff7ed" : "#f3f4f6";
       var n = 4, sh = bh / (n*2 + 1);
       for(var i = 0; i < n; i++) ctx.fillRect(0, top + sh*(2*i + 1), w, sh);
     }
-    ctx.fillStyle = "#030712";
-    ctx.fillRect(-w*0.06, d*0.3, w*1.12, d*0.26);
-    ctx.fillStyle = "#f9fafb";
-    ctx.beginPath(); ctx.arc(w*0.32, d*0.43, Math.max(1.4, d*0.075), 0, 6.2832); ctx.fill();
-    ctx.beginPath(); ctx.arc(w*0.68, d*0.43, Math.max(1.4, d*0.075), 0, 6.2832); ctx.fill();
   },
-  // цвет команды, повязка потемнее и белая полоса на груди
+  // цвет команды и свой головной убор: красные — каска с гербом, синие — бейсболка,
+  // зелёные — кепка, жёлтые — широкополая шляпа рейнджера
   team: function(w, h, color){
-    var d = w, top = d + h*FIG_GAP, bh = h - top;
-    var dark = ({ "#2563eb": "#1e3a8a", "#16a34a": "#14532d", "#ca8a04": "#713f12" })[color] || "#7f1d1d";
+    var d = w;
+    var dark = ({ "#2563eb": "#1e40af", "#16a34a": "#166534", "#ca8a04": "#a16207" })[color] || "#b91c1c";
     figure(w, h, color);
     ctx.fillStyle = dark;
-    ctx.fillRect(-w*0.04, d*0.2, w*1.08, Math.max(2, d*0.17));
-    ctx.fillStyle = "#f9fafb";
-    ctx.beginPath(); ctx.arc(w*0.34, d*0.52, Math.max(1.3, d*0.07), 0, 6.2832); ctx.fill();
-    ctx.beginPath(); ctx.arc(w*0.66, d*0.52, Math.max(1.3, d*0.07), 0, 6.2832); ctx.fill();
-    if(bh > 0){ ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.fillRect(0, top + bh*0.18, w, Math.max(2, bh*0.08)); }
+    if(color === "#2563eb"){                                                        // бейсболка
+      ctx.beginPath(); ctx.arc(w/2, d*0.3, d*0.5, Math.PI, 0); ctx.closePath(); ctx.fill();
+      rr(w*0.4, d*0.22, w*0.8, Math.max(2, d*0.12), d*0.06); ctx.fill();
+      ctx.fillStyle = "#f9fafb"; ctx.beginPath(); ctx.arc(w/2, d*0.02, Math.max(1.2, d*0.06), 0, 6.2832); ctx.fill();
+    } else if(color === "#16a34a"){                                                 // кепка
+      ctx.beginPath(); ctx.arc(w/2, d*0.3, d*0.5, Math.PI, 0); ctx.closePath(); ctx.fill();
+      rr(-w*0.14, d*0.22, w*1.28, Math.max(2, d*0.11), d*0.05); ctx.fill();
+      ctx.fillStyle = "#f9fafb"; ctx.beginPath(); ctx.arc(w/2, d*0.02, Math.max(1.2, d*0.06), 0, 6.2832); ctx.fill();
+    } else if(color === "#ca8a04"){                                                 // шляпа рейнджера
+      rr(-w*0.3, d*0.14, w*1.6, Math.max(2, d*0.12), d*0.06); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(w*0.12, d*0.16); ctx.lineTo(w*0.26, -d*0.22); ctx.lineTo(w*0.74, -d*0.22); ctx.lineTo(w*0.88, d*0.16); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#713f12"; ctx.fillRect(w*0.14, d*0.04, w*0.72, Math.max(1.5, d*0.08));
+    } else {                                                                        // каска с гербом
+      rr(-w*0.32, d*0.16, w*1.64, Math.max(2, d*0.1), d*0.05); ctx.fill();
+      ctx.beginPath(); ctx.arc(w/2, d*0.2, d*0.46, Math.PI, 0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#fbbf24";
+      ctx.beginPath(); ctx.moveTo(w*0.4, -d*0.12); ctx.lineTo(w*0.6, -d*0.12); ctx.lineTo(w*0.6, d*0.04); ctx.lineTo(w*0.5, d*0.12); ctx.lineTo(w*0.4, d*0.04); ctx.closePath(); ctx.fill();
+    }
   },
-  // только для себя: капюшон и красные глаза — остальные видят обычную фигуру
+  // только для себя: тёмно-красный капюшон по контуру головы
   murderer: function(w, h){
     var d = w;
-    figure(w, h, "#000000");
+    figure(w, h, "#111827");
     ctx.strokeStyle = "#7f1d1d"; ctx.lineWidth = Math.max(2, d*0.12);
     ctx.beginPath(); ctx.arc(w/2, d/2, d/2, Math.PI*1.05, Math.PI*1.95); ctx.stroke();
-    ctx.fillStyle = "#ef4444";
-    ctx.fillRect(w*0.26, d*0.42, Math.max(2, d*0.14), Math.max(1.6, d*0.08));
-    ctx.fillRect(w*0.6, d*0.42, Math.max(2, d*0.14), Math.max(1.6, d*0.08));
   },
-  // Bro RED (война): красный боец — маленькие рожки, жёлтые злые глаза, тёмный пояс (без свечения, как остальные роли)
+  // Bro RED (война): весь красный, как на рисунке режима, — его видно издалека
   bro: function(w, h){
-    var d = w, top = d + h*FIG_GAP, bh = h - top;
     figure(w, h, "#dc2626");
-    ctx.fillStyle = "#7f1d1d";
-    ctx.beginPath(); ctx.moveTo(w*0.14, d*0.2); ctx.lineTo(w*0.06, -d*0.12); ctx.lineTo(w*0.36, d*0.06); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(w*0.86, d*0.2); ctx.lineTo(w*0.94, -d*0.12); ctx.lineTo(w*0.64, d*0.06); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#fde047";
-    ctx.fillRect(w*0.26, d*0.42, Math.max(2, d*0.14), Math.max(1.6, d*0.08));
-    ctx.fillRect(w*0.6, d*0.42, Math.max(2, d*0.14), Math.max(1.6, d*0.08));
-    if(bh > 0){ ctx.fillStyle = "#450a0a"; ctx.fillRect(0, top + bh*0.5, w, Math.max(2, bh*0.07)); }
   },
-  // только для себя: шляпа и звезда шерифа
+  // только для себя: коричневая шляпа и звезда шерифа
   sheriff: function(w, h){
     var d = w, top = d + h*FIG_GAP, bh = h - top;
-    figure(w, h, "#000000");
+    figure(w, h, "#111827");
     ctx.fillStyle = "#92400e";
-    rr(-w*0.32, d*0.02, w*1.64, Math.max(2, d*0.12), d*0.06); ctx.fill();     // поля
-    rr(w*0.12, -d*0.36, w*0.76, d*0.42, d*0.12); ctx.fill();                  // тулья
-    ctx.fillStyle = "#451a03"; ctx.fillRect(w*0.12, -d*0.04, w*0.76, Math.max(1.5, d*0.07));
-    if(bh > 0) outfitStar(w*0.68, top + bh*0.2, Math.max(2.5, w*0.15), "#fbbf24");
+    rr(-w*0.4, d*0.02, w*1.8, Math.max(2, d*0.12), d*0.06); ctx.fill();     // поля
+    rr(w*0.1, -d*0.36, w*0.8, d*0.42, d*0.12); ctx.fill();                   // тулья
+    ctx.fillStyle = "#451a03"; ctx.fillRect(w*0.1, -d*0.04, w*0.8, Math.max(1.5, d*0.07));
+    if(bh > 0) outfitStar(w*0.5, top + bh*0.22, Math.max(2.5, w*0.17), "#fbbf24");
   },
-  /* классы «Приключения» (см. adventure.js) — в том же стиле, что коп и шериф: цвет формы, небольшой
-     головной убор и знак на груди. Воин — стальной шлем и красный щиток-герб */
+  /* классы «Приключения» (см. adventure.js). Воин — стальной шлем с прорезью забрала, красный герб, ремень */
   warrior: function(w, h){
     var d = w, top = d + h*FIG_GAP, bh = h - top;
-    figure(w, h, "#475569");
-    ctx.fillStyle = "#94a3b8";
-    rr(-w*0.06, -d*0.08, w*1.12, d*0.42, d*0.16); ctx.fill();                     // шлем
-    ctx.fillStyle = "#334155"; ctx.fillRect(w*0.45, d*0.3, w*0.1, d*0.24);       // наносник
+    figure(w, h, "#4b5563");
+    ctx.fillStyle = "#9ca3af";
+    rr(-w*0.06, -d*0.06, w*1.12, d*0.52, d*0.18); ctx.fill();                    // шлем
+    ctx.fillStyle = "#374151"; ctx.fillRect(w*0.12, d*0.32, w*0.76, Math.max(2, d*0.12));   // прорезь забрала
     if(bh > 0){
-      var sx = w*0.68, sy = top + bh*0.2, r = Math.max(2.5, w*0.15);
+      var sx = w*0.5, sy = top + bh*0.2, r = Math.max(2.5, w*0.17);
       ctx.fillStyle = "#dc2626";
       ctx.beginPath(); ctx.moveTo(sx - r, sy - r); ctx.lineTo(sx + r, sy - r); ctx.lineTo(sx + r, sy + r*0.2); ctx.lineTo(sx, sy + r*1.2); ctx.lineTo(sx - r, sy + r*0.2); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "#1e293b"; ctx.fillRect(0, top + bh*0.56, w, Math.max(2, bh*0.07));
+      ctx.fillStyle = "#1f2937"; ctx.fillRect(0, top + bh*0.56, w, Math.max(2, bh*0.07));
     }
   },
-  // лучник — зелёный капюшон по голове, ремень колчана через грудь
+  // лучник — зелёный, капюшон по голове, ремень колчана через грудь и пояс
   archer: function(w, h){
     var d = w, top = d + h*FIG_GAP, bh = h - top;
-    figure(w, h, "#15803d");
-    ctx.fillStyle = "#14532d";
-    ctx.beginPath(); ctx.arc(w/2, d/2, d/2, Math.PI*0.9, Math.PI*2.1); ctx.closePath(); ctx.fill();   // капюшон
-    ctx.fillStyle = "#f9fafb";
-    ctx.beginPath(); ctx.arc(w*0.34, d*0.6, Math.max(1.3, d*0.07), 0, 6.2832); ctx.fill();
-    ctx.beginPath(); ctx.arc(w*0.66, d*0.6, Math.max(1.3, d*0.07), 0, 6.2832); ctx.fill();
+    figure(w, h, "#16a34a");
+    ctx.fillStyle = "#166534";
+    ctx.beginPath(); ctx.arc(w/2, d/2, d/2, Math.PI*0.95, Math.PI*2.05); ctx.closePath(); ctx.fill();   // капюшон
     if(bh > 0){
       ctx.strokeStyle = "#78350f"; ctx.lineWidth = Math.max(2, w*0.1);
-      ctx.beginPath(); ctx.moveTo(w*0.05, top + bh*0.02); ctx.lineTo(w*0.95, top + bh*0.45); ctx.stroke();   // ремень колчана
-      ctx.fillStyle = "#713f12"; ctx.fillRect(0, top + bh*0.56, w, Math.max(2, bh*0.07));
+      ctx.beginPath(); ctx.moveTo(w*0.05, top + bh*0.02); ctx.lineTo(w*0.95, top + bh*0.45); ctx.stroke();
+      ctx.fillStyle = "#713f12"; ctx.fillRect(0, top + bh*0.62, w, Math.max(2, bh*0.07));
     }
   },
-  // маг — фиолетовая шляпа размером со шляпу шерифа и жёлтая звезда на груди
+  // маг — фиолетовый, высокая остроконечная шляпа, звезда на груди и посох с кристаллом
   mage: function(w, h){
     var d = w, top = d + h*FIG_GAP, bh = h - top;
-    figure(w, h, "#6d28d9");
-    ctx.fillStyle = "#4c1d95";
-    rr(-w*0.32, d*0.02, w*1.64, Math.max(2, d*0.12), d*0.06); ctx.fill();          // поля
-    ctx.beginPath(); ctx.moveTo(w*0.14, d*0.06); ctx.lineTo(w*0.56, -d*0.5); ctx.lineTo(w*0.86, d*0.06); ctx.closePath(); ctx.fill();
-    if(bh > 0) outfitStar(w*0.68, top + bh*0.2, Math.max(2.5, w*0.15), "#fde047");
+    ctx.fillStyle = "#78350f"; ctx.fillRect(w*1.12, d*0.2, Math.max(2, w*0.1), h - d*0.2);             // посох
+    ctx.fillStyle = "#a855f7";
+    ctx.beginPath(); ctx.moveTo(w*1.17, -d*0.12); ctx.lineTo(w*1.33, d*0.12); ctx.lineTo(w*1.17, d*0.36); ctx.lineTo(w*1.01, d*0.12); ctx.closePath(); ctx.fill();
+    figure(w, h, "#7c3aed");
+    ctx.fillStyle = "#6d28d9";
+    rr(-w*0.4, d*0.02, w*1.8, Math.max(2, d*0.12), d*0.06); ctx.fill();          // поля
+    ctx.beginPath(); ctx.moveTo(w*0.06, d*0.06); ctx.lineTo(w*0.5, -d*1.05); ctx.lineTo(w*0.94, d*0.06); ctx.closePath(); ctx.fill();
+    if(bh > 0) outfitStar(w*0.5, top + bh*0.22, Math.max(2.5, w*0.17), "#fde047");
   }
 };
 function drawOutfit(kind, w, h, arg){
@@ -4463,8 +4453,8 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=198"></script>
-        <script src="i18n.js?v=198"></script>
-        <script src="skinAvatar.js?v=198" defer></script>
+<script src="game.js?v=199"></script>
+        <script src="i18n.js?v=199"></script>
+        <script src="skinAvatar.js?v=199" defer></script>
 </body>
 </html>

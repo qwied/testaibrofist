@@ -71,8 +71,8 @@ const srv = http.createServer((req, res) => {
   ok(caught.out && !caught.over, 'убийца касается бота — тот выбывает, раунд идёт дальше');
   const sheriff = await mu.evaluate(async () => {
     const c = BFOfflineModes.room, st = c.st, me = c.me, sh = c.bots[1], sl = (ms) => new Promise(r => setTimeout(r, ms));
-    me.position = { x: sh.position.x + 5, y: sh.position.y, w: 30, h: 100 };
-    await sl(900);
+    // клиент сам шлёт настоящие координаты — держим убийцу у шерифа, пока тот не дотянется
+    for (let t = Date.now(); Date.now() - t < 5000 && !st.caughtSent; await sl(50)) me.position = { x: sh.position.x + 5, y: sh.position.y, w: 30, h: 100 };
     return { caught: st.murderCaught, over: st.caughtSent };
   });
   ok(sheriff.caught && sheriff.over, 'бот-шериф дотянулся до убийцы — убийца пойман, раунд кончился');
