@@ -170,42 +170,64 @@ body{
     width: 100%;
     max-width: 1000px;
     margin: 24px auto 0;
-    padding: 0 14px;
+    padding: 0 6px;
     box-sizing: border-box;
-    /* семь режимов должны помещаться на экране без прокрутки: две основные карточки покрупнее,
-       под ними одним рядом остальные пять поменьше. min-height — выбор режима стоит по центру
-       свободной высоты; если не влезает (узкий экран), страница просто прокручивается. */
+    /* все режимы — одной строкой, которую листают ползунком под ней, стрелками по бокам, колесом
+       мыши и пальцем; строка стоит по центру свободной высоты (min-height, а не height) */
     min-height: calc(100vh - 170px);
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 20px;
+    gap: 14px;
 }
-
-.cardsRow{
+.cardsStrip{
+    position: relative;
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
+    align-items: center;
+    gap: 8px;
+}
+.cardsTrack{
+    flex: 1;
+    min-width: 0;
+    display: flex;
     gap: 18px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    padding: 6px 4px 16px;
+    scrollbar-width: none;              /* своя полоса прокрутки — ползунок ниже */
 }
-
+.cardsTrack::-webkit-scrollbar{ display: none; }
 .cards .cardContainer{
+    flex: 0 0 auto;
+    width: 240px;
     text-align: center;
-    width: min(176px, 100%);
+    scroll-snap-align: start;
 }
-.cardsMain .cardContainer{
-    width: min(300px, 100%);
+.cardsArrow{
+    flex: 0 0 auto;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--line, #e5e7eb);
+    background: var(--panel, #fff);
+    color: var(--ink, #111827);
+    font-size: 26px; line-height: 36px;
+    cursor: pointer;
+    box-shadow: 0 6px 14px -8px rgba(15,23,42,.4);
+    transition: opacity .15s ease;
 }
-.cardsMore .card div{
-    font-size: 14px;
+.cardsArrow:disabled{ opacity: .3; cursor: default; }
+.cardsSlider{
+    width: min(420px, 80%);
+    margin: 0 auto;
+    accent-color: #111827;
+    cursor: pointer;
 }
-/* узкий экран: основные — по две в ряд, остальные — по три, а не каждая во всю ширину */
+/* узкий экран: карточки поменьше, стрелки прячем — там листают пальцем или ползунком */
 @media (max-width: 640px){
-    .cards{ gap: 14px; padding: 0 8px; }
-    .cardsRow{ gap: 10px; }
-    .cardsMain .cardContainer{ width: calc(50% - 5px); }
-    .cardsMore .cardContainer{ width: calc(33.333% - 7px); }
-    .cardsMore .card div{ font-size: 12px; line-height: 1.15; padding: 4px 2px; }
+    .cards .cardContainer{ width: 156px; }
+    .cardsTrack{ gap: 12px; }
+    .cardsArrow{ display: none; }
 }
 
 .card{
@@ -537,9 +559,11 @@ body{
                         </div>
                 </div>
 
-                <!-- Game mode cards: сверху две основные, ниже в один ряд — остальные режимы -->
+                <!-- Game mode cards: все режимы одной строкой, листаются ползунком, стрелками, колесом и пальцем -->
                 <div class="cards">
-                    <div class="cardsRow cardsMain">
+                    <div class="cardsStrip">
+                    <button type="button" class="cardsArrow cardsPrev" aria-label="Previous modes">&#8249;</button>
+                    <div class="cardsTrack" id="cardsTrack">
                         <div class="cardContainer">
                                 <a href="#" class="card" data-mode="hideAndSeek">
                                         <img src="mode-hide.png?v=106" alt="Hide and Seek">
@@ -552,8 +576,6 @@ body{
                                         <div data-i18n="race">Race</div>
                                 </a>
                         </div>
-                    </div>
-                    <div class="cardsRow cardsMore">
                         <div class="cardContainer">
                                 <a href="#" class="card" data-mode="murder">
                                         <img src="mode-murder.png?v=2" alt="Murder Mystery">
@@ -585,6 +607,9 @@ body{
                                 </a>
                         </div>
                     </div>
+                    <button type="button" class="cardsArrow cardsNext" aria-label="Next modes">&#8250;</button>
+                    </div>
+                    <input type="range" class="cardsSlider" id="cardsSlider" min="0" max="1000" value="0" aria-label="Scroll game modes">
                 </div>
 
         </div>
@@ -649,6 +674,43 @@ body{
                 overlay.addEventListener('click', closeSignIn);
 
         </script>
+<script>
+/* Строка режимов: ползунок, стрелки и колесо мыши двигают одну и ту же прокрутку строки,
+   а ползунок и стрелки следят за ней (листают и пальцем) */
+(function () {
+  var track = document.getElementById('cardsTrack'), slider = document.getElementById('cardsSlider');
+  if (!track || !slider) return;
+  var prev = document.querySelector('.cardsPrev'), next = document.querySelector('.cardsNext');
+  var max = function () { return Math.max(0, track.scrollWidth - track.clientWidth); };
+  var step = function () { var c = track.querySelector('.cardContainer'); return c ? c.getBoundingClientRect().width + 18 : 240; };
+  function sync() {
+    var m = max();
+    slider.style.visibility = m > 2 ? '' : 'hidden';          // всё и так видно — ползунок не нужен
+    slider.value = m ? Math.round(track.scrollLeft / m * 1000) : 0;
+    if (prev) prev.disabled = track.scrollLeft <= 2;
+    if (next) next.disabled = track.scrollLeft >= m - 2;
+  }
+  slider.addEventListener('input', function () {
+    track.style.scrollBehavior = 'auto';
+    track.scrollLeft = slider.value / 1000 * max();
+    track.style.scrollBehavior = '';
+  });
+  if (prev) prev.onclick = function () { track.scrollBy({ left: -step(), behavior: 'smooth' }); };
+  if (next) next.onclick = function () { track.scrollBy({ left: step(), behavior: 'smooth' }); };
+  track.addEventListener('wheel', function (e) {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || !max()) return;
+    var before = track.scrollLeft;
+    track.style.scrollBehavior = 'auto';
+    track.scrollLeft += e.deltaY;
+    track.style.scrollBehavior = '';
+    if (track.scrollLeft !== before) e.preventDefault();      // на краю строки колесо листает страницу как обычно
+  }, { passive: false });
+  track.addEventListener('scroll', sync, { passive: true });
+  window.addEventListener('resize', sync);
+  window.addEventListener('load', sync);
+  sync();
+})();
+</script>
 <script src="nav.js?v=200" defer></script>
         <script src="account.js?v=200" defer></script>
         <script src="i18n.js?v=200"></script>
