@@ -252,8 +252,7 @@
     req('dailyRewards').register(app, acc);
     req('quests').register(app, acc);
     req('serversInfo').register(app, { snapshot: snapshot, extra: function () { return { maps: req('maps').allMaps().length, accounts: Object.keys(acc.getDb().users).length, discord: null }; } });
-    // сессия потерялась (вышел из аккаунта и т.п.) — песочница всегда играет за своего игрока
-    if (!acc.currentUser({ headers: { cookie: 'sid=' + sid() } })) login();
+    // вышел из аккаунта — остаёшься гостем, как на сайте; войти снова — окно входа (account.js) или TestPanel
   }
   // входим под последним ником игрока песочницы (после смены ника — под новым), иначе — Local Tester
   function login() {
@@ -285,6 +284,7 @@
   window.BFOfflineServer = {
     ready: ready,
     handle: handle,
+    routes: function () { return routes.map(function (r) { return r.method + ' ' + r.re.source; }); },
     me: me,
     acc: function () { return acc; },
     maps: function () { return acc ? req('maps') : null; },

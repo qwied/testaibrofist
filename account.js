@@ -68,10 +68,31 @@
 
   // ---------- экран выбора ----------
   function screenChoice() {
+    // песочница (offlineServer.js на GitHub Pages): Discord нет — входим за любой её аккаунт или создаём новый
+    if (window.BFOfflineServer && BFOfflineServer.acc && BFOfflineServer.acc()) return screenSandbox();
     open('<div class="bf-x">X</div>'
        + '<div class="bf-t">Sign in or sign up</div>'
        + '<div class="bf-b" id="bfDiscord">Continue with Discord</div>');
     box.querySelector('#bfDiscord').onclick = function () { location.href = '/auth/discord'; };
+  }
+
+  function screenSandbox() {
+    var users = Object.values(BFOfflineServer.acc().getDb().users).map(function (u) { return u.name; }).sort();
+    open('<div class="bf-x">X</div>'
+       + '<div class="bf-t">Sign in</div>'
+       + '<div class="bf-h">Test site: pick an account or make a new one.</div>'
+       + users.map(function (n, i) { return '<div class="bf-b bfSbAcc" data-i="' + i + '" style="margin-top:6px">' + escapeHtml(n) + '</div>'; }).join('')
+       + '<input class="bf-i" id="bfSbNew" maxlength="20" placeholder="New username" style="margin-top:12px">'
+       + '<div class="bf-b" id="bfSbCreate">Create account</div>'
+       + '<div class="bf-e" id="bfSbErr"></div>');
+    Array.prototype.forEach.call(box.querySelectorAll('.bfSbAcc'), function (b) {
+      b.onclick = function () { BFOfflineServer.playAs(users[+b.dataset.i]); location.reload(); };
+    });
+    box.querySelector('#bfSbCreate').onclick = function () {
+      var n = box.querySelector('#bfSbNew').value.trim(), err = BFOfflineServer.createAccount(n);
+      if (err) { box.querySelector('#bfSbErr').textContent = err; return; }
+      BFOfflineServer.playAs(n); location.reload();
+    };
   }
 
   // сервер уже знает, кто мы в Discord (кука pendingAuth), тут только ник
@@ -248,6 +269,7 @@
         holder.innerHTML = '<div class="bf-h">Discord: ' + escapeHtml(dname) + ' — you can sign in with it.</div>';
         return;
       }
+      if (window.BFOfflineServer && BFOfflineServer.acc && BFOfflineServer.acc()) { holder.innerHTML = ''; return; }   // в песочнице Discord нет
       holder.innerHTML = '<div class="bf-b" id="bfLinkDiscord">Link Discord</div>';
       holder.querySelector('#bfLinkDiscord').onclick = function () { location.href = '/auth/discord'; };
     });
@@ -349,7 +371,8 @@
       icon.style.display = 'inherit';
       get('/getAvatar?name=' + encodeURIComponent(d.name), function (a) {
         var img = icon.querySelector('.profile-image');
-        if (img) img.src = 'avatar/' + ((a && a.avatar) || '0') + '.png';
+        // картинок avatar/N.png на сайте нет — до отрисовки скина (skinAvatar.js) пустой кадр, а не битая картинка
+        if (img) img.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
       });
       var items = menu.querySelectorAll('.menu-item');
       if (items[0]) {

@@ -372,16 +372,16 @@ body.mob #toolTip{display:none!important}
 body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=8"></script>
-<script src="offlineServer.js?v=4"></script>
-<script src="device.js?v=203"></script>
-        <script src="sound.js?v=203"></script>
-        <script src="skinRender.js?v=203"></script>
-        <script src="skinCanvas.js?v=203"></script>
-        <script src="gifuct.bundle.js?v=203"></script>
-        <script src="gifPlayer.js?v=203"></script>
-        <script src="coin.js?v=203"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=203">
-        <script src="theme.js?v=203"></script>
+<script src="offlineServer.js?v=5"></script>
+<script src="device.js?v=204"></script>
+        <script src="sound.js?v=204"></script>
+        <script src="skinRender.js?v=204"></script>
+        <script src="skinCanvas.js?v=204"></script>
+        <script src="gifuct.bundle.js?v=204"></script>
+        <script src="gifPlayer.js?v=204"></script>
+        <script src="coin.js?v=204"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=204">
+        <script src="theme.js?v=204"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -5380,12 +5380,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=203"></script>
-<script src="abuseShow.js?v=203" defer></script>
-<script src="editorHelp.js?v=203"></script>
-<script src="editorAI.js?v=203" defer></script>
-<script src="account.js?v=203" defer></script>
-<script src="owner.js?v=203" defer></script>
+<script src="i18n.js?v=204"></script>
+<script src="abuseShow.js?v=204" defer></script>
+<script src="editorHelp.js?v=204"></script>
+<script src="editorAI.js?v=204" defer></script>
+<script src="account.js?v=204" defer></script>
+<script src="owner.js?v=204" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -5501,13 +5501,14 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=203" defer></script>
+        <script src="skinAvatar.js?v=204" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */
 (function(){
   var a = document.createElement('a');
-  a.id = 'bfHome'; a.href = '/'; a.title = 'На главную'; a.setAttribute('data-i18n-title', 'edHomeTitle');
+  // главная — рядом с редактором, а не корень домена: сайт может лежать в подпапке (GitHub Pages)
+  a.id = 'bfHome'; a.href = window.BFHome ? BFHome() : './'; a.title = 'На главную'; a.setAttribute('data-i18n-title', 'edHomeTitle');
   a.textContent = 'AIBROFIST';
   // где стоит кнопка (с поправкой на телефон и его положение) — решает CSS
   // (#bfHome в <style>), а не разовая проверка ширины при загрузке

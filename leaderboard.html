@@ -4,12 +4,12 @@
         <title>AIBrofist — Leaderboards</title>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-        <link rel="stylesheet" type="text/css" href="style.css?v=203">
+        <link rel="stylesheet" type="text/css" href="style.css?v=204">
         <script src="offline.js?v=8"></script>
-<script src="offlineServer.js?v=4"></script>
-<script src="device.js?v=203"></script>
-        <script src="sound.js?v=203"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=203">
+<script src="offlineServer.js?v=5"></script>
+<script src="device.js?v=204"></script>
+        <script src="sound.js?v=204"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=204">
         <style>
                 /* Обёртка страницы обычно .bfWrap, 1080px, как у остальных
                    разделов — но на этой странице теперь до двух колонок
@@ -89,8 +89,8 @@
                 @media (pointer:coarse){ .lbArrow{width:44px;height:44px} }
                 .lbPageLabel{color:#8b93a1;font-size:13px;min-width:40px;text-align:center}
         </style>
-        <link rel="stylesheet" href="ui.css?v=203">
-        <script src="theme.js?v=203"></script>
+        <link rel="stylesheet" href="ui.css?v=204">
+        <script src="theme.js?v=204"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -149,7 +149,7 @@
         </div>
 </div>
 
-<script src="account.js?v=203" defer></script>
+<script src="account.js?v=204" defer></script>
 <script>
 (function () {
         var listEl = document.getElementById('lbList');
@@ -202,7 +202,7 @@
         function rowHtml(u2, ranks, mine, place, big) {
                 return '<div class="lbRow' + (mine ? ' me' : '') + '">'
                         + '<div class="lbPlace">' + place + '</div>'
-                        + '<div class="lbAva"><img src="/avatar/0.png" alt="" data-bf-name="' + esc(u2.name) + '"></div>'
+                        + '<div class="lbAva"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="" data-bf-name="' + esc(u2.name) + '"></div>'
                         + '<div class="lbName" data-n="' + esc(u2.name) + '">' + esc(u2.name) + '</div>'
                         + rankHtml(u2.name, ranks, big)
                         + (big ? '' : amountHtml(u2.amount)) + '</div>';
@@ -322,12 +322,12 @@
         setInterval(function () { load(); loadRanks(); }, 15000);
 })();
 </script>
-        <script src="i18n.js?v=203"></script>
-        <script src="owner.js?v=203" defer></script>
-        <script src="coin.js?v=203"></script>
-        <script src="skinRender.js?v=203"></script>
-        <script src="skinAvatar.js?v=203" defer></script>
-        <script src="shell.js?v=203"></script>
-<script src="abuseShow.js?v=203" defer></script>
+        <script src="i18n.js?v=204"></script>
+        <script src="owner.js?v=204" defer></script>
+        <script src="coin.js?v=204"></script>
+        <script src="skinRender.js?v=204"></script>
+        <script src="skinAvatar.js?v=204" defer></script>
+        <script src="shell.js?v=204"></script>
+<script src="abuseShow.js?v=204" defer></script>
 </body>
 </html>

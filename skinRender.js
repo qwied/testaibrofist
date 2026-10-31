@@ -44,7 +44,8 @@
   };
   function isAccessoryKind(kind) { return kind === 'accessory' || kind === 'accessory2'; }
   var NECK = 108;                        // середина зазора между головой и телом
-  var BASE = '/skinparts/';              // где лежат картинки деталей
+  // где лежат картинки деталей — рядом с этим скриптом: сайт может лежать не в корне домена (GitHub Pages)
+  var BASE = (function () { try { return new URL('skinparts/', document.currentScript.src).href; } catch (e) { return 'skinparts/'; } })();
   var uid = 0;
 
   function shade(hex, amt) {

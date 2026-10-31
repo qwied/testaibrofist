@@ -16,6 +16,10 @@
     {
       "title": "TestPanel",
       "text": "The test site's sandbox menu is now called TestPanel."
+    },
+    {
+      "title": "Test site fixes",
+      "text": "On the test site, Log out works and the sign-in window lets you pick or create a test account, Story Mode links, skins and Home links work inside the site's folder, and broken avatar images are gone."
     }
   ]
 }
