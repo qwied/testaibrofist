@@ -617,19 +617,22 @@
     me = r;
     injectCss();
     buildPanel();
+    loadAbuse();
     if (/mapsBrowser/i.test(location.pathname)) watchBrowser();
   }).catch(function () {});
 
   /* Панель Admin Abuse подключаем отсюда. В разметке страниц её тега нет
      вообще: у обычного игрока owner.js пустой, значит он и не узнает,
-     что такой файл существует, и запроса за ним не будет. */
-  (function () {
+     что такой файл существует, и запроса за ним не будет. Подключаем только
+     подтверждённому владельцу: на статическом хостинге (GitHub Pages) файл
+     отдаётся всем, и кнопку Admin Abuse видел бы любой игрок. */
+  function loadAbuse() {
     if (/\/?game(\.html)?/i.test(location.pathname)) return;
     if (document.getElementById('aaScript')) return;
     var sc = document.createElement('script');
     sc.id = 'aaScript';
-    sc.src = 'adminAbuse.js?v=204';
+    sc.src = 'adminAbuse.js?v=205';
     sc.defer = true;
     document.head.appendChild(sc);
-  })();
+  }
 })();

@@ -20,6 +20,10 @@
     {
       "title": "Test site fixes",
       "text": "On the test site, Log out works and the sign-in window lets you pick or create a test account, Story Mode links, skins and Home links work inside the site's folder, and broken avatar images are gone."
+    },
+    {
+      "title": "No more climbing walls from the side",
+      "text": "You can no longer hang on a block's edge and climb it from the side: blocks are only reached by jumping on top. Bots that seek turn blue and caught bots turn orange, hiding bots spread out across the map, the leaderboard's Today and This Week numbers are correct, and only the owner sees the Admin Abuse button."
     }
   ]
 }

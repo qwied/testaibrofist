@@ -290,7 +290,7 @@
       var spots = [null].concat(st.spots).sort(function () { return Math.random() - 0.5; });
       // боты встают на старт и в лобби бегут каждый к своему укрытию (как игроки, которые прячутся)
       bots.forEach(function (b, i) {
-        b.hideAt = (st.variant === 'murder' || classic) && b.id !== st.seekerId ? spots[i % spots.length] : null;
+        b.hideAt = (st.variant === 'murder' || classic) && b.id !== st.seekerId ? (spots[i % spots.length] || randomSpot()) : null;
         b.goalK = i;
         place(b, st.bases && st.teams ? st.bases[st.teams.get(b.id)] : null);
       });
@@ -390,6 +390,19 @@
     function bodyOf(b) {
       if (!b.ph) b.ph = { x: b.position.x, y: b.position.y, w: 30, h: 100, vx: 0, vy: 0, ground: false };
       return b.ph;
+    }
+    // без укрытия бот убегает в случайное место на какой-нибудь платформе карты — подальше от старта,
+    // а не стоит толпой у искателя (иначе его ловят в первую же секунду раунда)
+    function randomSpot() {
+      var tops = (st.phys ? st.phys.solids : []).filter(function (o) { return o.w >= 40; });
+      if (!tops.length) return null;
+      var best = null, bd = -1;
+      for (var k = 0; k < 6; k++) {
+        var o = tops[Math.floor(Math.random() * tops.length)], x = o.x + Math.random() * Math.max(0, o.w - 30);
+        var d = st.spawn ? Math.abs(x - st.spawn.x) + Math.abs(o.y - st.spawn.y) : 0;
+        if (d > bd) { bd = d; best = { x: x, y: o.y - 100, w: 30, h: 100 }; }
+      }
+      return best;
     }
     function spotGoal(s2) { return s2 ? { x: s2.x + s2.w / 2 - 15, y: s2.y + s2.h - 100 } : null; }
     function posGoal(p) { return p && p.position && isFinite(p.position.x) ? { x: p.position.x, y: p.position.y } : null; }
@@ -497,9 +510,20 @@
     function playersList() {
       return Array.from(members).map(function (id) { var p = gameState.players.get(id); return { id: p.id, name: p.name, nid: p.nid, position: p.position || {} }; });
     }
+    /* Цвет модели бота — так же, как свой цвет красит себе живой игрок (applyColor в game.js) и
+       присылает на сервер: синий искатель и оранжевый пойманный в прятках, цвет команды в командных. */
+    var COLOR = { normal: '#000000', seeker: '#1e6fe0', caught: '#f97316', team: { red: '#dc2626', blue: '#2563eb', green: '#16a34a', yellow: '#ca8a04' } };
+    function botColor(b) {
+      if (st.teams && st.teams.get(b.id) && COLOR.team[st.teams.get(b.id)]) return COLOR.team[st.teams.get(b.id)];
+      if (st.phase === 'round' && classic) {
+        if (b.id === st.seekerId) return COLOR.seeker;
+        if (st.caughtSet && st.caughtSet.has(b.id)) return COLOR.caught;
+      }
+      return COLOR.normal;
+    }
     var snapT = setInterval(function () {
       if (!sock.connected) { clearInterval(snapT); return; }
-      deliver('state', bots.map(function (b) { return { n: b.nid, x: b.position.x, y: b.position.y, w: 30, h: 100 }; }));
+      deliver('state', bots.map(function (b) { return { n: b.nid, x: b.position.x, y: b.position.y, w: 30, h: 100, c: botColor(b) }; }));
     }, 100);
 
     function join() {

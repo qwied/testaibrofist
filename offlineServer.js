@@ -228,15 +228,37 @@
     var mapsFile = ROOT + '/data/maps.json';
     if (lsGet('vfs:' + mapsFile) === null) {
       var old = (BFOffline.legacyMaps ? BFOffline.legacyMaps() : []).map(function (m) {
-        return { mapName: m.mapName, author: m.author === 'Local Test' ? ME : m.author, mapType: m.mapType, date: m.date || Date.now(), created: m.date || Date.now(),
+        // без created: иначе maps.js засчитал бы их как свежие публикации и записал «награду» в журнал монет
+        return { mapName: m.mapName, author: m.author, mapType: m.mapType, date: m.date || Date.now(),
           mapData: typeof m.mapData === 'string' ? m.mapData : JSON.stringify(m.mapData), rating: 0, votes: {}, boostLikes: 0, boostDislikes: 0, inGameModes: [] };
       });
       fs.writeFileSync(mapsFile, JSON.stringify(old));
     }
   }
 
+  /* Починка песочниц, созданных раньше: тестовые карты были записаны на Local Tester с датой
+     публикации — maps.js добавлял за них по 10 монет в «Today/This Week» (лидерборд, профиль),
+     хотя на баланс они не приходили. Возвращаем их автору «Local Test» и убираем эти записи. */
+  var SAMPLE = ['Local Race Lab', 'Local Race Playground', 'Local Hide-and-Seek Lab', 'Local Hide-and-Seek Playground'];
+  function repairSamples() {
+    var mf = ROOT + '/data/maps.json', cf = ROOT + '/data/coinlog.json', list, log;
+    try { list = JSON.parse(lsGet('vfs:' + mf) || 'null'); } catch (e) { return; }
+    if (!Array.isArray(list)) return;
+    var stamps = {}, changed = false;
+    list.forEach(function (m) {
+      if (SAMPLE.indexOf(m.mapName) === -1 || m.author === 'Local Test') return;
+      if (m.created) stamps[m.created] = String(m.author).toLowerCase();
+      m.author = 'Local Test'; delete m.created; changed = true;
+    });
+    if (!changed) return;
+    fs.writeFileSync(mf, JSON.stringify(list));
+    try { log = JSON.parse(lsGet('vfs:' + cf) || '[]'); } catch (e) { log = []; }
+    fs.writeFileSync(cf, JSON.stringify(log.filter(function (e) { return !(e && stamps[e.at] === String(e.name).toLowerCase() && e.amount === 10); })));
+  }
+
   function boot() {
     seed();
+    repairSamples();
     acc = req('accounts');
     var cleanText = function (v, max) { return String(v == null ? '' : v).replace(/[\u0000-\u001f​-‏‪-‮]/g, '').slice(0, max); };
     acc.register(app);
