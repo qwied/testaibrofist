@@ -28,6 +28,10 @@
     {
       "title": "Aiming in War and smarter bots",
       "text": "In War you now aim slings, bombs and fireballs with the mouse, with a crosshair and a dotted flight path; on phones weapons aim at the nearest enemy by themselves. On the test site, bots now really play: in War they pick up tokens, buy weapons and medkits, keep their distance, aim at you, man the cannons and avoid poison, and with bots you also get Team, Control Points and Bro RED rounds. In Capture the Flag bots steal and defend flags, in Domination they take points, and the Hide and Seek seeker searches hiding spots instead of seeing through walls."
+    },
+    {
+      "title": "Phone aiming and a new Pirate Bay",
+      "text": "On phones you can now aim in War: hold your finger on the map to see the flight path, and let go to throw or fire a cannon there. The War panel on phones moved to the top so it no longer covers your fighter. The Pirate Bay map was redrawn: real ship hulls, cannons standing on the decks, water that looks like water and a palm island in the middle."
     }
   ]
 }

@@ -390,7 +390,11 @@
     }
     var saved = null; try { saved = JSON.parse(lsGet('sandboxBtn') || 'null'); } catch (e) {}
     if (saved) putBtn(saved.x * innerWidth, saved.y * innerHeight);
-    else if (/\/game(\.html)?$/.test(location.pathname)) putBtn(12, innerHeight - 106);
+    else if (/\/game(\.html)?$/.test(location.pathname)) {
+      // на телефоне внизу слева — кнопки движения: туда нельзя, ставим под шапку
+      if (/(^| )is-(mobile|tablet)( |$)/.test(document.documentElement.className)) { var tb = document.getElementById('gTop'); putBtn(12, tb ? tb.getBoundingClientRect().bottom + 8 : 64); }
+      else putBtn(12, innerHeight - 106);
+    }
     var drag = null, moved = false;
     btn.addEventListener('pointerdown', function (e) { var r = btn.getBoundingClientRect(); drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, x: e.clientX, y: e.clientY }; moved = false; btn.setPointerCapture(e.pointerId); });
     btn.addEventListener('pointermove', function (e) {

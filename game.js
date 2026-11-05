@@ -750,15 +750,30 @@
         return;
       }
       if (!warOn()) return;
-      // клик мышью: у пушки — выстрел туда, куда кликнули; касание по карте у пушки — то же самое
-      if (e.pointerType === 'mouse' ? e.button === 0 : nearGun() !== -1) {
-        aimPt = toWorld(e.clientX, e.clientY); aimAt = Date.now();
-        e.preventDefault(); attack();
+      // клик мышью — выстрел туда, куда кликнули (и из пушки, если стоишь у неё)
+      if (e.pointerType === 'mouse') {
+        if (e.button === 0) { aimPt = toWorld(e.clientX, e.clientY); aimAt = Date.now(); e.preventDefault(); attack(); }
+        return;
       }
+      /* телефон: палец на карте — прицел (пунктир полёта и перекрестие), ведёшь — прицел за пальцем,
+         отпустил — выстрел туда (из любого оружия и из пушки, у которой стоишь) */
+      touchAim = e.pointerId;
+      aimPt = toWorld(e.clientX, e.clientY); aimAt = Date.now(); aimScr = { x: e.clientX, y: e.clientY };
+      try { canvasEl.setPointerCapture(e.pointerId); } catch (er) {}
+      e.preventDefault();
     });
-    // прицел пушки идёт за мышью (см. gunVel)
+    // прицел идёт за мышью или за пальцем (см. gunVel и handVel)
     canvasEl.addEventListener('pointermove', function (e) {
-      if (e.pointerType === 'mouse' && (warOn() || advOn())) { aimPt = toWorld(e.clientX, e.clientY); aimAt = Date.now(); aimScr = { x: e.clientX, y: e.clientY }; }
+      if (e.pointerType === 'mouse' ? !(warOn() || advOn()) : e.pointerId !== touchAim) return;
+      aimPt = toWorld(e.clientX, e.clientY); aimAt = Date.now(); aimScr = { x: e.clientX, y: e.clientY };
+    });
+    ['pointerup', 'pointercancel'].forEach(function (t) {
+      canvasEl.addEventListener(t, function (e) {
+        if (e.pointerId !== touchAim) return;
+        touchAim = null;
+        if (t === 'pointerup' && warOn()) { aimPt = toWorld(e.clientX, e.clientY); aimAt = Date.now(); aimScr = { x: e.clientX, y: e.clientY }; attack(); }
+        aimScr = null;                     // кнопка удара снова целится сама — в ближнего врага
+      });
     });
     // мышь ушла с поля — оружие снова целится само (см. handAim)
     canvasEl.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') aimScr = null; });
@@ -1029,8 +1044,10 @@
         'flex-direction:column;align-items:center;gap:5px;pointer-events:none;max-width:calc(100vw - 24px)';
       document.body.appendChild(box);
     }
-    var bar = $('gTop');
+    var bar = $('gTop'), wb = $('gWar');
     box.style.top = (bar ? Math.round(bar.getBoundingClientRect().bottom) + 6 : 52) + 'px';
+    // панель войны на телефоне стоит под шапкой — подсказки идут под ней
+    if (wb && wb.style.display !== 'none' && wb.style.top) box.style.top = Math.round(wb.getBoundingClientRect().bottom) + 6 + 'px';
     var d = document.createElement('div');
     d.innerHTML = html;
     d.style.cssText = 'background:rgba(0,0,0,.62);color:#fff;padding:7px 15px;border-radius:16px;' +
@@ -1545,6 +1562,8 @@
     if (hsVariant === 'build') return TR('hintBuild', 'Построй модель на тему по клеткам, потом оцени чужие от 1 до 5 звёзд.');
     if (hsVariant === 'ffa') return TR('hintFfa', 'Выбивай всех: F или клик — удар, 1–4 — оружие, B — магазин. Жетоны лежат на карте.');
     if (hsVariant === 'tdm') return TR('hintTdm', 'Выбивай соперников — каждое очко идёт твоей команде. F — удар, B — магазин.');
+    if (hsVariant === 'pirate' && /(^| )is-(mobile|tablet)( |$)/.test(document.documentElement.className))
+      return TR('hintPirateTouch', 'У твоей команды свой корабль. Встань у пушки, держи палец на цели и отпусти — выстрел. Ядовитая вода выбивает.');
     if (hsVariant === 'pirate') return TR('hintPirate', 'Твоя команда — на своём корабле. Встань у пушки и жми F или клик: ядро летит туда, куда целишься. Ядовитая вода выбивает.');
     if (hsVariant === 'hunger') return TR('hintHunger', 'Одна жизнь на раунд. Собирай жетоны, покупай оружие и останься последним.');
     if (hsVariant === 'cp') return TR('hintCp', 'Держи точки с командой; выбитые соперники точку не держат. F — удар, B — магазин.');
@@ -3256,7 +3275,7 @@
      Мышью — туда, где курсор (храним точку экрана: камера едет, а прицел остаётся под курсором).
      Без мыши (телефон, или курсор ушёл с поля) — автоприцел по ближнему видимому врагу в пределах
      дальности оружия; врага рядом нет — прямо, куда смотришь. */
-  var aimScr = null;
+  var aimScr = null, touchAim = null, aimHintShown = false;   // touchAim — палец, которым целятся на телефоне
   var REACH = { fist: 130, sling: 950, bomb: 420, magic: 1250 };
   function autoTarget(w, cx, cy) {
     var best = null, bd = REACH[w] || 900;
@@ -3435,7 +3454,7 @@
     ctx.save();
     ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     var touch = /(^| )is-(mobile|tablet)( |$)/.test(document.documentElement.className);
-    var txt = ready ? (touch ? TR('cannonFireTouch', 'Коснись цели или жми удар') : TR('cannonFire', 'F или клик — огонь'))
+    var txt = ready ? (touch ? TR('cannonFireTouch', 'Держи палец на цели, отпусти — огонь') : TR('cannonFire', 'F или клик — огонь'))
       : TR('cannonLoading', 'Заряжается…');
     var tw = ctx.measureText(txt).width + 16;
     ctx.fillStyle = 'rgba(17,24,39,.78)';
@@ -3526,6 +3545,13 @@
     bar.innerHTML = html;
     var atk = $('gAtk');
     if (atk) atk.style.display = inWar ? '' : 'none';
+    // на телефоне панель — сверху, под шапкой: внизу она закрывала бойца и карту между кнопками
+    if (/(^| )is-(mobile|tablet)( |$)/.test(document.documentElement.className)) {
+      var tb = $('gTop');
+      bar.style.top = (tb ? Math.round(tb.getBoundingClientRect().bottom) + 6 : 56) + 'px'; bar.style.bottom = 'auto';
+      // палец на карте — прицел, а не прокрутка страницы
+      if (inWar) canvasEl.style.touchAction = 'none';
+    }
   }
 
   /* ---------- рисование ---------- */
@@ -3698,6 +3724,10 @@
       if (d.ms) myBoost[d.item] = Date.now() + d.ms;
       if (d.item === 'sling' || d.item === 'bomb' || d.item === 'magic') weapon = d.item;
       log(TR('shopBought', 'Куплено: {i}').replace('{i}', '<b>' + esc(TR(SHOP_ITEMS[d.item].key, SHOP_ITEMS[d.item].ru)) + '</b>'));
+      // на телефоне один раз за игру — как целиться пальцем
+      if (d.ammo && !aimHintShown && /(^| )is-(mobile|tablet)( |$)/.test(document.documentElement.className)) {
+        aimHintShown = true; log(TR('hintAimTouch', 'Прицел: держи палец на карте и отпусти — бросок туда. Кнопка удара целится в ближнего врага сама.'));
+      }
       if (window.BFSound && BFSound.win) BFSound.win();
       tickWar(); renderWarHud(); renderShop();
     });

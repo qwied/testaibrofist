@@ -105,6 +105,38 @@ const srv = http.createServer((req, res) => {
   ok(seen.bro && !!seen.bro.bro, 'Bro RED выбран и бьётся', seen.bro && seen.bro.bro);
   await w.close();
 
+  console.log('Телефон: прицел пальцем');
+  { const { devices } = require(process.env.PW || '/opt/node22/lib/node_modules/playwright');
+    const pc = await b.newContext(devices['iPhone 13 landscape']); const ph = await pc.newPage();
+    ph.on('pageerror', e => errs.push('phone: ' + e.message.slice(0, 200)));
+    await ph.goto('http://localhost:3259/game.html?mode=war');
+    await until(ph, () => window.BFOfflineModes && BFOfflineModes.room && BFOfflineModes.room.st.phase === 'round', 30000);
+    await spy(ph);
+    await ph.evaluate(() => { const c = BFOfflineModes.room; c.st.tok.bank.set(c.me.id, 30); c.on('shopBuy', { item: 'magic' }); });
+    await ph.waitForTimeout(400);
+    await ph.tap('#gWar [data-w="magic"]').catch(() => {});
+    await ph.evaluate(() => { const P = GAME.pl; P.x = 1630; P.y = 640; P.vx = 0; P.vy = 0; });
+    await ph.waitForTimeout(300);
+    // палец ведём по карте влево-вверх и отпускаем — магия летит туда
+    const n0 = await ph.evaluate(() => window.__sent.length);
+    await ph.evaluate(() => { const c = document.getElementById('c'), o = { pointerType: 'touch', pointerId: 7, bubbles: true, isPrimary: true };
+      c.dispatchEvent(new PointerEvent('pointerdown', Object.assign({ clientX: 600, clientY: 200 }, o)));
+      c.dispatchEvent(new PointerEvent('pointermove', Object.assign({ clientX: 120, clientY: 90 }, o))); });
+    await ph.waitForTimeout(150);
+    const mid = await ph.evaluate((n0) => window.__sent.slice(n0).some(x => x.ev === 'warShot'), n0);
+    ok(!mid, 'пока палец на карте — только прицел, без выстрела');
+    await ph.evaluate(() => document.getElementById('c').dispatchEvent(new PointerEvent('pointerup', { pointerType: 'touch', pointerId: 7, bubbles: true, clientX: 120, clientY: 90 })));
+    await ph.waitForTimeout(200);
+    const sh = await ph.evaluate((n0) => { const s = window.__sent.slice(n0).filter(x => x.ev === 'warShot').pop(); return s && s.d; }, n0);
+    ok(sh && sh.w === 'magic' && sh.vx < 0 && sh.vy < 0, 'отпустил палец — магия летит туда (влево-вверх)', JSON.stringify(sh));
+    const lay = await ph.evaluate(() => { const r = (id) => { const e = document.getElementById(id); return e ? e.getBoundingClientRect() : null; };
+      const w = r('gWar'), top = r('gTop'), tp = r('bfSandboxBtn'), btns = [...document.querySelectorAll('#pad .pBtn')].map(e => e.getBoundingClientRect()).filter(q => q.width);
+      const hit = (a, q) => a && q && a.left < q.right && a.right > q.left && a.top < q.bottom && a.bottom > q.top;
+      return { warTop: w && Math.round(w.top), barBottom: top && Math.round(top.bottom), h: innerHeight, tpOver: btns.some(q => hit(tp, q)) }; });
+    ok(lay.warTop >= lay.barBottom && lay.warTop < lay.h / 3, 'на телефоне панель войны сверху, под шапкой', JSON.stringify(lay));
+    ok(!lay.tpOver, 'кнопка TestPanel не закрывает кнопки движения', JSON.stringify(lay));
+    await pc.close(); }
+
   console.log('Capture the Flag');
   const t = await open('game.html?mode=team');
   let ctf = null;

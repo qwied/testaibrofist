@@ -88,11 +88,11 @@ const connected = (ps) => Promise.all(ps.map(p => new Promise(r => p.s.connected
   R.s.emit('warShot', { w: 'cannon', c: 0, sid: 1, vx: 1.4, vy: -0.4 });
   await sleep(600);
   ok(!Bl.last('warShot', d => d.w === 'cannon', t0), 'вдали от пушки выстрела нет');
-  // у пушки на палубе (пушка 0: x 1040..1112, y 656..700)
+  // у пушки на палубе (пушка 0: x 1000..1072, y 656..700)
   R.at(1061, 600); await sleep(400);
   R.s.emit('warShot', { w: 'cannon', c: 0, sid: 2, vx: 1.4, vy: -0.4 });
   const sh = await until(() => Bl.last('warShot', d => d.w === 'cannon' && d.sid === 2, t0), 3000);
-  ok(!!sh && sh.c === 0 && sh.x === 1076 && sh.y === 678 && sh.id === R.s.id, 'у пушки — ядро летит из её центра', sh && JSON.stringify(sh));
+  ok(!!sh && sh.c === 0 && sh.x === 1036 && sh.y === 678 && sh.id === R.s.id, 'у пушки — ядро летит из её центра', sh && JSON.stringify(sh));
   R.s.emit('warShot', { w: 'cannon', c: 0, sid: 3, vx: 1.4, vy: -0.4 });
   await sleep(500);
   ok(!Bl.last('warShot', d => d.sid === 3, t0), 'пока пушка заряжается — второго выстрела нет');

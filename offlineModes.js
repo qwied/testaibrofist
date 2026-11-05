@@ -88,7 +88,7 @@
     function landing(b, dir) {
       for (var d = 60; d <= 230; d += 20) {
         var x = b.x + dir * (b.w + d), feet = b.y + b.h;
-        var fl = columnTop(x, b.w, feet - 120, feet + 80, sol);
+        var fl = columnTop(x, b.w, feet - 120, feet + 160, sol);   // ниже себя прыгать можно
         if (fl && !columnTop(x, b.w, fl.y - b.h, fl.y + 2, bad) && !hitAny(x, fl.y - b.h, b.w, b.h)) return true;
       }
       return false;
@@ -249,6 +249,7 @@
           var rec = api.findMap('qwied', name);
           if (!rec) { rec = { mapName: name, author: 'qwied', mapType: 'hideAndSeek', date: Date.now(), rating: 5, likes: 0, dislikes: 0, commentCount: 0,
             comments: [], votes: {}, favorites: {}, inGameModes: [], mapData: data }; api.maps.push(rec); }
+          else rec.mapData = data;          // встроенная карта всегда свежая (её могли перерисовать)
           return rec;
         });
       })).then(function (list) {
@@ -502,7 +503,7 @@
       magic:  { cd: 670, v: 1.15, g: 0, life: 2000, r: 9, range: 480 },
       cannon: { cd: 2500, v: 1.45, g: 0.0011, life: 4500, r: 11, boom: 110 }
     };
-    var SEE_X = 900, SEE_Y = 450;
+    var SEE_X = 1100, SEE_Y = 450;       // примерно экран игрока
     function bodyOf(b) {
       if (!b.ph) b.ph = { x: b.position.x, y: b.position.y, w: 30, h: 100, vx: 0, vy: 0, ground: false };
       return b.ph;
