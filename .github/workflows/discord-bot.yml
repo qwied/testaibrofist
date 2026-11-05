@@ -1,0 +1,58 @@
+# Discord-бот без игрового сервера: GitHub Actions держит его запущенным.
+# Один запуск живёт ~5 ч 50 мин (у GitHub предел 6 ч), а расписание каждый час ставит
+# следующий запуск в очередь — он стартует сразу, как только закончится текущий
+# (concurrency без отмены: один работает, один ждёт). Состояние бота (предупреждения,
+# выбранные каналы) переносится между запусками через кэш Actions.
+# Нужен секрет репозитория DISCORD_BOT_TOKEN (Settings → Secrets and variables → Actions).
+name: Discord bot
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: discord-bot
+  cancel-in-progress: false
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 358
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # только то, что нужно боту (без Chromium и прочего игрового сервера)
+      - name: Install bot packages
+        run: |
+          mkdir -p "$RUNNER_TEMP/botdeps" && cd "$RUNNER_TEMP/botdeps"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund ws@^8.21.3 pngjs@^7.0.0 jpeg-js@^0.4.4 gifuct-js@^2.1.2 @tensorflow/tfjs@^4.22.0 nsfwjs@^4.3.0
+
+      - name: Restore bot state
+        uses: actions/cache/restore@v4
+        with:
+          path: data
+          key: discord-bot-state-${{ github.run_id }}
+          restore-keys: discord-bot-state-
+
+      - name: Run the bot
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          SITE_URL: https://qwied.github.io/testaibrofist
+          BOT_RUN_MINUTES: '345'
+          NODE_PATH: ${{ runner.temp }}/botdeps/node_modules
+        run: |
+          mkdir -p data
+          node bot.js
+
+      - name: Save bot state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data
+          key: discord-bot-state-${{ github.run_id }}

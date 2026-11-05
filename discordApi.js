@@ -11,7 +11,10 @@ const http = require('http');
 
 const BASE = String(process.env.DISCORD_API_BASE || 'https://discord.com/api/v10').replace(/\/+$/, '');
 const TIMEOUT_MS = 15000;
-const SITE = 'https://' + (String(process.env.PRIMARY_HOST || '').trim() || 'aibrofist.online');
+// SITE_URL — полный адрес сайта, если он не в корне домена (бот без игрового сервера: тестовый сайт на
+// GitHub Pages, https://qwied.github.io/testaibrofist); иначе https:// + PRIMARY_HOST
+const SITE = String(process.env.SITE_URL || '').trim().replace(/\/+$/, '') ||
+  'https://' + (String(process.env.PRIMARY_HOST || '').trim() || 'aibrofist.online');
 
 const token = () => String(process.env.DISCORD_BOT_TOKEN || '').trim();
 

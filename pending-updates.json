@@ -24,6 +24,10 @@
     {
       "title": "No more climbing walls from the side",
       "text": "You can no longer hang on a block's edge and climb it from the side: blocks are only reached by jumping on top. Bots that seek turn blue and caught bots turn orange, hiding bots spread out across the map, the leaderboard's Today and This Week numbers are correct, and only the owner sees the Admin Abuse button."
+    },
+    {
+      "title": "Discord bot back online",
+      "text": "The Discord bot works again on its own, even while the game server is offline."
     }
   ]
 }
