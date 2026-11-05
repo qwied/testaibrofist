@@ -758,8 +758,10 @@
     });
     // прицел пушки идёт за мышью (см. gunVel)
     canvasEl.addEventListener('pointermove', function (e) {
-      if (e.pointerType === 'mouse' && (warOn() || advOn())) { aimPt = toWorld(e.clientX, e.clientY); aimAt = Date.now(); }
+      if (e.pointerType === 'mouse' && (warOn() || advOn())) { aimPt = toWorld(e.clientX, e.clientY); aimAt = Date.now(); aimScr = { x: e.clientX, y: e.clientY }; }
     });
+    // мышь ушла с поля — оружие снова целится само (см. handAim)
+    canvasEl.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') aimScr = null; });
     canvasEl.addEventListener('pointerdown', function (e) {
       if (!drawMode || gDraw.classList.contains('limit') || Date.now() < drawLockUntil) return;
       var p = toWorld(e.clientX, e.clientY);
@@ -3224,14 +3226,17 @@
       return;
     }
     lastFire[w] = now;
-    var p = GAME.pl, face = p.face || 1;
+    var p = GAME.pl;
     var cx = p.x + p.w / 2, cy = p.y + p.h * 0.38;
+    // прицел: курсор мыши, а без мыши — ближний враг (см. handVel); боец разворачивается туда
+    var aim = handVel(w, cx, cy, p.face || 1), face = aim.face;
+    p.face = face;
     var sid = shotSeq++;
     var vx = 0, vy = 0;
     if (w === 'fist') swings[socket.id] = { t: now, dir: face };
     else {
       ammo[w]--;
-      vx = face * WPN[w].v; vy = WPN[w].vy || (w === 'sling' ? -0.12 : 0);
+      vx = aim.vx; vy = aim.vy;
     }
     socket.emit('warShot', { w: w, sid: sid, x: Math.round(cx), y: Math.round(cy), vx: vx, vy: vy, dir: face });
     if (window.BFSound && BFSound.step) BFSound.step();
@@ -3246,6 +3251,59 @@
       });
     } else shots.push({ own: true, sid: sid, w: w, x: cx, y: cy, vx: vx, vy: vy, born: now, hit: {} });
     renderWarHud();
+  }
+  /* ---------- прицел ручного оружия ----------
+     Мышью — туда, где курсор (храним точку экрана: камера едет, а прицел остаётся под курсором).
+     Без мыши (телефон, или курсор ушёл с поля) — автоприцел по ближнему видимому врагу в пределах
+     дальности оружия; врага рядом нет — прямо, куда смотришь. */
+  var aimScr = null;
+  var REACH = { fist: 130, sling: 950, bomb: 420, magic: 1250 };
+  function autoTarget(w, cx, cy) {
+    var best = null, bd = REACH[w] || 900;
+    Object.keys(others).forEach(function (id) {
+      var o = others[id];
+      if (!warEnemy(id) || !warAlive(id) || boostOn(id, 'invis')) return;
+      var ox = o.tx + (o.w || 30) / 2, oy = o.ty + (o.h || 100) / 2, d = Math.hypot(ox - cx, oy - cy);
+      if (d < bd) { bd = d; best = { x: ox, y: oy }; }
+    });
+    return best;
+  }
+  function handAimPt(w, cx, cy) { return aimScr ? toWorld(aimScr.x, aimScr.y) : autoTarget(w, cx, cy); }
+  // скорость v в точку (dx, dy): без гравитации — прямо, с ней — низкой дугой; не долетает — под 45°
+  function lobVel(v, g, dx, dy) {
+    if (!g) { var l = Math.hypot(dx, dy) || 1; return { vx: dx / l * v, vy: dy / l * v }; }
+    var side = dx < 0 ? -1 : 1, x = Math.max(1, Math.abs(dx)), disc = v * v * v * v - g * (g * x * x - 2 * dy * v * v);
+    var th = disc >= 0 ? Math.atan((v * v - Math.sqrt(disc)) / (g * x)) : Math.PI / 4;
+    return { vx: side * Math.cos(th) * v, vy: -Math.sin(th) * v };
+  }
+  function handVel(w, cx, cy, face) {
+    var W = WPN[w], t = handAimPt(w, cx, cy);
+    if (!t) return w === 'fist' ? { vx: 0, vy: 0, face: face } : { vx: face * W.v, vy: W.vy || (w === 'sling' ? -0.12 : 0), face: face };
+    var dx = t.x - cx, dy = t.y - cy, f = dx < 0 ? -1 : 1;
+    if (w === 'fist') return { vx: 0, vy: 0, face: f };
+    var r = lobVel(w === 'bomb' ? Math.hypot(W.v, W.vy) : W.v, W.g, dx, dy);
+    return { vx: r.vx, vy: r.vy, face: f };
+  }
+  // пунктир полёта и перекрестие под курсором — только когда целишься мышью
+  function drawHandAim(ctx) {
+    if (!aimScr || !warOn() || !socket || !warAlive(socket.id) || GAME.frozen || nearGun() !== -1) return;
+    var p = GAME.pl, w = weapon, cx = p.x + p.w / 2, cy = p.y + p.h * 0.38, t = toWorld(aimScr.x, aimScr.y);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(17,24,39,.85)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(t.x, t.y, 9, 0, 6.2832);
+    ctx.moveTo(t.x - 15, t.y); ctx.lineTo(t.x - 5, t.y); ctx.moveTo(t.x + 5, t.y); ctx.lineTo(t.x + 15, t.y);
+    ctx.moveTo(t.x, t.y - 15); ctx.lineTo(t.x, t.y - 5); ctx.moveTo(t.x, t.y + 5); ctx.lineTo(t.x, t.y + 15);
+    ctx.stroke();
+    if (w !== 'fist' && ammo[w] > 0) {
+      var W = WPN[w], v = handVel(w, cx, cy, p.face || 1), x = cx, y = cy, vx = v.vx, vy = v.vy;
+      ctx.fillStyle = 'rgba(17,24,39,.45)';
+      for (var k = 0, tt = 0; k < 40 && tt < W.life; k++) {
+        for (var j = 0; j < 3; j++) { vy += W.g * 12; x += vx * 12; y += vy * 12; tt += 12; }
+        if (GAME.solidAt && GAME.solidAt(x, y)) break;
+        ctx.beginPath(); ctx.arc(x, y, 2.5, 0, 6.2832); ctx.fill();
+      }
+    }
+    ctx.restore();
   }
   function pickWeapon(w) {
     if (!WPN[w] || !war) return;
@@ -3527,6 +3585,7 @@
       return true;
     });
     drawGunAim(ctx);
+    drawHandAim(ctx);
     if (!war || phase !== 'round' || !socket) return;
     // полоски здоровья, удары и щиты
     var p = GAME.pl;
