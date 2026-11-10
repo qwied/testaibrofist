@@ -11,12 +11,12 @@
      фактором масштаба. Теперь полноразмерный масштаб 1:1, а колонки
      Play/Vote доступны свайпом вбок внутри каждой строки, как и раньше. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=212">
+<link rel="stylesheet" href="ui.css?v=213">
 <script src="offline.js?v=9"></script>
-<script src="offlineServer.js?v=8"></script>
-<script src="theme.js?v=212"></script>
-<script src="device.js?v=212"></script>
-<script src="sound.js?v=212"></script>
+<script src="offlineServer.js?v=9"></script>
+<script src="theme.js?v=213"></script>
+<script src="device.js?v=213"></script>
+<script src="sound.js?v=213"></script>
 <style>
 .mbFilters{display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:9px;margin-bottom:6px;align-items:center}
 .mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
@@ -184,6 +184,12 @@
   .mbHead .bfPager button{width:44px;height:44px}
   .mbAuthor a{display:block;line-height:44px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
+.mbPlays{font-size:12px;color:var(--muted,#6b7280);margin:2px 0 4px}
+.mbPlays a{color:inherit;text-decoration:underline;cursor:pointer}
+.mbDaily{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:12px 14px;border-radius:14px;
+  background:linear-gradient(90deg,#fef3c7,#fde68a);color:#111827;border:1px solid #f59e0b;font-size:14px}
+.mbDaily b{font-size:15px}
+.mbDaily .go{margin-left:auto}
 </style>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -235,6 +241,8 @@
       <option value="rating" data-i18n="sortRating">Сортировать по рейтингу</option>
       <option value="dislikes" data-i18n="sortDislikes">Sort by dislikes</option>
       <option value="oldest" data-i18n="sortOldest">Sort by oldest</option>
+      <option value="popular" data-i18n="sortPopular">Most played</option>
+      <option value="hot" data-i18n="sortHot">Hot this week</option>
     </select>
     <label class="mbFavOnly"><input type="checkbox" id="mbFavOnly">
       <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/></svg>
@@ -242,6 +250,7 @@
     <button class="bfBtn go" id="mbGo" data-i18n="refresh">Обновить</button>
   </div>
 
+  <div class="mbDaily" id="mbDaily" style="display:none"></div>
   <div class="mbTable">
     <div class="mbHead">
       <div class="bfPager">
@@ -269,15 +278,15 @@
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=212">
-<script src="i18n.js?v=212"></script>
-<script src="coin.js?v=212"></script>
-<script src="skinRender.js?v=212"></script>
-<script src="skinAvatar.js?v=212" defer></script>
-<script src="shell.js?v=212"></script>
-<script src="abuseShow.js?v=212" defer></script>
-<script src="account.js?v=212" defer></script>
-<script src="owner.js?v=212" defer></script>
+<link rel="stylesheet" href="mobile.css?v=213">
+<script src="i18n.js?v=213"></script>
+<script src="coin.js?v=213"></script>
+<script src="skinRender.js?v=213"></script>
+<script src="skinAvatar.js?v=213" defer></script>
+<script src="shell.js?v=213"></script>
+<script src="abuseShow.js?v=213" defer></script>
+<script src="account.js?v=213" defer></script>
+<script src="owner.js?v=213" defer></script>
 <script>
 (function () {
   'use strict';
@@ -377,6 +386,9 @@
       + '</div>'
       + '<button class="mbPlay" data-play="1">' + T('play', 'Играть') + '</button>'
       + '</div>'
+      + '<div class="mbPlays">\u25B6 ' + (m.plays || 0) + ' ' + T('playsTxt', 'игр')
+      +   (m.record ? ' · ' + T('recordTxt', 'Рекорд') + ': <b>' + esc(m.record.name) + '</b> ' + (m.record.ms / 1000).toFixed(2) + 's' : '')
+      +   (m.mapType === 'race' ? ' · <a href="#" data-records="1">' + T('topTimes', 'Топ-10 времён') + '</a>' : '') + '</div>'
       + medalsRow(m)
       + '<label class="mbPractice" title="' + T('practiceHint', 'Умирая, возвращаешься туда, где умер, а не на старт')
       +   '"><input type="checkbox" data-practice="1"> ' + T('practiceTxt', 'Practice') + '</label>'
@@ -444,9 +456,33 @@
     }
   });
 
+  /* Карта дня (идея «daily map + стрики»): одна гоночная карта на сутки для всех, своя комната;
+     первый финиш за день — бонус монет, дни подряд — серия. */
+  function showDaily() {
+    fetch('/getDailyMap', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+      var box = $('mbDaily');
+      if (!d || !box) return;
+      box.innerHTML = '\u2600 ' + T('dailyTitle', 'Карта дня') + ': <b>' + esc(d.mapName) + '</b> · ' + esc(d.author)
+        + (d.done ? ' · ' + T('dailyDone', 'Пройдена сегодня') : ' · ' + T('dailyBonus', 'бонус монет за первый финиш'))
+        + (d.streak ? ' · ' + T('dailyStreak', 'Серия') + ': ' + d.streak : '')
+        + '<a class="bfBtn go" href="game?mode=race&room=daily">' + T('play', 'Играть') + '</a>';
+      box.style.display = '';
+    }).catch(function () {});
+  }
   document.addEventListener('click', function (e) {
     var r = e.target.closest && e.target.closest('.mbRow');
     if (!r) return;
+    if (e.target.closest('[data-records]')) {
+      e.preventDefault();
+      fetch('/getMapRecords?author=' + encodeURIComponent(r.dataset.author) + '&mapName=' + encodeURIComponent(r.dataset.map))
+        .then(function (x) { return x.json(); }).then(function (d) {
+          var list = (d && d.records) || [];
+          alert(T('topTimes', 'Топ-10 времён') + ' — ' + r.dataset.map + '\n\n' + (list.length ? list.map(function (x, i) {
+            return (i + 1) + '. ' + x.name + ' — ' + (x.ms / 1000).toFixed(2) + 's';
+          }).join('\n') : T('noRecords', 'Пока никто не прошёл эту карту.')));
+        }).catch(function () {});
+      return;
+    }
 
     if (e.target.closest('[data-play]')) {
       var pc = r.querySelector('[data-practice]');
@@ -661,7 +697,7 @@
 
   fetch('/whoAmI', { credentials: 'same-origin' })
     .then(function (r) { return r.json(); })
-    .then(function (d) { me = d; load(); showNewMaps(); })
+    .then(function (d) { me = d; load(); showNewMaps(); showDaily(); })
     .catch(load);
 
   window.addEventListener('bf-lang', load);

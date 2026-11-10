@@ -52,6 +52,10 @@
     {
       "title": "New shapes and editor tools",
       "text": "The triangle in the map editor can now be a right triangle, rhombus, trapezoid, parallelogram, semicircle, pentagon, hexagon or star, and can be mirrored. Shapes can be see-through, have an outline of any thickness and color, or be invisible in the game while still blocking the way. Number fields accept simple math like 100+50. New editor buttons: jump to the start point, show what the player sees, and pick your own editor background color. The editor now warns you before you close a tab with unsaved changes."
+    },
+    {
+      "title": "Levels, badges, records and the map of the day",
+      "text": "Profiles now show your level with an XP bar (XP comes from your Race and Hide and Seek scores), a star for every 50 maps finished, and badges like Veteran, Map creator, Racer, Hunter and Survivor. You can gift coins to other players from their profile, and redeem promo codes in Settings. Every map shows how many times it was played and its record; race maps keep a top 10 of best times, and you get a message when you make it in. Maps Browser can sort by most played and hot this week, and has a Map of the day: finish it for bonus coins and keep a daily streak."
     }
   ]
 }

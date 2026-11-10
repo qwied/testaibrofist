@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <title>AIBrofist — Profile</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=212">
+<link rel="stylesheet" href="ui.css?v=213">
 <script src="offline.js?v=9"></script>
-<script src="offlineServer.js?v=8"></script>
-<script src="theme.js?v=212"></script>
-<script src="device.js?v=212"></script>
-<script src="sound.js?v=212"></script>
+<script src="offlineServer.js?v=9"></script>
+<script src="theme.js?v=213"></script>
+<script src="device.js?v=213"></script>
+<script src="sound.js?v=213"></script>
 <style>
 .upSearch{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
 .upSearch .bfInput{margin-bottom:0;flex:1 1 180px}
@@ -130,6 +130,21 @@
   .upRow .who{flex:1 1 100%}
   .upFolderAssign{flex:1 1 auto}
 }
+.upProg{margin-top:8px}
+.upLvl{display:flex;align-items:center;gap:8px;font-size:13px}
+.upLvl .upXp{margin-left:auto;color:var(--muted,#6b7280);font-size:12px}
+.upStars{color:#f59e0b;letter-spacing:1px}
+.upBar{height:8px;border-radius:6px;background:var(--line,#e5e7eb);overflow:hidden;margin-top:4px}
+.upBar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#16a34a)}
+.upBadges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.upBadge{padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700;background:#eef2f8;color:#111827;border:1px solid #d7dee7}
+.upBadge.b-creator{background:#111827;color:#fff;border-color:#111827}
+.upBadge.b-veteran{background:#fef3c7;border-color:#f59e0b}
+.upBadge.b-builder,.upBadge.b-builder2{background:#dbeafe;border-color:#3b82f6}
+.upBadge.b-racer{background:#dcfce7;border-color:#22c55e}
+.upBadge.b-hunter{background:#e0e7ff;border-color:#6366f1}
+.upBadge.b-survivor{background:#ffedd5;border-color:#f97316}
+.upBadge.b-streak{background:#fce7f3;border-color:#ec4899}
 </style>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -161,15 +176,15 @@
   <div class="bfMsg" id="upMsg"></div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=212">
-<script src="i18n.js?v=212"></script>
-<script src="coin.js?v=212"></script>
-<script src="skinRender.js?v=212"></script>
-<script src="skinAvatar.js?v=212" defer></script>
-<script src="shell.js?v=212"></script>
-<script src="abuseShow.js?v=212" defer></script>
-<script src="account.js?v=212" defer></script>
-<script src="owner.js?v=212" defer></script>
+<link rel="stylesheet" href="mobile.css?v=213">
+<script src="i18n.js?v=213"></script>
+<script src="coin.js?v=213"></script>
+<script src="skinRender.js?v=213"></script>
+<script src="skinAvatar.js?v=213" defer></script>
+<script src="shell.js?v=213"></script>
+<script src="abuseShow.js?v=213" defer></script>
+<script src="account.js?v=213" defer></script>
+<script src="owner.js?v=213" defer></script>
 <script>
 (function () {
   'use strict';
@@ -188,6 +203,22 @@
     var m = $('upMsg');
     m.textContent = t; m.style.color = ok ? 'var(--green)' : 'var(--red)';
     clearTimeout(msg._t); msg._t = setTimeout(function () { m.textContent = ''; }, 4000);
+  }
+  /* Уровень, опыт и значки (см. progress.js): уровень растёт от очков Race и Hide and Seek,
+     звезда — за каждые 50 пройденных карт. */
+  function drawProgress() {
+    get('/getProgress?name=' + encodeURIComponent(who)).then(function (p) {
+      var box = $('upProg');
+      if (!box || !p) return;
+      var pct = Math.max(0, Math.min(100, Math.round((p.xp - p.from) / Math.max(1, p.to - p.from) * 100)));
+      var stars = p.stars ? ' <span class="upStars" title="' + esc(T('starsTip', 'Звезда за каждые 50 пройденных карт')) + '">' + new Array(Math.min(p.stars, 10) + 1).join('\u2605') + (p.stars > 10 ? ' ×' + p.stars : '') + '</span>' : '';
+      box.innerHTML = '<div class="upLvl"><b>' + T('levelLbl', 'Уровень') + ' ' + p.level + '</b>' + stars
+        + '<span class="upXp">' + p.xp + ' / ' + p.to + ' XP</span></div>'
+        + '<div class="upBar"><i style="width:' + pct + '%"></i></div>'
+        + (p.badges && p.badges.length ? '<div class="upBadges">' + p.badges.map(function (b) {
+            return '<span class="upBadge b-' + esc(b.id) + '">' + esc(T('badge_' + b.id, b.t)) + '</span>';
+          }).join('') + '</div>' : '');
+    }).catch(function () {});
   }
   function get(url) {
     return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); });
@@ -255,6 +286,7 @@
                                + '<button class="go" data-rel="accept">' + T('accept', 'Принять') + '</button>';
       else acts = '<button data-rel="add">' + T('addFriend', 'Добавить в друзья') + '</button>';
       acts += '<a href="messages?with=' + encodeURIComponent(who) + '">' + T('msgBtn', 'Message') + '</a>';
+      acts += '<button id="upGift">' + T('giftBtn', 'Подарить монеты') + '</button>';
     }
 
     var s = d.stats || {};
@@ -277,6 +309,7 @@
       +     '</div>'
       +     rankRow(d.rank)
       +   '</div>'
+      +   '<div class="upProg" id="upProg"></div>'
       +   '<div class="upActs">' + acts + '</div>'
       + '</div></div>'
 
@@ -581,6 +614,14 @@
         rank: r[5]
       });
 
+      drawProgress();
+      if ($('upGift')) $('upGift').onclick = function () {
+        var n = prompt(T('giftAsk', 'Сколько монет подарить {n}? (до 200 в день)').replace('{n}', who), '10');
+        if (!n) return;
+        post('/giftCoins', { to: who, amount: n }).then(function (r) {
+          msg(r.message || (r.status === 'success' ? T('saved', 'Сохранено') : 'Error'), r.status === 'success');
+        }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      };
       if (isMe) {
         $('upEditAbout').onclick = function () {
           $('upAbout').style.display = 'none';

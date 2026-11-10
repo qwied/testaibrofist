@@ -559,6 +559,8 @@ function register(app, getUser, acc, cleanText) {
     if (favoritesOnly) out = out.filter(m => myFavs.indexOf(favKey(m.author, m.mapName)) !== -1);
 
     out.sort((a, b) => {
+      if (sortBy === 'popular') return ((b.plays || 0) - (a.plays || 0)) || (b.date - a.date);
+      if (sortBy === 'hot') return (weekPlays(b) - weekPlays(a)) || (b.date - a.date);
       if (sortBy === 'rating') return (b.rating - a.rating) || (b.date - a.date);
       if (sortBy === 'dislikes') return (tally(b).dislikes - tally(a).dislikes) || (b.date - a.date);
       if (sortBy === 'oldest') return a.date - b.date;
@@ -577,7 +579,9 @@ function register(app, getUser, acc, cleanText) {
         inGameModes: Array.isArray(m.inGameModes) ? m.inGameModes : [],
         commentCount: Array.isArray(m.comments) ? m.comments.length : 0,
         rankTiers: m.rankTiers || null,
-        myMedal: medalOf(m, me)
+        myMedal: medalOf(m, me),
+        plays: m.plays || 0,
+        record: Array.isArray(m.records) && m.records[0] ? { name: m.records[0].name, ms: m.records[0].ms } : null
       };
     });
 
@@ -586,6 +590,17 @@ function register(app, getUser, acc, cleanText) {
   }
   app.get('/getMaps', list);
   app.get('/getMapsForList', list);
+
+  // ---------- рекорды карты и карта дня ----------
+  app.get('/getMapRecords', (req, res) => {
+    const m = find(req.query.author, req.query.mapName);
+    res.json({ records: m && Array.isArray(m.records) ? m.records.map(r => ({ name: r.name, ms: r.ms })) : [], plays: m ? m.plays || 0 : 0 });
+  });
+  app.get('/getDailyMap', (req, res) => {
+    const m = dailyMap();
+    const u = getUser(req);
+    res.json(m ? { author: m.author, mapName: m.mapName, date: dayKey(), done: !!(u && u.dailyDone === dayKey()), streak: u ? u.dailyStreak || 0 : 0 } : null);
+  });
 
   // ---------- данные карты ----------
   app.get('/getMapData', (req, res) => {
@@ -890,6 +905,52 @@ function register(app, getUser, acc, cleanText) {
 }
 
 // ---------- доступ для инструментов владельца ----------
+/* ---------- счётчик игр, рекорды и карта дня (идеи игроков) ----------
+   plays — сколько раундов сыграно на карте всего; playDays — по дням за последние 2 недели
+   (для сортировки «Горячие»); records — 10 лучших времён гонки, по одному на игрока. */
+const dayKey = t => new Date(t || Date.now()).toISOString().slice(0, 10);
+function countPlay(author, mapName) {
+  const m = find(author, mapName);
+  if (!m) return;
+  m.plays = (m.plays || 0) + 1;
+  const d = dayKey();
+  if (!m.playDays || typeof m.playDays !== 'object') m.playDays = {};
+  m.playDays[d] = (m.playDays[d] || 0) + 1;
+  const keep = dayKey(Date.now() - 14 * 864e5);
+  Object.keys(m.playDays).forEach(k => { if (k < keep) delete m.playDays[k]; });
+  save();
+}
+function weekPlays(m) {
+  if (!m.playDays) return 0;
+  const from = dayKey(Date.now() - 7 * 864e5);
+  let n = 0;
+  Object.keys(m.playDays).forEach(k => { if (k >= from) n += m.playDays[k] || 0; });
+  return n;
+}
+function addRecord(author, mapName, name, ms) {
+  const m = find(author, mapName);
+  if (!m || !(ms > 0) || !name) return null;
+  const list = Array.isArray(m.records) ? m.records : [];
+  const i = list.findIndex(r => low(r.name) === low(name));
+  if (i !== -1 && list[i].ms <= ms) return null;
+  if (i !== -1) list.splice(i, 1);
+  list.push({ name: String(name), ms: Math.round(ms), at: Date.now() });
+  list.sort((a, b) => a.ms - b.ms);
+  m.records = list.slice(0, 10);
+  save();
+  const place = m.records.findIndex(r => low(r.name) === low(name));
+  return place === -1 ? null : place + 1;
+}
+/* Карта дня — одна гоночная карта на сутки для всех: из карт гонки в игре, по дате. Играется
+   в своей комнате race:daily (см. raceStartLobby в server.js); первый финиш за день — бонус. */
+function dailyMap(t) {
+  const pool = rawPool('race').filter(m => !m.showcase).sort((a, b) => low(a.author + a.mapName) < low(b.author + b.mapName) ? -1 : 1);
+  if (!pool.length) return null;
+  const d = dayKey(t);
+  let h = 0;
+  for (let i = 0; i < d.length; i++) h = (h * 31 + d.charCodeAt(i)) >>> 0;
+  return pool[h % pool.length];
+}
 function find(author, mapName) {
   return maps.find(x => low(x.author) === low(author) && low(x.mapName) === low(mapName));
 }
@@ -961,4 +1022,4 @@ function newFromFriends(user) {
   return out;
 }
 
-module.exports = { register, reload: load, MODES, FAMILY, familyOf, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, allMaps, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, candidatesFor, renameAuthor };
+module.exports = { countPlay, addRecord, dailyMap, dayKey, register, reload: load, MODES, FAMILY, familyOf, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, allMaps, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, candidatesFor, renameAuthor };

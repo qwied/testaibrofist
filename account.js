@@ -362,9 +362,20 @@
        + '<div class="bf-row" id="bfFxRow"></div>'
        + '<div class="bf-row" id="bfCbRow"></div>'
        + '<div class="bf-h">' + T('keysHint', 'Свои клавиши — вдобавок к стрелкам и WASD. Нажми на действие, потом на клавишу.') + '</div>'
-       + '<div class="bf-row" id="bfKeyRow" style="flex-wrap:wrap"></div>');
+       + '<div class="bf-row" id="bfKeyRow" style="flex-wrap:wrap"></div>'
+       + '<div class="bf-sec">' + T('promoSection', 'Промокод') + '</div>'
+       + '<div class="bf-row"><input id="bfPromo" maxlength="24" placeholder="CODE" style="flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid var(--line,#d7dee7);text-transform:uppercase">'
+       + '<div class="bf-opt" id="bfPromoGo">' + T('promoRedeem', 'Активировать') + '</div></div>'
+       + '<div class="bf-h" id="bfPromoMsg"></div>');
     drawBubblePref();
     drawGamePrefs();
+    box.querySelector('#bfPromoGo').onclick = function () {
+      var m = box.querySelector('#bfPromoMsg');
+      post('/promo/redeem', { code: box.querySelector('#bfPromo').value }, function (r) {
+        m.style.color = r && r.status === 'success' ? '#16a34a' : '#dc2626';
+        m.textContent = (r && r.message) || '';
+      });
+    };
     drawTheme();
     drawLang(name);
     drawChatPref();

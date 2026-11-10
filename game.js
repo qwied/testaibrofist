@@ -2830,6 +2830,15 @@
       if (MODE !== 'race' || !d || d.id === socket.id) return;
       log(TR('raceOutOther', '{n} выбыл').replace('{n}', '<b>' + esc(d.name || '') + '</b>'));
     });
+    // попал в 10 лучших времён карты / первый финиш карты дня за сегодня
+    socket.on('mapRecord', function (d) {
+      if (!d || !d.place) return;
+      log(TR('mapRecordMsg', 'Рекорд! Ты {p}-й в таблице лучших времён этой карты ({t} с).').replace('{p}', d.place).replace('{t}', (d.ms / 1000).toFixed(2)));
+      if (d.place === 1) bigBanner(TR('mapRecordBig', 'Рекорд карты!'), '#ca8a04');
+    });
+    socket.on('dailyDone', function (d) {
+      log(TR('dailyDoneMsg', 'Карта дня пройдена! Серия: {n} дн.').replace('{n}', (d && d.streak) || 1));
+    });
     socket.on('skipVotes', function (d) {
       if (MODE !== 'race' || !d) return;
       skipVotes = { n: +d.n || 0, need: +d.need || 1 };

@@ -362,6 +362,7 @@ require('./discordBot.js').start();
 require('./discordBot.js').register(app);   // /discord/status — состояние бота, без секретов
 require('./dailyRewards.js').register(app, accounts);
 require('./quests.js').register(app, accounts);
+require('./progress.js').register(app, accounts);   // уровень, значки, промокоды, подарки монет
 require('./story.js').register(app, accounts);
 
 // адреса, на которые ссылается шапка сайта
@@ -632,7 +633,8 @@ function raceIds(room) {
 }
 function raceStartLobby(io, room, st) {
   clearTimeout(st.timer);
-  const m = require('./maps.js').randomFor('race', st.map ? st.map.mapName : '');
+  // комната «Карта дня» (race:daily) всегда играет карту дня (см. dailyMap в maps.js)
+  const m = /:daily$/.test(room) ? require('./maps.js').dailyMap() : require('./maps.js').randomFor('race', st.map ? st.map.mapName : '');
   st.map = m ? { author: m.author, mapName: m.mapName } : null;
   st.rules = raceRulesOf(m);
   st.phase = 'lobby';
@@ -649,6 +651,7 @@ function raceStartRound(io, room, st) {
   st.phase = 'round';
   st.endsAt = Date.now() + ms;
   st.members = new Set(raceIds(room));     // кто стартовал — только их ждём на финише
+  if (st.map) require('./maps.js').countPlay(st.map.author, st.map.mapName);   // счётчик игр карты
   io.to(room).emit('racePhase', { phase: 'round', map: st.map, msLeft: ms, goal: st.rules.goal, roundNum: st.roundNum });
   st.timer = setTimeout(() => raceEndRound(io, room, st, 'time'), ms);
 }
@@ -1402,6 +1405,7 @@ function hsStartRound(io, room, st) {
     : adventure.isAdv(st.variant) ? adventure.roundMs(st) : st.variant === 'wait' ? HS_WAIT_MS : HS_ROUND_MS;
   st.endsAt = Date.now() + roundMs;
   st.roundStartedAt = Date.now();   // для медалей за время — см. hsDoInfect/hsCreditMapBest
+  if (st.map) require('./maps.js').countPlay(st.map.author, st.map.mapName);   // счётчик игр карты
   // снимок пряток на момент старта — только они и только если не пойманы, получат награду в конце
   // odo — отметка одометра на старте ЛОББИ, по ней в конце видно, кто вообще играл
   // охотники: искатель/убийца или все копы, кто ещё в комнате
@@ -2389,6 +2393,21 @@ io.on('connection', (socket) => {
     require('./quests.js').track(account, 'race_finish');
     if (points > 0) accountsRef.creditScore(account, points);
     raceStat(account, rs.key, elapsedMs);
+    // рекорды карты: 10 лучших времён — попал в них, скажем игроку место
+    const recPlace = require('./maps.js').addRecord(author, mapName, account, elapsedMs);
+    if (recPlace) socket.emit('mapRecord', { place: recPlace, ms: elapsedMs });
+    // карта дня: первый финиш за сутки — бонус и серия дней подряд
+    try {
+      const M = require('./maps.js'), dm = M.dailyMap();
+      const u = accountsRef.getDb().users[accountsRef.key(account)];
+      if (dm && u && dm.author + '|' + dm.mapName === rs.key && u.dailyDone !== M.dayKey()) {
+        u.dailyStreak = u.dailyDone === M.dayKey(Date.now() - 864e5) ? (u.dailyStreak || 0) + 1 : 1;
+        u.dailyDone = M.dayKey();
+        accountsRef.save();
+        hsCreditAndNotify(socket, account, 10 + Math.min(20, (u.dailyStreak - 1) * 2), 'dailyMap');
+        socket.emit('dailyDone', { streak: u.dailyStreak });
+      }
+    } catch (e) { /* бонус карты дня не должен ронять финиш */ }
   });
 
   socket.on('disconnect', () => {

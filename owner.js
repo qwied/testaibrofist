@@ -265,6 +265,16 @@
           + '<div class="ow-b" id="owCGo">' + T('apply', 'Применить') + '</div>'
           + '<div class="ow-m" id="owCMsg"></div>')
 
+      // промокоды (идея игроков): код на N монет, M активаций; игрок вводит его в «Настройках»
+      + acc('owAccPromo', ICN.coin, T('promoOwner', 'Промокоды'),
+            '<input class="ow-i" id="owPCode" placeholder="CODE" maxlength="24" style="text-transform:uppercase">'
+          + '<div class="ow-row2">'
+          +   '<input class="ow-i" id="owPCoins" type="number" min="1" placeholder="' + T('amount', 'Количество') + '">'
+          +   '<input class="ow-i" id="owPUses" type="number" min="1" placeholder="' + T('promoUses', 'Активаций') + '">'
+          + '</div>'
+          + '<div class="ow-b" id="owPGo">' + T('apply', 'Применить') + '</div>'
+          + '<div class="ow-m" id="owPMsg"></div>')
+
       + acc('owAccJoin', ICN.calendar, T('setJoinDate', 'Дата регистрации'),
             '<input class="ow-i" id="owJName" placeholder="' + T('playerName', 'Ник игрока') + '">'
           + '<input class="ow-i" id="owJDate" type="date">'
@@ -332,6 +342,17 @@
 
     box.querySelector('.ow-x').onclick = close;
 
+    box.querySelector('#owPGo').onclick = function () {
+      var m = box.querySelector('#owPMsg');
+      post('/owner/promo/create', {
+        code: box.querySelector('#owPCode').value.trim(),
+        coins: box.querySelector('#owPCoins').value.trim(),
+        uses: box.querySelector('#owPUses').value.trim() || '1'
+      }).then(function (r) {
+        m.style.color = r.status === 'success' ? '#2e9b2e' : 'red';
+        m.textContent = r.status === 'success' ? r.code + ': ' + r.coins + ' × ' + r.uses : (r.message || '');
+      }).catch(function () { m.style.color = 'red'; m.textContent = T('serverDown', 'Сервер недоступен'); });
+    };
     box.querySelector('#owCGo').onclick = function () {
       var m = box.querySelector('#owCMsg');
       post('/owner/giveCoins', {
@@ -631,7 +652,7 @@
     if (document.getElementById('aaScript')) return;
     var sc = document.createElement('script');
     sc.id = 'aaScript';
-    sc.src = 'adminAbuse.js?v=212';
+    sc.src = 'adminAbuse.js?v=213';
     sc.defer = true;
     document.head.appendChild(sc);
   }
