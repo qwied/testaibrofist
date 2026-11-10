@@ -2419,6 +2419,41 @@
       skipMine = true; socket.emit('voteSkip'); skipTick();
     });
   })();
+  /* Призрак лучшего забега (идея «запись прохождения»): каждый забег гонки пишется по 20 точек
+     в секунду; финишировал быстрее прежнего — запись сохраняется в этом браузере для этой карты,
+     и в следующих забегах полупрозрачная фигурка бежит рядом твоим лучшим путём. */
+  var ghostRec = null, ghostBest = null, ghostKey = '', ghostLastT = 0, ghostSaved = false;
+  var ghostOn = (function () { try { return localStorage.getItem('bfGhost') !== '0'; } catch (e) { return true; } })();
+  function ghostLoad(key) {
+    ghostKey = key; ghostBest = null;
+    try { var g = JSON.parse(localStorage.getItem('bfGhost:' + key) || 'null'); if (g && g.t > 0 && Array.isArray(g.p)) ghostBest = g; } catch (e) {}
+  }
+  setInterval(function () {
+    if (!ghostOn || MODE !== 'race' || STORY || !GAME.playing || !currentMap || !GAME.pl) return;
+    var key = currentMap.author + '|' + currentMap.mapName, t = GAME.timeMs || 0;
+    if (key !== ghostKey) { ghostLoad(key); ghostRec = null; }
+    if (!ghostRec || t < ghostLastT) { ghostRec = []; ghostSaved = false; }
+    ghostLastT = t;
+    if (!GAME.done) { if (ghostRec.length < 6000) ghostRec.push([Math.round(t), Math.round(GAME.pl.x), Math.round(GAME.pl.y)]); return; }
+    if (ghostSaved) return;
+    ghostSaved = true;
+    if (ghostRec.length > 5 && (!ghostBest || t < ghostBest.t)) {
+      ghostBest = { t: t, p: ghostRec };
+      try { localStorage.setItem('bfGhost:' + key, JSON.stringify(ghostBest)); } catch (e) {}
+    }
+  }, 50);
+  function drawGhost(ctx) {
+    if (!ghostOn || !ghostBest || MODE !== 'race' || !GAME.playing || GAME.done || !GAME.pl) return;
+    var t = GAME.timeMs || 0, p = ghostBest.p, lo = 0, hi = p.length - 1;
+    if (t > p[hi][0]) return;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (p[mid][0] < t) lo = mid + 1; else hi = mid; }
+    var a = p[Math.max(0, lo - 1)], b = p[lo], k = b[0] > a[0] ? (t - a[0]) / (b[0] - a[0]) : 0;
+    ctx.save(); ctx.globalAlpha = 0.3;
+    ctx.translate(a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k);
+    GAME.figure(GAME.pl.w, GAME.pl.h, '#6366f1', true, null);
+    ctx.restore();
+  }
+  window.__bfGhost = function () { return ghostBest ? { t: ghostBest.t, n: ghostBest.p.length } : null; };
   // прогресс гонки: самая дальняя доля пути от старта до финиша за этот забег
   var progBest = 0, progRun = -1;
   function progTick() {
@@ -4945,6 +4980,7 @@
       ctx.restore();
       drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74));
     });
+    drawGhost(ctx);
     drawTeamObjects(ctx);
     drawWar(ctx);
     drawAdv(ctx);

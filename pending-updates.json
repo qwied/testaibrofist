@@ -76,6 +76,10 @@
     {
       "title": "Hide and Seek: role wish, give up, free camera",
       "text": "In Hide and Seek there is a new menu button at the top. Choose whether you'd rather hide or seek next round, and the roulette will lean your way. Hiders can give up and leave the round. Once you're caught, you can turn on a free camera and look around the map with the arrow keys."
+    },
+    {
+      "title": "Ghost runs and editor helpers",
+      "text": "In Race, a see-through ghost now runs your best path on maps you've already finished, so you can race yourself (you can turn it off in Settings). In the editor you can cut a block in half, put your own picture under the map to trace over, and let other players copy your map: such maps get a Copy to editor link in Maps Browser."
     }
   ]
 }

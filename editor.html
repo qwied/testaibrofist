@@ -373,15 +373,15 @@ body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="device.js?v=218"></script>
-        <script src="sound.js?v=218"></script>
-        <script src="skinRender.js?v=218"></script>
-        <script src="skinCanvas.js?v=218"></script>
-        <script src="gifuct.bundle.js?v=218"></script>
-        <script src="gifPlayer.js?v=218"></script>
-        <script src="coin.js?v=218"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=218">
-        <script src="theme.js?v=218"></script>
+<script src="device.js?v=219"></script>
+        <script src="sound.js?v=219"></script>
+        <script src="skinRender.js?v=219"></script>
+        <script src="skinCanvas.js?v=219"></script>
+        <script src="gifuct.bundle.js?v=219"></script>
+        <script src="gifPlayer.js?v=219"></script>
+        <script src="coin.js?v=219"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=219">
+        <script src="theme.js?v=219"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1225,6 +1225,8 @@ var raceDJ = false, raceFall = false, raceSprint = false, FALL_DMG_H = 620;
 /* Атмосфера карты (идеи «дождь/снег», «день и ночь», «туман войны») — для любого режима:
    "" — ясно, rain, snow, night (темно, свет вокруг игрока), fog (видно только рядом). */
 var ATMOS = ["", "rain", "snow", "night", "fog"], atmo = "", flashA = 0;
+// автор разрешил другим копировать карту в свой редактор (кнопка «Копировать» в Maps Browser)
+var copyable = false;
 var RACE_LIVES = [0, 1, 3, 5], RACE_TIMES = [0, 5, 10], RACE_GOALS = ["", "first", "last"];
 function cleanRaceRules(d){
   raceLives = (mode === "race" && d && RACE_LIVES.indexOf(+d.lives) !== -1) ? +d.lives : 0;
@@ -1232,6 +1234,7 @@ function cleanRaceRules(d){
   raceGoal = (mode === "race" && d && (d.goal === "first" || (d.goal === "last" && raceLives))) ? d.goal : "";
   raceDJ = mode === "race" && !!(d && d.djump);
   atmo = (d && ATMOS.indexOf(d.atmo) > 0) ? d.atmo : "";
+  copyable = !!(d && d.copyable);
   raceFall = mode === "race" && !!(d && d.fallDmg);
   raceSprint = mode === "race" && !!(d && d.sprint);
 }
@@ -1240,6 +1243,7 @@ function withRaceRules(m){
   if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; if(raceGoal) m.goal = raceGoal;
     if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; if(raceSprint) m.sprint = 1; }
   if(atmo) m.atmo = atmo;
+  if(copyable) m.copyable = 1;
   return m;
 }
 
@@ -3459,6 +3463,7 @@ function paintFrame(){
   var sx = shake > .4 && !PREFS.lowFx ? (Math.random()-.5)*shake : 0, sy = shake > .4 && !PREFS.lowFx ? (Math.random()-.5)*shake : 0;
   ctx.setTransform(view.s*DPR,0,0,view.s*DPR, (view.x+sx)*DPR, (view.y+sy)*DPR);
 
+  if(underImg && !playing){ ctx.save(); ctx.globalAlpha = 0.45; ctx.drawImage(underImg, 0, 0); ctx.restore(); }
   // рисуем только то, что попадает на экран
   var vx0 = -view.x/view.s - 80, vy0 = -view.y/view.s - 80;
   var vx1 = vx0 + VW()/view.s + 160, vy1 = vy0 + VH()/view.s + 160;
@@ -3715,6 +3720,7 @@ var SVG = {
   copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
   trash:'<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
   grid:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>',
+  image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/>',
   cloud:'<path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 9.5 4.3 4.3 0 0 0 7 18z"/>',
   spawnPin:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
   viewBox:'<rect x="2" y="5" width="20" height="14" rx="2" stroke-dasharray="3 2"/><circle cx="12" cy="12" r="2"/>',
@@ -3738,7 +3744,7 @@ sceneEl.appendChild(Object.assign(document.createElement("div"),{className:"sep"
 [["bUndo",SVG.undo,"btnUndoTip","Отменить (Ctrl+Z)"],["bRedo",SVG.redo,"btnRedoTip","Вернуть (Ctrl+Y)"],
  ["bCopy",SVG.copy,"btnCopyTip","Дубликат (Ctrl+D)"],["bDel",SVG.trash,"btnDelTip","Удалить (Del)"],["bGrid",SVG.grid,"btnGridTip","Сетка (G)"]]
   .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2],a[3])); });
-[["bAtmo",SVG.cloud,"btnAtmoTip","Атмосфера карты"],["bToSpawn",SVG.spawnPin,"btnToSpawnTip","К точке старта"],["bViewBox",SVG.viewBox,"btnViewBoxTip","Рамка обзора игрока"]]
+[["bAtmo",SVG.cloud,"btnAtmoTip","Атмосфера карты"],["bCopyable",SVG.copy,"btnCopyableTip","Разрешить другим копировать карту"],["bUnder",SVG.image,"btnUnderTip","Картинка-подложка"],["bToSpawn",SVG.spawnPin,"btnToSpawnTip","К точке старта"],["bViewBox",SVG.viewBox,"btnViewBoxTip","Рамка обзора игрока"]]
   .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2],a[3])); });
 (function(){
   // цвет фона редактора (идея «серый/свой фон»): только для удобства автора, в карту не пишется
@@ -4774,6 +4780,18 @@ function arrRemove(o){
   if(arrRow(sel).length < 2) delete sel.row;
   markDirty && markDirty(); inspect();
 }
+function cutSel(dir){
+  if(!sel || sel.type !== "rect") return;
+  if(overLimit(1)) return;
+  commit();
+  var c = JSON.parse(JSON.stringify(sel));
+  c.id = uid++; delete c.row;
+  if(c.customId) c.customId = "w" + c.id;
+  if(dir === "v"){ var w = sel.w / 2; sel.w = w; c.w = w; c.x = sel.x + w; }
+  else { var h = sel.h / 2; sel.h = h; c.h = h; c.y = sel.y + h; }
+  objects.splice(objects.indexOf(sel) + 1, 0, c);
+  markDirty(); inspect();
+}
 function removeSel(){
   if(!sel) return;
   commit();
@@ -5305,6 +5323,19 @@ function inspect(){
     if(sel.look === "lock")
       hint(TR("lockHint","Дверь с замком открывается ключом: поставь «Ключ» и в его «Связях» укажи эту дверь."));
   }
+  /* Разрезать (идея «Cut tool»): блок без поворота делится пополам — по ширине или по высоте. */
+  if(sel.type === "rect" && !(sel.rot % 360) && !sel.moves && !sel.spins){
+    var cr = pr(), cl = document.createElement("label"); cl.textContent = TR("lblCut","Разрезать пополам");
+    var cw = document.createElement("div"); cw.style.cssText = "display:flex;gap:6px";
+    [["v","\u2194"],["h","\u2195"]].forEach(function(p){
+      var bt = document.createElement("button"); bt.type = "button"; bt.textContent = p[1]; bt.dataset.cut = p[0];
+      bt.title = p[0] === "v" ? TR("cutV","Разрезать по ширине") : TR("cutH","Разрезать по высоте");
+      bt.style.cssText = "width:34px;height:30px;border-radius:8px;border:2px solid currentColor;background:transparent;color:inherit;font:700 15px sans-serif;cursor:pointer";
+      bt.addEventListener("click", function(){ cutSel(p[0]); });
+      cw.appendChild(bt);
+    });
+    cr.appendChild(cl); cr.appendChild(cw);
+  }
   /* Копии рядом (идея «+ 1 −»): «+» ставит ещё одну такую же фигуру вплотную справа от последней,
      «−» убирает последнюю добавленную. Удобно для забора, ступенек, ряда шипов. */
   if(SOLID.indexOf(sel.type) !== -1 && !sel.moves && !sel.spins){
@@ -5723,7 +5754,7 @@ document.getElementById("file").addEventListener("change", function(e){
       // в гонке не бывает, что бы ни лежало в файле
       if(mode === "sandbox" || mode === "twoPlayer") mode = "hideAndSeek";
       apoc = (mode === "hideAndSeek") && !!d.apoc;   // в старых картах модификации не было — классика
-      cleanRaceRules(d); syncRaceBtns(); syncAtmoBtn();
+      cleanRaceRules(d); syncRaceBtns(); syncAtmoBtn(); syncCopyBtn();
       if(d.gravity !== undefined){
         // гравитация из старой карты игнорируется: она всегда 9
       }
@@ -5791,6 +5822,22 @@ document.getElementById("bAtmo").addEventListener("click", function(){
   if(tt){ tt.textContent = this.getAttribute("data-tip"); }
 });
 syncAtmoBtn();
+function syncCopyBtn(){ document.getElementById("bCopyable").classList.toggle("on", copyable); }
+document.getElementById("bCopyable").addEventListener("click", function(){ if(playing) return; copyable = !copyable; edDirty = true; syncCopyBtn(); });
+/* Картинка-подложка (идея «image overlay»): своя картинка под картой — обрисовывать по ней.
+   Только в этом редакторе: в карту не сохраняется и в игре её нет. Повторный клик — убрать. */
+var underImg = null;
+document.getElementById("bUnder").addEventListener("click", function(){
+  if(underImg){ underImg = null; this.classList.remove("on"); return; }
+  var btn = this, inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*";
+  inp.onchange = function(){
+    var f = inp.files && inp.files[0]; if(!f) return;
+    var im = new Image();
+    im.onload = function(){ underImg = im; btn.classList.add("on"); };
+    im.src = URL.createObjectURL(f);
+  };
+  inp.click();
+});
 // рамка обзора: сколько карты видит игрок вокруг старта (см. VIEW_UNITS_H — высота кадра в игре)
 var showViewBox = false;
 document.getElementById("bViewBox").addEventListener("click", function(){ showViewBox = !showViewBox; this.classList.toggle("on", showViewBox); });
@@ -5897,7 +5944,7 @@ window.GAME = BRIDGE = {
     // в принципе (см. TOOL_MODES.zombie), даже если в JSON что-то лежит
     apoc = (mode === "hideAndSeek") && !!d.apoc;
     cleanRaceRules(d);
-    syncRaceBtns(); syncAtmoBtn();
+    syncRaceBtns(); syncAtmoBtn(); syncCopyBtn();
     syncApocBtns();
     syncApocVisibility();
     // объекты чужого режима в карту не пускаем
@@ -6021,6 +6068,8 @@ requestAnimationFrame(loop);
       syncTools();
       if(!toolOK(tool)) setTool("select");
       sel = null; inspect();
+      // копия чужой карты (автор разрешил копировать): публикуется как новая, своя
+      if(qs.get("copy") === "1"){ BRIDGE.editingMapName = ""; document.title = "AIBrofist Editor — " + em + " (copy)"; edDirty = true; return; }
       BRIDGE.editingMapName = em;
       document.title = "AIBrofist Editor — " + em;
     })
@@ -6033,12 +6082,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=218"></script>
-<script src="abuseShow.js?v=218" defer></script>
-<script src="editorHelp.js?v=218"></script>
-<script src="editorAI.js?v=218" defer></script>
-<script src="account.js?v=218" defer></script>
-<script src="owner.js?v=218" defer></script>
+<script src="i18n.js?v=219"></script>
+<script src="abuseShow.js?v=219" defer></script>
+<script src="editorHelp.js?v=219"></script>
+<script src="editorAI.js?v=219" defer></script>
+<script src="account.js?v=219" defer></script>
+<script src="owner.js?v=219" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -6155,7 +6204,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=218" defer></script>
+        <script src="skinAvatar.js?v=219" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */

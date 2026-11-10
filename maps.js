@@ -581,6 +581,7 @@ function register(app, getUser, acc, cleanText) {
         rankTiers: m.rankTiers || null,
         myMedal: medalOf(m, me),
         plays: m.plays || 0,
+        copyable: (function () { try { return !!JSON.parse(m.mapData).copyable; } catch (e) { return false; } })(),
         record: Array.isArray(m.records) && m.records[0] ? { name: m.records[0].name, ms: m.records[0].ms } : null
       };
     });

@@ -293,6 +293,14 @@
     }
     toggleRow('#bfFxRow', 'bfLowFx', T2('fxFull', 'Все эффекты'), T2('fxLow', 'Слабый ПК: без частиц и тряски'));
     toggleRow('#bfCbRow', 'bfColorblind', T2('cbOff', 'Обычные цвета'), T2('cbOn', 'Для дальтоников: яд в штриховку'));
+    // призрак лучшего забега включён по умолчанию: '0' — выключен
+    var gr = box.querySelector('#bfGhostRow');
+    if (gr) {
+      var gon = ls('bfGhost') !== '0';
+      gr.innerHTML = '<div class="bf-opt' + (gon ? ' on' : '') + '" data-v="1">' + T2('ghostOn', 'Призрак лучшего забега') + '</div>'
+        + '<div class="bf-opt' + (!gon ? ' on' : '') + '" data-v="0">' + T2('ghostOff', 'Без призрака') + '</div>';
+      Array.prototype.forEach.call(gr.querySelectorAll('.bf-opt'), function (el) { el.onclick = function () { ls('bfGhost', el.getAttribute('data-v')); drawGamePrefs(); }; });
+    }
     var row = box.querySelector('#bfKeyRow');
     if (!row) return;
     var keys = {};
@@ -361,6 +369,7 @@
        + '<div class="bf-sec">' + T('gameSection', 'Игра') + '</div>'
        + '<div class="bf-row" id="bfFxRow"></div>'
        + '<div class="bf-row" id="bfCbRow"></div>'
+       + '<div class="bf-row" id="bfGhostRow"></div>'
        + '<div class="bf-h">' + T('keysHint', 'Свои клавиши — вдобавок к стрелкам и WASD. Нажми на действие, потом на клавишу.') + '</div>'
        + '<div class="bf-row" id="bfKeyRow" style="flex-wrap:wrap"></div>'
        + '<div class="bf-sec">' + T('promoSection', 'Промокод') + '</div>'
