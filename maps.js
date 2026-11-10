@@ -43,7 +43,7 @@ const TOOL_MODES = {
   button:null, lever:null, water:null, laserFeed:null, laserReceiver:null,
   zombie:['hideAndSeek'],       // модификация Zombie Apocalypse — только прятки
   teleport:null,               // пара площадок — есть в обоих режимах, как кнопка/рычаг
-  key:null, gravzone:null,     // ключ к двери и зона гравитации/ветра (идеи игроков)
+  key:null, gravzone:null, trigger:null,     // ключ к двери и зона гравитации/ветра (идеи игроков)
   star:null,                   // звезда для сбора (идея «Find all the stars»): в гонке без всех звёзд финиш закрыт
   cover:['hideAndSeek'],
   cannon:['hideAndSeek'],       // пушка «Пиратской войны» — стреляют из неё в режиме «Война»

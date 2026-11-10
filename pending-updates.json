@@ -56,6 +56,10 @@
     {
       "title": "Levels, badges, records and the map of the day",
       "text": "Profiles now show your level with an XP bar (XP comes from your Race and Hide and Seek scores), a star for every 50 maps finished, and badges like Veteran, Map creator, Racer, Hunter and Survivor. You can gift coins to other players from their profile, and redeem promo codes in Settings. Every map shows how many times it was played and its record; race maps keep a top 10 of best times, and you get a message when you make it in. Maps Browser can sort by most played and hot this week, and has a Map of the day: finish it for bonus coins and keep a daily streak."
+    },
+    {
+      "title": "Weather, night and effect triggers",
+      "text": "Maps can now have an atmosphere: rain, snow, night (only the area around you is lit) or fog. The editor has a new Effect trigger zone: walking into it shakes the screen, flashes it white or shows a message. Any block or text can be a parallax background that slowly follows the camera. Landing from a big jump kicks up a little dust."
     }
   ]
 }

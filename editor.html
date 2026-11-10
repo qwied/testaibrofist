@@ -373,15 +373,15 @@ body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=9"></script>
-<script src="device.js?v=213"></script>
-        <script src="sound.js?v=213"></script>
-        <script src="skinRender.js?v=213"></script>
-        <script src="skinCanvas.js?v=213"></script>
-        <script src="gifuct.bundle.js?v=213"></script>
-        <script src="gifPlayer.js?v=213"></script>
-        <script src="coin.js?v=213"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=213">
-        <script src="theme.js?v=213"></script>
+<script src="device.js?v=214"></script>
+        <script src="sound.js?v=214"></script>
+        <script src="skinRender.js?v=214"></script>
+        <script src="skinCanvas.js?v=214"></script>
+        <script src="gifuct.bundle.js?v=214"></script>
+        <script src="gifPlayer.js?v=214"></script>
+        <script src="coin.js?v=214"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=214">
+        <script src="theme.js?v=214"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -984,6 +984,16 @@ var PAINT = {
     ctx.fillRect(s*0.26, s*0.05, s*0.07, s*0.12); ctx.fillRect(s*0.36, s*0.05, s*0.07, s*0.09);
     ctx.restore();
   },
+  trigger: function(o){
+    if(playing) return;                         // в игре зона не видна
+    ctx.fillStyle = "rgba(236,72,153,.10)"; ctx.fillRect(0,0,o.w,o.h);
+    ctx.strokeStyle = "rgba(236,72,153,.7)"; ctx.lineWidth = 2; ctx.setLineDash([6,5]);
+    ctx.strokeRect(1,1,o.w-2,o.h-2); ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(190,24,93,.9)"; ctx.font = "700 " + Math.max(10, Math.min(18, o.h*0.18)) + "px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(({ shake:"\u2248 shake", flash:"\u2600 flash", msg:"\u201c" + String(o.text || "").slice(0, 14) + "\u201d" })[o.fx || "shake"], o.w/2, o.h/2);
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  },
   gravzone: function(o){
     var g = o.gmul === undefined ? 0.35 : +o.gmul, w = +o.wind || 0;
     ctx.fillStyle = g < 1 ? "rgba(139,92,246,.13)" : "rgba(234,88,12,.13)";
@@ -1074,6 +1084,9 @@ var TOOLS = [
   /* Зона гравитации и ветра (идеи «невесомость», «смена гравитации», «ветер»): пока игрок
      внутри, на него действует своя сила тяжести (0 — невесомость, 2 — вдвое тяжелее) и ветер. */
   {t:"gravzone",   n:"Зона гравитации", k:"toolGravZone", m:ALL},
+  /* Триггер-эффект (идеи «тряска камеры», «вспышка», «надпись по триггеру»): невидимая в игре зона,
+     вошёл — сработало: тряска экрана, вспышка или надпись на экране. */
+  {t:"trigger",    n:"Триггер-эффект", k:"toolTrigger",  m:ALL},
   /* метка модификации Zombie Apocalypse — без неё карту не включить в
      этот режим (см. hsApplyApoc в server.js); только прятки: в гонке
      модификация не предлагается (см. #apoc ниже и TOOL_MODES.zombie в
@@ -1138,7 +1151,7 @@ var COLORS = {
   seekerSpot:"",                   // всегда синий, как и сам искатель — красить нечем
   cannon:"",                       // дерево и чугун — рисуется собой
   camera:"", spyFlag:"", enemy:"", crystal:"",           // рисуются собой
-  checkpoint:"", finishline:"", spawn:INK, teleport:"", star:"", key:"", gravzone:""
+  checkpoint:"", finishline:"", spawn:INK, teleport:"", star:"", key:"", gravzone:"", trigger:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
    Игрок 30x100 (круг-голова радиуса 15 над телом 30x65, см. FIG_GAP
@@ -1151,7 +1164,7 @@ var SIZES = {
   button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
   zombie:[30,100],                 // впритык как у игрока — по прямой просьбе
   seekerSpot:[30,100],              // тоже впритык как у игрока
-  checkpoint:[40,104], finishline:[52,126], spawn:[30,100], star:[44,44], key:[36,36], gravzone:[160,160],
+  checkpoint:[40,104], finishline:[52,126], spawn:[30,100], star:[44,44], key:[36,36], gravzone:[160,160], trigger:[120,120],
   teleport:[30,100],                // тоже впритык как у игрока — по прямой просьбе,
                                      // растягивать/сжимать нельзя (см. gripAt/num ниже)
   cannon:[72,44],                   // у всех пушек одна дальность — и размер один
@@ -1209,18 +1222,23 @@ var apoc = false;
 var raceLives = 0, raceTimeMin = 0, raceGoal = "";
 /* Ещё две опции карты гонки (идеи игроков): двойной прыжок и урон от падения с большой высоты. */
 var raceDJ = false, raceFall = false, FALL_DMG_H = 620;
+/* Атмосфера карты (идеи «дождь/снег», «день и ночь», «туман войны») — для любого режима:
+   "" — ясно, rain, snow, night (темно, свет вокруг игрока), fog (видно только рядом). */
+var ATMOS = ["", "rain", "snow", "night", "fog"], atmo = "", flashA = 0;
 var RACE_LIVES = [0, 1, 3, 5], RACE_TIMES = [0, 5, 10], RACE_GOALS = ["", "first", "last"];
 function cleanRaceRules(d){
   raceLives = (mode === "race" && d && RACE_LIVES.indexOf(+d.lives) !== -1) ? +d.lives : 0;
   raceTimeMin = (mode === "race" && d && RACE_TIMES.indexOf(+d.timeMin) !== -1) ? +d.timeMin : 0;
   raceGoal = (mode === "race" && d && (d.goal === "first" || (d.goal === "last" && raceLives))) ? d.goal : "";
   raceDJ = mode === "race" && !!(d && d.djump);
+  atmo = (d && ATMOS.indexOf(d.atmo) > 0) ? d.atmo : "";
   raceFall = mode === "race" && !!(d && d.fallDmg);
 }
 // поля правил гонки для сохранения карты — пустые не пишем
 function withRaceRules(m){
   if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; if(raceGoal) m.goal = raceGoal;
     if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; }
+  if(atmo) m.atmo = atmo;
   return m;
 }
 
@@ -1591,7 +1609,7 @@ function play(){
   lastSafePos = {x:sp.x, y:sp.y};
   objects.forEach(function(o){
     o._hx = o.x; o._hy = o.y; o._t = 0; o._act = !!o.startsOpen;
-    o._reached = false; o._spin = 0; o._squash = 0; o._pulseT = 0; o._hue = 0; o._got = false; o._off = false; o._gone = false; o._cr = 0; o._offAt = 0;
+    o._reached = false; o._spin = 0; o._squash = 0; o._pulseT = 0; o._hue = 0; o._got = false; o._off = false; o._gone = false; o._cr = 0; o._offAt = 0; o._in = false; o._done = false;
   });
   pl.flag = false; pl.cpFlag = false;
   respawn();
@@ -1601,7 +1619,7 @@ function play(){
 function stop(){
   playing = false; document.body.classList.remove("play"); hideMsg(); parts.length = 0;
   objects.forEach(function(o){ if(o._hx !== undefined){ o.x = o._hx; o.y = o._hy; }
-    o._act = false; o._reached = false; o._spin = 0; o._got = false; o._off = false; o._gone = false; o._cr = 0; o._offAt = 0; });
+    o._act = false; o._reached = false; o._spin = 0; o._got = false; o._off = false; o._gone = false; o._cr = 0; o._offAt = 0; o._in = false; o._done = false; });
   starHud();
   resetView();
 }
@@ -1614,7 +1632,7 @@ function restartRun(){
   timeMs = 0; deaths = 0;
   objects.forEach(function(o){
     o._reached = false; o._got = false;
-    o._act = !!o.startsOpen; o._latch = false; o._off = false; o._gone = false; o._cr = 0; o._offAt = 0;
+    o._act = !!o.startsOpen; o._latch = false; o._off = false; o._gone = false; o._cr = 0; o._offAt = 0; o._in = false; o._done = false;
   });
   var sp = findSpawn();
   if(sp){ spawnPt = {x:sp.x, y:sp.y}; lastSafePos = {x:sp.x, y:sp.y}; }
@@ -1697,7 +1715,7 @@ function allAtDoor(o){
    от касания, а без модификации его на карте вообще нет. */
 var solid  = function(o){ return SOLID.indexOf(o.type) !== -1 && !opened(o)
                               && o.ghost !== true && o.hideSpot !== true
-                              && o.deadly !== true && !o._off && !o._gone; };
+                              && o.deadly !== true && !o._off && !o._gone && !o.parallax; };
 var hazard = function(o){ return o.deadly === true && !opened(o) && !o._off && !o._gone; };
 /* Односторонняя платформа: держит только того, кто сверху и падает (или стоит) на неё.
    Снизу и сбоку сквозь неё проходят; зажатое «вниз» — спрыгнуть с неё. */
@@ -2749,6 +2767,7 @@ function step(){
     // зашёл в укрытие — искатель не видит ни фигуру, ни ник
     if(over && o.hideSpot === true) pl.hidden = true;
     if(!over){
+      if(o.type === "trigger") o._in = false;
       if(o.type === "button" && o._act && !o._offAt){
         if(+o.holdSec > 0) o._offAt = timeMs + o.holdSec * 1000;   // таймер: держит ещё holdSec с
         else { o._act = false; drive(o); }
@@ -2767,6 +2786,18 @@ function step(){
     if(o.type === "checkpoint" && pl.flag && !pl.cpFlag){
       pl.cpFlag = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h}; lastSafePos = {x:spawnPt.x, y:spawnPt.y};
       spyNote("saved");
+    }
+    if(o.type === "trigger" && !o._in && !pl.dead){
+      o._in = true;
+      if(!(o.once && o._done)){
+        o._done = true;
+        if((o.fx || "shake") === "shake") shake = Math.max(shake, 16);
+        else if(o.fx === "flash") flashA = 0.85;
+        else if(o.fx === "msg" && o.text){
+          showMsg("", String(o.text).slice(0, 120));
+          clearTimeout(starMsgT); starMsgT = setTimeout(function(){ if(!done) hideMsg(); }, 2400);
+        }
+      }
     }
     if(o.type === "key" && !o._got && !pl.dead){
       o._got = true; o._act = true; drive(o);
@@ -2824,6 +2855,9 @@ function step(){
   spyTick();
   // не внутри опасности прямо сейчас — можно смело вернуть сюда при смерти
   // в Practice Mode (если умер этим же кадром, pl.dead уже true — не трогаем)
+  // пыль при приземлении (идея «частицы при приземлении»; «Слабый ПК» их выключает — см. burst)
+  if(pl.ground && !pl._wasG && (pl._airVy || 0) > 9 * TEMPO) burst(pl.x + pl.w/2, pl.y + pl.h, 10, "#cbd5e1", 1.8, 18);
+  pl._wasG = pl.ground; if(!pl.ground) pl._airVy = pl.vy;
   /* Урон от падения (опция карты гонки): приземлился, пролетев вниз больше FALL_DMG_H —
      смерть. Пружины, рикошет и зоны невесомости высоту отсчитывают заново. */
   if(raceFall && !pl.dead){
@@ -3088,6 +3122,47 @@ function hatchMarks(o){
   for(var x = -o.h; x < o.w; x += 12){ ctx.beginPath(); ctx.moveTo(x, o.h); ctx.lineTo(x + o.h, 0); ctx.stroke(); }
   ctx.restore();
 }
+/* Погода и свет поверх карты — в координатах экрана. Капли и снежинки живут в своём списке,
+   «Слабый ПК» (PREFS.lowFx) рисует их вчетверо меньше. Вспышка триггера — белым поверх всего. */
+var atmoParts = [];
+function drawAtmo(){
+  if(!playing){ flashA = 0; return; }
+  var W = VW(), H = VH();
+  ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0);
+  if(atmo === "rain" || atmo === "snow"){
+    var want = (atmo === "rain" ? 140 : 90) / (PREFS.lowFx ? 4 : 1);
+    while(atmoParts.length < want) atmoParts.push({ x: Math.random()*W, y: Math.random()*H, s: 0.6 + Math.random()*0.8, p: Math.random()*6.28 });
+    if(atmoParts.length > want) atmoParts.length = want;
+    // небо чуть темнее — иначе белый снег и светлый дождь на белом фоне почти не видны
+    ctx.fillStyle = atmo === "rain" ? "rgba(71,85,105,.16)" : "rgba(100,116,139,.18)"; ctx.fillRect(0, 0, W, H);
+    if(atmo === "rain"){ ctx.strokeStyle = "rgba(96,165,250,.55)"; ctx.lineWidth = 1.4; ctx.beginPath(); }
+    else ctx.fillStyle = "rgba(255,255,255,.9)";
+    for(var i=0;i<atmoParts.length;i++){
+      var q = atmoParts[i];
+      if(atmo === "rain"){ q.y += 14*q.s; q.x -= 2*q.s; ctx.moveTo(q.x, q.y); ctx.lineTo(q.x + 3*q.s, q.y - 14*q.s); }
+      else { q.y += 1.4*q.s; q.p += 0.03; q.x += Math.sin(q.p)*0.6; ctx.beginPath(); ctx.arc(q.x, q.y, 1.6 + q.s*1.6, 0, 6.2832); ctx.fill(); ctx.strokeStyle = "rgba(148,163,184,.6)"; ctx.lineWidth = 0.6; ctx.stroke(); }
+      if(q.y > H + 20){ q.y = -20; q.x = Math.random()*(W + 60); }
+      if(q.x < -20) q.x = W + 10;
+    }
+    if(atmo === "rain") ctx.stroke();
+  } else atmoParts.length = 0;
+  if(atmo === "night" || atmo === "fog"){
+    var cx = (pl.x + pl.w/2)*view.s + view.x, cy = (pl.y + pl.h/2)*view.s + view.y;
+    var r = (atmo === "night" ? 300 : 190) * view.s, dark = atmo === "night" ? "rgba(8,12,32,.86)" : "rgba(40,44,52,.94)";
+    var g = ctx.createRadialGradient(cx, cy, r*0.35, cx, cy, r);
+    g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, dark);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  if(flashA > 0.01){ ctx.fillStyle = "rgba(255,255,255," + flashA.toFixed(3) + ")"; ctx.fillRect(0, 0, W, H); flashA *= 0.9; }
+  ctx.restore();
+}
+/* Параллакс (идея «фон движется медленнее игрока»): декорация сдвигается вслед за камерой на
+   долю parallax, отсчёт — от точки старта; столкновений у неё нет (см. solid). */
+function parallaxShift(){
+  var sp = findSpawn();
+  var cx = (VW()/2 - view.x)/view.s, cy = (VH()/2 - view.y)/view.s;
+  return sp ? [cx - (sp.x + sp.w/2), cy - (sp.y + sp.h/2)] : [0, 0];
+}
 function crumbleMarks(o){
   ctx.save(); ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 1.5;
   for(var x = 8; x < o.w - 4; x += 22){
@@ -3230,6 +3305,7 @@ function paint(o, isSel){
   if(o.inv && playing) return;
   var open = opened(o);
   ctx.save();
+  if(o.parallax && playing){ var pxs = parallaxShift(); ctx.translate(pxs[0]*o.parallax, pxs[1]*o.parallax); }
   ctx.translate(o.x+o.w/2, o.y+o.h/2);
   ctx.rotate(o.spins && playing ? (o._spin||0) : (o.rot||0)*Math.PI/180);
   /* Размер меняется вокруг центра фигуры, хитбокс — вместе с ней (см. pulseScale). */
@@ -3348,7 +3424,7 @@ function paintFrame(){
   var drawn = 0;
   for(var ri=0; ri<objects.length; ri++){
     var ro = objects[ri], rb = bbox(ro);
-    if(rb[2] < vx0 || rb[0] > vx1 || rb[3] < vy0 || rb[1] > vy1) continue;
+    if(!ro.parallax && (rb[2] < vx0 || rb[0] > vx1 || rb[3] < vy0 || rb[1] > vy1)) continue;
     /* Точка старта — это метка для автора карты, а не второй игрок.
        Во время игры её не рисуем: иначе на экране две фигуры, живая и
        та, что стоит на месте спавна. */
@@ -3440,6 +3516,7 @@ function paintFrame(){
   }
   if(BRIDGE && BRIDGE.onDraw) BRIDGE.onDraw(ctx);
   drawParts();
+  drawAtmo();
   // рамка обзора игрока вокруг старта: кадр высотой VIEW_UNITS_H, ширина — как на широком мониторе и на телефоне
   if(!playing && showViewBox){
     var vsp = findSpawn();
@@ -3597,6 +3674,7 @@ var SVG = {
   copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
   trash:'<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
   grid:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>',
+  cloud:'<path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 9.5 4.3 4.3 0 0 0 7 18z"/>',
   spawnPin:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
   viewBox:'<rect x="2" y="5" width="20" height="14" rx="2" stroke-dasharray="3 2"/><circle cx="12" cy="12" r="2"/>',
   palette:'<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.8 1.6-1.6 0-.9-.7-1.3-.7-2.1 0-.9.7-1.6 1.6-1.6H17a4 4 0 0 0 4-4c0-4.9-4-8.7-9-8.7z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/>',
@@ -3619,7 +3697,7 @@ sceneEl.appendChild(Object.assign(document.createElement("div"),{className:"sep"
 [["bUndo",SVG.undo,"btnUndoTip","Отменить (Ctrl+Z)"],["bRedo",SVG.redo,"btnRedoTip","Вернуть (Ctrl+Y)"],
  ["bCopy",SVG.copy,"btnCopyTip","Дубликат (Ctrl+D)"],["bDel",SVG.trash,"btnDelTip","Удалить (Del)"],["bGrid",SVG.grid,"btnGridTip","Сетка (G)"]]
   .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2],a[3])); });
-[["bToSpawn",SVG.spawnPin,"btnToSpawnTip","К точке старта"],["bViewBox",SVG.viewBox,"btnViewBoxTip","Рамка обзора игрока"]]
+[["bAtmo",SVG.cloud,"btnAtmoTip","Атмосфера карты"],["bToSpawn",SVG.spawnPin,"btnToSpawnTip","К точке старта"],["bViewBox",SVG.viewBox,"btnViewBoxTip","Рамка обзора игрока"]]
   .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2],a[3])); });
 (function(){
   // цвет фона редактора (идея «серый/свой фон»): только для удобства автора, в карту не пишется
@@ -5133,6 +5211,8 @@ function inspect(){
     chk(TR("chkFlip","Отразить зеркально"), !!sel.flip, function(v){ if(v) sel.flip = true; else delete sel.flip; });
   }
   if(SOLID.indexOf(sel.type) !== -1 || sel.type === "text"){
+    rng(TR("lblParallax","Параллакс-фон"), +sel.parallax || 0, 0, 0.95, 0.05,
+        function(v){ if(v) cur.parallax = v; else delete cur.parallax; });
     rng(TR("lblAlpha","Прозрачность"), sel.alpha === undefined ? 1 : +sel.alpha, 0.1, 1, 0.05,
         function(v){ if(v >= 1) delete cur.alpha; else cur.alpha = v; });
     chk(TR("chkInv","Невидим в игре"), !!sel.inv, function(v){ if(v) sel.inv = true; else delete sel.inv; },
@@ -5458,6 +5538,20 @@ function inspect(){
   if(SOLID.indexOf(sel.type) !== -1)
     chk(TR("chkGhost","Проходимый (декорация)"), !sel.ghost, function(v){ sel.ghost = !v; },
         TR("descCollision","Выключи, чтобы игрок проходил сквозь"));
+  if(sel.type === "trigger"){
+    var fr = pr(), fl = document.createElement("label"); fl.textContent = TR("lblFx","Эффект");
+    var fs = document.createElement("select");
+    [["shake", TR("fxShake","Тряска экрана")], ["flash", TR("fxFlash","Вспышка")], ["msg", TR("fxMsg","Надпись на экране")]].forEach(function(p){
+      var op = document.createElement("option"); op.value = p[0]; op.textContent = p[1];
+      if((sel.fx || "shake") === p[0]) op.selected = true; fs.appendChild(op);
+    });
+    fs.addEventListener("focus", commit);
+    fs.addEventListener("change", function(){ sel.fx = fs.value; inspect(); });
+    fr.appendChild(fl); fr.appendChild(fs);
+    if(sel.fx === "msg") txt(TR("lblFxText","Текст надписи"), sel.text || "", function(v){ sel.text = String(v).slice(0, 120); });
+    chk(TR("chkOnce","Только один раз за забег"), !!sel.once, function(v){ if(v) sel.once = true; else delete sel.once; });
+    hint(TR("triggerHint","Невидимая в игре зона: игрок вошёл — срабатывает эффект. Только у того, кто вошёл."));
+  }
   if(sel.type === "gravzone"){
     rng(TR("lblGravMul","Гравитация в зоне"), sel.gmul === undefined ? 0.35 : +sel.gmul, 0, 2, 0.05, function(v){ cur.gmul = v; });
     rng(TR("lblWind","Ветер (− влево, + вправо)"), +sel.wind || 0, -5, 5, 0.5, function(v){ if(v) cur.wind = v; else delete cur.wind; });
@@ -5567,7 +5661,7 @@ document.getElementById("file").addEventListener("change", function(e){
       // в гонке не бывает, что бы ни лежало в файле
       if(mode === "sandbox" || mode === "twoPlayer") mode = "hideAndSeek";
       apoc = (mode === "hideAndSeek") && !!d.apoc;   // в старых картах модификации не было — классика
-      cleanRaceRules(d); syncRaceBtns();
+      cleanRaceRules(d); syncRaceBtns(); syncAtmoBtn();
       if(d.gravity !== undefined){
         // гравитация из старой карты игнорируется: она всегда 9
       }
@@ -5616,6 +5710,25 @@ function toSpawn(){
   view.x = VW()/2 - (sp.x + sp.w/2) * view.s; view.y = VH()/2 - (sp.y + sp.h/2) * view.s;
 }
 document.getElementById("bToSpawn").addEventListener("click", toSpawn);
+/* Атмосфера карты (дождь, снег, ночь, туман): кнопка перебирает по кругу, видно в «Играть». */
+function atmoName(a){
+  return ({ "": TR("atmoClear","Ясно"), rain: TR("atmoRain","Дождь"), snow: TR("atmoSnow","Снег"),
+            night: TR("atmoNight","Ночь"), fog: TR("atmoFog","Туман") })[a || ""];
+}
+function syncAtmoBtn(){
+  var b = document.getElementById("bAtmo");
+  b.setAttribute("data-tip", TR("btnAtmoTip","Атмосфера карты") + ": " + atmoName(atmo));
+  b.classList.toggle("on", !!atmo);
+}
+document.getElementById("bAtmo").addEventListener("click", function(){
+  if(playing) return;
+  commit();
+  atmo = ATMOS[(ATMOS.indexOf(atmo) + 1) % ATMOS.length];
+  syncAtmoBtn();
+  var tt = document.getElementById("toolTip");
+  if(tt){ tt.textContent = this.getAttribute("data-tip"); }
+});
+syncAtmoBtn();
 // рамка обзора: сколько карты видит игрок вокруг старта (см. VIEW_UNITS_H — высота кадра в игре)
 var showViewBox = false;
 document.getElementById("bViewBox").addEventListener("click", function(){ showViewBox = !showViewBox; this.classList.toggle("on", showViewBox); });
@@ -5687,6 +5800,7 @@ window.GAME = BRIDGE = {
   toolOK: function(t){ return toolOK(t); },   // автотесты: доступность инструмента (зомби/apoc)
   get done(){ return done; },
   get timeMs(){ return timeMs; },
+  get atmo(){ return atmo; }, get flashA(){ return flashA; }, get shake(){ return shake; },
   // «Шпион»: несёт ли игрок флаг и кого сейчас видят камеры (см. spyTick); onSpy — подсказки игре
   get spyFlag(){ return !!pl.flag; },
   get cams(){ return objects.filter(function(o){ return o.type === "camera"; }).map(function(o){ return { sees: !!o._sees, a: o._a }; }); },
@@ -5721,7 +5835,7 @@ window.GAME = BRIDGE = {
     // в принципе (см. TOOL_MODES.zombie), даже если в JSON что-то лежит
     apoc = (mode === "hideAndSeek") && !!d.apoc;
     cleanRaceRules(d);
-    syncRaceBtns();
+    syncRaceBtns(); syncAtmoBtn();
     syncApocBtns();
     syncApocVisibility();
     // объекты чужого режима в карту не пускаем
@@ -5857,12 +5971,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=213"></script>
-<script src="abuseShow.js?v=213" defer></script>
-<script src="editorHelp.js?v=213"></script>
-<script src="editorAI.js?v=213" defer></script>
-<script src="account.js?v=213" defer></script>
-<script src="owner.js?v=213" defer></script>
+<script src="i18n.js?v=214"></script>
+<script src="abuseShow.js?v=214" defer></script>
+<script src="editorHelp.js?v=214"></script>
+<script src="editorAI.js?v=214" defer></script>
+<script src="account.js?v=214" defer></script>
+<script src="owner.js?v=214" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -5979,7 +6093,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=213" defer></script>
+        <script src="skinAvatar.js?v=214" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */
