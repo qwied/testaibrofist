@@ -638,6 +638,7 @@ function raceStartLobby(io, room, st) {
   st.phase = 'lobby';
   st.roundNum++;
   st.finished = []; st.out = new Set(); st.ending = false; st.winner = null; st.members = new Set();
+  st.skip = new Set();
   st.endsAt = Date.now() + RACE_LOBBY_MS;
   io.to(room).emit('racePhase', { phase: 'lobby', map: st.map, msLeft: RACE_LOBBY_MS, goal: st.rules.goal, roundNum: st.roundNum });
   // карт гонки нет вовсе — заглядываем снова, вдруг владелец добавит
@@ -2326,6 +2327,28 @@ io.on('connection', (socket) => {
     st.out.add(socket.id);
     io.to(player.room).emit('raceOut', { id: socket.id, name: player.name });
     raceCheckDone(io, player.room, st);
+  });
+  /* Пропуск карты голосованием (идеи «skip map»): во время раунда общей гонки игрок голосует
+     один раз за раунд; больше половины игроков комнаты (одному — сразу) — через 3 секунды
+     раунд кончается и выбирается другая карта. */
+  socket.on('voteSkip', () => {
+    if (limRace()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('race:') !== 0) return;
+    const st = raceRooms.get(player.room);
+    if (!st || st.phase !== 'round' || st.ending) return;
+    if (!st.skip) st.skip = new Set();
+    st.skip.add(socket.id);
+    const ids = raceIds(player.room);
+    st.skip.forEach(id => { if (ids.indexOf(id) === -1) st.skip.delete(id); });
+    const need = Math.max(1, Math.floor(ids.length / 2) + 1);
+    const passed = st.skip.size >= need;
+    io.to(player.room).emit('skipVotes', { n: st.skip.size, need, passed });
+    if (passed) {
+      st.ending = true;
+      clearTimeout(st.timer);
+      st.timer = setTimeout(() => raceEndRound(io, player.room, st, 'skip'), 3000);
+    }
   });
   socket.on('raceFinish', (data) => {
     if (limRace()) return;

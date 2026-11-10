@@ -256,16 +256,16 @@ body{background:#eef2f8;overflow:hidden}
         <script src="offline.js?v=9"></script>
         <script src="offlineServer.js?v=8"></script>
         <script src="offlineModes.js?v=10"></script>
-<script src="device.js?v=210"></script>
-        <script src="sound.js?v=210"></script>
-        <script src="skinRender.js?v=210"></script>
-        <script src="skinCanvas.js?v=210"></script>
-        <script src="gifuct.bundle.js?v=210"></script>
-        <script src="gifPlayer.js?v=210"></script>
-        <script src="coin.js?v=210"></script>
-        <script src="liveText.js?v=210"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=210">
-        <script src="theme.js?v=210"></script>
+<script src="device.js?v=211"></script>
+        <script src="sound.js?v=211"></script>
+        <script src="skinRender.js?v=211"></script>
+        <script src="skinCanvas.js?v=211"></script>
+        <script src="gifuct.bundle.js?v=211"></script>
+        <script src="gifPlayer.js?v=211"></script>
+        <script src="coin.js?v=211"></script>
+        <script src="liveText.js?v=211"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=211">
+        <script src="theme.js?v=211"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1362,7 +1362,22 @@ function resetView(){ view.s = 1; view.x = 0; view.y = 0; document.getElementByI
    PARTICLES
    ══════════════════════════════════════════════════ */
 var parts = [];
+/* Настройки игрока из «Настроек» (account.js), хранятся в этом браузере:
+   bfLowFx — «Слабый ПК»: без частиц и тряски; bfColorblind — яд со штриховкой, а не только
+   красным цветом; bfKeys — свои клавиши {l, r, u, dn} (коды KeyboardEvent.code). */
+var PREFS = (function(){
+  var p = { lowFx:false, cb:false, keys:{} };
+  try {
+    p.lowFx = localStorage.getItem("bfLowFx") === "1";
+    p.cb = localStorage.getItem("bfColorblind") === "1";
+    var k = JSON.parse(localStorage.getItem("bfKeys") || "{}");
+    if(k && typeof k === "object") ["l","r","u","dn"].forEach(function(a){ if(typeof k[a] === "string" && k[a]) p.keys[a] = k[a]; });
+  } catch(e){}
+  return p;
+})();
+function prefKey(code){ for(var a in PREFS.keys) if(PREFS.keys[a] === code) return a; return ""; }
 function burst(x,y,n,col,spd,life){
+  if(PREFS.lowFx) return;
   for(var i=0;i<n;i++){
     var a = Math.random()*6.2832, v = spd*(0.35+Math.random());
     parts.push({x:x,y:y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-1,life:life,max:life,c:col,r:1.4+Math.random()*2.4});
@@ -3017,6 +3032,13 @@ function oneWayMarks(o){
   }
   ctx.restore();
 }
+// режим для дальтоников: ядовитое — в чёрно-жёлтую штриховку, не только красным
+function hatchMarks(o){
+  ctx.save(); ctx.beginPath(); ctx.rect(0,0,o.w,o.h); ctx.clip();
+  ctx.strokeStyle = "rgba(250,204,21,.85)"; ctx.lineWidth = 3;
+  for(var x = -o.h; x < o.w; x += 12){ ctx.beginPath(); ctx.moveTo(x, o.h); ctx.lineTo(x + o.h, 0); ctx.stroke(); }
+  ctx.restore();
+}
 function crumbleMarks(o){
   ctx.save(); ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 1.5;
   for(var x = 8; x < o.w - 4; x += 22){
@@ -3174,6 +3196,7 @@ function paint(o, isSel){
      Раньше их делали полупрозрачными (45%), и декорации выцветали (см. test-ghost-look.js). */
   (PAINT[o.type] || PAINT.rect)(o);
   if(o.oneWay) oneWayMarks(o);
+  if(PREFS.cb && o.deadly && playing && !open) hatchMarks(o);
   if(o.crumble && !(playing && o._gone)) crumbleMarks(o);
   /* Лазер теперь свойство, а не отдельный тип — рисуем ту же линзу, что
      раньше была у laserFeed, поверх обычной фигуры. */
@@ -3254,7 +3277,7 @@ function paintFrame(){
   ctx.fillStyle = bgGrad; ctx.fillRect(0,0,VW(),VH());
   drawGrid();
 
-  var sx = shake > .4 ? (Math.random()-.5)*shake : 0, sy = shake > .4 ? (Math.random()-.5)*shake : 0;
+  var sx = shake > .4 && !PREFS.lowFx ? (Math.random()-.5)*shake : 0, sy = shake > .4 && !PREFS.lowFx ? (Math.random()-.5)*shake : 0;
   ctx.setTransform(view.s*DPR,0,0,view.s*DPR, (view.x+sx)*DPR, (view.y+sy)*DPR);
 
   // рисуем только то, что попадает на экран
@@ -3926,6 +3949,9 @@ document.addEventListener("keydown", function(e){
       if(!(typingInChat() && e.code === "KeyW")) e.preventDefault();
     }
     if(e.code === "ArrowDown" || e.code === "KeyS"){ keys.dn = true; if(e.code === "ArrowDown") e.preventDefault(); }
+    // свои клавиши из «Настроек» — вдобавок к стрелкам и WASD
+    var pk = prefKey(e.code);
+    if(pk && !(typingInChat() && !movementKey(e.code))){ keys[pk] = true; if(pk === "u") buf = BUFFER; e.preventDefault(); }
     // R — назад на чекпоинт (в гонке; считается смертью, как и падение)
     if(e.code === "KeyR" && !e.repeat && mode === "race" && !done && !pl.dead) die();
     if(e.code === "Escape") stop();
@@ -3951,6 +3977,7 @@ document.addEventListener("keyup", function(e){
     if(e.code === "ArrowRight"|| e.code === "KeyD") keys.r = false;
     if(e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Space") keys.u = false;
     if(e.code === "ArrowDown" || e.code === "KeyS") keys.dn = false;
+    var pk2 = prefKey(e.code); if(pk2) keys[pk2] = false;
   }
 });
 function pad(id, fn){
@@ -4544,6 +4571,7 @@ window.GAME = BRIDGE = {
   myOutfit: null,
   figureOutfit: function(kind, w, h, arg){ drawOutfit(kind, w, h, arg); },
   get done(){ return done; },
+  get timeMs(){ return timeMs; },
   // «Шпион»: несёт ли игрок флаг и кого сейчас видят камеры (см. spyTick); onSpy — подсказки игре
   get spyFlag(){ return !!pl.flag; },
   get cams(){ return objects.filter(function(o){ return o.type === "camera"; }).map(function(o){ return { sees: !!o._sees, a: o._a }; }); },
@@ -4693,8 +4721,8 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=210"></script>
-        <script src="i18n.js?v=210"></script>
-        <script src="skinAvatar.js?v=210" defer></script>
+<script src="game.js?v=211"></script>
+        <script src="i18n.js?v=211"></script>
+        <script src="skinAvatar.js?v=211" defer></script>
 </body>
 </html>

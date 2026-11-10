@@ -277,6 +277,46 @@
     };
   }
 
+  /* ---------- игра (идеи «слабый ПК», «режим для дальтоников», «настройка клавиш»):
+     всё хранится в этом браузере, игра читает при загрузке (см. PREFS в game.html) ---------- */
+  function drawGamePrefs() {
+    var T2 = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : (f || k); };
+    var ls = function (k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} return null; };
+    function toggleRow(id, key, offTxt, onTxt) {
+      var row = box.querySelector(id);
+      if (!row) return;
+      var on = ls(key) === '1';
+      row.innerHTML = '<div class="bf-opt' + (!on ? ' on' : '') + '" data-v="0">' + offTxt + '</div>'
+        + '<div class="bf-opt' + (on ? ' on' : '') + '" data-v="1">' + onTxt + '</div>';
+      var els = row.querySelectorAll('.bf-opt');
+      for (var i = 0; i < els.length; i++) els[i].onclick = function () { ls(key, this.getAttribute('data-v')); drawGamePrefs(); };
+    }
+    toggleRow('#bfFxRow', 'bfLowFx', T2('fxFull', 'Все эффекты'), T2('fxLow', 'Слабый ПК: без частиц и тряски'));
+    toggleRow('#bfCbRow', 'bfColorblind', T2('cbOff', 'Обычные цвета'), T2('cbOn', 'Для дальтоников: яд в штриховку'));
+    var row = box.querySelector('#bfKeyRow');
+    if (!row) return;
+    var keys = {};
+    try { keys = JSON.parse(ls('bfKeys') || '{}') || {}; } catch (e) { keys = {}; }
+    var acts = [['l', T2('keyLeft', 'Влево')], ['r', T2('keyRight', 'Вправо')], ['u', T2('keyJump', 'Прыжок')], ['dn', T2('keyDown', 'Вниз')]];
+    var nice = function (c) { return c ? c.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Arrow/, '') : '—'; };
+    row.innerHTML = acts.map(function (a) {
+      return '<div class="bf-opt" data-k="' + a[0] + '">' + a[1] + ': <b>' + nice(keys[a[0]]) + '</b></div>';
+    }).join('') + '<div class="bf-opt" data-reset="1">' + T2('keyReset', 'Сбросить') + '</div>';
+    var els = row.querySelectorAll('.bf-opt');
+    for (var i = 0; i < els.length; i++) els[i].onclick = function () {
+      var el = this;
+      if (el.getAttribute('data-reset')) { ls('bfKeys', null); drawGamePrefs(); return; }
+      el.innerHTML = T2('keyPress', 'Нажми клавишу…');
+      var on = function (e) {
+        e.preventDefault(); e.stopPropagation();
+        document.removeEventListener('keydown', on, true);
+        if (e.code !== 'Escape') { keys[el.getAttribute('data-k')] = e.code; ls('bfKeys', JSON.stringify(keys)); }
+        drawGamePrefs();
+      };
+      document.addEventListener('keydown', on, true);
+    };
+  }
+
   // ---------- привязка Discord ----------
   function drawDiscordLink() {
     var holder = box.querySelector('#bfDiscordBox');
@@ -317,8 +357,14 @@
          + 'реплики в игровом чате. Свои сообщения отправлять по-прежнему можно.') + '</div>'
        + '<div class="bf-row" id="bfChatRow"></div>'
        + '<div class="bf-h">' + T('bubbleHint', 'Как выглядят реплики над головами в игре (видишь только ты).') + '</div>'
-       + '<div class="bf-row" id="bfBubbleRow"></div>');
+       + '<div class="bf-row" id="bfBubbleRow"></div>'
+       + '<div class="bf-sec">' + T('gameSection', 'Игра') + '</div>'
+       + '<div class="bf-row" id="bfFxRow"></div>'
+       + '<div class="bf-row" id="bfCbRow"></div>'
+       + '<div class="bf-h">' + T('keysHint', 'Свои клавиши — вдобавок к стрелкам и WASD. Нажми на действие, потом на клавишу.') + '</div>'
+       + '<div class="bf-row" id="bfKeyRow" style="flex-wrap:wrap"></div>');
     drawBubblePref();
+    drawGamePrefs();
     drawTheme();
     drawLang(name);
     drawChatPref();

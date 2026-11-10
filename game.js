@@ -518,6 +518,11 @@
     + '<span><span id="gLblPlayers">Игроков</span>: <b id="gCount">1</b></span>'
     + '<span><span id="gLblPing">Пинг</span>: <b id="gPing">—</b></span>'
     + '<span id="gTimeBox"><span id="gLblTime">Время</span>: <b id="gTime">—</b></span>'
+    // прогресс по карте гонки, % пути от старта до финиша (идея «как в GD»)
+    + '<span id="gProgBox" style="display:none"><span id="gLblProg">Прогресс</span>: <b id="gProg">0%</b></span>'
+    // пропуск карты голосованием (идея «skip map»): больше половины игроков — карта меняется
+    + '<button id="gSkip" style="display:none;padding:4px 9px;border-radius:8px;border:1px solid #d7dee7;background:#fff;'
+    + 'color:#111827;font:700 12px sans-serif;cursor:pointer;white-space:nowrap"></button>'
     // приватная комната (см. isPrivateRoom в server.js): код, по клику — ссылка в буфер
     + '<button id="gPriv" style="display:none;padding:4px 9px;border-radius:8px;border:1px solid #d7dee7;background:#fff;'
     + 'color:#111827;font:700 12px ui-monospace,monospace;letter-spacing:1px;cursor:pointer;white-space:nowrap"></button>'
@@ -586,6 +591,7 @@
     $('gLblPlayers').textContent = TR('gPlayers', 'Игроков');
     $('gLblPing').textContent = TR('gPing', 'Пинг');
     $('gLblTime').textContent = TR('gTimeLbl', 'Время');
+    if ($('gLblProg')) $('gLblProg').textContent = TR('gLblProg', 'Прогресс');
     $('gLblLives').textContent = TR('gLivesLbl', 'Жизни');
     $('gLblRole').textContent = TR('roleLbl', 'Роль');
     $('gExit').textContent = TR('menu', 'Меню');
@@ -1343,10 +1349,12 @@
   /* Скрытые игроки (идеи «Hide player», «Ignore»): их фигуры не рисуются на твоём экране —
      только у тебя; сами они играют как играли (и поймать тебя могут). Хранится, как и mute, по нику. */
   var HIDE_KEY = 'bfHiddenPlayers';
+  // «Скрыть всех» (идея «hide players button»): никого, кроме себя, на экране
+  var hideAllP = (function () { try { return localStorage.getItem('bfHideAll') === '1'; } catch (e) { return false; } })();
   var hiddenP = (function () {
     try { return JSON.parse(localStorage.getItem(HIDE_KEY) || '[]'); } catch (e) { return []; }
   })();
-  function isHiddenP(name) { return hiddenP.indexOf(String(name || '').toLowerCase()) !== -1; }
+  function isHiddenP(name) { return hideAllP || hiddenP.indexOf(String(name || '').toLowerCase()) !== -1; }
   function toggleHiddenP(name) {
     var k = String(name || '').trim().toLowerCase(), i = hiddenP.indexOf(k);
     if (!k) return;
@@ -1371,6 +1379,11 @@
     b.addEventListener('click', function (e) {
       var t = e.target;
       if (t.dataset && t.dataset.plx) { plToggle(false); return; }
+      if (t.dataset && t.dataset.pall) {
+        hideAllP = !hideAllP;
+        try { localStorage.setItem('bfHideAll', hideAllP ? '1' : '0'); } catch (e2) {}
+        plRender(); return;
+      }
       var name = t.dataset && t.dataset.pn;
       if (!name) return;
       if (t.dataset.pa === 'mute') { if (isMuted(name)) unmuteName(name); else muteName(name); }
@@ -1387,6 +1400,7 @@
     var row = function (inner) { return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid #eef0f3">' + inner + '</div>'; };
     b.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><b style="flex:1;font-size:15px">'
       + esc(TR('plTitle', 'Игроки в комнате')) + ' · ' + (ids.length + 1) + '</b>'
+      + '<button data-pall="1" style="' + (hideAllP ? on : btn) + '">' + esc(hideAllP ? TR('plShowAll', 'Показать всех') : TR('plHideAll', 'Скрыть всех')) + '</button>'
       + '<button data-plx="1" style="' + btn + '">&times;</button></div>'
       + row('<span style="flex:1;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(me.name || '') + '</span>'
             + '<span style="color:#6b7280">' + esc(TR('plYou', 'ты')) + '</span>')
@@ -1441,6 +1455,23 @@
     while (list.length > SAY_MAX + 3) list.shift();
   }
 
+  /* Большая надпись на весь экран (идея «3, 2, 1, Start!», «Hide!» оранжевым, «Seek!» синим):
+     выскакивает и через секунду гаснет, игре не мешает. */
+  function bigBanner(text, color) {
+    var e = $('gBig');
+    if (!e) {
+      e = document.createElement('div'); e.id = 'gBig';
+      e.style.cssText = 'position:fixed;left:0;right:0;top:34%;text-align:center;z-index:60;pointer-events:none;'
+        + 'font:900 clamp(48px,11vw,120px)/1 sans-serif;letter-spacing:2px;-webkit-text-stroke:3px #fff;paint-order:stroke fill;'
+        + 'text-shadow:0 6px 24px rgba(0,0,0,.35);transition:opacity .35s,transform .35s;opacity:0';
+      document.body.appendChild(e);
+    }
+    e.textContent = text; e.style.color = color || '#111827';
+    e.style.transition = 'none'; e.style.opacity = '1'; e.style.transform = 'scale(1.35)';
+    void e.offsetWidth;
+    e.style.transition = 'opacity .35s ease .75s,transform .35s cubic-bezier(.2,1.6,.4,1)'; e.style.transform = 'scale(1)'; e.style.opacity = '0';
+  }
+  window.__bfBig = function () { var e = $('gBig'); return e ? e.textContent : ''; };
   function banner(title, text, show) {
     $('gbT').textContent = title || '';
     $('gbP').textContent = text || '';
@@ -2039,6 +2070,7 @@
     return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
   }
   var lastTickSec = -1;   // последняя озвученная секунда обратного отсчёта
+  var lastBigSec = -1;    // последняя показанная крупно секунда отсчёта (см. bigBanner)
   setInterval(function () {
     if (phase === 'dev' || phase === 'loading') return;
     var left = phaseEnds - Date.now();
@@ -2049,6 +2081,12 @@
         lastTickSec = secLeft;
         if (secLeft > 0 && secLeft <= 3) BFSound.tick();
       }
+    }
+    // отсчёт 3, 2, 1 перед стартом раунда — крупно посреди экрана
+    var bigSec = Math.ceil(left / 1000);
+    if (phase === 'lobby' && bigSec !== lastBigSec && (MODE === 'race' || MODE === 'hideAndSeek') && !VIEW && !STORY) {
+      lastBigSec = bigSec;
+      if (bigSec > 0 && bigSec <= 3) bigBanner(String(bigSec), '#111827');
     }
     if (left <= 0) {
       // фазами пряток управляет сервер: ждём его событие, а не переключаемся сами
@@ -2240,6 +2278,43 @@
     pendingRaceStart = { author: currentMap.author, mapName: currentMap.mapName };
     flushPendingRaceStart();
   };
+  /* Пропуск карты голосованием (только общая гонка): кнопка в шапке, счёт голосов — с сервера. */
+  var skipVotes = null, skipMine = false;
+  function skipTick() {
+    var b = $('gSkip');
+    if (!b) return;
+    var show = MODE === 'race' && phase === 'round' && !VIEW && !STORY && !PRACTICE && !!socket;
+    b.style.display = show ? '' : 'none';
+    if (!show) return;
+    b.textContent = TR('skipMap', 'Пропустить карту') + (skipVotes ? ' ' + skipVotes.n + '/' + skipVotes.need : '');
+    b.style.background = skipMine ? '#111827' : '#fff'; b.style.color = skipMine ? '#fff' : '#111827';
+  }
+  (function () {
+    var b = $('gSkip');
+    if (b) b.addEventListener('click', function () {
+      if (!socket || skipMine) return;
+      skipMine = true; socket.emit('voteSkip'); skipTick();
+    });
+  })();
+  // прогресс гонки: самая дальняя доля пути от старта до финиша за этот забег
+  var progBest = 0, progRun = -1;
+  function progTick() {
+    var box = $('gProgBox');
+    if (!box) return;
+    var objs = GAME.objects || [], fin = null, sp = null;
+    for (var i = 0; i < objs.length; i++) { if (objs[i].type === 'finishline' && !fin) fin = objs[i]; if (objs[i].type === 'spawn' && !sp) sp = objs[i]; }
+    var show = MODE === 'race' && GAME.playing && fin && sp && !STORY;
+    box.style.display = show ? '' : 'none';
+    if (!show || !GAME.pl) return;
+    if (GAME.timeMs !== undefined && GAME.timeMs < progRun) progBest = 0;
+    progRun = GAME.timeMs || 0;
+    var ax = sp.x, ay = sp.y, bx = fin.x + fin.w / 2, by = fin.y + fin.h / 2, dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+    var t = L ? ((GAME.pl.x - ax) * dx + (GAME.pl.y - ay) * dy) / L : 0;
+    if (GAME.done) t = 1;
+    progBest = Math.max(progBest, Math.max(0, Math.min(1, t)));
+    $('gProg').textContent = Math.round(progBest * 100) + '%';
+  }
+  setInterval(function () { progTick(); skipTick(); }, 250);
   function livesTick() {
     var box = $('gLivesBox');
     if (!box) return;
@@ -2252,6 +2327,7 @@
      начинается заново с самого старта — время, смерти и чекпоинты сброшены. */
   function raceLobby(d) {
     raceOutMe = false; applyColor();
+    skipVotes = null; skipMine = false; skipTick();
     GAME.frozen = true;
     loadServerMap(d.map, function () { GAME.frozen = true; if (GAME.restartRun) GAME.restartRun(); });
     if (d.goal === 'first') log(TR('raceGoalFirstHint', 'Побеждает тот, кто финиширует первым!'));
@@ -2264,7 +2340,8 @@
       finSent = false;
       if (currentMap) { pendingRaceStart = { author: currentMap.author, mapName: currentMap.mapName }; flushPendingRaceStart(); }
     });
-    if (!late) { log(TR('raceGo', 'Старт!')); if (window.BFSound) BFSound.go(); }
+    if (!late) { log(TR('raceGo', 'Старт!')); bigBanner(TR('raceGo', 'Старт!'), '#16a34a'); if (window.BFSound) BFSound.go(); }
+    skipVotes = null; skipMine = false; skipTick();
   }
   function racePhaseIn(d, late) {
     if (MODE !== 'race' || STORY || VIEW || !d) return;
@@ -2753,6 +2830,12 @@
       if (MODE !== 'race' || !d || d.id === socket.id) return;
       log(TR('raceOutOther', '{n} выбыл').replace('{n}', '<b>' + esc(d.name || '') + '</b>'));
     });
+    socket.on('skipVotes', function (d) {
+      if (MODE !== 'race' || !d) return;
+      skipVotes = { n: +d.n || 0, need: +d.need || 1 };
+      if (d.passed) log(TR('skipPassed', 'Карту пропускают — сейчас будет другая.'));
+      skipTick();
+    });
     socket.on('raceResult', function (d) {
       if (MODE !== 'race' || !d) return;
       if (d.winner) log(TR('raceWinner', '{n} победил!').replace('{n}', '<b>' + esc(d.winner) + '</b>'));
@@ -2929,8 +3012,14 @@
             if (phase === 'round' && hsVariant === 'murder' && hsSecret === 'murderer' && !me.caught) log(TR('mmGraceOver', 'Теперь можно выбивать!'));
           }, Number(d.grace));
         }
+        if (!STORY && !VIEW) {
+          var huntV = !(hsVariant === 'wait' || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant));
+          bigBanner(huntV ? (d.apoc ? TR('bigRun', 'Беги!') : TR('bigSeek', 'Ищи!')) : TR('raceGo', 'Старт!'), huntV ? '#2563eb' : '#16a34a');
+        }
         if (window.BFSound) BFSound.go();
       } else if (d.phase === 'lobby') {
+        if (!STORY && !VIEW && !(d.variant === 'wait' || isWarV(d.variant) || partyGame(d.variant) || advV(d.variant)))
+          setTimeout(function () { if (phase === 'lobby') bigBanner(TR('bigHide', 'Прячься!'), '#ea580c'); }, 200);
         setVote(null);
         if (d.voted && d.map) log(TR('hsVoteDone', 'Голосованием выбрана карта: {m}').replace('{m}', '<b>' + esc(d.map.mapName) + '</b>'));
         // дожил до конца раунда прячущимся — личный успех (значения ещё

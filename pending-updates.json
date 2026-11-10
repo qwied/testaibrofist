@@ -44,6 +44,10 @@
     {
       "title": "New blocks: ice, keys, crumbling floors and more",
       "text": "The map editor has new blocks and options: slippery ice, floors that crumble under your feet, platforms you can jump up through (hold Down to drop), blinking blocks, keys that open locked doors, buttons that stay pressed for a few seconds, and zones with low gravity or wind. Race maps can turn on double jump and fall damage. In Race, press R to go back to your checkpoint and hold Down to fall faster."
+    },
+    {
+      "title": "Round banners, map skip and new settings",
+      "text": "Rounds now start with a big 3, 2, 1 countdown and a Start!, Hide! or Seek! sign across the screen. In Race you can vote to skip the map: once more than half the room agrees, a new map starts. Race also shows how far along the map you are in percent. The player list has a Hide all button. Settings have a new Game section: a low-end PC mode without particles and screen shake, a colorblind mode that stripes poison blocks, and your own keys for left, right, jump and down."
     }
   ]
 }
