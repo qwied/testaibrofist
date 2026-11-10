@@ -80,7 +80,8 @@ ok('без градиента у круга', !/createRadialGradient/.test(three
 // хитбоксы
 console.log('\nхитбоксы:');
 ok('круг многоугольником',  /CIRCLE_SIDES = 32/.test(src));
-ok('треугольник по 3 точкам', /o\.type === "triangle"[\s\S]{0,80}\[o\.w\/2,0\],\[o\.w,o\.h\],\[0,o\.h\]/.test(src));
+// обычный треугольник — 3 точки (формы ромб/звезда и т.д. — в shapePts, по умолчанию треугольник)
+ok('треугольник по 3 точкам', /o\.type === "triangle"[\s\S]{0,40}shapePts\(o\)/.test(src) && /default: pts = \[\[w\/2,0\],\[w,h\],\[0,h\]\]/.test(src));
 ok('SOLID = 3 фигуры',      /var SOLID  = \["rect","circle","triangle"\];/.test(src));
 
 // прятки

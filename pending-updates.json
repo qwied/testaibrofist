@@ -48,6 +48,10 @@
     {
       "title": "Round banners, map skip and new settings",
       "text": "Rounds now start with a big 3, 2, 1 countdown and a Start!, Hide! or Seek! sign across the screen. In Race you can vote to skip the map: once more than half the room agrees, a new map starts. Race also shows how far along the map you are in percent. The player list has a Hide all button. Settings have a new Game section: a low-end PC mode without particles and screen shake, a colorblind mode that stripes poison blocks, and your own keys for left, right, jump and down."
+    },
+    {
+      "title": "New shapes and editor tools",
+      "text": "The triangle in the map editor can now be a right triangle, rhombus, trapezoid, parallelogram, semicircle, pentagon, hexagon or star, and can be mirrored. Shapes can be see-through, have an outline of any thickness and color, or be invisible in the game while still blocking the way. Number fields accept simple math like 100+50. New editor buttons: jump to the start point, show what the player sees, and pick your own editor background color. The editor now warns you before you close a tab with unsaved changes."
     }
   ]
 }

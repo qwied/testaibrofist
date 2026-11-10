@@ -256,16 +256,16 @@ body{background:#eef2f8;overflow:hidden}
         <script src="offline.js?v=9"></script>
         <script src="offlineServer.js?v=8"></script>
         <script src="offlineModes.js?v=10"></script>
-<script src="device.js?v=211"></script>
-        <script src="sound.js?v=211"></script>
-        <script src="skinRender.js?v=211"></script>
-        <script src="skinCanvas.js?v=211"></script>
-        <script src="gifuct.bundle.js?v=211"></script>
-        <script src="gifPlayer.js?v=211"></script>
-        <script src="coin.js?v=211"></script>
-        <script src="liveText.js?v=211"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=211">
-        <script src="theme.js?v=211"></script>
+<script src="device.js?v=212"></script>
+        <script src="sound.js?v=212"></script>
+        <script src="skinRender.js?v=212"></script>
+        <script src="skinCanvas.js?v=212"></script>
+        <script src="gifuct.bundle.js?v=212"></script>
+        <script src="gifPlayer.js?v=212"></script>
+        <script src="coin.js?v=212"></script>
+        <script src="liveText.js?v=212"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=212">
+        <script src="theme.js?v=212"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -570,7 +570,10 @@ var PAINT = {
   },
   triangle: function(o){
     ctx.fillStyle = shapeFill(o);
-    ctx.beginPath(); ctx.moveTo(o.w/2,0); ctx.lineTo(o.w,o.h); ctx.lineTo(0,o.h); ctx.closePath(); ctx.fill();
+    var tp = shapePts(o);
+    ctx.beginPath(); ctx.moveTo(tp[0][0], tp[0][1]);
+    for(var ti=1; ti<tp.length; ti++) ctx.lineTo(tp[ti][0], tp[ti][1]);
+    ctx.closePath(); ctx.fill();
   },
   text: function(o){
     ctx.fillStyle = o.fill || C.ink;
@@ -1755,10 +1758,37 @@ function ricochet(o, cx, cy){
   if(window.BFSound) BFSound.bounce();
 }
 
+/* Формы фигуры «треугольник» (идеи игроков: ромб, трапеция, полукруг, пятиугольник, звезда…):
+   один и тот же тип, другой многоугольник — столкновения считаются по нему же. flip — зеркально. */
+var SHAPES = ["", "right", "rhombus", "trapezoid", "parallelogram", "semicircle", "pentagon", "hexagon", "star5"];
+function shapePts(o){
+  var w = o.w, h = o.h, pts, i, a, n;
+  switch(o.shape){
+    case "right": pts = [[0,0],[w,h],[0,h]]; break;
+    case "rhombus": pts = [[w/2,0],[w,h/2],[w/2,h],[0,h/2]]; break;
+    case "trapezoid": pts = [[w*0.25,0],[w*0.75,0],[w,h],[0,h]]; break;
+    case "parallelogram": pts = [[w*0.25,0],[w,0],[w*0.75,h],[0,h]]; break;
+    case "semicircle":
+      pts = [];
+      for(i=0;i<=16;i++){ a = Math.PI + i/16*Math.PI; pts.push([w/2 + Math.cos(a)*w/2, h + Math.sin(a)*h]); }
+      break;
+    case "pentagon": case "hexagon":
+      n = o.shape === "pentagon" ? 5 : 6; pts = [];
+      for(i=0;i<n;i++){ a = -Math.PI/2 + i*2*Math.PI/n; pts.push([w/2 + Math.cos(a)*w/2, h/2 + Math.sin(a)*h/2]); }
+      break;
+    case "star5":
+      pts = [];
+      for(i=0;i<10;i++){ a = -Math.PI/2 + i*Math.PI/5; var q = i%2 ? 0.45 : 1; pts.push([w/2 + Math.cos(a)*w/2*q, h/2 + Math.sin(a)*h/2*q]); }
+      break;
+    default: pts = [[w/2,0],[w,h],[0,h]];
+  }
+  if(o.flip) for(i=0;i<pts.length;i++) pts[i] = [w - pts[i][0], pts[i][1]];
+  return pts;
+}
 function rawPoly(o){
   var pts, i, a;
   if(o.type === "triangle"){
-    pts = [[o.w/2,0],[o.w,o.h],[0,o.h]];
+    pts = shapePts(o);
   } else if(o.type === "circle"){
     pts = [];
     for(i=0;i<CIRCLE_SIDES;i++){
@@ -1788,7 +1818,7 @@ function pulseScale(o){
 function polyOf(o){
   var ang = (o.spins && playing) ? (o._spin || 0) : (o.rot||0)*Math.PI/180;
   var ps = pulseScale(o);
-  var key = o.x + "," + o.y + "," + o.w + "," + o.h + "," + ang.toFixed(4) + "," + o.type + "," + ps.toFixed(3);
+  var key = o.x + "," + o.y + "," + o.w + "," + o.h + "," + ang.toFixed(4) + "," + o.type + "," + ps.toFixed(3) + "," + (o.shape||"") + (o.flip?"f":"");
   if(o._pk === key) return o._poly;
 
   var base = rawPoly(o), cx = o.w/2, cy = o.h/2, out = [], i, p, dx, dy;
@@ -3177,6 +3207,8 @@ function drawCarriedFlag(w, h){
   spyCloth(w * 0.85 + 3, -h * 0.28, 26, 18);
 }
 function paint(o, isSel){
+  // «Невидим в игре» (идея «invisible objects»): в забеге не рисуется, но мешает как обычно
+  if(o.inv && playing) return;
   var open = opened(o);
   ctx.save();
   ctx.translate(o.x+o.w/2, o.y+o.h/2);
@@ -3194,7 +3226,18 @@ function paint(o, isSel){
   if(playing && o._cr && !o._gone) ctx.translate((Math.random()-0.5)*3, (Math.random()-0.5)*2);
   /* Проходимые объекты (без коллизии) выглядят так же, как обычные — просто не мешают игроку.
      Раньше их делали полупрозрачными (45%), и декорации выцветали (см. test-ghost-look.js). */
+  // прозрачность фигуры (0.1…1) и полупрозрачность невидимого в игре — в редакторе
+  if(o.alpha !== undefined && +o.alpha < 1) ctx.globalAlpha *= Math.max(0.1, +o.alpha);
+  if(o.inv) ctx.globalAlpha *= 0.45;
   (PAINT[o.type] || PAINT.rect)(o);
+  // обводка с толщиной (идея «outline»): по силуэту фигуры
+  if(+o.strokeW > 0 && SOLID.indexOf(o.type) !== -1){
+    var sp = rawPoly(o);
+    ctx.beginPath(); ctx.moveTo(sp[0][0], sp[0][1]);
+    for(var si=1; si<sp.length; si++) ctx.lineTo(sp[si][0], sp[si][1]);
+    ctx.closePath(); ctx.lineJoin = "round";
+    ctx.strokeStyle = o.stroke || "#111827"; ctx.lineWidth = Math.min(30, +o.strokeW); ctx.stroke();
+  }
   if(o.oneWay) oneWayMarks(o);
   if(PREFS.cb && o.deadly && playing && !open) hatchMarks(o);
   if(o.crumble && !(playing && o._gone)) crumbleMarks(o);
@@ -3229,7 +3272,7 @@ function paint(o, isSel){
     ctx.globalAlpha = 1;
     ctx.strokeStyle = "#111827"; ctx.lineWidth = 1.6*k; ctx.setLineDash([5*k,4*k]);
     var m = 3*k;
-    if(o.type === "triangle"){
+    if(o.type === "triangle" && !o.shape && !o.flip){
       ctx.beginPath();
       ctx.moveTo(o.w/2, -m);
       ctx.lineTo(o.w+m, o.h+m);
@@ -4721,8 +4764,8 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=211"></script>
-        <script src="i18n.js?v=211"></script>
-        <script src="skinAvatar.js?v=211" defer></script>
+<script src="game.js?v=212"></script>
+        <script src="i18n.js?v=212"></script>
+        <script src="skinAvatar.js?v=212" defer></script>
 </body>
 </html>

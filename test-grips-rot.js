@@ -26,6 +26,7 @@ vm.runInContext(`
   var CIRCLE_SIDES = 24, PULSE_DEF_MIN = 0.78, playing = false, grid = false, GRID = 10, drag = null, sel = null, objects = [];
   var snapN = function(v){ return grid ? Math.round(v/GRID)*GRID : v; };
   var inspect = function(){}, liftEnsurePath = function(){}, liftHome = function(){ return [0,0]; }, liftSync = function(){};
+  ${fn('shapePts')}
   ${fn('rawPoly')}
   ${fn('pulseScale')}
   ${fn('polyOf')}
