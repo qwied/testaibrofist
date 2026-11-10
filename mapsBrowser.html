@@ -11,12 +11,12 @@
      фактором масштаба. Теперь полноразмерный масштаб 1:1, а колонки
      Play/Vote доступны свайпом вбок внутри каждой строки, как и раньше. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=207">
-<script src="offline.js?v=8"></script>
+<link rel="stylesheet" href="ui.css?v=208">
+<script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=7"></script>
-<script src="theme.js?v=207"></script>
-<script src="device.js?v=207"></script>
-<script src="sound.js?v=207"></script>
+<script src="theme.js?v=208"></script>
+<script src="device.js?v=208"></script>
+<script src="sound.js?v=208"></script>
 <style>
 .mbFilters{display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:9px;margin-bottom:6px;align-items:center}
 .mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
@@ -228,6 +228,7 @@
       <option value="party" data-i18n="modeParty">Party</option>
       <option value="adventure" data-i18n="modeAdventure">Adventure</option>
     </select>
+    <input class="bfInput" id="mbName" data-i18n-ph="mapNamePh" placeholder="Название карты" maxlength="60">
     <input class="bfInput" id="mbAuthor" data-i18n-ph="colAuthor" placeholder="Автор">
     <select class="bfSelect" id="mbSort">
       <option value="date" data-i18n="sortDate">Сортировать по дате</option>
@@ -244,7 +245,7 @@
   <div class="mbTable">
     <div class="mbHead">
       <div class="bfPager">
-        <button id="mbPrev">&lt;</button><span id="mbPage">1/1</span><button id="mbNext">&gt;</button>
+        <button id="mbFirst" title="1">&laquo;</button><button id="mbPrev">&lt;</button><span id="mbPage" role="button" tabindex="0" style="cursor:pointer" data-i18n-title="pageJumpTip" title="Перейти на страницу">1/1</span><button id="mbNext">&gt;</button><button id="mbLast">&raquo;</button>
       </div>
     </div>
     <div class="mbScroll"><div class="mbScrollInner">
@@ -268,15 +269,15 @@
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=207">
-<script src="i18n.js?v=207"></script>
-<script src="coin.js?v=207"></script>
-<script src="skinRender.js?v=207"></script>
-<script src="skinAvatar.js?v=207" defer></script>
-<script src="shell.js?v=207"></script>
-<script src="abuseShow.js?v=207" defer></script>
-<script src="account.js?v=207" defer></script>
-<script src="owner.js?v=207" defer></script>
+<link rel="stylesheet" href="mobile.css?v=208">
+<script src="i18n.js?v=208"></script>
+<script src="coin.js?v=208"></script>
+<script src="skinRender.js?v=208"></script>
+<script src="skinAvatar.js?v=208" defer></script>
+<script src="shell.js?v=208"></script>
+<script src="abuseShow.js?v=208" defer></script>
+<script src="account.js?v=208" defer></script>
+<script src="owner.js?v=208" defer></script>
 <script>
 (function () {
   'use strict';
@@ -405,6 +406,7 @@
     var q = '?page=' + page
           + '&mapType=' + encodeURIComponent($('mbMode').value)
           + '&author=' + encodeURIComponent($('mbAuthor').value.trim())
+          + '&name=' + encodeURIComponent($('mbName').value.trim())
           + '&sortBy=' + $('mbSort').value
           + '&favoritesOnly=' + ($('mbFavOnly').checked ? '1' : '0');
     fetch('/getMapsForList' + q, { credentials: 'same-origin' })
@@ -416,6 +418,8 @@
         $('mbPage').textContent = page + '/' + pages;
         $('mbPrev').disabled = page <= 1;
         $('mbNext').disabled = page >= pages;
+        $('mbFirst').disabled = page <= 1;
+        $('mbLast').disabled = page >= pages;
         $('mbList').innerHTML = (d.maps && d.maps.length)
           ? '<div class="mbList">' + d.maps.map(row).join('') + '</div>'
           : '<div class="bfHint">' + T('noMaps', 'Карты не найдены') + '</div>';
@@ -606,6 +610,16 @@
   $('mbGo').onclick = function () { page = 1; load(); };
   $('mbPrev').onclick = function () { if (page > 1) { page--; load(); } };
   $('mbNext').onclick = function () { if (page < pages) { page++; load(); } };
+  $('mbFirst').onclick = function () { if (page > 1) { page = 1; load(); } };
+  $('mbLast').onclick = function () { if (page < pages) { page = pages; load(); } };
+  // клик по «3/17» — перейти сразу на нужную страницу
+  $('mbPage').onclick = function () {
+    var n = parseInt(window.prompt(T('pageJump', 'Страница (1–{n})').replace('{n}', pages), page), 10);
+    if (n >= 1 && n <= pages && n !== page) { page = n; load(); }
+  };
+  ['mbName', 'mbAuthor'].forEach(function (id) {
+    $(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') { page = 1; load(); } });
+  });
   $('mbMode').onchange = function () { page = 1; load(); };
   $('mbSort').onchange = function () { page = 1; load(); };
   $('mbFavOnly').onchange = function () { page = 1; load(); };

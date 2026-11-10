@@ -378,13 +378,32 @@ app.get(/^\/avatar\//, (req, res) => {
 function roomVariantOk(mode, key, variant) {
   return mode !== 'hideAndSeek' || hsFixedOf(key.slice(mode.length + 1)) === variant;
 }
+/* Приватные комнаты (самая частая просьба из идей игроков: «Add private rooms», «комната по коду»).
+   Комната — обычная, только её имя кончается на код «p» + 6 знаков (pk3x9aq, war-pk3x9aq): такой
+   нет ни в списке комнат, ни в подборе «Играть», ни в /api/online и на Servers — попасть в неё
+   можно только по коду или ссылке. Кода никто не выдаёт: его придумывает клиент создателя
+   (roomList.js), а комната появляется, когда в неё зашли, и пропадает, когда все вышли. */
+const PRIVATE_CODE = /^p[a-z0-9]{6}$/;
+function isPrivateRoom(roomName) {
+  // годится и имя комнаты («war-pk3x9aq»), и ключ с режимом («race:pk3x9aq»)
+  const n = String(roomName || '');
+  return PRIVATE_CODE.test(n.slice(Math.max(n.lastIndexOf('-'), n.lastIndexOf(':')) + 1));
+}
+// есть ли комната с таким кодом (вход по коду: чтобы опечатка не заводила пустую комнату)
+app.get('/getPrivateRoom', (req, res) => {
+  const mode = cleanName(req.query.mode) || 'hideAndSeek';
+  const room = cleanName(req.query.room).toLowerCase();
+  if (!isPrivateRoom(room)) return res.json({ exists: false });
+  const set = gameState.rooms.get(mode + ':' + room);
+  res.json({ exists: !!set && set.size > 0, players: set ? set.size : 0, limit: ROOM_FULL });
+});
 app.get('/getBestRoom', (req, res) => {
   // чистим как имя комнаты в join: мусор в mode не заводит лишние ключи
   const mode = cleanName(req.query.mode) || 'hideAndSeek';
   const variant = mode === 'hideAndSeek' ? hsFixedOf(cleanName(req.query.variant) + '-1') : null;
   let best = null, bestCount = -1;
   gameState.rooms.forEach((set, key) => {
-    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant)) return;
+    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant) || isPrivateRoom(key)) return;
     const n = set.size;
     if (n >= ROOM_FULL) return;
     if (n > bestCount) { bestCount = n; best = key.slice(mode.length + 1); }
@@ -413,7 +432,7 @@ app.get('/getRoomList', (req, res) => {
   const now = Date.now();
   const list = [];
   gameState.rooms.forEach((set, key) => {
-    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant)) return;
+    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant) || isPrivateRoom(key)) return;
     const n = set.size;
     const status = n >= ROOM_FULL ? 'red'
                  : (now - (roomLeftAt.get(key) || 0) < ROOM_RECENT_LEFT_MS) ? 'yellow'
@@ -441,7 +460,7 @@ app.get('/api/online', (req, res) => {
     const i = key.indexOf(':');
     if (i === -1) return;
     const mode = key.slice(0, i), roomName = key.slice(i + 1);
-    if (PUBLIC_MODES.indexOf(mode) === -1) return;
+    if (PUBLIC_MODES.indexOf(mode) === -1 || isPrivateRoom(roomName)) return;
     const names = Array.from(set)
       .map(id => gameState.players.get(id))
       .filter(Boolean)
@@ -463,7 +482,7 @@ function serversSnapshot() {
     const i = key.indexOf(':');
     if (i === -1) return;
     const mode = key.slice(0, i);
-    if (PUBLIC_MODES.indexOf(mode) === -1) return;
+    if (PUBLIC_MODES.indexOf(mode) === -1 || isPrivateRoom(key)) return;
     const players = Array.from(set).map(id => gameState.players.get(id)).filter(Boolean);
     if (!players.length) return;
     const st = mode === 'hideAndSeek' ? hsRooms.get(key) : null;
@@ -1054,7 +1073,7 @@ const HS_COPS_MIN = Number(process.env.HS_COPS_MIN) || 6;
 const HS_MURDER_GRACE_MS = Number(process.env.HS_MURDER_GRACE_MS) || 20000;
 const HS_FIXED = { murder: { min: 3 }, team: { min: 2, team: true }, war: { min: 2 }, party: { min: 2 }, adventure: { min: 1 } };
 function hsFixedOf(roomName) {
-  const m = /^(murder|team|war|party|adventure)-\d+$/.exec(String(roomName || ''));
+  const m = /^(murder|team|war|party|adventure)-(\d+|p[a-z0-9]{6})$/.exec(String(roomName || ''));
   return m ? m[1] : null;
 }
 function hsFixedMin(f) { return HS_FIXED[f] ? HS_FIXED[f].min : 2; }

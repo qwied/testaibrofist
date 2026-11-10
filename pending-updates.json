@@ -32,6 +32,10 @@
     {
       "title": "Phone aiming and a new Pirate Bay",
       "text": "On phones you can now aim in War: hold your finger on the map to see the flight path, and let go to throw or fire a cannon there. The War panel on phones moved to the top so it no longer covers your fighter. The Pirate Bay map was redrawn: real ship hulls, cannons standing on the decks, water that looks like water and a palm island in the middle."
+    },
+    {
+      "title": "Private rooms, map search and player list",
+      "text": "You can now create a private room on any mode page and invite friends with a six-character code or a link; private rooms are not shown in the room list. Maps Browser can search maps by name and jump to any page, the first or the last. Press Tab in a game to see who is in the room: Mute hides a player's chat and Hide removes them from your screen, only for you."
     }
   ]
 }

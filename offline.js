@@ -438,7 +438,7 @@
           return sock;
         }
         var user = currentUser();
-        var vm = /^(murder|team|war|party|adventure)-\d+$/.exec(String(data && data.room || ''));
+        var vm = /^(murder|team|war|party|adventure)-(?:\d+|p[a-z0-9]{6})$/.exec(String(data && data.room || ''));
         // обычные прятки — тоже настоящий круг раунда с ботами (offlineModes.js), кроме сюжета
         if (!vm && data && data.gameMode === 'hideAndSeek' && !/[?&]story=1/.test(location.search) && window.BFOfflineModes && BFOfflineModes.has('classic')) vm = [null, 'classic'];
         if (vm && window.BFOfflineModes && BFOfflineModes.has(vm[1]) && originalFetch) {

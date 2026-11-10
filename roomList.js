@@ -90,5 +90,63 @@
     });
   }
 
-  window.BFRoomList = { init: init };
+  /* ---------- приватные комнаты по коду (см. isPrivateRoom в server.js) ----------
+     Под списком комнат: «Создать приватную комнату» — придумывает код и сразу заводит в комнату,
+     которой нет ни в списке, ни в подборе; друзья входят по коду из шести знаков или по ссылке. */
+  var ABC = 'abcdefghjkmnpqrstuvwxyz23456789';      // без похожих знаков: 0/o, 1/l/i
+  function newCode() {
+    var c = '', rnd = new Uint32Array(6);
+    (window.crypto || window.msCrypto).getRandomValues(rnd);
+    for (var i = 0; i < 6; i++) c += ABC[rnd[i] % ABC.length];
+    return c;
+  }
+  function roomOf(code, variant) { return (variant ? variant + '-' : '') + 'p' + code; }
+  function go(mode, variant, code) {
+    location.href = 'game?mode=' + encodeURIComponent(variant || mode) + '&room=' + encodeURIComponent(roomOf(code, variant));
+  }
+  function privateUi(el, mode, variant) {
+    if (!el || !el.parentNode || el.parentNode.querySelector('.rlPriv')) return;
+    var box = document.createElement('div');
+    box.className = 'rlPriv';
+    box.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-8px 0 18px';
+    var mk = document.createElement('button');
+    mk.type = 'button'; mk.className = 'rlPrivNew';
+    mk.textContent = T('privCreate', 'Создать приватную комнату');
+    var inp = document.createElement('input');
+    inp.className = 'rlPrivCode'; inp.maxLength = 12; inp.autocomplete = 'off'; inp.spellcheck = false;
+    inp.placeholder = T('privCodePh', 'Код комнаты');
+    var join = document.createElement('button');
+    join.type = 'button'; join.className = 'rlPrivJoin';
+    join.textContent = T('privJoin', 'Войти по коду');
+    var msg = document.createElement('div');
+    msg.className = 'rlPrivMsg'; msg.style.cssText = 'flex-basis:100%;font-size:13px;color:#b91c1c;min-height:0';
+    [mk, join].forEach(function (b) {
+      b.style.cssText = 'padding:9px 14px;border-radius:10px;border:1px solid var(--line,#d7dee7);background:var(--card,#fff);'
+        + 'color:inherit;font:600 14px inherit;cursor:pointer';
+    });
+    inp.style.cssText = 'padding:9px 12px;border-radius:10px;border:1px solid var(--line,#d7dee7);background:var(--card,#fff);'
+      + 'color:inherit;font:600 14px ui-monospace,monospace;width:150px;text-transform:uppercase;letter-spacing:1px';
+    box.appendChild(mk); box.appendChild(inp); box.appendChild(join); box.appendChild(msg);
+    el.parentNode.insertBefore(box, el.nextSibling);
+
+    mk.addEventListener('click', function () { go(mode, variant, newCode()); });
+    function tryJoin() {
+      // код можно вставить и целиком со ссылкой или с «p» в начале — берём последние шесть знаков
+      var code = inp.value.toLowerCase().replace(/[^a-z0-9]/g, '').slice(-6);
+      if (code.length !== 6) { msg.textContent = T('privBadCode', 'В коде шесть букв и цифр'); return; }
+      msg.textContent = '';
+      fetch('/getPrivateRoom?mode=' + encodeURIComponent(mode) + '&room=' + encodeURIComponent(roomOf(code, variant)), { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d || !d.exists) { msg.textContent = T('privNoRoom', 'Комнаты с таким кодом сейчас нет'); return; }
+          if (d.players >= d.limit) { msg.textContent = T('privFull', 'Комната заполнена'); return; }
+          go(mode, variant, code);
+        })
+        .catch(function () { go(mode, variant, code); });      // без сервера (песочница) — просто входим
+    }
+    join.addEventListener('click', tryJoin);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') tryJoin(); });
+  }
+
+  window.BFRoomList = { init: function (el, mode, variant) { init(el, mode, variant); privateUi(el, mode, variant); } };
 })();

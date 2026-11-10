@@ -541,6 +541,8 @@ function register(app, getUser, acc, cleanText) {
     const myFavs = me && Array.isArray(me.favoriteMaps) ? me.favoriteMaps : [];
     const mapType = String(req.query.mapType || '');
     const author = low(req.query.author || '');
+    // поиск по названию карты (просят с 2020 года): подстрока без учёта регистра
+    const mapName = low(String(req.query.name || '').slice(0, 60));
     const sortBy = String(req.query.sortBy || 'date');
     const favoritesOnly = req.query.favoritesOnly === '1';
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -549,6 +551,7 @@ function register(app, getUser, acc, cleanText) {
     let out = maps.slice();
     if (mapType) out = out.filter(m => m.mapType === mapType);
     if (author) out = out.filter(m => low(m.author).indexOf(author) !== -1);
+    if (mapName) out = out.filter(m => low(m.mapName).indexOf(mapName) !== -1);
     if (favoritesOnly) out = out.filter(m => myFavs.indexOf(favKey(m.author, m.mapName)) !== -1);
 
     out.sort((a, b) => {

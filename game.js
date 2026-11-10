@@ -518,6 +518,9 @@
     + '<span><span id="gLblPlayers">Игроков</span>: <b id="gCount">1</b></span>'
     + '<span><span id="gLblPing">Пинг</span>: <b id="gPing">—</b></span>'
     + '<span id="gTimeBox"><span id="gLblTime">Время</span>: <b id="gTime">—</b></span>'
+    // приватная комната (см. isPrivateRoom в server.js): код, по клику — ссылка в буфер
+    + '<button id="gPriv" style="display:none;padding:4px 9px;border-radius:8px;border:1px solid #d7dee7;background:#fff;'
+    + 'color:#111827;font:700 12px ui-monospace,monospace;letter-spacing:1px;cursor:pointer;white-space:nowrap"></button>'
     // счёт команд в Capture the Flag и Domination (см. renderTeamHud)
     + '<span id="gTeamBox" style="display:none"></span>'
     // жизни на карте гонки (см. raceLives в движке) — только если карта их задаёт
@@ -617,6 +620,23 @@
   var TR = function (k, f) {
     return (window.I18N && window.I18N.t(k) !== k) ? window.I18N.t(k) : (f || k);
   };
+  /* Приватная комната: в шапке её код; клик копирует ссылку-приглашение (или показывает её, если
+     буфер недоступен). Имя комнаты кончается на «p» + 6 знаков — см. isPrivateRoom в server.js. */
+  (function () {
+    var m = /(?:^|-)p([a-z0-9]{6})$/.exec(String(ROOM || '')), b = $('gPriv');
+    if (!m || !b || STORY || VIEW) return;
+    var code = m[1].toUpperCase();
+    b.style.display = '';
+    b.textContent = code;
+    b.title = TR('privCopy', 'Приватная комната — нажми, чтобы скопировать ссылку для друзей');
+    b.onclick = function () {
+      var url = location.origin + location.pathname + '?mode=' + encodeURIComponent(MODE_Q) + '&room=' + encodeURIComponent(ROOM);
+      var done = function () { log(TR('privCopied', 'Ссылка скопирована — отправь её друзьям. Код комнаты: {c}').replace('{c}', '<b>' + code + '</b>')); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () { window.prompt(code, url); });
+      else window.prompt(code, url);
+    };
+    setTimeout(function () { log(TR('privHello', 'Приватная комната. Код для друзей: {c} — нажми на код вверху, чтобы скопировать ссылку.').replace('{c}', '<b>' + code + '</b>')); }, 1200);
+  })();
   $('gExit').onclick = function () {
     // просмотр карты из Maps Browser идёt внутри её iframe (см. VIEW выше) —
     // там некуда уходить своей навигацией, просто просим родителя закрыть окно
@@ -1266,11 +1286,90 @@
     if (i === -1) return false;
     muted.splice(i, 1); saveMuted(); return true;
   }
+  /* Скрытые игроки (идеи «Hide player», «Ignore»): их фигуры не рисуются на твоём экране —
+     только у тебя; сами они играют как играли (и поймать тебя могут). Хранится, как и mute, по нику. */
+  var HIDE_KEY = 'bfHiddenPlayers';
+  var hiddenP = (function () {
+    try { return JSON.parse(localStorage.getItem(HIDE_KEY) || '[]'); } catch (e) { return []; }
+  })();
+  function isHiddenP(name) { return hiddenP.indexOf(String(name || '').toLowerCase()) !== -1; }
+  function toggleHiddenP(name) {
+    var k = String(name || '').trim().toLowerCase(), i = hiddenP.indexOf(k);
+    if (!k) return;
+    if (i === -1) hiddenP.push(k); else hiddenP.splice(i, 1);
+    try { localStorage.setItem(HIDE_KEY, JSON.stringify(hiddenP)); } catch (e) {}
+  }
+
+  /* Список игроков комнаты (идеи «Tab — list of players», «Mute player», «Hide player»):
+     Tab или клик по «Игроков: N» в шапке. У каждого — «Заглушить» (его чат не показывается)
+     и «Скрыть» (не рисуется). Всё локально: другим об этом ничего не уходит. */
+  var plOpen = false;
+  function plBox() {
+    var b = $('gPlayers');
+    if (b) return b;
+    b = document.createElement('div');
+    b.id = 'gPlayers';
+    b.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70;display:none;'
+      + 'width:340px;max-width:calc(100vw - 24px);max-height:min(70vh,520px);overflow:auto;background:rgba(255,255,255,.97);'
+      + 'color:#111827;border:1px solid #d7dee7;border-radius:14px;box-shadow:0 20px 50px -20px rgba(15,23,42,.6);'
+      + 'padding:12px 14px;font:13px sans-serif';
+    document.body.appendChild(b);
+    b.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t.dataset && t.dataset.plx) { plToggle(false); return; }
+      var name = t.dataset && t.dataset.pn;
+      if (!name) return;
+      if (t.dataset.pa === 'mute') { if (isMuted(name)) unmuteName(name); else muteName(name); }
+      else if (t.dataset.pa === 'hide') toggleHiddenP(name);
+      plRender();
+    });
+    return b;
+  }
+  function plRender() {
+    var b = plBox(), ids = Object.keys(others).filter(function (id) { return others[id] && !others[id].gone && others[id].name; });
+    ids.sort(function (a, c) { return String(others[a].name).localeCompare(String(others[c].name)); });
+    var btn = 'padding:4px 9px;border-radius:8px;border:1px solid #d7dee7;background:#f9fafb;color:#111827;font:600 12px sans-serif;cursor:pointer';
+    var on = 'padding:4px 9px;border-radius:8px;border:1px solid #111827;background:#111827;color:#fff;font:600 12px sans-serif;cursor:pointer';
+    var row = function (inner) { return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid #eef0f3">' + inner + '</div>'; };
+    b.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><b style="flex:1;font-size:15px">'
+      + esc(TR('plTitle', 'Игроки в комнате')) + ' · ' + (ids.length + 1) + '</b>'
+      + '<button data-plx="1" style="' + btn + '">&times;</button></div>'
+      + row('<span style="flex:1;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(me.name || '') + '</span>'
+            + '<span style="color:#6b7280">' + esc(TR('plYou', 'ты')) + '</span>')
+      + ids.map(function (id) {
+          var n = others[id].name, m = isMuted(n), h = isHiddenP(n);
+          return row('<span style="flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(n) + '</span>'
+            + '<button data-pa="mute" data-pn="' + esc(n) + '" style="' + (m ? on : btn) + '">' + esc(m ? TR('plUnmute', 'Вернуть чат') : TR('plMute', 'Заглушить')) + '</button>'
+            + '<button data-pa="hide" data-pn="' + esc(n) + '" style="' + (h ? on : btn) + '">' + esc(h ? TR('plShow', 'Показать') : TR('plHide', 'Скрыть')) + '</button>');
+        }).join('')
+      + '<div style="color:#6b7280;font-size:12px;margin-top:8px">' + esc(TR('plHint', 'Tab — список игроков. «Заглушить» прячет чат игрока, «Скрыть» убирает его с твоего экрана. Это видишь только ты.')) + '</div>';
+  }
+  function plToggle(v) {
+    plOpen = v === undefined ? !plOpen : !!v;
+    var b = plBox();
+    b.style.display = plOpen ? '' : 'none';
+    if (plOpen) plRender();
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.code === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      var el = document.activeElement, tag = el && el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      e.preventDefault(); plToggle();
+    } else if (e.code === 'Escape' && plOpen) plToggle(false);
+  });
+  (function () {
+    var c = $('gCount'), sp = c && c.parentNode;
+    if (!sp) return;
+    sp.style.cursor = 'pointer';
+    sp.title = TR('plBtn', 'Игроки') + ' (Tab)';
+    sp.addEventListener('click', function () { plToggle(); });
+  })();
+
   // мост для автотестов — тем же приёмом, что window.GAME в game.html
   // (см. hideBridge() там): реплики рисуются на canvas, без него снаружи
   // нечем проверить, что заглушённый действительно не долетает до экрана
   if (/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname)) {
-    window.__bfChatDebug = { spoken: spoken, isMuted: isMuted, chatColors: chatColors, nickColors: nickColors, clanTags: clanTags };
+    window.__bfChatDebug = { spoken: spoken, isMuted: isMuted, isHidden: isHiddenP, chatColors: chatColors, nickColors: nickColors, clanTags: clanTags };
   }
   function speak(who, text) {
     if (!text) return;
@@ -4541,6 +4640,7 @@
       if (o.hid && hsWait) return;
       if (o.hid && MODE !== 'hideAndSeek') return;
       if (boostOn(id, 'invis')) return;            // невидимость из магазина
+      if (isHiddenP(o.name)) return;               // «Скрыть» в списке игроков (Tab)
       var w = o.w || 22, h = o.h || 74;
       ctx.save();
       ctx.translate(o.x, o.y);
