@@ -924,6 +924,15 @@
           me.position = pos; war.track(st, me.id, pos); return true;
         }
         case 'hsCatch': doCatch(me.id, String(d && d.targetId || '')); return true;
+        // «Сдаться» (как на сервере, см. hsGiveUp): прячущийся сам выходит из раунда
+        case 'hsGiveUp':
+          if (classic && st.phase === 'round' && !st.caughtSent && me.id !== st.seekerId && !st.caughtSet.has(me.id)) {
+            st.caughtSet.add(me.id);
+            deliver('hsOut', { id: me.id, name: me.name, jail: false });
+            if (!(st.roundMembers || []).some(function (m) { return !st.caughtSet.has(m.id); })) endEarly(room, st);
+          }
+          return true;
+        case 'hsPref': return true;
         case 'ctfTouch': ctfTouch(d); return true;
         case 'ctfTag': ctfTag(d); return true;
         case 'warShot': war.shot(st, room, sockOf(me.id), d); return true;

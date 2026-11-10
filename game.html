@@ -255,17 +255,17 @@ body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="offline.js?v=9"></script>
         <script src="offlineServer.js?v=10"></script>
-        <script src="offlineModes.js?v=10"></script>
-<script src="device.js?v=217"></script>
-        <script src="sound.js?v=217"></script>
-        <script src="skinRender.js?v=217"></script>
-        <script src="skinCanvas.js?v=217"></script>
-        <script src="gifuct.bundle.js?v=217"></script>
-        <script src="gifPlayer.js?v=217"></script>
-        <script src="coin.js?v=217"></script>
-        <script src="liveText.js?v=217"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=217">
-        <script src="theme.js?v=217"></script>
+        <script src="offlineModes.js?v=11"></script>
+<script src="device.js?v=218"></script>
+        <script src="sound.js?v=218"></script>
+        <script src="skinRender.js?v=218"></script>
+        <script src="skinCanvas.js?v=218"></script>
+        <script src="gifuct.bundle.js?v=218"></script>
+        <script src="gifPlayer.js?v=218"></script>
+        <script src="coin.js?v=218"></script>
+        <script src="liveText.js?v=218"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=218">
+        <script src="theme.js?v=218"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -3024,6 +3024,10 @@ function follow(){
      плавным лерпом 0.12 — при прыжке и падении персонаж уезжал к краю
      экрана, и это выглядело как «лаги». Теперь ноль отставания: экран
      движется ровно с той же скоростью, что и сам игрок. */
+  // свободная камера зрителя (см. freeCam в game.js): смотрим туда, куда её увели стрелками
+  if(typeof BRIDGE !== "undefined" && BRIDGE && BRIDGE.freeCam){
+    view.x = VW()/2 - BRIDGE.freeCam.x*view.s; view.y = VH()*0.6 - BRIDGE.freeCam.y*view.s; return;
+  }
   view.x = VW()/2 - (pl.x+pl.w/2)*view.s; view.y = VH()*0.6 - (pl.y+pl.h/2)*view.s;
 }
 
@@ -4891,9 +4895,9 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="cosmDraw.js?v=217"></script>
-<script src="game.js?v=217"></script>
-        <script src="i18n.js?v=217"></script>
-        <script src="skinAvatar.js?v=217" defer></script>
+<script src="cosmDraw.js?v=218"></script>
+<script src="game.js?v=218"></script>
+        <script src="i18n.js?v=218"></script>
+        <script src="skinAvatar.js?v=218" defer></script>
 </body>
 </html>

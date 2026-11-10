@@ -536,6 +536,8 @@
     + '<select id="gDrawTarget" title="Кому показать стрелку" style="display:none"><option value="all">Все</option></select>'
     + '<button id="gEmo" title="Эмоции" aria-label="Emotions"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" '
     + 'stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9.5h.01M15 9.5h.01"/></svg></button>'
+    // прятки: выбор роли, «Сдаться», свободная камера (см. hsMenu)
+    + '<button id="gHs" style="display:none"></button>'
     + '<button id="gExit">Меню</button></div>'
     + '<div id="gMap"><div class="n" id="gMapName">Loading map…</div>'
     + '<div class="a" id="gMapAuthor"></div><div class="rate" id="gRate" style="display:none">'
@@ -679,6 +681,68 @@
     });
     document.addEventListener('click', function (e) { if (box.style.display !== 'none' && !box.contains(e.target) && e.target !== b) box.style.display = 'none'; });
   })();
+
+  /* Прятки (идеи игроков): какую роль хочешь в рулетке (вес жребия на сервере, см. hsChances),
+     «Сдаться» — выйти из раунда пойманным, и свободная камера для пойманного: стрелками смотреть
+     по карте, пока раунд идёт. */
+  var hsPref = (function () { try { return localStorage.getItem('bfHsPref') || ''; } catch (e) { return ''; } })();
+  (function () {
+    var b = $('gHs');
+    if (!b) return;
+    b.textContent = '\u2630';
+    b.title = TR('hsMenuTip', 'Прятки: роль, сдаться, камера');
+    b.style.cssText = 'display:none;padding:4px 9px;border-radius:8px;border:1px solid #d7dee7;background:#fff;color:#111827;font:700 13px sans-serif;cursor:pointer';
+    var box = document.createElement('div');
+    box.id = 'gHsBox';
+    box.style.cssText = 'position:fixed;z-index:70;display:none;background:#fff;color:#111827;border:1px solid #d7dee7;border-radius:12px;'
+      + 'padding:10px;box-shadow:0 14px 30px -14px rgba(15,23,42,.55);font:600 13px sans-serif;min-width:210px';
+    document.body.appendChild(box);
+    function opt(v, t) { return '<button data-pref="' + v + '" style="flex:1;padding:5px 6px;border-radius:8px;border:1px solid ' + (hsPref === v ? '#111827;background:#111827;color:#fff' : '#d7dee7;background:#f9fafb;color:#111827') + ';font:600 12px sans-serif;cursor:pointer">' + esc(t) + '</button>'; }
+    function big(k, t, col) { return '<button data-hs="' + k + '" style="display:block;width:100%;margin-top:8px;padding:7px;border-radius:8px;border:2px solid ' + col + ';background:#fff;color:' + col + ';font:800 13px sans-serif;cursor:pointer">' + esc(t) + '</button>'; }
+    function render() {
+      var inRound = phase === 'round', hider = me.role !== 'seeker' && !me.caught;
+      box.innerHTML = '<div style="margin-bottom:6px">' + esc(TR('hsPrefLbl', 'Хочу в следующем раунде:')) + '</div>'
+        + '<div style="display:flex;gap:4px">' + opt('', TR('hsPrefAuto', 'Как выпадет')) + opt('hide', TR('hsPrefHide', 'Прятаться')) + opt('seek', TR('hsPrefSeek', 'Искать')) + '</div>'
+        + (inRound && hider && huntNow() ? big('giveup', TR('hsGiveUp', 'Сдаться'), '#dc2626') : '')
+        + (inRound && me.caught ? big('cam', GAME.freeCam ? TR('hsCamOff', 'Вернуть камеру') : TR('hsCamOn', 'Свободная камера (стрелки)'), '#2563eb') : '');
+    }
+    b.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+      render();
+      var r = b.getBoundingClientRect();
+      box.style.display = '';
+      box.style.top = Math.round(r.bottom + 6) + 'px';
+      box.style.left = Math.max(8, Math.min(innerWidth - box.offsetWidth - 8, Math.round(r.left - box.offsetWidth / 2))) + 'px';
+    });
+    box.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t.dataset.pref !== undefined) {
+        hsPref = t.dataset.pref;
+        try { localStorage.setItem('bfHsPref', hsPref); } catch (err) {}
+        if (socket) socket.emit('hsPref', { pref: hsPref });
+        render(); return;
+      }
+      if (t.dataset.hs === 'giveup' && socket) { socket.emit('hsGiveUp'); box.style.display = 'none'; }
+      if (t.dataset.hs === 'cam') { setFreeCam(!GAME.freeCam); box.style.display = 'none'; }
+    });
+    document.addEventListener('click', function (e) { if (box.style.display !== 'none' && !box.contains(e.target) && e.target !== b) box.style.display = 'none'; });
+    setInterval(function () {
+      b.style.display = MODE === 'hideAndSeek' && !STORY && !VIEW && huntNow() ? '' : 'none';
+      if (GAME.freeCam && (phase !== 'round' || !me.caught)) setFreeCam(false);
+      if (GAME.freeCam && GAME.keys) {
+        var k = GAME.keys, sp = 14;
+        GAME.freeCam.x += ((k.r ? 1 : 0) - (k.l ? 1 : 0)) * sp;
+        GAME.freeCam.y += ((k.dn ? 1 : 0) - (k.u ? 1 : 0)) * sp;
+      }
+    }, 33);
+  })();
+  // обычные прятки с охотой — не «Война», не «Вечеринка», не «Приключение», не «Копы»
+  function huntNow() { return !(hsVariant === 'wait' || hsVariant === 'cops' || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant)); }
+  function setFreeCam(on) {
+    if (on && GAME.pl) { GAME.freeCam = { x: GAME.pl.x + GAME.pl.w / 2, y: GAME.pl.y + GAME.pl.h / 2 }; GAME.frozen = true; log(TR('hsCamHint', 'Свободная камера: стрелки — смотреть по карте.')); }
+    else { GAME.freeCam = null; if (hsVariant !== 'cops') GAME.frozen = false; }
+  }
 
   /* Приватная комната: в шапке её код; клик копирует ссылку-приглашение (или показывает её, если
      буфер недоступен). Имя комнаты кончается на «p» + 6 знаков — см. isPrivateRoom в server.js. */
@@ -2571,6 +2635,7 @@
         me.name = (signed && signed.data && !signed.data.guest) ? signed.data.name : guestName();
         ROOM = pick.room || 'room1';
         socket.emit('join', { playerName: me.name, gameMode: MODE, room: ROOM });
+        if (hsPref) socket.emit('hsPref', { pref: hsPref });
         // старый сервер общих раундов гонки не ведёт — тогда, как раньше, карту берём сами
         setTimeout(function () {
           if (MODE === 'race' && !STORY && !VIEW && !raceSync && !currentMap && socket.connected) nextMap();

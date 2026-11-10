@@ -72,6 +72,10 @@
     {
       "title": "Smarter map logic",
       "text": "New editor logic for map makers: blocks that appear when a button or lever is turned on, effect triggers that toggle targets like a lever or open a random one, rotating and pulsing blocks that only move while their button is held, buttons that need several players standing on them, and blocks that chase the player within a set radius. Race maps can turn on sprint: hold Shift to run faster."
+    },
+    {
+      "title": "Hide and Seek: role wish, give up, free camera",
+      "text": "In Hide and Seek there is a new menu button at the top. Choose whether you'd rather hide or seek next round, and the roulette will lean your way. Hiders can give up and leave the round. Once you're caught, you can turn on a free camera and look around the map with the arrow keys."
     }
   ]
 }

@@ -750,6 +750,10 @@ function hsChances(members, st) {
     let x = 1 + Math.random() * 9;                // базовый вес 1..10, свой у каждого
     if (m.id === st.lastSeeker) x *= 0.25;        // был искателем в прошлом раунде — вчетверо меньше
     else if (m.id === st.prevSeeker) x *= 0.5;    // позапрошлый — вдвое меньше
+    // пожелание игрока (кнопка в игре): хочет искать — втрое чаще, хочет прятаться — впятеро реже
+    const pp = gameState.players.get(m.id);
+    if (pp && pp.hsPref === 'seek') x *= 3;
+    else if (pp && pp.hsPref === 'hide') x *= 0.2;
     return x;
   });
   const total = w.reduce((a, b) => a + b, 0) || 1;
@@ -2062,6 +2066,25 @@ io.on('connection', (socket) => {
      по своим же последним координатам (см. movePlayer). Клиентский
      hsCatch — заявка, а не факт: подделать «поймал», не подойдя к цели
      или переиграв в уже пойманного, не выйдет. */
+  /* Прятки (идеи игроков): «Сдаться» — прячущийся сам выходит из раунда, как пойманный
+     (в зомби-раунде — становится зомби); и пожелание роли на следующую рулетку (см. hsChances). */
+  socket.on('hsGiveUp', () => {
+    if (limHsCatch()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('hideAndSeek:') !== 0) return;
+    const st = hsRooms.get(player.room);
+    if (!st || st.phase !== 'round' || !st.seekerIds || st.caughtSent || hsNoHunt(st.variant) || st.variant === 'cops') return;
+    if (st.seekerIds.has(socket.id) || (st.caughtSet && st.caughtSet.has(socket.id))) return;
+    if (!(st.roundMembers || []).some(m => m.id === socket.id)) return;
+    if (!st.caughtSet) st.caughtSet = new Set();
+    hsDoInfect(io, player.room, st, socket.id, player, 'giveup');
+  });
+  socket.on('hsPref', (data) => {
+    const player = gameState.players.get(socket.id);
+    if (!player) return;
+    const p = data && data.pref;
+    player.hsPref = p === 'hide' || p === 'seek' ? p : '';
+  });
   socket.on('hsCatch', (data) => {
     if (limHsCatch()) return;
     const player = gameState.players.get(socket.id);
