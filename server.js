@@ -1904,7 +1904,9 @@ io.on('connection', (socket) => {
         color: cleanText(p.color, 20),
         say: say,
         fin: !!p.fin,
-        hid: !!p.hid
+        hid: !!p.hid,
+        // эмоция (идея «Emotions: Sit / Sleep»): только эти две позы
+        pose: p.pose === 'sit' || p.pose === 'sleep' ? p.pose : ''
       };
       if (p.sk !== undefined) pos.sk = cleanText(p.sk, 120);
       else if (player.position) pos.sk = player.position.sk;   // не прислали — значит не менялся
@@ -2470,6 +2472,7 @@ setInterval(() => {
       if (pos.say !== last.say) { e.s = pos.say || ''; last.say = pos.say; }
       if (!!pos.fin !== !!last.fin) { e.f = pos.fin ? 1 : 0; last.fin = !!pos.fin; }
       if (!!pos.hid !== !!last.hid) { e.d = pos.hid ? 1 : 0; last.hid = !!pos.hid; }
+      if ((pos.pose || '') !== (last.pose || '')) { e.p = pos.pose || ''; last.pose = pos.pose || ''; }
       frame.push(e);
     });
     if (!frame.length) return;

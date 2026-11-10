@@ -43,6 +43,7 @@ const TOOL_MODES = {
   button:null, lever:null, water:null, laserFeed:null, laserReceiver:null,
   zombie:['hideAndSeek'],       // модификация Zombie Apocalypse — только прятки
   teleport:null,               // пара площадок — есть в обоих режимах, как кнопка/рычаг
+  star:null,                   // звезда для сбора (идея «Find all the stars»): в гонке без всех звёзд финиш закрыт
   cover:['hideAndSeek'],
   cannon:['hideAndSeek'],       // пушка «Пиратской войны» — стреляют из неё в режиме «Война»
   camera:['race'], spyFlag:['race'],   // «Шпион» в гонке: камеры и флаг, без которого финиш закрыт
@@ -55,7 +56,7 @@ const TOOL_MODES = {
 const TOOL_RU = {
   cover:'Cover', seeker:'Seeker', door:'Door', button:'Button',
   lever:'Lever', checkpoint:'Checkpoint', finishline:'Finish', water:'Water',
-  teleport:'Teleport', zombie:'Zombie', liquid:'Liquid', superGate:'SUPER BRO gate'
+  teleport:'Teleport', star:'Star', zombie:'Zombie', liquid:'Liquid', superGate:'SUPER BRO gate'
 };
 
 // объекты карты (mapData — JSON из редактора)
@@ -203,6 +204,8 @@ const BUILTIN = [
   { file: 'piratebay.json', mapName: 'Pirate Bay', author: 'qwied', mapType: 'hideAndSeek', ver: 3, play: true, only: 'war' },
   // гонка-«шпион»: камеры, лазеры, флаг в хранилище — финиш только с флагом (см. spyTick в game.html)
   { file: 'spybase.json', mapName: 'Spy Base', author: 'qwied', mapType: 'race', ver: 1, play: true },
+  // «Find all the stars» (идея игроков с картинкой): звёзды по всей карте, финиш открывается только со всеми
+  { file: 'starhunt.json', mapName: 'Find all the stars', author: 'qwied', mapType: 'race', ver: 1, play: true },
   // «Приключение» (см. adventure.js): башня в 5 этажей с боссом и оборона кристалла от волн врагов
   { file: 'brotower.json', mapName: 'Bro Tower', author: 'qwied', mapType: 'hideAndSeek', ver: 1, play: true, only: 'adventure' },
   { file: 'crystaldefense.json', mapName: 'Crystal Defense', author: 'qwied', mapType: 'hideAndSeek', ver: 1, play: true, only: 'adventure' },

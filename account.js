@@ -259,6 +259,24 @@
     get('/getMySettings', function (r) { paint(!!(r && r.data && r.data.hideChat)); });
   }
 
+  // ---------- вид реплик над головами (идея «New dialog box»): хранится в этом браузере ----------
+  function drawBubblePref() {
+    var row = box.querySelector('#bfBubbleRow');
+    if (!row) return;
+    var T2 = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : (f || k); };
+    var cur = 'text';
+    try { cur = localStorage.getItem('bfBubbleStyle') || 'text'; } catch (e) {}
+    var opts = [['text', T2('bubbleText', 'Текст с обводкой')], ['box', T2('bubbleBox', 'Облачко-рамка')], ['round', T2('bubbleRound', 'Круглое облачко')]];
+    row.innerHTML = opts.map(function (o) {
+      return '<div class="bf-opt' + (o[0] === cur ? ' on' : '') + '" data-bub="' + o[0] + '">' + o[1] + '</div>';
+    }).join('');
+    var els = row.querySelectorAll('.bf-opt');
+    for (var i = 0; i < els.length; i++) els[i].onclick = function () {
+      try { localStorage.setItem('bfBubbleStyle', this.getAttribute('data-bub')); } catch (e) {}
+      drawBubblePref();
+    };
+  }
+
   // ---------- привязка Discord ----------
   function drawDiscordLink() {
     var holder = box.querySelector('#bfDiscordBox');
@@ -297,7 +315,10 @@
        + '<div class="bf-h">' + T('chatHint',
            'Скрывает у тебя Messages (пункт меню и значок непрочитанного) и чужие '
          + 'реплики в игровом чате. Свои сообщения отправлять по-прежнему можно.') + '</div>'
-       + '<div class="bf-row" id="bfChatRow"></div>');
+       + '<div class="bf-row" id="bfChatRow"></div>'
+       + '<div class="bf-h">' + T('bubbleHint', 'Как выглядят реплики над головами в игре (видишь только ты).') + '</div>'
+       + '<div class="bf-row" id="bfBubbleRow"></div>');
+    drawBubblePref();
     drawTheme();
     drawLang(name);
     drawChatPref();

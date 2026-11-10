@@ -254,18 +254,18 @@ body.mob #msg h1{font-size:38px}
 body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="offline.js?v=9"></script>
-        <script src="offlineServer.js?v=7"></script>
+        <script src="offlineServer.js?v=8"></script>
         <script src="offlineModes.js?v=10"></script>
-<script src="device.js?v=208"></script>
-        <script src="sound.js?v=208"></script>
-        <script src="skinRender.js?v=208"></script>
-        <script src="skinCanvas.js?v=208"></script>
-        <script src="gifuct.bundle.js?v=208"></script>
-        <script src="gifPlayer.js?v=208"></script>
-        <script src="coin.js?v=208"></script>
-        <script src="liveText.js?v=208"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=208">
-        <script src="theme.js?v=208"></script>
+<script src="device.js?v=209"></script>
+        <script src="sound.js?v=209"></script>
+        <script src="skinRender.js?v=209"></script>
+        <script src="skinCanvas.js?v=209"></script>
+        <script src="gifuct.bundle.js?v=209"></script>
+        <script src="gifPlayer.js?v=209"></script>
+        <script src="coin.js?v=209"></script>
+        <script src="liveText.js?v=209"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=209">
+        <script src="theme.js?v=209"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -556,6 +556,9 @@ function laserLens(cx, cy, r, active){
 /* Each painter draws the object in its own local space (0,0 → w,h). */
 var PAINT = {
   rect: function(o){
+    // «Вид» блока (идеи про шипы и пружину): рисуется шипами или пружиной, поведение — от свойств (яд, прыжок)
+    if(o.look === "spikes") return PAINT.spike(o);
+    if(o.look === "spring") return PAINT.bounce(o);
     ctx.fillStyle = shapeFill(o);
     ctx.fillRect(0,0,o.w,o.h);
   },
@@ -657,7 +660,7 @@ var PAINT = {
     ctx.fillStyle = "#111827";
     rr(0, o.h*0.52, o.w, o.h*0.48, Math.min(5,o.w*0.14)); ctx.fill();
     var capH = o.h*0.42, capY = pressed ? o.h*0.38 : o.h*0.1;
-    ctx.fillStyle = "#f16d63";
+    ctx.fillStyle = pressed ? "#2563eb" : "#f16d63";        // нажата — синяя, как на макете игрока
     rr(o.w*0.1, capY, o.w*0.8, capH, Math.min(7,capH*0.45)); ctx.fill();
   },
   /* Тот же баг с o._active чинится здесь же — реальный флаг o._act. */
@@ -672,7 +675,7 @@ var PAINT = {
     ctx.lineWidth = Math.max(2, o.w*0.17);
     ctx.lineCap = "round";
     ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-o.h*0.72); ctx.stroke();
-    ctx.fillStyle = "#f16d63";
+    ctx.fillStyle = on ? "#2563eb" : "#f16d63";             // включён — шарик синий
     ctx.beginPath(); ctx.arc(0,-o.h*0.72,Math.max(3,o.w*0.27),0,6.2832); ctx.fill();
     ctx.restore();
   },
@@ -833,11 +836,21 @@ var PAINT = {
     ctx.fillStyle = "#c4b5fd";
     ctx.beginPath(); ctx.arc(o.w/2,o.h/2,Math.max(1.5,o.h*0.3),0,6.2832); ctx.fill();
   },
+  star: function(o){
+    if(o._got && playing) return;                 // собрана — её больше нет
+    var R = Math.min(o.w, o.h)/2, cx = o.w/2, cy = o.h/2 + Math.sin(anim*0.08 + o.x)*R*0.08, r = R*0.45;
+    ctx.beginPath();
+    for(var i=0;i<10;i++){ var a = -Math.PI/2 + i*Math.PI/5, q = i%2 ? r : R; ctx[i?"lineTo":"moveTo"](cx+Math.cos(a)*q, cy+Math.sin(a)*q); }
+    ctx.closePath();
+    ctx.fillStyle = "#facc15"; ctx.fill();
+    ctx.lineWidth = Math.max(1.5, R*0.1); ctx.strokeStyle = "#ca8a04"; ctx.stroke();
+  },
   checkpoint: function(o){
     var pole = Math.max(2.5, o.w*0.15);
     ctx.fillStyle = C.stone2; rr(0,0,pole,o.h,1); ctx.fill();
     var wave = o._reached ? Math.sin(anim*0.13)*o.h*0.035 : 0;
-    ctx.fillStyle = o._reached ? grad(0,0,0,o.h*0.4,"#4ade80","#16a34a") : grad(0,0,0,o.h*0.4,C.red1,C.red2);
+    // пройден — флаг серый (уже не нужен), пока не пройден — красный
+    ctx.fillStyle = o._reached ? grad(0,0,0,o.h*0.4,"#d1d5db","#9ca3af") : grad(0,0,0,o.h*0.4,C.red1,C.red2);
     ctx.beginPath(); ctx.moveTo(pole, o.h*0.04);
     ctx.quadraticCurveTo(o.w*0.6, o.h*0.1+wave, o.w, o.h*0.2);
     ctx.quadraticCurveTo(o.w*0.6, o.h*0.3-wave, pole, o.h*0.4);
@@ -1001,6 +1014,9 @@ var TOOLS = [
   {t:"button",     n:"Кнопка",      k:"toolButton",     m:ALL},
   {t:"lever",      n:"Рычаг",       k:"toolLever",      m:ALL},
   {t:"teleport",   n:"Телепорт",    k:"toolTeleport",   m:ALL},
+  /* Звезда (идея «Find all the stars»): коснулся — собрал. Счётчик вверху справа; если на карте гонки
+     есть звёзды, финиш засчитывается только со всеми (как флаг шпиона, см. starsLeft()). */
+  {t:"star",       n:"Звезда",      k:"toolStar",       m:ALL},
   /* метка модификации Zombie Apocalypse — без неё карту не включить в
      этот режим (см. hsApplyApoc в server.js); только прятки: в гонке
      модификация не предлагается (см. #apoc ниже и TOOL_MODES.zombie в
@@ -1061,7 +1077,7 @@ var COLORS = {
   seekerSpot:"",                   // всегда синий, как и сам искатель — красить нечем
   cannon:"",                       // дерево и чугун — рисуется собой
   camera:"", spyFlag:"", enemy:"", crystal:"",           // рисуются собой
-  checkpoint:"", finishline:"", spawn:INK, teleport:""
+  checkpoint:"", finishline:"", spawn:INK, teleport:"", star:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
    Игрок 30x100 (круг-голова радиуса 15 над телом 30x65, см. FIG_GAP
@@ -1074,7 +1090,7 @@ var SIZES = {
   button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
   zombie:[30,100],                 // впритык как у игрока — по прямой просьбе
   seekerSpot:[30,100],              // тоже впритык как у игрока
-  checkpoint:[40,104], finishline:[52,126], spawn:[30,100],
+  checkpoint:[40,104], finishline:[52,126], spawn:[30,100], star:[44,44],
   teleport:[30,100],                // тоже впритык как у игрока — по прямой просьбе
   cannon:[72,44],                   // у всех пушек одна дальность — и размер один
   camera:[36,26], spyFlag:[34,64], enemy:[40,64], crystal:[90,120]
@@ -1467,17 +1483,18 @@ function play(){
   lastSafePos = {x:sp.x, y:sp.y};
   objects.forEach(function(o){
     o._hx = o.x; o._hy = o.y; o._t = 0; o._act = !!o.startsOpen;
-    o._reached = false; o._spin = 0; o._squash = 0; o._pulseT = 0; o._hue = 0;
+    o._reached = false; o._spin = 0; o._squash = 0; o._pulseT = 0; o._hue = 0; o._got = false;
   });
   pl.flag = false; pl.cpFlag = false;
   respawn();
   document.body.classList.add("play");
-  sel = null; inspect(); hideMsg(); last = 0; acc = 0; stat();
+  sel = null; inspect(); hideMsg(); last = 0; acc = 0; stat(); starHud();
 }
 function stop(){
   playing = false; document.body.classList.remove("play"); hideMsg(); parts.length = 0;
   objects.forEach(function(o){ if(o._hx !== undefined){ o.x = o._hx; o.y = o._hy; }
     o._act = false; o._reached = false; o._spin = 0; o._got = false; });
+  starHud();
   resetView();
 }
 /* Перезапуск забега без перезагрузки страницы: монеты, время, смерти
@@ -1488,13 +1505,13 @@ function restartRun(){
   done = false; hideMsg();
   timeMs = 0; deaths = 0;
   objects.forEach(function(o){
-    o._reached = false;
+    o._reached = false; o._got = false;
     o._act = !!o.startsOpen; o._latch = false;
   });
   var sp = findSpawn();
   if(sp){ spawnPt = {x:sp.x, y:sp.y}; lastSafePos = {x:sp.x, y:sp.y}; }
   pl.flag = false; pl.cpFlag = false;
-  stat(); respawn();
+  stat(); starHud(); respawn();
 }
 
 function respawn(){
@@ -2425,7 +2442,11 @@ function step(){
     if(pl.vy >= 0 && fromTop){
       pl.y += Math.min((sp[0] - pl.h) - pl.y, capY); pl.ground = true; coy = COYOTE;
       // приземление сверху: рикошет швыряет игрока обратно по нормали грани
-      if(o.ricochet && pl.vy > RICO_MIN){
+      // пружина (вид блока): подбрасывает выше обычного прыжка с любого приземления
+      if(o.look === "spring"){
+        pl.vy = jumpV() * Math.max(0.6, Math.min(3, +o.power || 1.7)); pl.ground = false; pl.selfJump = false; o._squash = 1;
+        if(window.BFSound) BFSound.jump();
+      } else if(o.ricochet && pl.vy > RICO_MIN){
         ricochet(o);
       } else {
         if(wasAir && pl.vy > 6){ if(window.BFSound) BFSound.land(); }
@@ -2578,6 +2599,12 @@ function step(){
       pl.cpFlag = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h}; lastSafePos = {x:spawnPt.x, y:spawnPt.y};
       spyNote("saved");
     }
+    if(o.type === "star" && !o._got && !pl.dead){
+      o._got = true;
+      burst(o.x+o.w/2, o.y+o.h/2, 18, "#facc15", 3, 34);
+      if(window.BFSound) BFSound.checkpoint();
+      starNote(false);
+    }
     if(o.type === "checkpoint" && !o._reached){
       o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h}; lastSafePos = {x:spawnPt.x, y:spawnPt.y};
       burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
@@ -2600,7 +2627,8 @@ function step(){
     }
     // Дверь — это выход: игроку достаточно дойти до неё самому.
     if(o.type === "finishline" && !done && spyLocked()) spyNote("need");
-    if(o.type === "finishline" && !done && !spyLocked()){
+    if(o.type === "finishline" && !done && !spyLocked() && starsLeft()) starNote(true);
+    if(o.type === "finishline" && !done && !spyLocked() && !starsLeft()){
       done = true; shake = 6;
       if(window.BFSound) BFSound.finish();
       burst(o.x+o.w/2, o.y+o.h/2, 40, "#fbbf24", 5, 60);
@@ -2858,6 +2886,30 @@ function camSeesPlayer(o, c, a, L){
 }
 function findSpyFlag(){ for(var i = 0; i < objects.length; i++) if(objects[i].type === "spyFlag") return objects[i]; return null; }
 // финиш закрыт: на карте есть флаг шпиона, а игрок его не несёт
+/* Звёзды на карте: сколько осталось, счётчик в углу и подсказка у финиша */
+function starsLeft(){ var n = 0; for(var i = 0; i < objects.length; i++) if(objects[i].type === "star" && !objects[i]._got) n++; return n; }
+function starHud(){
+  var all = 0, got = 0;
+  for(var i = 0; i < objects.length; i++) if(objects[i].type === "star"){ all++; if(objects[i]._got) got++; }
+  var el = document.getElementById("starHud");
+  if(!all || !playing){ if(el) el.style.display = "none"; return; }
+  if(!el){
+    el = document.createElement("div"); el.id = "starHud";
+    el.style.cssText = "position:fixed;right:12px;top:58px;z-index:61;padding:6px 12px;border-radius:12px;background:rgba(255,255,255,.92);"
+      + "border:1px solid #e5e7eb;color:#111827;font:800 15px sans-serif;pointer-events:none;box-shadow:0 6px 16px -10px rgba(0,0,0,.5)";
+    document.body.appendChild(el);
+  }
+  el.style.display = "";
+  el.innerHTML = '<span style="color:#eab308">&#9733;</span> ' + TR("starsFound", "Найдено звёзд") + ": " + got + " / " + all;
+}
+var starMsgT = 0;
+function starNote(need){
+  starHud();
+  if(!need){ if(!starsLeft() && !done){ showMsg(TR("starsTitle", "Звёзды"), TR("starsAll", "Все звёзды собраны!")); clearTimeout(starMsgT); starMsgT = setTimeout(function(){ if(!done) hideMsg(); }, 1600); } return; }
+  if(done) return;
+  showMsg(TR("starsTitle", "Звёзды"), TR("starsNeed", "Сначала собери все звёзды — осталось {n}.").replace("{n}", starsLeft()));
+  clearTimeout(starMsgT); starMsgT = setTimeout(function(){ if(!done) hideMsg(); }, 1600);
+}
 function spyLocked(){ return !pl.flag && !!findSpyFlag(); }
 // каждый кадр игры: камеры смотрят, кого видно
 function spyTick(){
@@ -3174,6 +3226,8 @@ function paintFrame(){
     // невидимость из магазина и выбитый в войне — тоже бледным (см. myAlpha в game.js)
     if(BRIDGE && BRIDGE.myAlpha < 1) ctx.globalAlpha = Math.min(ctx.globalAlpha, Math.max(0.1, BRIDGE.myAlpha));
     // заразился в apoc-раунде — сам теперь выглядишь зомби (см. meIsZombie в game.js)
+    // эмоция (сесть / лечь): поза рисуется поверх обычного силуэта, хитбокс не меняется
+    if(BRIDGE && BRIDGE.myPose && BRIDGE.posePrep) BRIDGE.posePrep(ctx, BRIDGE.myPose, pl.w, pl.h);
     if(BRIDGE && BRIDGE.meIsZombie) PAINT.zombie({w: pl.w, h: pl.h, _zface: pl.face || 1});
     // роль варианта пряток — в её наряде (см. outfitFor в game.js)
     else if(BRIDGE && BRIDGE.myOutfit) drawOutfit(BRIDGE.myOutfit.kind, pl.w, pl.h, BRIDGE.myOutfit.arg);
@@ -4425,7 +4479,7 @@ window.GAME = BRIDGE = {
       if(o.type === "seeker") o.type = "spawn";
       // размер игрока и зомби больше не настраивается — приводим старые объекты
       if(o.type === "spawn"){ o.w = SIZES.spawn[0]; o.h = SIZES.spawn[1]; }
-      if(o.type === "zombie" || o.type === "teleport" || o.type === "seekerSpot"){ o.w = SIZES[o.type][0]; o.h = SIZES[o.type][1]; }
+      if(o.type === "zombie" || o.type === "teleport" || o.type === "seekerSpot" || o.type === "star"){ o.w = SIZES[o.type][0]; o.h = SIZES[o.type][1]; }
       // пушка: размер задан движком, поворота нет — только прицел ствола (o.aim, градусы)
       if(o.type === "cannon"){ o.w = SIZES.cannon[0]; o.h = SIZES.cannon[1]; o.rot = 0;
         o.aim = isFinite(o.aim) ? Math.max(-360, Math.min(360, +o.aim)) : 0; }
@@ -4492,8 +4546,8 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=208"></script>
-        <script src="i18n.js?v=208"></script>
-        <script src="skinAvatar.js?v=208" defer></script>
+<script src="game.js?v=209"></script>
+        <script src="i18n.js?v=209"></script>
+        <script src="skinAvatar.js?v=209" defer></script>
 </body>
 </html>

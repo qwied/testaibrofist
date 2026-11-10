@@ -182,7 +182,7 @@
   /* ---------- модули сервера: исходники грузим разом, require — синхронно из кэша ---------- */
   var FILES = ['accounts', 'maps', 'ranks', 'quests', 'themes', 'extras', 'messages', 'notifications', 'clans',
                'userSkins', 'skins', 'dailyRewards', 'serversInfo', 'fsAtomic', 'abuse'];
-  var BUILTIN = ['serversinfo', 'piratebay', 'spybase', 'brotower', 'crystaldefense', 'broarena'];
+  var BUILTIN = ['serversinfo', 'piratebay', 'spybase', 'starhunt', 'brotower', 'crystaldefense', 'broarena'];
   var src = {}, cache = {};
   function env() {
     var sb = sandbox();

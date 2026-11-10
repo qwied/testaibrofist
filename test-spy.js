@@ -34,7 +34,9 @@ function server(port) {
   if (!await until(() => fetch(S.base + '/').then(r => r.ok).catch(() => false), 20000)) throw new Error('сервер не поднялся');
 
   console.log('Карта:');
-  const m = await fetch(S.base + '/getRandomMap?mapType=race').then(r => r.json());
+  // встроенных карт гонки теперь несколько (Spy Base, Find all the stars) — подбор случайный, ждём «Spy Base»
+  let m = null;
+  for (let i = 0; i < 40 && !(m && m.mapName === 'Spy Base'); i++) m = await fetch(S.base + '/getRandomMap?mapType=race').then(r => r.json());
   const data = m && JSON.parse(m.mapData);
   const objs = data ? data.objects : [];
   ok(!!m && m.mapName === 'Spy Base', 'встроенная «Spy Base» — в подборе карт гонки', m && m.mapName);

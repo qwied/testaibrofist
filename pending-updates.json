@@ -36,6 +36,10 @@
     {
       "title": "Private rooms, map search and player list",
       "text": "You can now create a private room on any mode page and invite friends with a six-character code or a link; private rooms are not shown in the room list. Maps Browser can search maps by name and jump to any page, the first or the last. Press Tab in a game to see who is in the room: Mute hides a player's chat and Hide removes them from your screen, only for you."
+    },
+    {
+      "title": "Stars, spikes, springs and emotions",
+      "text": "Map editor: new Star object, and a race map with stars only finishes once every star is collected; blocks can now look like spikes or a spring that throws you higher than a jump; a plus and minus button adds or removes copies of a block in a row. New race map Find all the stars. Buttons and levers turn blue when switched on and a used checkpoint flag turns grey. In a game you can sit down or lie down to sleep from the emotions button, and everyone sees it. Settings now let you pick how chat lines look above heads: outlined text, a box or a round bubble."
     }
   ]
 }

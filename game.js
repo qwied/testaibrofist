@@ -529,6 +529,8 @@
     + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     + '<line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></button>'
     + '<select id="gDrawTarget" title="Кому показать стрелку" style="display:none"><option value="all">Все</option></select>'
+    + '<button id="gEmo" title="Эмоции" aria-label="Emotions"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" '
+    + 'stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9.5h.01M15 9.5h.01"/></svg></button>'
     + '<button id="gExit">Меню</button></div>'
     + '<div id="gMap"><div class="n" id="gMapName">Loading map…</div>'
     + '<div class="a" id="gMapAuthor"></div><div class="rate" id="gRate" style="display:none">'
@@ -620,6 +622,58 @@
   var TR = function (k, f) {
     return (window.I18N && window.I18N.t(k) !== k) ? window.I18N.t(k) : (f || k);
   };
+  /* ---------- эмоции (идея с картинкой «Emotions: Sit / Sleep») ----------
+     Поза — только картинка: хитбокс тот же, игре не мешает. Видят все (поле pose в movePlayer),
+     сбрасывается, как только сдвинулся с места. */
+  var myPose = '', poseAt = null;
+  function posePrep(ctx, pose, w, h) {
+    if (pose === 'sit') { ctx.translate(0, h * 0.36); ctx.scale(1, 0.64); }
+    else if (pose === 'sleep') { ctx.translate(w / 2 + h / 2, h - w); ctx.rotate(Math.PI / 2); }
+  }
+  GAME.posePrep = posePrep;
+  function setPose(p) {
+    myPose = p || ''; GAME.myPose = myPose;
+    poseAt = myPose && GAME.pl ? { x: GAME.pl.x, y: GAME.pl.y } : null;
+  }
+  setInterval(function () {
+    if (!myPose || !GAME.pl) return;
+    if (!poseAt || Math.abs(GAME.pl.x - poseAt.x) + Math.abs(GAME.pl.y - poseAt.y) > 6) setPose('');
+  }, 120);
+  (function () {
+    var b = $('gEmo');
+    if (!b) return;
+    b.title = TR('emoTitle', 'Эмоции');
+    b.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;padding:4px 7px;border-radius:8px;border:1px solid #d7dee7;background:#fff;color:#111827;cursor:pointer';
+    var box = document.createElement('div');
+    box.id = 'gEmoBox';
+    box.style.cssText = 'position:fixed;z-index:70;display:none;background:#fff;color:#111827;border:1px solid #d7dee7;border-radius:12px;'
+      + 'padding:8px 10px 10px;box-shadow:0 14px 30px -14px rgba(15,23,42,.55);font:700 14px sans-serif;min-width:150px';
+    document.body.appendChild(box);
+    function render() {
+      var btn = 'display:block;width:100%;margin-top:6px;padding:6px 10px;border-radius:8px;border:2px solid #93c5fd;background:#f8fafc;color:#4f46e5;font:800 15px sans-serif;cursor:pointer';
+      box.innerHTML = '<div style="display:flex;align-items:center;gap:8px"><b style="flex:1;text-align:center">' + esc(TR('emoTitle', 'Эмоции')) + '</b>'
+        + '<button data-emo="x" style="width:22px;height:22px;border-radius:50%;border:1.5px solid #f87171;background:#fff;color:#ef4444;font:700 12px sans-serif;cursor:pointer;padding:0">&times;</button></div>'
+        + '<button data-emo="sit" style="' + btn + '">' + esc(TR('emoSit', 'Сесть')) + '</button>'
+        + '<button data-emo="sleep" style="' + btn + '">' + esc(TR('emoSleep', 'Лечь спать')) + '</button>';
+    }
+    b.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+      render();
+      var r = b.getBoundingClientRect();
+      box.style.display = '';
+      box.style.top = Math.round(r.bottom + 6) + 'px';
+      box.style.left = Math.max(8, Math.min(innerWidth - box.offsetWidth - 8, Math.round(r.left + r.width / 2 - box.offsetWidth / 2))) + 'px';
+    });
+    box.addEventListener('click', function (e) {
+      var k = e.target.getAttribute && e.target.getAttribute('data-emo');
+      if (!k) return;
+      if (k !== 'x') setPose(myPose === k ? '' : k);
+      box.style.display = 'none';
+    });
+    document.addEventListener('click', function (e) { if (box.style.display !== 'none' && !box.contains(e.target) && e.target !== b) box.style.display = 'none'; });
+  })();
+
   /* Приватная комната: в шапке её код; клик копирует ссылку-приглашение (или показывает её, если
      буфер недоступен). Имя комнаты кончается на «p» + 6 знаков — см. isPrivateRoom в server.js. */
   (function () {
@@ -2458,6 +2512,7 @@
         if (e.s !== undefined) o.say = e.s || '';
         if (e.f !== undefined) o.fin = !!e.f;
         if (e.d !== undefined) o.hid = !!e.d;
+        if (e.p !== undefined) o.pose = e.p || '';
         if (e.k !== undefined) {
           o.skin = strToSkin(e.k);
           patchSkinFromCache(o);
@@ -3029,10 +3084,11 @@
     var pos = {
       x: Math.round(p.x), y: Math.round(p.y), w: p.w, h: p.h,
       color: GAME.myColor || COLOR_NORMAL, say: typing || '', fin: !!GAME.done,
-      hid: !!GAME.hidden          // сижу в укрытии — меня не рисуют у других
+      hid: !!GAME.hidden,         // сижу в укрытии — меня не рисуют у других
+      pose: myPose                // эмоция: sit / sleep / ''
     };
     var moved = pos.x !== prev.x || pos.y !== prev.y || pos.w !== prev.w || pos.h !== prev.h
-      || pos.color !== prev.c || pos.say !== prev.s || pos.fin !== prev.f || pos.hid !== prev.d;
+      || pos.color !== prev.c || pos.say !== prev.s || pos.fin !== prev.f || pos.hid !== prev.d || pos.pose !== prev.p;
     var force = now - lastForce > 1000;
 
     /* Один в комнате — канал не тратим: контрольный пакет раз в секунду.
@@ -3052,7 +3108,7 @@
       lastSent = now;
       if (force) lastForce = now;
       prev.x = pos.x; prev.y = pos.y; prev.w = pos.w; prev.h = pos.h;
-      prev.c = pos.color; prev.s = pos.say; prev.f = pos.fin; prev.d = pos.hid;
+      prev.c = pos.color; prev.s = pos.say; prev.f = pos.fin; prev.d = pos.hid; prev.p = pos.pose;
 
       // скин — строка до 120 символов, менять её незачем каждый пакет
       if (mySkinStr !== lastSk) { pos.sk = mySkinStr; lastSk = mySkinStr; }
@@ -4651,7 +4707,7 @@
       var fit = outfitFor(id);
       if (hsApocRound && hsSeekerIds[id] && GAME.figureZombie) GAME.figureZombie(w, h);
       else if (fit && GAME.figureOutfit) GAME.figureOutfit(fit.kind, w, h, fit.arg);   // наряд роли варианта
-      else GAME.figure(w, h, o.color || COLOR_NORMAL, true, o.skin || null);
+      else { if (o.pose) posePrep(ctx, o.pose, w, h); GAME.figure(w, h, o.color || COLOR_NORMAL, true, o.skin || null); }
       ctx.restore();
       drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74));
     });
@@ -4728,8 +4784,29 @@
   /* Реплика с серой обводкой (см. inkText). Своего цвета нет — белая, как ник по умолчанию: на серой
      обводке белый читается на любом фоне. Раньше тут был тёмно-серый #3a3a3a, а у набираемого
      текста — #6b7280, ровно цвет обводки, и буквы сливались в серую полосу. */
-  function paintSay(ctx, t, x, y, tk, color) {
-    inkText(ctx, t, x, y, tk, color || '#ffffff');
+  /* Вид реплики (настройки → Чат): текст с обводкой, рамка с хвостиком (как в идее «New dialog box»)
+     или круглое облачко. Цвет купленного чата в облачке — цвет текста. */
+  function bubbleStyle() {
+    try { return localStorage.getItem('bfBubbleStyle') || 'text'; } catch (e) { return 'text'; }
+  }
+  function paintSay(ctx, t, x, y, tk, color, tail) {
+    var st = bubbleStyle();
+    if (st === 'text') { inkText(ctx, t, x, y, tk, color || '#ffffff'); return; }
+    var w = ctx.measureText(t).width + 16 * tk, h = 22 * tk, bx = x - w / 2, by = y - 16 * tk;
+    var ink = color && color !== '#ffffff' && color !== '#d1d5db' ? color : '#111827';
+    ctx.save();
+    ctx.globalAlpha *= color === '#d1d5db' ? 0.7 : 1;
+    ctx.fillStyle = '#f9fafb'; ctx.strokeStyle = '#111827'; ctx.lineWidth = 1.6 * tk;
+    ctx.beginPath();
+    if (st === 'round' && ctx.roundRect) ctx.roundRect(bx, by, w, h, h / 2); else ctx.rect(bx, by, w, h);
+    ctx.fill(); ctx.stroke();
+    if (tail) {                                  // хвостик к голове — только у нижней (последней) реплики
+      ctx.beginPath(); ctx.moveTo(x - 6 * tk, by + h - 0.5); ctx.lineTo(x, by + h + 7 * tk); ctx.lineTo(x + 6 * tk, by + h - 0.5);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - 6 * tk, by + h); ctx.lineTo(x, by + h + 7 * tk); ctx.lineTo(x + 6 * tk, by + h); ctx.stroke();
+    }
+    ctx.fillStyle = ink; ctx.fillText(t, x, y);
+    ctx.restore();
   }
 
   /* Роль раньше показывала короткая полоса прямо под ником (синяя —
@@ -4794,8 +4871,9 @@
         for (var li = 0; li < lines.length; li++) {
           // SAY_GAP — облачко стоит отдельно над головой, а не сразу над
           // теменем; всплытие при растворении (k*46) добавляется поверх.
-          var ly = sp.y - (SAY_GAP + (lines.length - 1 - li) * 16) * tk - lift - k * 46 * tk;
-          paintSay(ctx, lines[li], sp.x, ly, tk, sp.color);
+          var lh = bubbleStyle() === 'text' ? 16 : 25;      // рамки выше строки текста — строки реже
+          var ly = sp.y - (SAY_GAP + (lines.length - 1 - li) * lh) * tk - lift - k * 46 * tk;
+          paintSay(ctx, lines[li], sp.x, ly, tk, sp.color, li === lines.length - 1);
         }
       }
       ctx.globalAlpha = 1;
@@ -4804,7 +4882,7 @@
     // то, что печатают прямо сейчас — ниже уплывающей реплики, чтобы не наложились
     if (say) {
       ctx.font = (15 * tk) + 'px sans-serif';
-      paintSay(ctx, cleanSay(say), cx, topY - SAY_GAP * tk, tk, '#d1d5db');   // набираемое — светло-серым, чтобы отличалось от отправленного
+      paintSay(ctx, cleanSay(say), cx, topY - SAY_GAP * tk, tk, '#d1d5db', true);   // набираемое — светло-серым, чтобы отличалось от отправленного
     }
     ctx.restore();
   }
