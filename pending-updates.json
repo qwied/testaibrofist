@@ -68,6 +68,10 @@
     {
       "title": "Follow authors, report maps and more",
       "text": "You can follow a player from their profile: their new maps show up in your notifications, just like your friends' maps. Maps Browser has a Report link to tell the owner about a broken or bad map. The friend requests tab has an Accept all button, friends are marked in the in-game player list, and the home page shows the hottest maps of the week."
+    },
+    {
+      "title": "Smarter map logic",
+      "text": "New editor logic for map makers: blocks that appear when a button or lever is turned on, effect triggers that toggle targets like a lever or open a random one, rotating and pulsing blocks that only move while their button is held, buttons that need several players standing on them, and blocks that chase the player within a set radius. Race maps can turn on sprint: hold Shift to run faster."
     }
   ]
 }

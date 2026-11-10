@@ -34,11 +34,11 @@ for(const c of cases){
 console.log('\nв движке:');
 const ok = (t,c)=>console.log('   '+t.padEnd(24)+':', c ? '✓' : '✗');
 ok('движение по свойству',  /if\(o\.moves && !o\.pushable\)\{/.test(src));
-ok('вращение по свойству',  /if\(o\.spins\)/.test(src));
+ok('вращение по свойству',  /if\(o\.spins( && heldOk)?\)/.test(src));
 ok('батут по свойству',     /if\(o\.bouncy\)\{/.test(src));
 ok('несёт игрока',          /pl\.x \+= pl\.rideOn\._dx\|\|0; pl\.y \+= pl\.rideOn\._dy\|\|0;/.test(src));
 ok('сдвиг платформы один раз', !/if\(o\.moves\)\{ pl\.x \+=/.test(src) &&
-                                /if\(o\.moves \|\| o\.pushable\) pl\.rideOn = o;/.test(src));
+                                /if\(o\.moves (\|\| o\.chase )?\|\| o\.pushable\) pl\.rideOn = o;/.test(src));
 ok('сторона по «откуда пришёл»', /var fromLeft  = \(xBefore \+ pl\.w\) <= leftWas \+ 2;/.test(src) &&
                                 /var xBefore = pl\.x;/.test(src));
 ok('толчок в темпе платформы', /var lim  = Math\.abs\(pdx\) \+ Math\.abs\(pl\.vx\) \+ 4;/.test(src) &&
@@ -60,8 +60,8 @@ ok('прыжок не режется сразу', /MIN_HOLD = 7;/.test(src) && /
 ok('посадка по «откуда пришёл»', /var fromTop   = \(yBefore \+ pl\.h\) <= topWas \+ 2;/.test(src) &&
                                 /var yBefore = pl\.y;/.test(src));
 ok('удар головой по «откуда пришёл»', /pl\.vy < 0 && \(!o\.moves \|\| fromBelow\)/.test(src));
-ok('толчок только у движущихся и толкаемых', /var pdx = \(o\.moves \|\| o\.pushable\) \? \(o\._dx\|\|0\) : 0;/.test(src) &&
-                                /var pdy = \(o\.moves \|\| o\.pushable\) \? \(o\._dy\|\|0\) : 0;/.test(src));
+ok('толчок только у движущихся и толкаемых', /var pdx = \(o\.moves (\|\| o\.chase )?\|\| o\.pushable\) \? \(o\._dx\|\|0\) : 0;/.test(src) &&
+                                /var pdy = \(o\.moves (\|\| o\.chase )?\|\| o\.pushable\) \? \(o\._dy\|\|0\) : 0;/.test(src));
 ok('статика ведёт себя как раньше', /if\(pl\.vx !== 0\) pl\.wall = 1;/.test(src));
 ok('то же в игре',          /pl\.rideOn/.test(game) && !/if\(o\.moves\)\{ pl\.x \+=/.test(game));
 ok('плоская заливка',       /function grad\([^)]*\)\{ return a; \}/.test(src));

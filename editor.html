@@ -373,15 +373,15 @@ body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="device.js?v=216"></script>
-        <script src="sound.js?v=216"></script>
-        <script src="skinRender.js?v=216"></script>
-        <script src="skinCanvas.js?v=216"></script>
-        <script src="gifuct.bundle.js?v=216"></script>
-        <script src="gifPlayer.js?v=216"></script>
-        <script src="coin.js?v=216"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=216">
-        <script src="theme.js?v=216"></script>
+<script src="device.js?v=217"></script>
+        <script src="sound.js?v=217"></script>
+        <script src="skinRender.js?v=217"></script>
+        <script src="skinCanvas.js?v=217"></script>
+        <script src="gifuct.bundle.js?v=217"></script>
+        <script src="gifPlayer.js?v=217"></script>
+        <script src="coin.js?v=217"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=217">
+        <script src="theme.js?v=217"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1221,7 +1221,7 @@ var apoc = false;
    побеждает первый, "last" — Last bro standing, только с жизнями. */
 var raceLives = 0, raceTimeMin = 0, raceGoal = "";
 /* Ещё две опции карты гонки (идеи игроков): двойной прыжок и урон от падения с большой высоты. */
-var raceDJ = false, raceFall = false, FALL_DMG_H = 620;
+var raceDJ = false, raceFall = false, raceSprint = false, FALL_DMG_H = 620;
 /* Атмосфера карты (идеи «дождь/снег», «день и ночь», «туман войны») — для любого режима:
    "" — ясно, rain, snow, night (темно, свет вокруг игрока), fog (видно только рядом). */
 var ATMOS = ["", "rain", "snow", "night", "fog"], atmo = "", flashA = 0;
@@ -1233,11 +1233,12 @@ function cleanRaceRules(d){
   raceDJ = mode === "race" && !!(d && d.djump);
   atmo = (d && ATMOS.indexOf(d.atmo) > 0) ? d.atmo : "";
   raceFall = mode === "race" && !!(d && d.fallDmg);
+  raceSprint = mode === "race" && !!(d && d.sprint);
 }
 // поля правил гонки для сохранения карты — пустые не пишем
 function withRaceRules(m){
   if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; if(raceGoal) m.goal = raceGoal;
-    if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; }
+    if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; if(raceSprint) m.sprint = 1; }
   if(atmo) m.atmo = atmo;
   return m;
 }
@@ -1317,7 +1318,7 @@ var movers = [];
 function indexMovers(){
   // толкаемые объекты тоже меняют клетку каждый кадр, как платформы и
   // роторы — тем же способом обходим устаревающую сетку (см. nearby)
-  movers = objects.filter(function(o){ return o.moves || o.spins || o.pushable || o.pulse; });
+  movers = objects.filter(function(o){ return o.moves || o.chase || o.spins || o.pushable || o.pulse; });
 }
 function overLimit(extra){
   if(objects.length + (extra||1) <= OBJ_LIMIT) return false;
@@ -1338,7 +1339,7 @@ function mk(type,x,y,w,h){
            deadly: DEADLY_BY_DEFAULT.indexOf(type) !== -1};
   if(type === "text") o.text = "Text";
 
-  if(type === "button" || type === "lever" || type === "teleport" || type === "key"){ o.customId = "w"+o.id; o.targetIds = ""; }
+  if(type === "button" || type === "lever" || type === "teleport" || type === "key" || type === "trigger"){ o.customId = "w"+o.id; o.targetIds = ""; }
   return o;
 }
 objects = [];   // редактор открывается пустым: карту автор строит сам
@@ -1632,6 +1633,7 @@ function restartRun(){
   timeMs = 0; deaths = 0;
   objects.forEach(function(o){
     o._reached = false; o._got = false;
+    if(o.chase && o._hx !== undefined){ o.x = o._hx; o.y = o._hy; o._dx = 0; o._dy = 0; }
     o._act = !!o.startsOpen; o._latch = false; o._off = false; o._gone = false; o._cr = 0; o._offAt = 0; o._in = false; o._done = false;
   });
   var sp = findSpawn();
@@ -1690,7 +1692,7 @@ function hideMsg(){ var m = document.getElementById("msg"); m.classList.remove("
 
 /* «Открыт» — объект, который включила кнопка или рычаг: он становится
    полупрозрачным и проходимым. Сами кнопка и рычаг так не исчезают. */
-var opened = function(o){ return o.type !== "button" && o.type !== "lever" && !!o._act; };
+var opened = function(o){ return o.type !== "button" && o.type !== "lever" && o.type !== "key" && o.type !== "trigger" && (o.invert ? !o._act : !!o._act); };
 
 /* Все ли игроки уже в двери. В одиночном прогоне редактора игрок один,
    поэтому условие выполняется сразу. В сетевой игре список приходит
@@ -1889,7 +1891,7 @@ function bbox(o){ polyOf(o); return o._bb; }
    в воздухе, потом его затаскивало «на крышу», которой нет, и оттуда
    выталкивало — со стороны это выглядело как телепорт и отскок. */
 function grabbable(o){
-  if(o.type !== "rect" || o.moves || o.pushable || o.spins || o.pulse) return false;
+  if(o.type !== "rect" || o.moves || o.chase || o.pushable || o.spins || o.pulse) return false;
   var r = (((o.rot || 0) % 90) + 90) % 90;
   return r < 0.5 || r > 89.5;
 }
@@ -2254,8 +2256,23 @@ function step(){
         o._dx = nx-o.x; o._dy = ny-o.y; o.x = nx; o.y = ny;
       }
     }
-    if(o.spins) o._spin += (o.spin||2)*0.02;
-    if(o.pulse) o._pulseT = (o._pulseT||0) + 0.05;
+    /* Блок-преследователь (идея «блок следует за игроком»): едет к игроку со скоростью chase, пока
+       тот ближе chaseR от места установки; иначе возвращается на место. */
+    if(o.chase && playing){
+      var ccx = pl.x + pl.w/2 - o.w/2, ccy = pl.y + pl.h/2 - o.h/2, cR = +o.chaseR || 600;
+      var tdx = ccx - o._hx, tdy = ccy - o._hy, td = Math.sqrt(tdx*tdx + tdy*tdy);
+      // игрок дальше радиуса (или погиб, финишировал) — возвращается на своё место
+      var home = td > cR || pl.dead || done;
+      var gx = home ? o._hx : o._hx + tdx, gy = home ? o._hy : o._hy + tdy;
+      var mdx = gx - o.x, mdy = gy - o.y, md = Math.sqrt(mdx*mdx + mdy*mdy), sp = Math.max(0.3, +o.chase) * TEMPO;
+      if(md > sp){ mdx *= sp/md; mdy *= sp/md; }
+      o.x += mdx; o.y += mdy; o._dx = mdx; o._dy = mdy;
+    }
+    /* Вращение и пульс по кнопке/рычагу (идея «ротатор включается рычагом»): если объект — чья-то
+       цель, он крутится/пульсирует, только пока его держат (как привязанная платформа). */
+    var heldOk = !(drivenIds && o.customId && drivenIds[o.customId]) || o._act;
+    if(o.spins && heldOk) o._spin += (o.spin||2)*0.02;
+    if(o.pulse && heldOk) o._pulseT = (o._pulseT||0) + 0.05;
     if(o.colorCycle) o._hue = ((o._hue||0) + 1.2) % 360;
     if(o._squash) o._squash *= 0.82;
     if(playing){
@@ -2293,7 +2310,7 @@ function step(){
      в кадре «после» — clampRideDelta режет сдвиг на мелкие шаги и
      останавливает игрока у первого препятствия, которого там не было
      до начала сдвига. */
-  if(pl.ground && pl.rideOn && (pl.rideOn.moves || pl.rideOn.pushable)){
+  if(pl.ground && pl.rideOn && (pl.rideOn.moves || pl.rideOn.chase || pl.rideOn.pushable)){
     var rideD = clampRideDelta(pl.rideOn._dx||0, pl.rideOn._dy||0, pl.rideOn);
     pl.x += rideD.dx; pl.y += rideD.dy;
   }
@@ -2383,7 +2400,7 @@ function step(){
        короткий разбег читался как вялость — особенно на коротких
        перебежках, где игрок отпускал кнопку, не дойдя до максимума.
        Инерция при отпускании остаётся: см. FRIC в ветке ниже. */
-    pl.vx = dir * maxVX() * platBoost(pl.standPlat); pl.face = dir;
+    pl.vx = dir * maxVX() * platBoost(pl.standPlat) * (raceSprint && keys.sh ? 1.45 : 1); pl.face = dir;
   } else {
     pl.vx *= pl.ground ? FRIC : AIR;
     if(Math.abs(pl.vx) < .05) pl.vx = 0;
@@ -2480,7 +2497,7 @@ function step(){
         return;
       }
     }
-    var pdx = (o.moves || o.pushable) ? (o._dx||0) : 0;
+    var pdx = (o.moves || o.chase || o.pushable) ? (o._dx||0) : 0;
     var goL;
     if(pdx !== 0){
       /* Движущийся блок. Сторону выбираем по тому, с какой стороны игрок
@@ -2545,7 +2562,7 @@ function step(){
     if(pl.vx === 0){
       var head = pl.ground ? spanY(P, pl.x + 2, pl.x + pl.w - 2) : null;
       squeezed = !!head && head[0] < pl.y + 2 && head[1] < pl.y + pl.h - STEP_UP;
-      if(pl.ground && !(o.moves || o.spins || o.pushable || o.pulse) && !squeezed) return;
+      if(pl.ground && !(o.moves || o.chase || o.spins || o.pushable || o.pulse) && !squeezed) return;
       goL = pl.x + pl.w/2 < (sp[0]+sp[1])/2;
     } else goL = pl.vx > 0;
     /* Страховка. Если вбок пришлось бы двигать дальше, чем игрок вообще мог
@@ -2571,7 +2588,7 @@ function step(){
        его наверх, и по стене можно было бы забраться. Фигура, которая
        сама надвигается (едет, крутится, её толкают), выталкивает к грани
        как раньше — это её движение, а не отскок. */
-    var CONTACT = 3, still = !(o.moves || o.spins || o.pushable || o.pulse);
+    var CONTACT = 3, still = !(o.moves || o.chase || o.spins || o.pushable || o.pulse);
     if(pl.vx === 0){ pl.x = goL ? sp[0] - pl.w : sp[1]; }
     else if(goL){
       pl.x = Math.max(sp[0] - pl.w, still && (xBefore + pl.w) - sp[0] <= CONTACT ? Math.min(xBefore, pl.x) : -1/0);
@@ -2603,7 +2620,7 @@ function step(){
     var sp = spanY(P, pl.x + 2, pl.x + pl.w - 2);
     if(!sp || pl.y >= sp[1] || pl.y + pl.h <= sp[0]) return;
 
-    var pdy = (o.moves || o.pushable) ? (o._dy||0) : 0;
+    var pdy = (o.moves || o.chase || o.pushable) ? (o._dy||0) : 0;
     /* Откуда игрок пришёл — считаем не по глубине провала, а по тому, где
        были его ноги (голова) и где была грань ДО этого шага. Так одинаково
        ловится и быстрое падение, и платформа, подъехавшая под ноги сама.
@@ -2635,7 +2652,7 @@ function step(){
         pl.vy = 0; pl.selfJump = false;
       }
       // едем вместе с платформой — сдвиг применится в начале следующего шага
-      if(o.moves || o.pushable) pl.rideOn = o;
+      if(o.moves || o.chase || o.pushable) pl.rideOn = o;
     } else if(pl.vy < 0 && o.moves && fromBelow){
       // удар головой снизу — только едущая платформа: у статичного блока
       // то же самое теперь разбирает общая угловая ветка ниже, она же
@@ -2755,7 +2772,7 @@ function step(){
       var z = objects.indexOf(o);
       if(z > bestZ){ bestZ = z; bestPlat = o; }
     });
-    pl.rideOn = (bestPlat && (bestPlat.moves || bestPlat.pushable)) ? bestPlat : null;
+    pl.rideOn = (bestPlat && (bestPlat.moves || bestPlat.chase || bestPlat.pushable)) ? bestPlat : null;
     pl.standPlat = bestPlat;
     // встал на ломающийся блок — он начинает рассыпаться
     if(bestPlat && bestPlat.crumble && !bestPlat._cr) bestPlat._cr = 1;
@@ -2791,7 +2808,13 @@ function step(){
       o._in = true;
       if(!(o.once && o._done)){
         o._done = true;
-        if((o.fx || "shake") === "shake") shake = Math.max(shake, 16);
+        if(o.fx === "toggle"){ o._act = !o._act; drive(o); }
+        else if(o.fx === "random" && o.targetIds){
+          // случайная цель из «Связей»: открыть/включить её одну, остальные — закрыть
+          var rids = o.targetIds.split(",").map(function(x){ return x.trim(); }).filter(Boolean), pick = rids[Math.floor(Math.random()*rids.length)];
+          objects.forEach(function(t){ if(t.customId && rids.indexOf(t.customId) !== -1) t._act = t.customId === pick; });
+        }
+        else if((o.fx || "shake") === "shake") shake = Math.max(shake, 16);
         else if(o.fx === "flash") flashA = 0.85;
         else if(o.fx === "msg" && o.text){
           showMsg("", String(o.text).slice(0, 120));
@@ -2846,6 +2869,11 @@ function step(){
          секунд — чтобы успеть увидеть время и салют, дальше снова старт. */
       clearTimeout(finishTimer);
       finishTimer = setTimeout(function(){ if(playing && done) restartRun(); }, 2200);
+    }
+    // кнопка на нескольких (идея «кнопка для 2+ игроков»): пока на ней меньше need игроков — не нажата
+    if(o.type === "button" && +o.need > 1 && playersOn(o) < +o.need){
+      if(o._act && !o._offAt){ if(+o.holdSec > 0) o._offAt = timeMs + o.holdSec * 1000; else { o._act = false; drive(o); } }
+      return;
     }
     if(o.type === "button" && o._offAt) o._offAt = 0;   // снова нажали — таймер заново
     if(o.type === "button" && !o._act){ o._act = true; drive(o); if(window.BFSound) BFSound.toggle(); }
@@ -2935,6 +2963,15 @@ function drive(src){
    у телепорта одна конкретная пара, а не список того, что приводить в
    движение сразу. Запятая с несколькими ID тут не ошибка, просто лишние
    игнорируются. */
+// сколько игроков стоит на объекте: я и другие (их список даёт game.js, см. allAtDoor)
+function playersOn(o){
+  var n = 1, others = (BRIDGE && BRIDGE.others) ? BRIDGE.others() : null;
+  if(others) for(var i = 0; i < others.length; i++){
+    var p = others[i];
+    if(p && !p.gone && overlaps(o, p.x, p.y, p.w || 22, p.h || 74)) n++;
+  }
+  return n;
+}
 function teleportTarget(src){
   if(!src.targetIds) return null;
   var id = src.targetIds.split(",")[0].trim();
@@ -3778,13 +3815,15 @@ function showModeBtn(){
   add("rrBtn", TR("rrDJ","Двойной прыжок"), "opt", "dj");
   tip = TR("rrFallTip","Урон от падения: упал с большой высоты — смерть");
   add("rrBtn", TR("rrFall","Урон от падения"), "opt", "fall");
+  tip = TR("rrSprintTip","Спринт: с зажатым Shift бег быстрее");
+  add("rrBtn", TR("rrSprint","Спринт (Shift)"), "opt", "sprint");
 })();
 function goalName(g){
   return g === "first" ? TR("rrGoalFirst","Первый") : g === "last" ? TR("rrGoalLast","Последний") : TR("rrGoalAll","Финиш");
 }
 function syncRaceBtns(){
   document.querySelectorAll(".rrBtn").forEach(function(b){
-    var on = b.dataset.opt ? (b.dataset.opt === "dj" ? raceDJ : raceFall)
+    var on = b.dataset.opt ? (b.dataset.opt === "dj" ? raceDJ : b.dataset.opt === "sprint" ? raceSprint : raceFall)
       : b.dataset.lives !== undefined ? +b.dataset.lives === raceLives
       : b.dataset.goal !== undefined ? b.dataset.goal === raceGoal : +b.dataset.time === raceTimeMin;
     b.classList.toggle("on", on);
@@ -3838,7 +3877,7 @@ document.getElementById("apoc").addEventListener("click", function(e){
   if(r){
     if(playing) return;
     if(r.dataset.opt){
-      if(r.dataset.opt === "dj") raceDJ = !raceDJ; else raceFall = !raceFall;
+      if(r.dataset.opt === "dj") raceDJ = !raceDJ; else if(r.dataset.opt === "sprint") raceSprint = !raceSprint; else raceFall = !raceFall;
     } else if(r.dataset.lives !== undefined){
       raceLives = +r.dataset.lives;
       if(!raceLives && raceGoal === "last") raceGoal = "";      // Last bro standing без жизней не бывает
@@ -3943,6 +3982,7 @@ function retip(){
   });
   Array.prototype.forEach.call(document.querySelectorAll(".rrBtn"), function(b){
     if(b.dataset.opt === "dj"){ b.textContent = TR("rrDJ","Двойной прыжок"); b.title = TR("rrDJTip","Двойной прыжок: ещё один прыжок в воздухе"); return; }
+    if(b.dataset.opt === "sprint"){ b.textContent = TR("rrSprint","Спринт (Shift)"); b.title = TR("rrSprintTip","Спринт: с зажатым Shift бег быстрее"); return; }
     if(b.dataset.opt === "fall"){ b.textContent = TR("rrFall","Урон от падения"); b.title = TR("rrFallTip","Урон от падения: упал с большой высоты — смерть"); return; }
     b.title = b.dataset.time !== undefined ? TR("rrTimeTip","Время на эту карту")
       : b.dataset.goal !== undefined ? TR("rrGoalTip","Цель общего раунда")
@@ -4640,6 +4680,7 @@ document.addEventListener("keydown", function(e){
     }
     if(e.code === "KeyR"){ clearTimeout(finishTimer); restartRun(); }
     if(e.code === "ArrowDown" || e.code === "KeyS"){ keys.dn = true; if(e.code === "ArrowDown") e.preventDefault(); }
+    if(e.code === "ShiftLeft" || e.code === "ShiftRight") keys.sh = true;
     // свои клавиши из «Настроек» — вдобавок к стрелкам и WASD
     var pk = prefKey(e.code);
     if(pk && !(typingInChat() && !movementKey(e.code))){ keys[pk] = true; if(pk === "u") buf = BUFFER; e.preventDefault(); }
@@ -4677,6 +4718,7 @@ document.addEventListener("keyup", function(e){
     if(e.code === "ArrowRight"|| e.code === "KeyD") keys.r = false;
     if(e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Space") keys.u = false;
     if(e.code === "ArrowDown" || e.code === "KeyS") keys.dn = false;
+    if(e.code === "ShiftLeft" || e.code === "ShiftRight") keys.sh = false;
     var pk2 = prefKey(e.code); if(pk2) keys[pk2] = false;
   }
 });
@@ -5363,8 +5405,12 @@ function inspect(){
   if(SOLID.indexOf(sel.type) !== -1 && mode === "hideAndSeek")
     chk(TR("chkHideSpot","Укрытие для пряток"), !!sel.hideSpot, function(v){ sel.hideSpot = v; },
         TR("descHideSpot","Игрок исчезает здесь во время пряток. В «Командном бою» на укрытиях стоят флаги и точки захвата"));
-  if(LINKED.indexOf(sel.type) !== -1 && SOLID.indexOf(sel.type) !== -1)
+  if(LINKED.indexOf(sel.type) !== -1 && SOLID.indexOf(sel.type) !== -1){
     chk(TR("chkStartsOpen","Открыт сначала (проходим)"), sel.startsOpen, function(v){ sel.startsOpen = v; });
+    // наоборот: проходим, пока кнопку не нажали, — по кнопке появляется (идея «spawn/despawn»)
+    chk(TR("chkInvert","Появляется по кнопке"), !!sel.invert, function(v){ if(v) sel.invert = true; else delete sel.invert; },
+        TR("descInvert","Пока кнопку/рычаг не включили — блока нет; включили — появился"));
+  }
   if(!passiveEl.querySelector(".pRow"))
     hint(TR("passiveEmptyHint","У этого объекта нет пассивных свойств."));
 
@@ -5389,6 +5435,14 @@ function inspect(){
     if(sel.blink){
       rng(TR("lblBlinkSec","Мигание, секунд"), +sel.blink, 0.3, 6, 0.1, function(v){ cur.blink = v; });
       rng(TR("lblBlinkPh","Сдвиг мигания"), +sel.blinkPh || 0, 0, 1, 0.5, function(v){ if(v) cur.blinkPh = v; else delete cur.blinkPh; });
+    }
+    if(!sel.pushable && !sel.moves){
+      chk(TR("chkChase","Преследует игрока"), !!sel.chase, function(v){ if(v){ sel.chase = 2; sel.chaseR = 600; } else { delete sel.chase; delete sel.chaseR; } inspect(); },
+          TR("descChase","Едет к игроку, но не дальше заданного радиуса от своего места"));
+      if(sel.chase){
+        rng(TR("lblChaseSpeed","Скорость погони"), +sel.chase, 0.5, 8, 0.5, function(v){ cur.chase = v; });
+        rng(TR("lblChaseR","Радиус погони"), +sel.chaseR || 600, 100, 3000, 50, function(v){ cur.chaseR = v; });
+      }
     }
     chk(TR("chkRicochet","Рикошет"), !!sel.ricochet, function(v){ sel.ricochet = v; inspect(); },
         TR("descBouncing","Отражает от той грани, в которую попал игрок"));
@@ -5491,8 +5545,11 @@ function inspect(){
   if(LINKED.indexOf(sel.type) !== -1){
     grp(TR("grpLinks","Связи"));
     txt("ID", sel.customId, function(v){ sel.customId = v; });
-    if(sel.type === "button" || sel.type === "lever" || sel.type === "laserFeed" || sel.laser || sel.type === "key")
+    if(sel.type === "button" || sel.type === "lever" || sel.type === "laserFeed" || sel.laser || sel.type === "key"
+       || (sel.type === "trigger" && (sel.fx === "toggle" || sel.fx === "random")))
       linkPicker(sel);
+    if(sel.type === "button")
+      rng(TR("lblNeed","Нужно игроков на кнопке"), +sel.need || 1, 1, 8, 1, function(v){ if(v > 1) cur.need = v; else delete cur.need; });
     // кнопка с таймером: после того как с неё сошли, держит цели ещё столько секунд
     if(sel.type === "button")
       rng(TR("lblHoldSec","Держит после ухода, секунд"), +sel.holdSec || 0, 0, 30, 1, function(v){ if(v) cur.holdSec = v; else delete cur.holdSec; });
@@ -5541,7 +5598,8 @@ function inspect(){
   if(sel.type === "trigger"){
     var fr = pr(), fl = document.createElement("label"); fl.textContent = TR("lblFx","Эффект");
     var fs = document.createElement("select");
-    [["shake", TR("fxShake","Тряска экрана")], ["flash", TR("fxFlash","Вспышка")], ["msg", TR("fxMsg","Надпись на экране")]].forEach(function(p){
+    [["shake", TR("fxShake","Тряска экрана")], ["flash", TR("fxFlash","Вспышка")], ["msg", TR("fxMsg","Надпись на экране")],
+     ["toggle", TR("fxToggle","Переключить цели (как рычаг)")], ["random", TR("fxRandom","Открыть случайную цель")]].forEach(function(p){
       var op = document.createElement("option"); op.value = p[0]; op.textContent = p[1];
       if((sel.fx || "shake") === p[0]) op.selected = true; fs.appendChild(op);
     });
@@ -5971,12 +6029,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=216"></script>
-<script src="abuseShow.js?v=216" defer></script>
-<script src="editorHelp.js?v=216"></script>
-<script src="editorAI.js?v=216" defer></script>
-<script src="account.js?v=216" defer></script>
-<script src="owner.js?v=216" defer></script>
+<script src="i18n.js?v=217"></script>
+<script src="abuseShow.js?v=217" defer></script>
+<script src="editorHelp.js?v=217"></script>
+<script src="editorAI.js?v=217" defer></script>
+<script src="account.js?v=217" defer></script>
+<script src="owner.js?v=217" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -6093,7 +6151,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=216" defer></script>
+        <script src="skinAvatar.js?v=217" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */
