@@ -1199,6 +1199,47 @@
   var imgCache = Object.create(null);   // ник -> url ('' если картинки нет)
   var kindCache = Object.create(null);  // ник -> 'accessory' | 'full'
   var imgWanted = Object.create(null);
+  var cosmCache = Object.create(null);  // ник -> надетая косметика {hat, back, trail, pet, glow} (см. cosmShop.js)
+  var cosmFx = Object.create(null);     // id игрока -> {pts: след, px, py: питомец, face}
+  /* След и питомец: копятся по кадрам у каждого игрока (и у себя — id 'me'), рисуются в мире. */
+  function cosmWorld(ctx, id, c, x, y, w, h, face) {
+    if (!c || !window.BFCosm || (!c.trail && !c.pet)) return;
+    var st = cosmFx[id] || (cosmFx[id] = { pts: [], px: x - face * 34, py: y + h, face: face });
+    var fx = x + w / 2, fy = y + h - 4, last = st.pts[st.pts.length - 1];
+    if (!last || Math.abs(last[0] - fx) + Math.abs(last[1] - fy) > 4) { st.pts.push([fx, fy]); if (st.pts.length > 16) st.pts.shift(); }
+    else if (st.pts.length) st.pts.shift();
+    if (c.trail) BFCosm.drawTrail(ctx, c.trail, st.pts, Date.now());
+    if (c.pet) {
+      var tx = x + w / 2 - face * 38, ty = y + h;
+      st.px += (tx - st.px) * 0.08; st.py += (ty - st.py) * 0.2;
+      if (Math.abs(tx - st.px) > 1.5) st.face = tx > st.px ? 1 : -1;
+      BFCosm.drawPet(ctx, c.pet, st.px, st.py, st.face, Date.now());
+    }
+  }
+  // чья косметика ещё не известна — спрашиваем пачкой раз в 150 мс (как картинки скинов)
+  var cosmWanted = Object.create(null), cosmTimer = null;
+  function cosmOf(name) {
+    if (!name) return null;
+    if (cosmCache[name] !== undefined) return cosmCache[name];
+    if (!cosmWanted[name]) {
+      cosmWanted[name] = 1;
+      clearTimeout(cosmTimer);
+      cosmTimer = setTimeout(function () {
+        var names = Object.keys(cosmWanted); cosmWanted = Object.create(null);
+        names.forEach(function (n) { cosmCache[n] = null; });
+        fetch('/cosm/many?names=' + encodeURIComponent(names.join(',')), { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { var got = (d && d.cosm) || {}; names.forEach(function (n) { cosmCache[n] = got[n] || null; }); })
+          .catch(function () {});
+      }, 150);
+    }
+    return null;
+  }
+  function loadMyCosm() {
+    fetch('/cosm/my', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+      .then(function (d) { GAME.myCosm = d && Object.keys(d).length ? d : null; }).catch(function () {});
+  }
+  loadMyCosm();
   var imgTimer = null;
   function imgOf(name) {
     if (!name) return '';
@@ -4765,6 +4806,8 @@
   // ---------- отрисовка чужих игроков ----------
   GAME.onDraw = function (ctx) {
     syncMyOutfit();
+    var mp = GAME.pl;
+    if (GAME.myCosm && GAME.playing && mp && !mp.dead && !mp.hidden) cosmWorld(ctx, 'me', GAME.myCosm, mp.x, mp.y, mp.w, mp.h, mp.face || 1);
     /* Правила видимости пряток в лобби завязаны на рулетку:
 
        пока она крутится — видно ВСЕХ. Это единственный момент, когда
@@ -4796,6 +4839,11 @@
       if (boostOn(id, 'invis')) return;            // невидимость из магазина
       if (isHiddenP(o.name)) return;               // «Скрыть» в списке игроков (Tab)
       var w = o.w || 22, h = o.h || 74;
+      // куда смотрит — по движению (в сеть поворот не уходит)
+      if (o._fx !== undefined && Math.abs(o.x - o._fx) > 0.4) o._face = o.x > o._fx ? 1 : -1;
+      o._fx = o.x;
+      var oc = cosmOf(o.name);
+      if (oc) cosmWorld(ctx, id, oc, o.x, o.y, w, h, o._face || 1);
       ctx.save();
       ctx.translate(o.x, o.y);
       if (war && phase === 'round' && !warAlive(id)) ctx.globalAlpha = 0.25;   // выбит — бледный, пока не вернётся
@@ -4805,7 +4853,12 @@
       var fit = outfitFor(id);
       if (hsApocRound && hsSeekerIds[id] && GAME.figureZombie) GAME.figureZombie(w, h);
       else if (fit && GAME.figureOutfit) GAME.figureOutfit(fit.kind, w, h, fit.arg);   // наряд роли варианта
-      else { if (o.pose) posePrep(ctx, o.pose, w, h); GAME.figure(w, h, o.color || COLOR_NORMAL, true, o.skin || null); }
+      else {
+        if (o.pose) posePrep(ctx, o.pose, w, h);
+        if (oc && window.BFCosm) BFCosm.drawFig(ctx, oc, w, h, o._face || 1, 'back');
+        GAME.figure(w, h, o.color || COLOR_NORMAL, true, o.skin || null);
+        if (oc && window.BFCosm) BFCosm.drawFig(ctx, oc, w, h, o._face || 1, 'front');
+      }
       ctx.restore();
       drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74));
     });

@@ -254,18 +254,18 @@ body.mob #msg h1{font-size:38px}
 body{background:#eef2f8;overflow:hidden}
 </style>
         <script src="offline.js?v=9"></script>
-        <script src="offlineServer.js?v=9"></script>
+        <script src="offlineServer.js?v=10"></script>
         <script src="offlineModes.js?v=10"></script>
-<script src="device.js?v=214"></script>
-        <script src="sound.js?v=214"></script>
-        <script src="skinRender.js?v=214"></script>
-        <script src="skinCanvas.js?v=214"></script>
-        <script src="gifuct.bundle.js?v=214"></script>
-        <script src="gifPlayer.js?v=214"></script>
-        <script src="coin.js?v=214"></script>
-        <script src="liveText.js?v=214"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=214">
-        <script src="theme.js?v=214"></script>
+<script src="device.js?v=215"></script>
+        <script src="sound.js?v=215"></script>
+        <script src="skinRender.js?v=215"></script>
+        <script src="skinCanvas.js?v=215"></script>
+        <script src="gifuct.bundle.js?v=215"></script>
+        <script src="gifPlayer.js?v=215"></script>
+        <script src="coin.js?v=215"></script>
+        <script src="liveText.js?v=215"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=215">
+        <script src="theme.js?v=215"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1645,7 +1645,11 @@ function die(){
   if(pl.dead || done) return;
   pl.dead = true; deaths++; shake = 13; stat();
   if(window.BFSound) BFSound.death();
-  burst(pl.x+pl.w/2, pl.y+pl.h/2, 22, "#ef4444", 4.4, 34);
+  // эффект смерти из магазина косметики: конфетти или призрак вместо красных брызг
+  var dfx = BRIDGE && BRIDGE.myCosm && BRIDGE.myCosm.death;
+  if(dfx === "death_confetti") ["#ef4444","#facc15","#22c55e","#3b82f6","#a855f7"].forEach(function(c){ burst(pl.x+pl.w/2, pl.y+pl.h/2, 8, c, 4.8, 44); });
+  else if(dfx === "death_ghost"){ for(var gi=0; gi<(PREFS.lowFx ? 0 : 18); gi++) parts.push({x:pl.x+pl.w/2+(Math.random()-.5)*pl.w, y:pl.y+pl.h*(0.2+Math.random()*0.6), vx:(Math.random()-.5)*0.6, vy:-1.2-Math.random(), life:60, max:60, c:"#e2e8f0", r:3+Math.random()*3}); }
+  else burst(pl.x+pl.w/2, pl.y+pl.h/2, 22, "#ef4444", 4.4, 34);
   // жизни карты кончились — забег заново с самого начала: время, смерти и чекпоинты сбрасываются
   var outOfLives = mode === "race" && raceLives > 0 && deaths >= raceLives && !practiceMode;
   setTimeout(function(){
@@ -3516,8 +3520,14 @@ function paintFrame(){
     if(BRIDGE && BRIDGE.meIsZombie) PAINT.zombie({w: pl.w, h: pl.h, _zface: pl.face || 1});
     // роль варианта пряток — в её наряде (см. outfitFor в game.js)
     else if(BRIDGE && BRIDGE.myOutfit) drawOutfit(BRIDGE.myOutfit.kind, pl.w, pl.h, BRIDGE.myOutfit.arg);
-    else figure(pl.w, pl.h, (BRIDGE && BRIDGE.myColor) || "#000000", true,
+    else {
+      // косметика за монеты (см. cosmDraw.js): плащ/крылья/свечение — под фигуркой, шляпа — поверх
+      var myC = BRIDGE && BRIDGE.myCosm && window.BFCosm ? BRIDGE.myCosm : null;
+      if(myC) BFCosm.drawFig(ctx, myC, pl.w, pl.h, pl.face || 1, "back");
+      figure(pl.w, pl.h, (BRIDGE && BRIDGE.myColor) || "#000000", true,
            (BRIDGE && BRIDGE.mySkin) || null);
+      if(myC) BFCosm.drawFig(ctx, myC, pl.w, pl.h, pl.face || 1, "front");
+    }
     if(pl.flag) drawCarriedFlag(pl.w, pl.h);     // несёт флаг шпиона
     ctx.restore();
   }
@@ -4842,8 +4852,9 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=214"></script>
-        <script src="i18n.js?v=214"></script>
-        <script src="skinAvatar.js?v=214" defer></script>
+<script src="cosmDraw.js?v=215"></script>
+<script src="game.js?v=215"></script>
+        <script src="i18n.js?v=215"></script>
+        <script src="skinAvatar.js?v=215" defer></script>
 </body>
 </html>

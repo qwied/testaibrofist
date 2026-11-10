@@ -60,6 +60,10 @@
     {
       "title": "Weather, night and effect triggers",
       "text": "Maps can now have an atmosphere: rain, snow, night (only the area around you is lit) or fog. The editor has a new Effect trigger zone: walking into it shakes the screen, flashes it white or shows a message. Any block or text can be a parallax background that slowly follows the camera. Landing from a big jump kicks up a little dust."
+    },
+    {
+      "title": "Accessories shop",
+      "text": "The Avatar page has a new Accessories shop: hats (party hat, cap, beanie, top hat, crown), capes and wings, sparkle, fire and rainbow trails, a pet slime, cat or dog that follows you, confetti or ghost death effects and a rainbow glow. Buy with coins, wear or take off any time; everyone in the game sees what you wear."
     }
   ]
 }

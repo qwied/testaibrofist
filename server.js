@@ -76,7 +76,7 @@ const PUBLIC_JS = new Set([
   'dailyreward.js', 'device.js', 'editorai.js', 'editorhelp.js', 'game.js',
   'gifplayer.js', 'gifuct.bundle.js', 'i18n.js', 'nav.js', 'owner.js',
   'roomlist.js', 'shell.js', 'skinavatar.js', 'skincanvas.js', 'skinrender.js',
-  'sound.js', 'theme.js', 'livetext.js'
+  'sound.js', 'theme.js', 'livetext.js', 'cosmdraw.js'
 ]);
 // owner.js и adminAbuse.js разрешены здесь только затем, чтобы запрос дошёл
 // до своих маршрутов выше — там они проверяют права владельца отдельно.
@@ -363,6 +363,7 @@ require('./discordBot.js').register(app);   // /discord/status — состоя�
 require('./dailyRewards.js').register(app, accounts);
 require('./quests.js').register(app, accounts);
 require('./progress.js').register(app, accounts);   // уровень, значки, промокоды, подарки монет
+require('./cosmShop.js').register(app, accounts);  // косметика за монеты: шляпы, плащи, след, питомец
 require('./story.js').register(app, accounts);
 
 // адреса, на которые ссылается шапка сайта
