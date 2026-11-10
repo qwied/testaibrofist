@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <title>AIBrofist — Profile</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=215">
+<link rel="stylesheet" href="ui.css?v=216">
 <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="theme.js?v=215"></script>
-<script src="device.js?v=215"></script>
-<script src="sound.js?v=215"></script>
+<script src="theme.js?v=216"></script>
+<script src="device.js?v=216"></script>
+<script src="sound.js?v=216"></script>
 <style>
 .upSearch{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
 .upSearch .bfInput{margin-bottom:0;flex:1 1 180px}
@@ -176,15 +176,15 @@
   <div class="bfMsg" id="upMsg"></div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=215">
-<script src="i18n.js?v=215"></script>
-<script src="coin.js?v=215"></script>
-<script src="skinRender.js?v=215"></script>
-<script src="skinAvatar.js?v=215" defer></script>
-<script src="shell.js?v=215"></script>
-<script src="abuseShow.js?v=215" defer></script>
-<script src="account.js?v=215" defer></script>
-<script src="owner.js?v=215" defer></script>
+<link rel="stylesheet" href="mobile.css?v=216">
+<script src="i18n.js?v=216"></script>
+<script src="coin.js?v=216"></script>
+<script src="skinRender.js?v=216"></script>
+<script src="skinAvatar.js?v=216" defer></script>
+<script src="shell.js?v=216"></script>
+<script src="abuseShow.js?v=216" defer></script>
+<script src="account.js?v=216" defer></script>
+<script src="owner.js?v=216" defer></script>
 <script>
 (function () {
   'use strict';
@@ -287,6 +287,7 @@
       else acts = '<button data-rel="add">' + T('addFriend', 'Добавить в друзья') + '</button>';
       acts += '<a href="messages?with=' + encodeURIComponent(who) + '">' + T('msgBtn', 'Message') + '</a>';
       acts += '<button id="upGift">' + T('giftBtn', 'Подарить монеты') + '</button>';
+      acts += '<button id="upFollow" data-on="0">' + T('followBtn', 'Подписаться на карты') + '</button>';
     }
 
     var s = d.stats || {};
@@ -342,7 +343,10 @@
           box.innerHTML = '<div class="bfHint">' + T('emptyHere', 'Пусто') + '</div>';
           return;
         }
-        box.innerHTML = list.map(function (u) {
+        // «Принять всех» (идея игроков) — одной кнопкой все входящие заявки
+        var allBtn = isMe && kind === 'requests' && list.length > 1
+          ? '<div style="margin:6px 0 10px"><button class="go" id="upAcceptAll">' + T('acceptAll', 'Принять всех') + ' (' + list.length + ')</button></div>' : '';
+        box.innerHTML = allBtn + list.map(function (u) {
           var btn = '';
           if (isMe && kind === 'requests')
             btn = '<button class="go" data-act="accept" data-n="' + esc(u.name) + '">' + T('accept', 'Принять') + '</button>'
@@ -359,6 +363,10 @@
             + btn + '</div>';
         }).join('');
         if (window.BFAvatar) BFAvatar.scan(box);
+        if ($('upAcceptAll')) $('upAcceptAll').onclick = function () {
+          Promise.all(list.map(function (u) { return post('/acceptFriendRequest', { name: u.name }).catch(function () {}); }))
+            .then(function () { showTab(tab); });
+        };
       })
       .catch(function () { box.innerHTML = '<div class="bfHint">' + T('serverDown', 'Сервер недоступен') + '</div>'; });
   }
@@ -615,6 +623,18 @@
       });
 
       drawProgress();
+      // подписка на автора (идея «уведомление о новой карте»): новые карты придут в шапку, как карты друзей
+      if ($('upFollow')) {
+        var paintFollow = function (on) {
+          $('upFollow').dataset.on = on ? '1' : '0';
+          $('upFollow').textContent = on ? T('unfollowBtn', 'Отписаться') : T('followBtn', 'Подписаться на карты');
+        };
+        get('/follow/state?name=' + encodeURIComponent(who)).then(function (r) { paintFollow(r && r.on); }).catch(function () {});
+        $('upFollow').onclick = function () {
+          var on = $('upFollow').dataset.on !== '1';
+          post('/follow', { name: who, on: on ? '1' : '0' }).then(function (r) { if (r && r.status === 'success') paintFollow(r.on); }).catch(function () {});
+        };
+      }
       if ($('upGift')) $('upGift').onclick = function () {
         var n = prompt(T('giftAsk', 'Сколько монет подарить {n}? (до 200 в день)').replace('{n}', who), '10');
         if (!n) return;

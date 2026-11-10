@@ -1446,14 +1446,32 @@
       + row('<span style="flex:1;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(me.name || '') + '</span>'
             + '<span style="color:#6b7280">' + esc(TR('plYou', 'ты')) + '</span>')
       + ids.map(function (id) {
-          var n = others[id].name, m = isMuted(n), h = isHiddenP(n);
-          return row('<span style="flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(n) + '</span>'
+          var n = others[id].name, m = isMuted(n), h = isHiddenP(n), fr = myFriends[String(n).toLowerCase()];
+          return row('<span style="flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(n)
+            + (fr ? ' <span style="color:#16a34a;font-size:11px">\u2605 ' + esc(TR('plFriend', 'друг')) + '</span>' : '') + '</span>'
             + '<button data-pa="mute" data-pn="' + esc(n) + '" style="' + (m ? on : btn) + '">' + esc(m ? TR('plUnmute', 'Вернуть чат') : TR('plMute', 'Заглушить')) + '</button>'
             + '<button data-pa="hide" data-pn="' + esc(n) + '" style="' + (h ? on : btn) + '">' + esc(h ? TR('plShow', 'Показать') : TR('plHide', 'Скрыть')) + '</button>');
         }).join('')
       + '<div style="color:#6b7280;font-size:12px;margin-top:8px">' + esc(TR('plHint', 'Tab — список игроков. «Заглушить» прячет чат игрока, «Скрыть» убирает его с твоего экрана. Это видишь только ты.')) + '</div>';
   }
+  // друзья в комнате (идея «показывать друзей на твоём сервере»): отмечены в списке игроков
+  var myFriends = Object.create(null);
+  function loadFriends() {
+    if (!me.name) return;
+    // список друзей отдаётся страницами по 10 — берём до 10 страниц
+    (function page(n) {
+      fetch('/getFriendsList?name=' + encodeURIComponent(me.name) + '&type=friends&page=' + n, { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          (d && d.relation || []).forEach(function (u) { myFriends[String(u.name).toLowerCase()] = 1; });
+          var tot = parseInt(String(d && d.page || '1/1').split('/')[1]) || 1;
+          if (n < tot && n < 10) page(n + 1); else if (plOpen) plRender();
+        })
+        .catch(function () {});
+    })(1);
+  }
   function plToggle(v) {
+    if (v !== false && !Object.keys(myFriends).length) loadFriends();
     plOpen = v === undefined ? !plOpen : !!v;
     var b = plBox();
     b.style.display = plOpen ? '' : 'none';

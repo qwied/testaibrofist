@@ -275,6 +275,10 @@
           + '<div class="ow-b" id="owPGo">' + T('apply', 'Применить') + '</div>'
           + '<div class="ow-m" id="owPMsg"></div>')
 
+      // жалобы игроков на карты (кнопка «Пожаловаться» в Maps Browser)
+      + acc('owAccReports', ICN.star, T('mapReportsOwner', 'Жалобы на карты'),
+            '<div class="ow-m" style="text-align:left" id="owRepList">…</div>')
+
       + acc('owAccJoin', ICN.calendar, T('setJoinDate', 'Дата регистрации'),
             '<input class="ow-i" id="owJName" placeholder="' + T('playerName', 'Ник игрока') + '">'
           + '<input class="ow-i" id="owJDate" type="date">'
@@ -342,6 +346,14 @@
 
     box.querySelector('.ow-x').onclick = close;
 
+    get('/owner/mapReports').then(function (list) {
+      var el = box.querySelector('#owRepList');
+      if (!el) return;
+      el.innerHTML = !list || !list.length ? T('emptyHere', 'Пусто') : list.map(function (m) {
+        return '<div style="margin-bottom:8px"><b>' + esc(m.mapName) + '</b> · ' + esc(m.author) + ' — ' + m.reports.length + '<br>'
+          + m.reports.slice(-5).map(function (r) { return '<span style="color:var(--muted)">' + esc(r.by) + ':</span> ' + esc(r.why || '—'); }).join('<br>') + '</div>';
+      }).join('');
+    }).catch(function () {});
     box.querySelector('#owPGo').onclick = function () {
       var m = box.querySelector('#owPMsg');
       post('/owner/promo/create', {
@@ -652,7 +664,7 @@
     if (document.getElementById('aaScript')) return;
     var sc = document.createElement('script');
     sc.id = 'aaScript';
-    sc.src = 'adminAbuse.js?v=215';
+    sc.src = 'adminAbuse.js?v=216';
     sc.defer = true;
     document.head.appendChild(sc);
   }

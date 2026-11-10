@@ -591,6 +591,43 @@ function register(app, getUser, acc, cleanText) {
   app.get('/getMaps', list);
   app.get('/getMapsForList', list);
 
+  // ---------- подписка на автора карт ----------
+  app.get('/follow/state', (req, res) => {
+    const u = getUser(req);
+    res.json({ on: !!(u && Array.isArray(u.follows) && u.follows.some(n => low(n) === low(req.query.name))) });
+  });
+  app.post('/follow', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const name = String(req.body.name || '').trim().slice(0, 40);
+    if (!name || low(name) === low(u.name)) return res.json({ status: 'error', message: 'Bad name' });
+    if (!Array.isArray(u.follows)) u.follows = [];
+    u.follows = u.follows.filter(n => low(n) !== low(name));
+    const on = req.body.on === '1';
+    if (on) { if (u.follows.length >= 200) return res.json({ status: 'error', message: 'Too many' }); u.follows.push(name); }
+    if (!u.mapsSeenAt) u.mapsSeenAt = Date.now();
+    acc.save();
+    res.json({ status: 'success', on });
+  });
+  /* ---------- жалоба на карту (идея «report map»): владелец видит список в своей панели ---------- */
+  app.post('/reportMap', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const m = find(req.body.author, req.body.mapName);
+    if (!m) return res.json({ status: 'error', message: 'No such map' });
+    if (!Array.isArray(m.reports)) m.reports = [];
+    if (m.reports.some(r => low(r.by) === low(u.name))) return res.json({ status: 'success', message: 'Already reported' });
+    m.reports.push({ by: u.name, why: cleanText(req.body.why, 200) || '', at: Date.now() });
+    if (m.reports.length > 50) m.reports = m.reports.slice(-50);
+    save();
+    res.json({ status: 'success', message: 'Thanks, the owner will look at it' });
+  });
+  app.get('/owner/mapReports', (req, res) => {
+    if (!acc.isOwner(getUser(req))) return res.json([]);
+    res.json(maps.filter(m => Array.isArray(m.reports) && m.reports.length)
+      .map(m => ({ author: m.author, mapName: m.mapName, reports: m.reports })));
+  });
+
   // ---------- рекорды карты и карта дня ----------
   app.get('/getMapRecords', (req, res) => {
     const m = find(req.query.author, req.query.mapName);
@@ -1008,11 +1045,13 @@ function inGameList() {
    поэтому одного числа хватает, и оно не растёт с ростом каталога. */
 function newFromFriends(user) {
   const out = { count: 0, authors: [], newest: 0 };
-  if (!user || !Array.isArray(user.friends) || !user.friends.length) return out;
+  const follows = user && Array.isArray(user.follows) ? user.follows : [];
+  if (!user || ((!Array.isArray(user.friends) || !user.friends.length) && !follows.length)) return out;
   const since = Number(user.mapsSeenAt) || 0;
   // ни разу не открывал Maps Browser — не заваливаем его всем каталогом
   if (!since) return out;
-  const friends = new Set(user.friends.map(low));
+  // друзья и авторы, на которых подписан (см. /follow) — новые карты обоих приходят в шапку
+  const friends = new Set((Array.isArray(user.friends) ? user.friends : []).map(low).concat(follows.map(low)));
   for (const m of maps) {
     if (!(m.date > since) || !friends.has(low(m.author))) continue;
     out.count++;

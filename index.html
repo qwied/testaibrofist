@@ -458,14 +458,21 @@ body{
 #menuButton{display:block !important;}
 #menuButton:hover{color:#111827;}
 
+.weekTop{max-width:880px;margin:18px auto 0;padding:0 16px}
+.weekTopT{font-weight:800;font-size:15px;margin-bottom:8px}
+.weekTopL{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.weekTopI{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;color:#111827;text-decoration:none}
+.weekTopI b{font-size:20px;color:#f59e0b;width:20px;text-align:center}
+.weekTopI span{display:flex;flex-direction:column;font-weight:700;font-size:14px;min-width:0}
+.weekTopI i{font-style:normal;font-weight:500;font-size:12px;color:#6b7280}
 </style>
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="device.js?v=215"></script>
-        <script src="sound.js?v=215"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=215">
-        <link rel="stylesheet" href="ui.css?v=215">
-        <script src="theme.js?v=215"></script>
+<script src="device.js?v=216"></script>
+        <script src="sound.js?v=216"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=216">
+        <link rel="stylesheet" href="ui.css?v=216">
+        <script src="theme.js?v=216"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -610,6 +617,25 @@ body{
                     <button type="button" class="cardsArrow cardsNext" aria-label="Next modes">&#8250;</button>
                     </div>
                 </div>
+                <!-- популярные карты недели (идея «топ-3 карты недели на главной»): по числу игр за 7 дней -->
+                <div class="weekTop" id="weekTop" style="display:none"></div>
+                <script>
+                (function () {
+                  var T = function (k, f) { return (window.I18N && I18N.t(k) !== k) ? I18N.t(k) : f; };
+                  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+                  fetch('/getMapsForList?page=1&sortBy=hot', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+                    var list = (d && d.maps || []).filter(function (m) { return m.plays > 0; }).slice(0, 3);
+                    var box = document.getElementById('weekTop');
+                    if (!list.length || !box) return;
+                    box.innerHTML = '<div class="weekTopT">' + esc(T('weekTop', 'Популярные на этой неделе')) + '</div><div class="weekTopL">'
+                      + list.map(function (m, i) {
+                          return '<a class="weekTopI" href="game?mode=' + encodeURIComponent(m.mapType === 'race' ? 'race' : 'hideAndSeek') + '&view=' + encodeURIComponent(m.mapName) + '&author=' + encodeURIComponent(m.author) + '">'
+                            + '<b>' + (i + 1) + '</b><span>' + esc(m.mapName) + '<i>' + esc(m.author) + ' · \u25B6 ' + m.plays + '</i></span></a>';
+                        }).join('') + '</div>';
+                    box.style.display = '';
+                  }).catch(function () {});
+                })();
+                </script>
 
         </div>
 
@@ -701,15 +727,15 @@ body{
   sync();
 })();
 </script>
-<script src="nav.js?v=215" defer></script>
-        <script src="account.js?v=215" defer></script>
-        <script src="i18n.js?v=215"></script>
-        <script src="owner.js?v=215" defer></script>
-        <script src="coin.js?v=215"></script>
-        <script src="skinRender.js?v=215"></script>
-        <script src="skinAvatar.js?v=215" defer></script>
-        <script src="shell.js?v=215"></script>
-<script src="abuseShow.js?v=215" defer></script>
-        <script src="consent.js?v=215"></script>
+<script src="nav.js?v=216" defer></script>
+        <script src="account.js?v=216" defer></script>
+        <script src="i18n.js?v=216"></script>
+        <script src="owner.js?v=216" defer></script>
+        <script src="coin.js?v=216"></script>
+        <script src="skinRender.js?v=216"></script>
+        <script src="skinAvatar.js?v=216" defer></script>
+        <script src="shell.js?v=216"></script>
+<script src="abuseShow.js?v=216" defer></script>
+        <script src="consent.js?v=216"></script>
 </body>
 </html>
