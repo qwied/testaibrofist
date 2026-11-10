@@ -40,6 +40,10 @@
     {
       "title": "Stars, spikes, springs and emotions",
       "text": "Map editor: new Star object, and a race map with stars only finishes once every star is collected; blocks can now look like spikes or a spring that throws you higher than a jump; a plus and minus button adds or removes copies of a block in a row. New race map Find all the stars. Buttons and levers turn blue when switched on and a used checkpoint flag turns grey. In a game you can sit down or lie down to sleep from the emotions button, and everyone sees it. Settings now let you pick how chat lines look above heads: outlined text, a box or a round bubble."
+    },
+    {
+      "title": "New blocks: ice, keys, crumbling floors and more",
+      "text": "The map editor has new blocks and options: slippery ice, floors that crumble under your feet, platforms you can jump up through (hold Down to drop), blinking blocks, keys that open locked doors, buttons that stay pressed for a few seconds, and zones with low gravity or wind. Race maps can turn on double jump and fall damage. In Race, press R to go back to your checkpoint and hold Down to fall faster."
     }
   ]
 }

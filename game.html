@@ -256,16 +256,16 @@ body{background:#eef2f8;overflow:hidden}
         <script src="offline.js?v=9"></script>
         <script src="offlineServer.js?v=8"></script>
         <script src="offlineModes.js?v=10"></script>
-<script src="device.js?v=209"></script>
-        <script src="sound.js?v=209"></script>
-        <script src="skinRender.js?v=209"></script>
-        <script src="skinCanvas.js?v=209"></script>
-        <script src="gifuct.bundle.js?v=209"></script>
-        <script src="gifPlayer.js?v=209"></script>
-        <script src="coin.js?v=209"></script>
-        <script src="liveText.js?v=209"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=209">
-        <script src="theme.js?v=209"></script>
+<script src="device.js?v=210"></script>
+        <script src="sound.js?v=210"></script>
+        <script src="skinRender.js?v=210"></script>
+        <script src="skinCanvas.js?v=210"></script>
+        <script src="gifuct.bundle.js?v=210"></script>
+        <script src="gifPlayer.js?v=210"></script>
+        <script src="coin.js?v=210"></script>
+        <script src="liveText.js?v=210"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=210">
+        <script src="theme.js?v=210"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -559,6 +559,8 @@ var PAINT = {
     // «Вид» блока (идеи про шипы и пружину): рисуется шипами или пружиной, поведение — от свойств (яд, прыжок)
     if(o.look === "spikes") return PAINT.spike(o);
     if(o.look === "spring") return PAINT.bounce(o);
+    if(o.look === "ice") return PAINT.ice(o);
+    if(o.look === "lock") return PAINT.lockdoor(o);
     ctx.fillStyle = shapeFill(o);
     ctx.fillRect(0,0,o.w,o.h);
   },
@@ -836,6 +838,50 @@ var PAINT = {
     ctx.fillStyle = "#c4b5fd";
     ctx.beginPath(); ctx.arc(o.w/2,o.h/2,Math.max(1.5,o.h*0.3),0,6.2832); ctx.fill();
   },
+  key: function(o){
+    if(o._got && playing) return;                 // подобран — его больше нет
+    var s = Math.min(o.w, o.h), bob = Math.sin(anim*0.08 + o.x)*s*0.06;
+    ctx.save(); ctx.translate(o.w/2, o.h/2 + bob); ctx.rotate(-0.6);
+    ctx.fillStyle = "#facc15"; ctx.strokeStyle = "#a16207"; ctx.lineWidth = Math.max(1.2, s*0.05);
+    ctx.beginPath(); ctx.arc(-s*0.22, 0, s*0.2, 0, 6.2832); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#a16207"; ctx.beginPath(); ctx.arc(-s*0.22, 0, s*0.08, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#facc15";
+    ctx.fillRect(-s*0.04, -s*0.05, s*0.46, s*0.1); ctx.strokeRect(-s*0.04, -s*0.05, s*0.46, s*0.1);
+    ctx.fillRect(s*0.26, s*0.05, s*0.07, s*0.12); ctx.fillRect(s*0.36, s*0.05, s*0.07, s*0.09);
+    ctx.restore();
+  },
+  gravzone: function(o){
+    var g = o.gmul === undefined ? 0.35 : +o.gmul, w = +o.wind || 0;
+    ctx.fillStyle = g < 1 ? "rgba(139,92,246,.13)" : "rgba(234,88,12,.13)";
+    ctx.fillRect(0,0,o.w,o.h);
+    ctx.strokeStyle = g < 1 ? "rgba(139,92,246,.55)" : "rgba(234,88,12,.55)";
+    ctx.lineWidth = 2; ctx.setLineDash([8,6]); ctx.strokeRect(1,1,o.w-2,o.h-2); ctx.setLineDash([]);
+    // плывущие вверх (лёгкая) или вниз (тяжёлая) стрелки, по ветру — вбок
+    var t = (anim*0.6) % 40, dir = g < 1 ? -1 : 1;
+    ctx.strokeStyle = g < 1 ? "rgba(167,139,250,.6)" : "rgba(251,146,60,.6)"; ctx.lineWidth = 2;
+    for(var x = 20; x < o.w; x += 46) for(var y = 20; y < o.h; y += 40){
+      var yy = y + dir*t*0.5, xx = x + w*t*0.6;
+      if(yy < 6 || yy > o.h-6 || xx < 6 || xx > o.w-6) continue;
+      ctx.beginPath();
+      if(w){ ctx.moveTo(xx - 6*Math.sign(w), yy - 5); ctx.lineTo(xx, yy); ctx.lineTo(xx - 6*Math.sign(w), yy + 5); }
+      else { ctx.moveTo(xx - 5, yy - 6*dir); ctx.lineTo(xx, yy); ctx.lineTo(xx + 5, yy - 6*dir); }
+      ctx.stroke();
+    }
+  },
+  ice: function(o){
+    ctx.fillStyle = grad(0,0,0,o.h,"#e0f2fe","#7dd3fc"); ctx.fillRect(0,0,o.w,o.h);
+    ctx.fillStyle = "rgba(255,255,255,.75)"; ctx.fillRect(0,0,o.w,Math.max(2,Math.min(6,o.h*0.18)));
+    ctx.strokeStyle = "rgba(255,255,255,.6)"; ctx.lineWidth = 1.5;
+    for(var x = 10; x < o.w - 6; x += 34){ ctx.beginPath(); ctx.moveTo(x, o.h*0.75); ctx.lineTo(x + Math.min(14, o.h*0.6), o.h*0.25); ctx.stroke(); }
+  },
+  lockdoor: function(o){
+    ctx.fillStyle = grad(0,0,0,o.h,"#b45309","#78350f"); ctx.fillRect(0,0,o.w,o.h);
+    ctx.strokeStyle = "rgba(0,0,0,.25)"; ctx.lineWidth = 2; ctx.strokeRect(2,2,o.w-4,o.h-4);
+    var r = Math.max(3, Math.min(o.w, o.h)*0.12), cx = o.w/2, cy = o.h/2;
+    ctx.fillStyle = "#facc15"; ctx.beginPath(); ctx.arc(cx, cy - r*0.4, r, 0, 6.2832); ctx.fill();
+    ctx.fillRect(cx - r*0.45, cy - r*0.4, r*0.9, r*1.8);
+    ctx.fillStyle = "#1f2937"; ctx.beginPath(); ctx.arc(cx, cy - r*0.4, r*0.4, 0, 6.2832); ctx.fill();
+  },
   star: function(o){
     if(o._got && playing) return;                 // собрана — её больше нет
     var R = Math.min(o.w, o.h)/2, cx = o.w/2, cy = o.h/2 + Math.sin(anim*0.08 + o.x)*R*0.08, r = R*0.45;
@@ -1017,6 +1063,12 @@ var TOOLS = [
   /* Звезда (идея «Find all the stars»): коснулся — собрал. Счётчик вверху справа; если на карте гонки
      есть звёзды, финиш засчитывается только со всеми (как флаг шпиона, см. starsLeft()). */
   {t:"star",       n:"Звезда",      k:"toolStar",       m:ALL},
+  /* Ключ (идеи «собери ключи → откроется дверь»): коснулся — подобрал, и всё, что указано в его
+     «Связях», открывается насовсем до конца забега (как рычаг, только без возврата). */
+  {t:"key",        n:"Ключ",        k:"toolKey",        m:ALL},
+  /* Зона гравитации и ветра (идеи «невесомость», «смена гравитации», «ветер»): пока игрок
+     внутри, на него действует своя сила тяжести (0 — невесомость, 2 — вдвое тяжелее) и ветер. */
+  {t:"gravzone",   n:"Зона гравитации", k:"toolGravZone", m:ALL},
   /* метка модификации Zombie Apocalypse — без неё карту не включить в
      этот режим (см. hsApplyApoc в server.js); только прятки: в гонке
      модификация не предлагается (см. #apoc ниже и TOOL_MODES.zombie в
@@ -1077,7 +1129,7 @@ var COLORS = {
   seekerSpot:"",                   // всегда синий, как и сам искатель — красить нечем
   cannon:"",                       // дерево и чугун — рисуется собой
   camera:"", spyFlag:"", enemy:"", crystal:"",           // рисуются собой
-  checkpoint:"", finishline:"", spawn:INK, teleport:"", star:""
+  checkpoint:"", finishline:"", spawn:INK, teleport:"", star:"", key:"", gravzone:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
    Игрок 30x100 (круг-голова радиуса 15 над телом 30x65, см. FIG_GAP
@@ -1090,7 +1142,7 @@ var SIZES = {
   button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
   zombie:[30,100],                 // впритык как у игрока — по прямой просьбе
   seekerSpot:[30,100],              // тоже впритык как у игрока
-  checkpoint:[40,104], finishline:[52,126], spawn:[30,100], star:[44,44],
+  checkpoint:[40,104], finishline:[52,126], spawn:[30,100], star:[44,44], key:[36,36], gravzone:[160,160],
   teleport:[30,100],                // тоже впритык как у игрока — по прямой просьбе
   cannon:[72,44],                   // у всех пушек одна дальность — и размер один
   camera:[36,26], spyFlag:[34,64], enemy:[40,64], crystal:[90,120]
@@ -1103,7 +1155,7 @@ var HAZARD = [];
 var DEADLY_BY_DEFAULT = [];
 /* Ворота и укрытие убраны, но механика связей осталась: цель кнопки или
    рычага — теперь любой обычный блок, круг или треугольник. */
-var LINKED = ["rect","circle","triangle","button","lever","laserFeed","teleport"];
+var LINKED = ["rect","circle","triangle","button","lever","laserFeed","teleport","key"];
 /* Шрифты для текстового объекта (см. text: в PAINT и панель свойств):
    раньше единственным способом получить не-обычный шрифт было слепить
    текст на стороннем «генераторе шрифтов» из юникод-символов-подделок
@@ -1137,15 +1189,20 @@ var apoc = false;
    raceGoal — цель общего раунда (см. raceRooms в server.js): "" — финишируют все, "first" —
    побеждает первый, "last" — Last bro standing, только с жизнями. */
 var raceLives = 0, raceTimeMin = 0, raceGoal = "";
+/* Ещё две опции карты гонки (идеи игроков): двойной прыжок и урон от падения с большой высоты. */
+var raceDJ = false, raceFall = false, FALL_DMG_H = 620;
 var RACE_LIVES = [0, 1, 3, 5], RACE_TIMES = [0, 5, 10], RACE_GOALS = ["", "first", "last"];
 function cleanRaceRules(d){
   raceLives = (mode === "race" && d && RACE_LIVES.indexOf(+d.lives) !== -1) ? +d.lives : 0;
   raceTimeMin = (mode === "race" && d && RACE_TIMES.indexOf(+d.timeMin) !== -1) ? +d.timeMin : 0;
   raceGoal = (mode === "race" && d && (d.goal === "first" || (d.goal === "last" && raceLives))) ? d.goal : "";
+  raceDJ = mode === "race" && !!(d && d.djump);
+  raceFall = mode === "race" && !!(d && d.fallDmg);
 }
 // поля правил гонки для сохранения карты — пустые не пишем
 function withRaceRules(m){
-  if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; if(raceGoal) m.goal = raceGoal; }
+  if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; if(raceGoal) m.goal = raceGoal;
+    if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; }
   return m;
 }
 
@@ -1483,7 +1540,7 @@ function play(){
   lastSafePos = {x:sp.x, y:sp.y};
   objects.forEach(function(o){
     o._hx = o.x; o._hy = o.y; o._t = 0; o._act = !!o.startsOpen;
-    o._reached = false; o._spin = 0; o._squash = 0; o._pulseT = 0; o._hue = 0; o._got = false;
+    o._reached = false; o._spin = 0; o._squash = 0; o._pulseT = 0; o._hue = 0; o._got = false; o._off = false; o._gone = false; o._cr = 0; o._offAt = 0;
   });
   pl.flag = false; pl.cpFlag = false;
   respawn();
@@ -1493,7 +1550,7 @@ function play(){
 function stop(){
   playing = false; document.body.classList.remove("play"); hideMsg(); parts.length = 0;
   objects.forEach(function(o){ if(o._hx !== undefined){ o.x = o._hx; o.y = o._hy; }
-    o._act = false; o._reached = false; o._spin = 0; o._got = false; });
+    o._act = false; o._reached = false; o._spin = 0; o._got = false; o._off = false; o._gone = false; o._cr = 0; o._offAt = 0; });
   starHud();
   resetView();
 }
@@ -1506,7 +1563,7 @@ function restartRun(){
   timeMs = 0; deaths = 0;
   objects.forEach(function(o){
     o._reached = false; o._got = false;
-    o._act = !!o.startsOpen; o._latch = false;
+    o._act = !!o.startsOpen; o._latch = false; o._off = false; o._gone = false; o._cr = 0; o._offAt = 0;
   });
   var sp = findSpawn();
   if(sp){ spawnPt = {x:sp.x, y:sp.y}; lastSafePos = {x:sp.x, y:sp.y}; }
@@ -1521,7 +1578,7 @@ function respawn(){
     if(pl.flag && !pl.cpFlag) spyNote("lost");
     pl.flag = !!pl.cpFlag;
   }
-  pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0;
+  pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0; pl.airTop = undefined; pl.dj = false;
   pl.rideOn = null; pl.grab = null; grabCd = 0; pl.kick = 0; pl.climb = null; pl.jumpLock = false;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckSteer = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
 }
@@ -1602,8 +1659,15 @@ function allAtDoor(o){
    от касания, а без модификации его на карте вообще нет. */
 var solid  = function(o){ return SOLID.indexOf(o.type) !== -1 && !opened(o)
                               && o.ghost !== true && o.hideSpot !== true
-                              && o.deadly !== true; };
-var hazard = function(o){ return o.deadly === true && !opened(o); };
+                              && o.deadly !== true && !o._off && !o._gone; };
+var hazard = function(o){ return o.deadly === true && !opened(o) && !o._off && !o._gone; };
+/* Односторонняя платформа: держит только того, кто сверху и падает (или стоит) на неё.
+   Снизу и сбоку сквозь неё проходят; зажатое «вниз» — спрыгнуть с неё. */
+function oneWayHolds(o){
+  if(keys.dn) return false;
+  var bb = bbox(o);
+  return pl.vy >= 0 && pl.y + pl.h <= bb[1] + 4;
+}
 function hit(ax,ay,aw,ah,bx,by,bw,bh){ return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by; }
 
 /* ══════════════════════════════════════════════════
@@ -2112,6 +2176,18 @@ function step(){
     if(o.pulse) o._pulseT = (o._pulseT||0) + 0.05;
     if(o.colorCycle) o._hue = ((o._hue||0) + 1.2) % 360;
     if(o._squash) o._squash *= 0.82;
+    if(playing){
+      // мигающий блок: blink секунд есть, столько же нет (сдвиг фазы — blinkPh, 0..1)
+      if(o.blink) o._off = Math.floor(timeMs/1000/o.blink + (+o.blinkPh || 0)*2) % 2 === 1;
+      // ломающийся блок: дрожит ~0.6 с, исчезает на 3 с, потом возвращается (если на месте никого)
+      if(o._cr){
+        o._cr++;
+        if(o._cr === 38){ o._gone = true; burst(o.x+o.w/2, o.y+o.h/2, 14, "#a8a29e", 3, 26); }
+        if(o._cr > 38 + 180 && !overlaps(o, pl.x, pl.y, pl.w, pl.h)){ o._cr = 0; o._gone = false; }
+      }
+      // кнопка с таймером: отпущена — держит ещё holdSec секунд
+      if(o._offAt && timeMs >= o._offAt){ o._offAt = 0; o._act = false; drive(o); }
+    }
   });
   if(shake > 0) shake *= 0.86;
   stepParts();
@@ -2148,7 +2224,15 @@ function step(){
   // рядом с игроком объектов мало — дальние даже не проверяем
   var near = nearby(pl.x - 260, pl.y - 260, pl.w + 520, pl.h + 520);
   var sol = [], i;
-  for(i=0;i<near.length;i++) if(solid(near[i])) sol.push(near[i]);
+  for(i=0;i<near.length;i++) if(solid(near[i]) && !(near[i].oneWay && !oneWayHolds(near[i]))) sol.push(near[i]);
+  // зона гравитации и ветра: берём последнюю (верхнюю), в которой стоит игрок
+  var zoneG = 1, zoneW = 0;
+  for(i=0;i<near.length;i++) if(near[i].type === "gravzone" && overlaps(near[i], pl.x, pl.y, pl.w, pl.h)){
+    zoneG = near[i].gmul === undefined ? 0.35 : Math.max(0, Math.min(2, +near[i].gmul));
+    zoneW = Math.max(-5, Math.min(5, +near[i].wind || 0));
+  }
+  // лёд: под ногами скользкий блок — разгон и торможение плавные
+  var onIce = pl.ground && pl.standPlat && pl.standPlat.look === "ice", vx0 = pl.vx;
 
   /* Захват уступа: ввод разбирается здесь, до обычной физики — залезть
      наверх или отпуститься должно начинать действовать с этого же
@@ -2221,6 +2305,11 @@ function step(){
     pl.vx *= pl.ground ? FRIC : AIR;
     if(Math.abs(pl.vx) < .05) pl.vx = 0;
   }
+  if(onIce && pl.kick <= 0 && !grabbing){
+    pl.vx = dir ? vx0 + (pl.vx - vx0) * 0.05 : vx0 * 0.985;
+    if(Math.abs(pl.vx) < .05) pl.vx = 0;
+  }
+  if(zoneW && !grabbing) pl.x += zoneW * 0.6 * TEMPO;
 
   /* шаги — только по земле и только пока реально двигается. Порог был 30 —
      мёртвый код: vx тут в пикселях НЕ на кадре игры, а на физическом шаге
@@ -2267,10 +2356,21 @@ function step(){
        зависит от удержания. */
     if(pl.vy < 0 && pl.selfJump && hold > MIN_HOLD) pl.vy += G()*0.5;
 
-    pl.vy += G() * (pl.vy >= 0 ? FALL_MULT : 1);
+    /* Двойной прыжок (опция карты гонки): ещё один прыжок в воздухе — по новому нажатию. */
+    if(!keys.u) pl.djReady = true;
+    if(pl.ground) pl.dj = false;
+    if(raceDJ && keys.u && pl.djReady && hold > 2 && !pl.dj && !pl.ground && coy <= 0 && !frz){
+      pl.vy = jumpV() * 0.92; pl.dj = true; pl.djReady = false; hold = 0; pl.selfJump = true;
+      burst(pl.x + pl.w/2, pl.y + pl.h, 8, "#e5e7eb", 2, 18);
+      if(window.BFSound) BFSound.jump();
+    }
+    if(keys.u && pl.selfJump && hold < 2) pl.djReady = false;
+    pl.vy += G() * zoneG * (pl.vy >= 0 ? FALL_MULT : 1);
+    // зажатое «вниз» в воздухе — падаем быстрее
+    if(keys.dn && pl.vy > 0) pl.vy += G() * 0.9;
     // трение о стену — только в воздухе
     if(pl.wall !== 0 && pl.vy > WALL_SLIDE) pl.vy -= (pl.vy - WALL_SLIDE) * 0.55;
-    var fallCap = maxFall();
+    var fallCap = maxFall() * (keys.dn ? 1.35 : 1) * (zoneG < 1 ? Math.max(0.25, zoneG) : 1);
     if(pl.vy > fallCap) pl.vy = fallCap;
   }
 
@@ -2575,6 +2675,8 @@ function step(){
     });
     pl.rideOn = (bestPlat && (bestPlat.moves || bestPlat.pushable)) ? bestPlat : null;
     pl.standPlat = bestPlat;
+    // встал на ломающийся блок — он начинает рассыпаться
+    if(bestPlat && bestPlat.crumble && !bestPlat._cr) bestPlat._cr = 1;
   }
 
   pl.hidden = false;
@@ -2583,7 +2685,10 @@ function step(){
     // зашёл в укрытие — искатель не видит ни фигуру, ни ник
     if(over && o.hideSpot === true) pl.hidden = true;
     if(!over){
-      if(o.type === "button" && o._act){ o._act = false; drive(o); }
+      if(o.type === "button" && o._act && !o._offAt){
+        if(+o.holdSec > 0) o._offAt = timeMs + o.holdSec * 1000;   // таймер: держит ещё holdSec с
+        else { o._act = false; drive(o); }
+      }
       if(o.type === "lever") o._latch = false;
       return;
     }
@@ -2598,6 +2703,13 @@ function step(){
     if(o.type === "checkpoint" && pl.flag && !pl.cpFlag){
       pl.cpFlag = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h}; lastSafePos = {x:spawnPt.x, y:spawnPt.y};
       spyNote("saved");
+    }
+    if(o.type === "key" && !o._got && !pl.dead){
+      o._got = true; o._act = true; drive(o);
+      burst(o.x+o.w/2, o.y+o.h/2, 16, "#facc15", 3, 30);
+      if(window.BFSound) BFSound.toggle();
+      showMsg(TR("keyTitle","Ключ"), TR("keyGot","Ключ подобран — где-то открылась дверь."));
+      clearTimeout(starMsgT); starMsgT = setTimeout(function(){ if(!done) hideMsg(); }, 1500);
     }
     if(o.type === "star" && !o._got && !pl.dead){
       o._got = true;
@@ -2640,6 +2752,7 @@ function step(){
       clearTimeout(finishTimer);
       finishTimer = setTimeout(function(){ if(playing && done) restartRun(); }, 2200);
     }
+    if(o.type === "button" && o._offAt) o._offAt = 0;   // снова нажали — таймер заново
     if(o.type === "button" && !o._act){ o._act = true; drive(o); if(window.BFSound) BFSound.toggle(); }
     if(o.type === "lever" && !o._latch){ o._act = !o._act; o._latch = true; drive(o); if(window.BFSound) BFSound.toggle(); }
   });
@@ -2647,6 +2760,15 @@ function step(){
   spyTick();
   // не внутри опасности прямо сейчас — можно смело вернуть сюда при смерти
   // в Practice Mode (если умер этим же кадром, pl.dead уже true — не трогаем)
+  /* Урон от падения (опция карты гонки): приземлился, пролетев вниз больше FALL_DMG_H —
+     смерть. Пружины, рикошет и зоны невесомости высоту отсчитывают заново. */
+  if(raceFall && !pl.dead){
+    if(!pl.ground){ if(pl.airTop === undefined || pl.y < pl.airTop || pl.vy < 0 || zoneG < 1) pl.airTop = pl.y; }
+    else {
+      if(pl.airTop !== undefined && pl.y - pl.airTop > FALL_DMG_H && !(pl.standPlat && (pl.standPlat.look === "spring" || pl.standPlat.ricochet))) die();
+      pl.airTop = pl.y;
+    }
+  }
   if(!pl.dead) lastSafePos = {x:pl.x, y:pl.y};
 
   if(pl.y > 5000){
@@ -2887,6 +3009,21 @@ function camSeesPlayer(o, c, a, L){
 function findSpyFlag(){ for(var i = 0; i < objects.length; i++) if(objects[i].type === "spyFlag") return objects[i]; return null; }
 // финиш закрыт: на карте есть флаг шпиона, а игрок его не несёт
 /* Звёзды на карте: сколько осталось, счётчик в углу и подсказка у финиша */
+function oneWayMarks(o){
+  ctx.save(); ctx.strokeStyle = "rgba(255,255,255,.7)"; ctx.lineWidth = 2;
+  for(var x = 12; x < o.w - 6; x += 26){
+    var y = o.h/2;
+    ctx.beginPath(); ctx.moveTo(x - 5, y + 3); ctx.lineTo(x, y - 3); ctx.lineTo(x + 5, y + 3); ctx.stroke();
+  }
+  ctx.restore();
+}
+function crumbleMarks(o){
+  ctx.save(); ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 1.5;
+  for(var x = 8; x < o.w - 4; x += 22){
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 5, o.h*0.45); ctx.lineTo(x - 2, o.h); ctx.stroke();
+  }
+  ctx.restore();
+}
 function starsLeft(){ var n = 0; for(var i = 0; i < objects.length; i++) if(objects[i].type === "star" && !objects[i]._got) n++; return n; }
 function starHud(){
   var all = 0, got = 0;
@@ -3029,9 +3166,15 @@ function paint(o, isSel){
   }
   ctx.translate(-o.w/2, -o.h/2);
   if(open) ctx.globalAlpha = .2;
+  // мигающий в «выключенной» фазе и рассыпавшийся блок — бледная тень на своём месте
+  if(playing && (o._off || o._gone)) ctx.globalAlpha = .15;
+  // ломающийся блок под игроком дрожит, прежде чем рассыпаться
+  if(playing && o._cr && !o._gone) ctx.translate((Math.random()-0.5)*3, (Math.random()-0.5)*2);
   /* Проходимые объекты (без коллизии) выглядят так же, как обычные — просто не мешают игроку.
      Раньше их делали полупрозрачными (45%), и декорации выцветали (см. test-ghost-look.js). */
   (PAINT[o.type] || PAINT.rect)(o);
+  if(o.oneWay) oneWayMarks(o);
+  if(o.crumble && !(playing && o._gone)) crumbleMarks(o);
   /* Лазер теперь свойство, а не отдельный тип — рисуем ту же линзу, что
      раньше была у laserFeed, поверх обычной фигуры. */
   if(o.laser){
@@ -3782,6 +3925,9 @@ document.addEventListener("keydown", function(e){
       keys.u = true; buf = BUFFER;
       if(!(typingInChat() && e.code === "KeyW")) e.preventDefault();
     }
+    if(e.code === "ArrowDown" || e.code === "KeyS"){ keys.dn = true; if(e.code === "ArrowDown") e.preventDefault(); }
+    // R — назад на чекпоинт (в гонке; считается смертью, как и падение)
+    if(e.code === "KeyR" && !e.repeat && mode === "race" && !done && !pl.dead) die();
     if(e.code === "Escape") stop();
     return;
   }
@@ -3804,6 +3950,7 @@ document.addEventListener("keyup", function(e){
     if(e.code === "ArrowLeft" || e.code === "KeyA") keys.l = false;
     if(e.code === "ArrowRight"|| e.code === "KeyD") keys.r = false;
     if(e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Space") keys.u = false;
+    if(e.code === "ArrowDown" || e.code === "KeyS") keys.dn = false;
   }
 });
 function pad(id, fn){
@@ -4479,7 +4626,7 @@ window.GAME = BRIDGE = {
       if(o.type === "seeker") o.type = "spawn";
       // размер игрока и зомби больше не настраивается — приводим старые объекты
       if(o.type === "spawn"){ o.w = SIZES.spawn[0]; o.h = SIZES.spawn[1]; }
-      if(o.type === "zombie" || o.type === "teleport" || o.type === "seekerSpot" || o.type === "star"){ o.w = SIZES[o.type][0]; o.h = SIZES[o.type][1]; }
+      if(o.type === "zombie" || o.type === "teleport" || o.type === "seekerSpot" || o.type === "star" || o.type === "key"){ o.w = SIZES[o.type][0]; o.h = SIZES[o.type][1]; }
       // пушка: размер задан движком, поворота нет — только прицел ствола (o.aim, градусы)
       if(o.type === "cannon"){ o.w = SIZES.cannon[0]; o.h = SIZES.cannon[1]; o.rot = 0;
         o.aim = isFinite(o.aim) ? Math.max(-360, Math.min(360, +o.aim)) : 0; }
@@ -4546,8 +4693,8 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="game.js?v=209"></script>
-        <script src="i18n.js?v=209"></script>
-        <script src="skinAvatar.js?v=209" defer></script>
+<script src="game.js?v=210"></script>
+        <script src="i18n.js?v=210"></script>
+        <script src="skinAvatar.js?v=210" defer></script>
 </body>
 </html>
