@@ -70,7 +70,7 @@ const nearMap = (extra) => Object.assign({ mode: 'race', objects: [
     ok(hs.rr === 0 && hs.ap === 2, 'прятки: только Classic / Zombie Apocalypse' + tag, JSON.stringify(hs));
     await ep.click('.modeBtn[data-mode="race"]');
     const rc = await vis();
-    ok(rc.rr === 14 && rc.ap === 0, 'гонка: вместо них жизни, время, цель карты, двойной прыжок, урон от падения, спринт и авто-бег' + tag, JSON.stringify(rc));
+    ok(rc.rr === 15 && rc.ap === 0, 'гонка: вместо них жизни, время, цель карты, двойной прыжок, урон от падения, спринт, авто-бег и крюк' + tag, JSON.stringify(rc));
     const fit = await ep.evaluate(() => {
       const r = document.getElementById('apoc').getBoundingClientRect();
       return { left: Math.round(r.left), right: Math.round(r.right), vw: document.documentElement.clientWidth, scroll: document.getElementById('apoc').scrollWidth - document.getElementById('apoc').clientWidth };

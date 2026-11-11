@@ -92,6 +92,10 @@
     {
       "title": "Ziplines and map search in your profile",
       "text": "The map editor has a new Zipline: jump up to the rope to grab it and slide down, picking up speed, and jump again to let go. Your profile's Maps tab now has a search box to find your own maps by name."
+    },
+    {
+      "title": "Grappling hook",
+      "text": "Race maps can turn on a grappling hook: press E to hook onto a block ahead and above you and swing on the rope across gaps. Jump or press E again to let go."
     }
   ]
 }

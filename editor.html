@@ -373,15 +373,15 @@ body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="device.js?v=222"></script>
-        <script src="sound.js?v=222"></script>
-        <script src="skinRender.js?v=222"></script>
-        <script src="skinCanvas.js?v=222"></script>
-        <script src="gifuct.bundle.js?v=222"></script>
-        <script src="gifPlayer.js?v=222"></script>
-        <script src="coin.js?v=222"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=222">
-        <script src="theme.js?v=222"></script>
+<script src="device.js?v=223"></script>
+        <script src="sound.js?v=223"></script>
+        <script src="skinRender.js?v=223"></script>
+        <script src="skinCanvas.js?v=223"></script>
+        <script src="gifuct.bundle.js?v=223"></script>
+        <script src="gifPlayer.js?v=223"></script>
+        <script src="coin.js?v=223"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=223">
+        <script src="theme.js?v=223"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1235,7 +1235,7 @@ var apoc = false;
    побеждает первый, "last" — Last bro standing, только с жизнями. */
 var raceLives = 0, raceTimeMin = 0, raceGoal = "";
 /* Ещё две опции карты гонки (идеи игроков): двойной прыжок и урон от падения с большой высоты. */
-var raceDJ = false, raceFall = false, raceSprint = false, raceAuto = false, FALL_DMG_H = 620;
+var raceDJ = false, raceFall = false, raceSprint = false, raceAuto = false, raceHook = false, FALL_DMG_H = 620;
 /* Атмосфера карты (идеи «дождь/снег», «день и ночь», «туман войны») — для любого режима:
    "" — ясно, rain, snow, night (темно, свет вокруг игрока), fog (видно только рядом). */
 var ATMOS = ["", "rain", "snow", "night", "fog"], atmo = "", flashA = 0;
@@ -1252,11 +1252,12 @@ function cleanRaceRules(d){
   raceFall = mode === "race" && !!(d && d.fallDmg);
   raceSprint = mode === "race" && !!(d && d.sprint);
   raceAuto = mode === "race" && !!(d && d.autoRun);
+  raceHook = mode === "race" && !!(d && d.hook);
 }
 // поля правил гонки для сохранения карты — пустые не пишем
 function withRaceRules(m){
   if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; if(raceGoal) m.goal = raceGoal;
-    if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; if(raceSprint) m.sprint = 1; if(raceAuto) m.autoRun = 1; }
+    if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; if(raceSprint) m.sprint = 1; if(raceAuto) m.autoRun = 1; if(raceHook) m.hook = 1; }
   if(atmo) m.atmo = atmo;
   if(copyable) m.copyable = 1;
   return m;
@@ -1668,7 +1669,7 @@ function respawn(){
     if(pl.flag && !pl.cpFlag) spyNote("lost");
     pl.flag = !!pl.cpFlag;
   }
-  pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0; pl.airTop = undefined; pl.dj = false; pl.zip = null;
+  pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0; pl.airTop = undefined; pl.dj = false; pl.zip = null; pl.hook = null;
   pl.rideOn = null; pl.grab = null; grabCd = 0; pl.kick = 0; pl.climb = null; pl.jumpLock = false;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckSteer = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
 }
@@ -2938,6 +2939,22 @@ function step(){
   spyTick();
   // не внутри опасности прямо сейчас — можно смело вернуть сюда при смерти
   // в Practice Mode (если умер этим же кадром, pl.dead уже true — не трогаем)
+  /* Крюк-кошка (опция гонки, идея «Grapple mode»): верёвка не даёт отойти от точки зацепа дальше
+     её длины — игрок качается маятником; E или прыжок — отпустить (прыжок ещё и подбрасывает). */
+  if(pl.hook){
+    var hk = pl.hook, hcx = pl.x + pl.w/2, hcy = pl.y + pl.h*0.2, hdx = hcx - hk.x, hdy = hcy - hk.y, hd = Math.sqrt(hdx*hdx + hdy*hdy) || 1;
+    if(keys.u && !pl.jumpLock && !pl.ground){ pl.hook = null; pl.vy = Math.min(pl.vy, jumpV()*0.7); pl.jumpLock = true; pl.selfJump = true; }
+    else if(hd > hk.len){
+      var nx = hdx/hd, ny = hdy/hd;
+      pl.x -= nx*(hd - hk.len); pl.y -= ny*(hd - hk.len);
+      var vr = pl.vx*nx + pl.vy*ny;
+      if(vr > 0){ pl.vx -= vr*nx; pl.vy -= vr*ny; }
+      // ход маятника не гасит управление: нажатие в сторону раскачивает сильнее
+      if(dir) pl.vx += dir * 0.25 * TEMPO;
+      pl.kick = 6;
+    }
+    if(pl.dead) pl.hook = null;
+  }
   // пыль при приземлении (идея «частицы при приземлении»; «Слабый ПК» их выключает — см. burst)
   if(pl.ground && !pl._wasG && (pl._airVy || 0) > 9 * TEMPO) burst(pl.x + pl.w/2, pl.y + pl.h, 10, "#cbd5e1", 1.8, 18);
   pl._wasG = pl.ground; if(!pl.ground) pl._airVy = pl.vy;
@@ -3264,6 +3281,20 @@ function parallaxShift(){
 function zipEnds(o, local){
   var x0 = local ? 0 : o.x, y0 = local ? 0 : o.y;
   return o.flip ? [x0 + o.w, y0, x0, y0 + o.h] : [x0, y0, x0 + o.w, y0 + o.h];
+}
+// крюк: луч вверх-вперёд (60° к горизонту) до 360 единиц — первая твёрдая фигура на пути и есть зацеп
+function throwHook(){
+  if(pl.hook){ pl.hook = null; return; }
+  var sx = pl.x + pl.w/2, sy = pl.y + pl.h*0.2, fx = (pl.face || 1) * 0.5, fy = -0.866;
+  var near = nearby(sx - 380, sy - 380, 760, 760);
+  for(var d = 20; d <= 360; d += 8){
+    var px = sx + fx*d, py = sy + fy*d;
+    for(var i = 0; i < near.length; i++) if(solid(near[i]) && inside(near[i], px, py)){
+      pl.hook = { x: px, y: py, len: d };
+      burst(px, py, 8, "#a8a29e", 1.6, 14);
+      return;
+    }
+  }
 }
 function crumbleMarks(o){
   ctx.save(); ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 1.5;
@@ -3608,6 +3639,13 @@ function paintFrame(){
   }
   // маршрут выделенного лифта с призраками — только в редакторе (см. drawRoute)
   if(!playing && liftRouted(sel)) drawRoute(sel);
+  // верёвка крюка-кошки
+  if(playing && pl.hook){
+    ctx.save(); ctx.strokeStyle = "#57534e"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(pl.x + pl.w/2, pl.y + pl.h*0.2); ctx.lineTo(pl.hook.x, pl.hook.y); ctx.stroke();
+    ctx.fillStyle = "#44403c"; ctx.beginPath(); ctx.arc(pl.hook.x, pl.hook.y, 4, 0, 6.2832); ctx.fill();
+    ctx.restore();
+  }
   if(playing && !pl.dead){
     ctx.save(); ctx.translate(pl.x, pl.y);
     // себя в укрытии видно бледным — чужие не видят вообще
@@ -3886,13 +3924,15 @@ function showModeBtn(){
   add("rrBtn", TR("rrSprint","Спринт (Shift)"), "opt", "sprint");
   tip = TR("rrAutoTip","Авто-бег: персонаж бежит сам, игрок только прыгает");
   add("rrBtn", TR("rrAuto","Авто-бег"), "opt", "auto");
+  tip = TR("rrHookTip","Крюк-кошка: E — зацепиться за блок впереди-вверху и качаться");
+  add("rrBtn", TR("rrHook","Крюк (E)"), "opt", "hook");
 })();
 function goalName(g){
   return g === "first" ? TR("rrGoalFirst","Первый") : g === "last" ? TR("rrGoalLast","Последний") : TR("rrGoalAll","Финиш");
 }
 function syncRaceBtns(){
   document.querySelectorAll(".rrBtn").forEach(function(b){
-    var on = b.dataset.opt ? (b.dataset.opt === "dj" ? raceDJ : b.dataset.opt === "sprint" ? raceSprint : b.dataset.opt === "auto" ? raceAuto : raceFall)
+    var on = b.dataset.opt ? (b.dataset.opt === "dj" ? raceDJ : b.dataset.opt === "sprint" ? raceSprint : b.dataset.opt === "auto" ? raceAuto : b.dataset.opt === "hook" ? raceHook : raceFall)
       : b.dataset.lives !== undefined ? +b.dataset.lives === raceLives
       : b.dataset.goal !== undefined ? b.dataset.goal === raceGoal : +b.dataset.time === raceTimeMin;
     b.classList.toggle("on", on);
@@ -3946,7 +3986,7 @@ document.getElementById("apoc").addEventListener("click", function(e){
   if(r){
     if(playing) return;
     if(r.dataset.opt){
-      if(r.dataset.opt === "dj") raceDJ = !raceDJ; else if(r.dataset.opt === "sprint") raceSprint = !raceSprint; else if(r.dataset.opt === "auto") raceAuto = !raceAuto; else raceFall = !raceFall;
+      if(r.dataset.opt === "dj") raceDJ = !raceDJ; else if(r.dataset.opt === "sprint") raceSprint = !raceSprint; else if(r.dataset.opt === "auto") raceAuto = !raceAuto; else if(r.dataset.opt === "hook") raceHook = !raceHook; else raceFall = !raceFall;
     } else if(r.dataset.lives !== undefined){
       raceLives = +r.dataset.lives;
       if(!raceLives && raceGoal === "last") raceGoal = "";      // Last bro standing без жизней не бывает
@@ -4051,6 +4091,7 @@ function retip(){
   });
   Array.prototype.forEach.call(document.querySelectorAll(".rrBtn"), function(b){
     if(b.dataset.opt === "dj"){ b.textContent = TR("rrDJ","Двойной прыжок"); b.title = TR("rrDJTip","Двойной прыжок: ещё один прыжок в воздухе"); return; }
+    if(b.dataset.opt === "hook"){ b.textContent = TR("rrHook","Крюк (E)"); b.title = TR("rrHookTip","Крюк-кошка: E — зацепиться за блок впереди-вверху и качаться"); return; }
     if(b.dataset.opt === "auto"){ b.textContent = TR("rrAuto","Авто-бег"); b.title = TR("rrAutoTip","Авто-бег: персонаж бежит сам, игрок только прыгает"); return; }
     if(b.dataset.opt === "sprint"){ b.textContent = TR("rrSprint","Спринт (Shift)"); b.title = TR("rrSprintTip","Спринт: с зажатым Shift бег быстрее"); return; }
     if(b.dataset.opt === "fall"){ b.textContent = TR("rrFall","Урон от падения"); b.title = TR("rrFallTip","Урон от падения: упал с большой высоты — смерть"); return; }
@@ -4751,6 +4792,7 @@ document.addEventListener("keydown", function(e){
     if(e.code === "KeyR"){ clearTimeout(finishTimer); restartRun(); }
     if(e.code === "ArrowDown" || e.code === "KeyS"){ keys.dn = true; if(e.code === "ArrowDown") e.preventDefault(); }
     if(e.code === "ShiftLeft" || e.code === "ShiftRight") keys.sh = true;
+    if(e.code === "KeyE" && !e.repeat && raceHook) throwHook();
     // свои клавиши из «Настроек» — вдобавок к стрелкам и WASD
     var pk = prefKey(e.code);
     if(pk && !(typingInChat() && !movementKey(e.code))){ keys[pk] = true; if(pk === "u") buf = BUFFER; e.preventDefault(); }
@@ -6146,12 +6188,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=222"></script>
-<script src="abuseShow.js?v=222" defer></script>
-<script src="editorHelp.js?v=222"></script>
-<script src="editorAI.js?v=222" defer></script>
-<script src="account.js?v=222" defer></script>
-<script src="owner.js?v=222" defer></script>
+<script src="i18n.js?v=223"></script>
+<script src="abuseShow.js?v=223" defer></script>
+<script src="editorHelp.js?v=223"></script>
+<script src="editorAI.js?v=223" defer></script>
+<script src="account.js?v=223" defer></script>
+<script src="owner.js?v=223" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -6268,7 +6310,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=222" defer></script>
+        <script src="skinAvatar.js?v=223" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */
