@@ -152,6 +152,10 @@
     {
       "title": "Medic rounds in Hide and Seek",
       "text": "Hide and Seek has a new Medic round. One of the hiders is the medic and can touch a caught player once per round to bring them back into the game. Hosts of private rooms can pick this mode too."
+    },
+    {
+      "title": "Player collisions",
+      "text": "Race maps have a new option in the editor: Player collisions. On such maps you can stand on top of other players to reach higher places. You still pass through them from the side and from below, so nobody gets stuck."
     }
   ]
 }

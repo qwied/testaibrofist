@@ -260,16 +260,16 @@ body{background:#eef2f8;overflow:hidden}
         <script src="offline.js?v=9"></script>
         <script src="offlineServer.js?v=10"></script>
         <script src="offlineModes.js?v=11"></script>
-<script src="device.js?v=237"></script>
-        <script src="sound.js?v=237"></script>
-        <script src="skinRender.js?v=237"></script>
-        <script src="skinCanvas.js?v=237"></script>
-        <script src="gifuct.bundle.js?v=237"></script>
-        <script src="gifPlayer.js?v=237"></script>
-        <script src="coin.js?v=237"></script>
-        <script src="liveText.js?v=237"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=237">
-        <script src="theme.js?v=237"></script>
+<script src="device.js?v=238"></script>
+        <script src="sound.js?v=238"></script>
+        <script src="skinRender.js?v=238"></script>
+        <script src="skinCanvas.js?v=238"></script>
+        <script src="gifuct.bundle.js?v=238"></script>
+        <script src="gifPlayer.js?v=238"></script>
+        <script src="coin.js?v=238"></script>
+        <script src="liveText.js?v=238"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=238">
+        <script src="theme.js?v=238"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1396,7 +1396,7 @@ var apoc = false;
    побеждает первый, "last" — Last bro standing, только с жизнями. */
 var raceLives = 0, raceTimeMin = 0, raceGoal = "", trialTrapN = 0;
 /* Ещё две опции карты гонки (идеи игроков): двойной прыжок и урон от падения с большой высоты. */
-var raceDJ = false, raceFall = false, raceSprint = false, raceAuto = false, raceHook = false, FALL_DMG_H = 620;
+var raceDJ = false, raceFall = false, raceSprint = false, raceAuto = false, raceHook = false, raceCollide = false, FALL_DMG_H = 620;
 /* Атмосфера карты (идеи «дождь/снег», «день и ночь», «туман войны») — для любого режима:
    "" — ясно, rain, snow, night (темно, свет вокруг игрока), fog (видно только рядом). */
 var ATMOS = ["", "rain", "snow", "night", "fog", "real"], atmo = "", flashA = 0, mapBg = "";
@@ -1412,11 +1412,12 @@ function cleanRaceRules(d){
   raceSprint = mode === "race" && !!(d && d.sprint);
   raceAuto = mode === "race" && !!(d && d.autoRun);
   raceHook = mode === "race" && !!(d && d.hook);
+  raceCollide = mode === "race" && !!(d && d.collide);
 }
 // поля правил гонки для сохранения карты — пустые не пишем
 function withRaceRules(m){
   if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; if(raceGoal) m.goal = raceGoal;
-    if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; if(raceSprint) m.sprint = 1; if(raceAuto) m.autoRun = 1; if(raceHook) m.hook = 1; }
+    if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; if(raceSprint) m.sprint = 1; if(raceAuto) m.autoRun = 1; if(raceHook) m.hook = 1; if(raceCollide) m.collide = 1; }
   if(atmo) m.atmo = atmo;
   if(mapBg) m.bg = mapBg;
   return m;
@@ -2536,6 +2537,15 @@ function step(){
   var near = nearby(pl.x - 260, pl.y - 260, pl.w + 520, pl.h + 520);
   var sol = [], i;
   for(i=0;i<near.length;i++) if(solid(near[i]) && !(near[i].oneWay && !oneWayHolds(near[i]))) sol.push(near[i]);
+  /* Столкновения игроков (опция карты гонки, идея #401): на других игроков можно встать, как на
+     платформу «сквозь снизу» — сбоку и снизу сквозь них проходишь, чтобы не толкаться и не застревать. */
+  if(raceCollide && typeof BRIDGE !== "undefined" && BRIDGE && BRIDGE.others){
+    var ops = BRIDGE.others() || [];
+    for(var oi = 0; oi < ops.length; oi++){
+      var po = { id: -1 - oi, type: "rect", x: ops[oi].x, y: ops[oi].y, w: ops[oi].w || 22, h: ops[oi].h || 74, oneWay: true };
+      if(oneWayHolds(po)) sol.push(po);
+    }
+  }
   // зона гравитации и ветра: берём последнюю (верхнюю), в которой стоит игрок
   var zoneG = 1, zoneW = 0;
   for(i=0;i<near.length;i++) if(near[i].type === "gravzone" && overlaps(near[i], pl.x, pl.y, pl.w, pl.h)){
@@ -5343,9 +5353,9 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="cosmDraw.js?v=237"></script>
-<script src="game.js?v=237"></script>
-        <script src="i18n.js?v=237"></script>
-        <script src="skinAvatar.js?v=237" defer></script>
+<script src="cosmDraw.js?v=238"></script>
+<script src="game.js?v=238"></script>
+        <script src="i18n.js?v=238"></script>
+        <script src="skinAvatar.js?v=238" defer></script>
 </body>
 </html>
