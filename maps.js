@@ -31,7 +31,13 @@ const REWARD      = 10;                // монет за каждую нову�
 const COIN_LIMIT  = 3;                 // максимум монет в одной карте — защита от накрутки
 const OBJ_LIMIT   = 2000;              // максимум объектов в карте, одинаково во всех режимах
 const OBJ_MIN     = 100;               // минимум объектов для публикации — иначе награду накрутить проще, чем карту построить
-const TEXT_MAX_RATIO = 0.3;            // не больше 30% карты — текстовые объекты, остальное геометрия
+const TEXT_MAX_RATIO = 0.3;
+/* Волна 23: категории карт, продвижение за монеты, монеты автору за лайки, недельная подборка. */
+const CATEGORIES   = ['parkour', 'speedrun', 'minigame', 'puzzle', 'troll', 'layout', 'model'];
+const PROMO_PRICE  = 50;               // монет за сутки продвижения карты
+const PROMO_MS     = 24 * 60 * 60 * 1000;
+const LIKE_COIN_DAY = 20;              // максимум монет автору за лайки в сутки
+const PACK_SIZE    = 5, PACK_REWARD = 50;            // не больше 30% карты — текстовые объекты, остальное геометрия
 
 // у каждого режима свой набор объектов; общие доступны везде
 /* Платформа, ротатор, батут, яд и шипы стали свойствами обычных объектов,
@@ -557,8 +563,18 @@ function register(app, getUser, acc, cleanText) {
     if (author) out = out.filter(m => low(m.author).indexOf(author) !== -1);
     if (mapName) out = out.filter(m => low(m.mapName).indexOf(mapName) !== -1);
     if (favoritesOnly) out = out.filter(m => myFavs.indexOf(favKey(m.author, m.mapName)) !== -1);
+    const category = String(req.query.category || '');
+    if (category) out = out.filter(m => m.category === category);
+    /* «Вперемешку»: порядок задаёт seed клиента, чтобы страницы не повторяли друг друга */
+    const seed = String(req.query.seed || '').slice(0, 20);
+    const mix = m => { let h = 2166136261; const k = seed + '|' + low(m.author) + '|' + low(m.mapName);
+      for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 16777619) >>> 0; return h; };
+    const promoted = m => (m.promotedUntil || 0) > Date.now();
 
     out.sort((a, b) => {
+      if (sortBy === 'random') return mix(a) - mix(b);
+      // продвинутые карты — первыми в списке «новые»
+      if (sortBy === 'date' && promoted(a) !== promoted(b)) return promoted(a) ? -1 : 1;
       if (sortBy === 'popular') return ((b.plays || 0) - (a.plays || 0)) || (b.date - a.date);
       if (sortBy === 'hot') return (weekPlays(b) - weekPlays(a)) || (b.date - a.date);
       if (sortBy === 'rating') return (b.rating - a.rating) || (b.date - a.date);
@@ -581,6 +597,8 @@ function register(app, getUser, acc, cleanText) {
         rankTiers: m.rankTiers || null,
         myMedal: medalOf(m, me),
         plays: m.plays || 0,
+        category: m.category || '',
+        promoted: promoted(m),
         copyable: (function () { try { return !!JSON.parse(m.mapData).copyable; } catch (e) { return false; } })(),
         record: Array.isArray(m.records) && m.records[0] ? { name: m.records[0].name, ms: m.records[0].ms } : null
       };
@@ -591,6 +609,73 @@ function register(app, getUser, acc, cleanText) {
   }
   app.get('/getMaps', list);
   app.get('/getMapsForList', list);
+
+  // ---------- категория карты (ставит автор) ----------
+  app.post('/setMapCategory', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const m = find(req.body.author, req.body.mapName);
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+    if (low(m.author) !== low(u.name) && !isOwnerName(u.name))
+      return res.json({ status: 'error', message: 'Only the author can change this' });
+    const c = String(req.body.category || '');
+    if (c && CATEGORIES.indexOf(c) === -1) return res.json({ status: 'error', message: 'Unknown category' });
+    if (c) m.category = c; else delete m.category;
+    save();
+    res.json({ status: 'success', category: m.category || '' });
+  });
+
+  // ---------- продвижение карты за монеты: сутки первой в «новых» ----------
+  app.post('/promoteMap', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const m = find(req.body.author, req.body.mapName);
+    if (!m) return res.json({ status: 'error', message: 'Map not found' });
+    if (low(m.author) !== low(u.name)) return res.json({ status: 'error', message: 'You can only promote your own maps' });
+    if ((u.coins || 0) < PROMO_PRICE) return res.json({ status: 'error', message: 'You need ' + (PROMO_PRICE - (u.coins || 0)) + ' more coins' });
+    u.coins -= PROMO_PRICE;
+    m.promotedUntil = Math.max(Date.now(), m.promotedUntil || 0) + PROMO_MS;
+    save();
+    if (acc && typeof acc.save === 'function') acc.save();
+    res.json({ status: 'success', coins: u.coins, until: m.promotedUntil });
+  });
+
+  // ---------- подборка недели: 5 гоночных карт, за все — награда ----------
+  function weekKey(t) {
+    const d = new Date(t || Date.now()); const wd = (d.getUTCDay() + 6) % 7;
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - wd)).toISOString().slice(0, 10);
+  }
+  function weekPack() {
+    const pool = rawPool('race').filter(m => !m.showcase)
+      .sort((a, b) => low(a.author + a.mapName) < low(b.author + b.mapName) ? -1 : 1);
+    const wk = weekKey(), out = [];
+    let h = 0;
+    for (let i = 0; i < wk.length; i++) h = (h * 31 + wk.charCodeAt(i)) >>> 0;
+    while (pool.length && out.length < PACK_SIZE) {
+      h = (Math.imul(h, 1103515245) + 12345) >>> 0;
+      out.push(pool.splice(h % pool.length, 1)[0]);
+    }
+    return out;
+  }
+  function packState(u) {
+    const list = weekPack().map(m => ({ author: m.author, mapName: m.mapName,
+      done: !!(u && u.rcBest && u.rcBest[m.author + '|' + m.mapName] > 0) }));
+    return { week: weekKey(), maps: list, reward: PACK_REWARD,
+             claimed: !!(u && u.packWeek === weekKey()), signed: !!u };
+  }
+  app.get('/mapPack', (req, res) => res.json(packState(getUser(req))));
+  app.post('/mapPack/claim', (req, res) => {
+    const u = getUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const st = packState(u);
+    if (st.claimed) return res.json({ status: 'error', message: 'Already claimed this week' });
+    if (!st.maps.length || st.maps.some(x => !x.done)) return res.json({ status: 'error', message: 'Finish every map of the pack first' });
+    u.packWeek = st.week;
+    u.coins = (u.coins || 0) + PACK_REWARD;
+    if (acc && typeof acc.save === 'function') acc.save();
+    if (acc && typeof acc.logCoins === 'function') acc.logCoins(u.name, PACK_REWARD);
+    res.json({ status: 'success', coins: u.coins, reward: PACK_REWARD });
+  });
 
   // ---------- подписка на автора карт ----------
   app.get('/follow/state', (req, res) => {
@@ -679,6 +764,19 @@ function register(app, getUser, acc, cleanText) {
     else {
       m.votes[low(u.name)] = v;
       if (fresh) require('./quests.js').track(u.name, 'map_vote');
+      // монета автору за первый лайк каждого игрока (не больше LIKE_COIN_DAY в сутки)
+      if (v === 1 && !m.showcase && !(m.likeCoined || {})[low(u.name)] && acc && typeof acc.getDb === 'function') {
+        m.likeCoined = m.likeCoined || {}; m.likeCoined[low(u.name)] = 1;
+        const au = acc.getDb().users[acc.key(m.author)];
+        if (au) {
+          const d = dayKey();
+          if (au.likeCoinDay !== d) { au.likeCoinDay = d; au.likeCoinN = 0; }
+          if (au.likeCoinN < LIKE_COIN_DAY) {
+            au.likeCoinN++; au.coins = (au.coins || 0) + 1;
+            acc.save(); if (typeof acc.logCoins === 'function') acc.logCoins(au.name, 1);
+          }
+        }
+      }
     }
     const t = retally(m);
     save();
@@ -1062,4 +1160,4 @@ function newFromFriends(user) {
   return out;
 }
 
-module.exports = { countPlay, addRecord, dailyMap, dayKey, register, reload: load, MODES, FAMILY, familyOf, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, allMaps, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, candidatesFor, renameAuthor };
+module.exports = { CATEGORIES, PROMO_PRICE, countPlay, addRecord, dailyMap, dayKey, register, reload: load, MODES, FAMILY, familyOf, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, allMaps, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, candidatesFor, renameAuthor };

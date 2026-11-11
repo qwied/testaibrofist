@@ -120,6 +120,10 @@
     {
       "title": "Profiles, hall of fame and a lobby chat",
       "text": "Profiles now have reputation, a short status and a link. The leaderboard has a Hall of Fame. The home page has a shared chat for signed-in players. The shop sells gold and glowing nicknames. The players list shows recent chat, and settings list the players you muted or hid."
+    },
+    {
+      "title": "Map categories, promotion and a weekly map pack",
+      "text": "Authors can set a category for their maps and filter the Maps Browser by it. A new Shuffle sort shows maps in random order. Authors can promote a map for 50 coins to show it first among the newest maps for a day. Map authors get a coin for each new like. Every week there is a pack of 5 race maps with a coin reward for finishing all of them."
     }
   ]
 }

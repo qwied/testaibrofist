@@ -11,12 +11,12 @@
      фактором масштаба. Теперь полноразмерный масштаб 1:1, а колонки
      Play/Vote доступны свайпом вбок внутри каждой строки, как и раньше. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=229">
+<link rel="stylesheet" href="ui.css?v=230">
 <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="theme.js?v=229"></script>
-<script src="device.js?v=229"></script>
-<script src="sound.js?v=229"></script>
+<script src="theme.js?v=230"></script>
+<script src="device.js?v=230"></script>
+<script src="sound.js?v=230"></script>
 <style>
 .mbFilters{display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:9px;margin-bottom:6px;align-items:center}
 .mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
@@ -190,6 +190,15 @@
   background:linear-gradient(90deg,#fef3c7,#fde68a);color:#111827;border:1px solid #f59e0b;font-size:14px}
 .mbDaily b{font-size:15px}
 .mbDaily .go{margin-left:auto}
+.mbPack{flex-direction:column;align-items:stretch}
+.mbPackHead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mbPackList{display:flex;gap:6px;flex-wrap:wrap}
+.mbPackMap{border:1px solid var(--line,#ccd);background:var(--panel);border-radius:9px;padding:5px 10px;cursor:pointer;font:inherit;color:inherit}
+.mbPackMap.done{border-color:var(--green);color:var(--green)}
+.mbCatTag{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:7px;background:rgba(80,120,255,.13);color:var(--blue);margin-left:6px;vertical-align:1px}
+.mbPromo{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:7px;background:#ffcd3c;color:#4a3500;margin-left:6px;vertical-align:1px;font-weight:700}
+.mbExtra select{font:inherit;font-size:13px;border-radius:8px;padding:4px 6px}
+.mbPromoBtn{border:1px solid #d9a400;color:#8a6500;background:var(--panel);border-radius:8px;padding:5px 10px;cursor:pointer;font:inherit;font-size:13px}
 </style>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -243,6 +252,17 @@
       <option value="oldest" data-i18n="sortOldest">Sort by oldest</option>
       <option value="popular" data-i18n="sortPopular">Most played</option>
       <option value="hot" data-i18n="sortHot">Hot this week</option>
+      <option value="random" data-i18n="sortRandom">Shuffle</option>
+    </select>
+    <select class="bfSelect" id="mbCat">
+      <option value="" data-i18n="catAll">Category: all</option>
+      <option value="parkour" data-i18n="cat_parkour">Parkour</option>
+      <option value="speedrun" data-i18n="cat_speedrun">Speedrun</option>
+      <option value="minigame" data-i18n="cat_minigame">Minigame</option>
+      <option value="puzzle" data-i18n="cat_puzzle">Puzzle</option>
+      <option value="troll" data-i18n="cat_troll">Troll</option>
+      <option value="layout" data-i18n="cat_layout">Layout</option>
+      <option value="model" data-i18n="cat_model">Model</option>
     </select>
     <label class="mbFavOnly"><input type="checkbox" id="mbFavOnly">
       <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 2.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7-5.4-4.8 7.1-.7z"/></svg>
@@ -251,6 +271,7 @@
   </div>
 
   <div class="mbDaily" id="mbDaily" style="display:none"></div>
+  <div class="mbDaily mbPack" id="mbPack" style="display:none"></div>
   <div class="mbTable">
     <div class="mbHead">
       <div class="bfPager">
@@ -278,15 +299,15 @@
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=229">
-<script src="i18n.js?v=229"></script>
-<script src="coin.js?v=229"></script>
-<script src="skinRender.js?v=229"></script>
-<script src="skinAvatar.js?v=229" defer></script>
-<script src="shell.js?v=229"></script>
-<script src="abuseShow.js?v=229" defer></script>
-<script src="account.js?v=229" defer></script>
-<script src="owner.js?v=229" defer></script>
+<link rel="stylesheet" href="mobile.css?v=230">
+<script src="i18n.js?v=230"></script>
+<script src="coin.js?v=230"></script>
+<script src="skinRender.js?v=230"></script>
+<script src="skinAvatar.js?v=230" defer></script>
+<script src="shell.js?v=230"></script>
+<script src="abuseShow.js?v=230" defer></script>
+<script src="account.js?v=230" defer></script>
+<script src="owner.js?v=230" defer></script>
 <script>
 (function () {
   'use strict';
@@ -373,7 +394,9 @@
       + '<div class="mbName" title="' + esc(m.mapName) + '">'
       +   '<button class="mbFav' + (m.myFavorite ? ' on' : '') + '" data-fav="1" title="'
       +     T('favToggle', 'В избранное') + '">' + (m.myFavorite ? STAR_ON : STAR_OFF) + '</button>'
-      +   '<span>' + esc(m.mapName) + '</span></div>'
+      +   '<span>' + esc(m.mapName) + '</span>'
+      +   (m.promoted ? '<i class="mbPromo">' + T('promotedTag', 'Promoted') + '</i>' : '')
+      +   (m.category ? '<i class="mbCatTag">' + esc(catName(m.category)) + '</i>' : '') + '</div>'
       + '<div class="mbRate ' + rc + '">' + m.rating + '</div>'
       + '<div class="mbAuthor"><a href="users?name=' + encodeURIComponent(m.author) + '">'
       +   esc(m.author) + '</a></div>'
@@ -410,11 +433,19 @@
               + '<button data-comment-send="1">' + T('send', 'Отправить') + '</button></div>'
             : '<div class="mbCommentSignIn">' + T('signInToComment', 'Войдите, чтобы оставить комментарий') + '</div>')
       + '</div>'
-      + (mine ? '<div class="mbExtra"><button class="mbDel" data-del="1">'
+      + (mine ? '<div class="mbExtra"><select data-cat="1" title="' + T('catSet', 'Category') + '"><option value="">'
+                + T('catNone', 'No category') + '</option>' + CATS.map(function (c) {
+                  return '<option value="' + c + '"' + (m.category === c ? ' selected' : '') + '>' + esc(catName(c)) + '</option>';
+                }).join('') + '</select>'
+                + '<button class="mbPromoBtn" data-promote="1">' + T('promoteBtn', 'Promote for 50 coins (24h)') + '</button>'
+                + '<button class="mbDel" data-del="1">'
                 + T('removeTxt', 'Удалить') + '</button></div>' : '')
       + '</div>';
   }
 
+  var shuffleSeed = String(Math.random()).slice(2, 10);
+  var CATS = ['parkour', 'speedrun', 'minigame', 'puzzle', 'troll', 'layout', 'model'];
+  function catName(c) { return T('cat_' + c, c.charAt(0).toUpperCase() + c.slice(1)); }
   function load() {
     $('mbList').innerHTML = '<div class="bfHint">' + T('loading', 'Загрузка…') + '</div>';
     var q = '?page=' + page
@@ -422,6 +453,8 @@
           + '&author=' + encodeURIComponent($('mbAuthor').value.trim())
           + '&name=' + encodeURIComponent($('mbName').value.trim())
           + '&sortBy=' + $('mbSort').value
+          + '&category=' + encodeURIComponent($('mbCat').value)
+          + '&seed=' + shuffleSeed
           + '&favoritesOnly=' + ($('mbFavOnly').checked ? '1' : '0');
     fetch('/getMapsForList' + q, { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
@@ -448,6 +481,14 @@
   // Неуязвимость/полёт видны, только пока отмечена сама Practice — иначе
   // включённые галочки простаивают, а карточка выглядит захламлённой.
   document.addEventListener('change', function (e) {
+    if (e.target.matches('[data-cat]')) {
+      var cr = e.target.closest('.mbRow');
+      post('/setMapCategory', { author: cr.dataset.author, mapName: cr.dataset.map, category: e.target.value }).then(function (x) {
+        if (x.status === 'success') { msg(T('catSaved', 'Category saved'), true); load(); }
+        else msg(x.message || T('errorTxt', 'Ошибка'));
+      }).catch(function () {});
+      return;
+    }
     if (!e.target.matches('[data-practice]')) return;
     var r = e.target.closest('.mbRow');
     var opts = r && r.querySelector('.mbPracticeOpts');
@@ -471,6 +512,33 @@
       box.style.display = '';
     }).catch(function () {});
   }
+  /* Подборка недели: 5 гоночных карт, за прохождение всех — монеты. */
+  function showPack() {
+    fetch('/mapPack', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+      var box = $('mbPack');
+      if (!d || !d.maps || !d.maps.length || !box) return;
+      var done = d.maps.filter(function (x) { return x.done; }).length;
+      box.innerHTML = '<div class="mbPackHead">\uD83D\uDCE6 <b>' + T('packTitle', 'Map pack of the week') + '</b> · '
+        + done + '/' + d.maps.length + ' · ' + (d.claimed ? T('packClaimed', 'reward claimed')
+          : '+' + d.reward + ' ' + T('packReward', 'coins for finishing all'))
+        + (!d.claimed && d.signed && done === d.maps.length ? '<button class="bfBtn go" id="mbPackClaim">' + T('packClaim', 'Claim') + '</button>' : '')
+        + '</div><div class="mbPackList">' + d.maps.map(function (x) {
+          return '<button class="mbPackMap' + (x.done ? ' done' : '') + '" data-pack-map="' + esc(x.mapName) + '" data-pack-author="' + esc(x.author) + '">'
+            + (x.done ? '\u2713 ' : '') + esc(x.mapName) + '</button>';
+        }).join('') + '</div>';
+      box.style.display = '';
+    }).catch(function () {});
+  }
+  document.addEventListener('click', function (e) {
+    var pm = e.target.closest && e.target.closest('[data-pack-map]');
+    if (pm) { openPlay(pm.dataset.packMap, pm.dataset.packAuthor, false, false, false); return; }
+    if (e.target.id === 'mbPackClaim') {
+      post('/mapPack/claim', {}).then(function (x) {
+        if (x.status === 'success') { msg('+' + x.reward + ' ' + T('coinsTxt', 'coins'), true); showPack(); }
+        else msg(x.message || T('errorTxt', 'Ошибка'));
+      }).catch(function () {});
+    }
+  });
   document.addEventListener('click', function (e) {
     var r = e.target.closest && e.target.closest('.mbRow');
     if (!r) return;
@@ -523,6 +591,15 @@
       }).then(function (x) {
         if (x.status !== 'success') { msg(x.message || T('errorTxt', 'Ошибка')); return; }
         load();
+      }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
+      return;
+    }
+
+    if (e.target.closest('[data-promote]')) {
+      if (!confirm(T('promoteAsk', 'Spend 50 coins to show this map first in "Newest" for 24 hours?'))) return;
+      post('/promoteMap', { author: r.dataset.author, mapName: r.dataset.map }).then(function (x) {
+        if (x.status === 'success') { msg(T('promoted', 'Map promoted for 24 hours'), true); load(); }
+        else msg(x.message || T('errorTxt', 'Ошибка'));
       }).catch(function () { msg(T('serverDown', 'Сервер недоступен')); });
       return;
     }
@@ -668,7 +745,8 @@
     $(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') { page = 1; load(); } });
   });
   $('mbMode').onchange = function () { page = 1; load(); };
-  $('mbSort').onchange = function () { page = 1; load(); };
+  $('mbSort').onchange = function () { page = 1; shuffleSeed = String(Math.random()).slice(2, 10); load(); };
+  $('mbCat').onchange = function () { page = 1; load(); };
   $('mbFavOnly').onchange = function () { page = 1; load(); };
   $('mbAuthor').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { page = 1; load(); }
@@ -708,7 +786,7 @@
 
   fetch('/whoAmI', { credentials: 'same-origin' })
     .then(function (r) { return r.json(); })
-    .then(function (d) { me = d; load(); showNewMaps(); showDaily(); })
+    .then(function (d) { me = d; load(); showNewMaps(); showDaily(); showPack(); })
     .catch(load);
 
   window.addEventListener('bf-lang', load);
