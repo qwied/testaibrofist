@@ -256,16 +256,16 @@ body{background:#eef2f8;overflow:hidden}
         <script src="offline.js?v=9"></script>
         <script src="offlineServer.js?v=10"></script>
         <script src="offlineModes.js?v=11"></script>
-<script src="device.js?v=223"></script>
-        <script src="sound.js?v=223"></script>
-        <script src="skinRender.js?v=223"></script>
-        <script src="skinCanvas.js?v=223"></script>
-        <script src="gifuct.bundle.js?v=223"></script>
-        <script src="gifPlayer.js?v=223"></script>
-        <script src="coin.js?v=223"></script>
-        <script src="liveText.js?v=223"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=223">
-        <script src="theme.js?v=223"></script>
+<script src="device.js?v=224"></script>
+        <script src="sound.js?v=224"></script>
+        <script src="skinRender.js?v=224"></script>
+        <script src="skinCanvas.js?v=224"></script>
+        <script src="gifuct.bundle.js?v=224"></script>
+        <script src="gifPlayer.js?v=224"></script>
+        <script src="coin.js?v=224"></script>
+        <script src="liveText.js?v=224"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=224">
+        <script src="theme.js?v=224"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1819,6 +1819,12 @@ function shapePts(o){
     case "star5":
       pts = [];
       for(i=0;i<10;i++){ a = -Math.PI/2 + i*Math.PI/5; var q = i%2 ? 0.45 : 1; pts.push([w/2 + Math.cos(a)*w/2*q, h/2 + Math.sin(a)*h/2*q]); }
+      break;
+    case "custom":
+      // свой многоугольник из редактора (инструмент «Многоугольник»): точки в долях рамки 0..1
+      pts = Array.isArray(o.pts) ? o.pts.slice(0, 40).filter(function(p){ return p && isFinite(p[0]) && isFinite(p[1]); })
+        .map(function(p){ return [Math.max(0, Math.min(1, +p[0])) * w, Math.max(0, Math.min(1, +p[1])) * h]; }) : [];
+      if(pts.length < 3) pts = [[w/2,0],[w,h],[0,h]];
       break;
     default: pts = [[w/2,0],[w,h],[0,h]];
   }
@@ -4991,9 +4997,9 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="cosmDraw.js?v=223"></script>
-<script src="game.js?v=223"></script>
-        <script src="i18n.js?v=223"></script>
-        <script src="skinAvatar.js?v=223" defer></script>
+<script src="cosmDraw.js?v=224"></script>
+<script src="game.js?v=224"></script>
+        <script src="i18n.js?v=224"></script>
+        <script src="skinAvatar.js?v=224" defer></script>
 </body>
 </html>

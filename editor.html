@@ -63,7 +63,7 @@ canvas{display:block;position:absolute;inset:0;touch-action:none}
 /* все семь режимов — равные кнопки в одну строку с обычным ползунком (как карточки режимов
    на главной): панель кончается до панели сцены, а что не влезло — листается */
 #modes{position:fixed;top:14px;left:14px;display:flex;padding:4px;gap:2px;z-index:11;
-  max-width:calc(50vw - 290px);overflow-x:auto;overflow-y:hidden;
+  max-width:calc(50vw - 420px);overflow-x:auto;overflow-y:hidden;
   scrollbar-width:auto;scrollbar-color:#9ca3af #eef0f3}
 #modes::-webkit-scrollbar{height:12px}
 #modes::-webkit-scrollbar-track{background:#eef0f3;border-radius:6px}
@@ -353,8 +353,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   #insp{top:calc(68px + env(safe-area-inset-top,0px));transform:none;
     max-height:calc(100vh - 128px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
 }
-/* слева от панели сцены остаётся меньше трёх кнопок — режимы встают под ней во всю ширину */
-@media (max-width:1100px){
+/* слева от панели сцены остаётся меньше трёх кнопок — режимы встают под ней во всю ширину
+   (панель сцены стала шире: атмосфера, копирование, подложка, старт, рамка обзора, фон) */
+@media (max-width:1400px){
   #modes{top:68px;max-width:calc(100vw - 28px)}
   #apoc{top:132px}
 }
@@ -373,15 +374,15 @@ body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="device.js?v=223"></script>
-        <script src="sound.js?v=223"></script>
-        <script src="skinRender.js?v=223"></script>
-        <script src="skinCanvas.js?v=223"></script>
-        <script src="gifuct.bundle.js?v=223"></script>
-        <script src="gifPlayer.js?v=223"></script>
-        <script src="coin.js?v=223"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=223">
-        <script src="theme.js?v=223"></script>
+<script src="device.js?v=224"></script>
+        <script src="sound.js?v=224"></script>
+        <script src="skinRender.js?v=224"></script>
+        <script src="skinCanvas.js?v=224"></script>
+        <script src="gifuct.bundle.js?v=224"></script>
+        <script src="gifPlayer.js?v=224"></script>
+        <script src="coin.js?v=224"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=224">
+        <script src="theme.js?v=224"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1101,6 +1102,9 @@ var TOOLS = [
   /* Зиплайн (идея «зиплайны и скольжение»): канат от одного угла рамки к другому; в прыжке
      игрок цепляется руками и скатывается вниз по нему, прыжок — отцепиться. */
   {t:"zipline",    n:"Зиплайн",     k:"toolZip",        m:ALL},
+  /* Свой многоугольник (идеи «свои фигуры», «polygon tool»): клики ставят вершины, Enter, двойной
+     клик или клик по первой точке — готово. Получается «треугольник» с формой custom. */
+  {t:"poly",       n:"Многоугольник", k:"toolPoly",     m:ALL},
   /* метка модификации Zombie Apocalypse — без неё карту не включить в
      этот режим (см. hsApplyApoc в server.js); только прятки: в гонке
      модификация не предлагается (см. #apoc ниже и TOOL_MODES.zombie в
@@ -1839,6 +1843,12 @@ function shapePts(o){
     case "star5":
       pts = [];
       for(i=0;i<10;i++){ a = -Math.PI/2 + i*Math.PI/5; var q = i%2 ? 0.45 : 1; pts.push([w/2 + Math.cos(a)*w/2*q, h/2 + Math.sin(a)*h/2*q]); }
+      break;
+    case "custom":
+      // свой многоугольник из редактора (инструмент «Многоугольник»): точки в долях рамки 0..1
+      pts = Array.isArray(o.pts) ? o.pts.slice(0, 40).filter(function(p){ return p && isFinite(p[0]) && isFinite(p[1]); })
+        .map(function(p){ return [Math.max(0, Math.min(1, +p[0])) * w, Math.max(0, Math.min(1, +p[1])) * h]; }) : [];
+      if(pts.length < 3) pts = [[w/2,0],[w,h],[0,h]];
       break;
     default: pts = [[w/2,0],[w,h],[0,h]];
   }
@@ -3658,6 +3668,18 @@ function paintFrame(){
   if(BRIDGE && BRIDGE.onDraw) BRIDGE.onDraw(ctx);
   drawParts();
   drawAtmo();
+  // недостроенный многоугольник: вершины и стороны, последняя — к курсору
+  if(!playing && tool === "poly" && polyPts.length){
+    var pk = 1/view.s;
+    ctx.save(); ctx.strokeStyle = "#2563eb"; ctx.lineWidth = 2*pk; ctx.fillStyle = "rgba(37,99,235,.15)";
+    ctx.beginPath(); ctx.moveTo(polyPts[0][0], polyPts[0][1]);
+    for(var pi = 1; pi < polyPts.length; pi++) ctx.lineTo(polyPts[pi][0], polyPts[pi][1]);
+    if(polyMouse) ctx.lineTo(polyMouse[0], polyMouse[1]);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#2563eb";
+    polyPts.forEach(function(q, i){ ctx.beginPath(); ctx.arc(q[0], q[1], (i ? 4 : 6)*pk, 0, 6.2832); ctx.fill(); });
+    ctx.restore();
+  }
   // рамка обзора игрока вокруг старта: кадр высотой VIEW_UNITS_H, ширина — как на широком мониторе и на телефоне
   if(!playing && showViewBox){
     var vsp = findSpawn();
@@ -3953,6 +3975,19 @@ var IS_GAME_PAGE = /\/?game(\.html)?/i.test(location.pathname);
    поднимается к панели режимов (их семь, в три строки) — тогда колонка встаёт
    сразу под ней и прокручивается, а не налезает на кнопки */
 function fitTools(){
+  /* Узкий экран: режимы и правила встают ПОД панелью сцены — по её настоящей высоте (на телефоне
+     она в две-три строки), а не на фиксированные 68px, где строки панели прятались под вкладками. */
+  var sc = document.getElementById("scene"), md = document.getElementById("modes"), ap = document.getElementById("apoc");
+  if(sc && md){
+    md.style.top = ""; if(ap) ap.style.top = "";
+    if(innerWidth <= 1400){
+      var sb = sc.getBoundingClientRect().bottom;
+      if(md.getBoundingClientRect().top < sb + 6){
+        md.style.top = Math.round(sb + 8) + "px";
+        if(ap) ap.style.top = Math.round(md.getBoundingClientRect().bottom + 8) + "px";
+      }
+    }
+  }
   var t = document.getElementById("tools");
   if(!t) return;
   t.style.top = ""; t.style.transform = ""; t.style.maxHeight = "";
@@ -4106,7 +4141,11 @@ addEventListener("bf-lang", retip);
 function drawIcon(cvs, type){
   var g = cvs.getContext("2d"), old = ctx;
   ctx = g; g.clearRect(0,0,48,48); g.save(); g.translate(4,4);
-  if(type === "select"){
+  if(type === "poly"){
+    g.fillStyle = "#111827"; g.beginPath();
+    g.moveTo(8,30); g.lineTo(14,8); g.lineTo(30,6); g.lineTo(36,24); g.lineTo(22,36); g.closePath(); g.fill();
+    g.fillStyle = "#fff"; [[8,30],[14,8],[30,6],[36,24],[22,36]].forEach(function(p){ g.beginPath(); g.arc(p[0], p[1], 2.4, 0, 6.2832); g.fill(); });
+  } else if(type === "select"){
     g.fillStyle = "#111827"; g.beginPath();
     g.moveTo(6,3); g.lineTo(33,25); g.lineTo(21,26); g.lineTo(27,38); g.lineTo(21,40); g.lineTo(15,28); g.lineTo(6,35);
     g.closePath(); g.fill();
@@ -4552,6 +4591,11 @@ function down(x,y,alt,shift){
     inspect(); return;
   }
   if(!toolOK(tool)){ setTool("select"); return; }
+  if(tool === "poly"){
+    // клик по первой вершине (или рядом) при трёх и больше — замкнуть фигуру
+    if(polyPts.length >= 3 && Math.hypot(x - polyPts[0][0], y - polyPts[0][1]) < 12 / view.s){ finishPoly(); return; }
+    polyPts.push([x, y]); return;
+  }
   if(overLimit(1)) return;
   commit();
   if(tool === "spawn"){
@@ -4580,7 +4624,24 @@ function down(x,y,alt,shift){
   drag = {m:"new", ox:x, oy:y, moved:false, w:d[0], h:d[1]};
   inspect();
 }
+var polyPts = [];
+function finishPoly(){
+  var p = polyPts; polyPts = [];
+  if(p.length < 3 || overLimit(1)) return;
+  var x0 = Math.min.apply(null, p.map(function(q){ return q[0]; })), x1 = Math.max.apply(null, p.map(function(q){ return q[0]; }));
+  var y0 = Math.min.apply(null, p.map(function(q){ return q[1]; })), y1 = Math.max.apply(null, p.map(function(q){ return q[1]; }));
+  var w = Math.max(4, x1 - x0), h = Math.max(4, y1 - y0);
+  commit();
+  var o = mk("triangle", Math.round(x0), Math.round(y0), Math.round(w), Math.round(h));
+  o.shape = "custom";
+  o.pts = p.slice(0, 40).map(function(q){ return [+((q[0] - x0) / w).toFixed(4), +((q[1] - y0) / h).toFixed(4)]; });
+  objects.push(o); sel = o; markDirty();
+  setTool("select"); inspect();
+}
+var polyMouse = null;
+cv.addEventListener("dblclick", function(){ if(tool === "poly" && polyPts.length >= 3) finishPoly(); });
 function move(x,y){
+  if(tool === "poly") polyMouse = [x, y];
   if(!drag || playing) return;
   // точка маршрута и протяжка рисования — без inspect() на каждый сдвиг,
   // поля инспектора обновит up()
@@ -4802,6 +4863,11 @@ document.addEventListener("keydown", function(e){
     return;
   }
   if(e.key === "Escape" && linkPick){ linkPick = null; inspect(); return; }
+  if(tool === "poly" && polyPts.length){
+    if(e.key === "Enter"){ e.preventDefault(); finishPoly(); return; }
+    if(e.key === "Escape"){ polyPts = []; return; }
+    if(e.key === "Backspace"){ e.preventDefault(); polyPts.pop(); return; }
+  }
   if((e.key === "Escape" || e.key === "Enter") && routeDraw){ routeDraw = null; drag = null; inspect(); return; }
   if(e.key === "Escape" && routeSel){ routeSel = null; inspect(); return; }
   var mod = e.ctrlKey || e.metaKey;
@@ -5361,7 +5427,9 @@ function inspect(){
   }
   /* Формы и оформление из идей игроков: ромб, трапеция, полукруг, звезда… (у «треугольника»),
      зеркало, прозрачность, обводка нужной толщины, «невидим в игре». */
-  if(sel.type === "triangle"){
+  if(sel.type === "triangle" && sel.shape === "custom")
+    hint(TR("polyHint","Свой многоугольник: форму задали точки при рисовании. Размер и поворот меняются как обычно."));
+  else if(sel.type === "triangle"){
     var shr = pr(), shl = document.createElement("label"); shl.textContent = TR("lblShape","Форма");
     var shs = document.createElement("select");
     var SHN = { "": TR("shapeTri","Треугольник"), right: TR("shapeRight","Прямоугольный треугольник"), rhombus: TR("shapeRhombus","Ромб"),
@@ -6188,12 +6256,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=223"></script>
-<script src="abuseShow.js?v=223" defer></script>
-<script src="editorHelp.js?v=223"></script>
-<script src="editorAI.js?v=223" defer></script>
-<script src="account.js?v=223" defer></script>
-<script src="owner.js?v=223" defer></script>
+<script src="i18n.js?v=224"></script>
+<script src="abuseShow.js?v=224" defer></script>
+<script src="editorHelp.js?v=224"></script>
+<script src="editorAI.js?v=224" defer></script>
+<script src="account.js?v=224" defer></script>
+<script src="owner.js?v=224" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -6310,7 +6378,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=223" defer></script>
+        <script src="skinAvatar.js?v=224" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */

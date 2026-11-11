@@ -96,6 +96,10 @@
     {
       "title": "Grappling hook",
       "text": "Race maps can turn on a grappling hook: press E to hook onto a block ahead and above you and swing on the rope across gaps. Jump or press E again to let go."
+    },
+    {
+      "title": "Draw your own shapes",
+      "text": "The map editor has a new Polygon tool: click to place corners, then press Enter, double-click or click the first corner to finish. You can stand on these shapes in the game like on any block. On small screens the editor's top bar no longer hides under the mode tabs."
     }
   ]
 }
