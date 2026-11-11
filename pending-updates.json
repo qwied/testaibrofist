@@ -140,6 +140,10 @@
     {
       "title": "Editor hotkeys, layers and a winter theme",
       "text": "The map editor has new hotkeys: V select, B brush, P polygon, arrow keys move the selected object, [ and ] change its order. Press L to work only on gameplay objects or only on decorations. A Random outfit button puts on a random mix of your accessories. On phones you can move the jump button to the left and make the buttons smaller or bigger in Settings. From December 15 to January 10 snow falls on the site; the snowflake button turns it off."
+    },
+    {
+      "title": "Trials mode",
+      "text": "New Trials button in Race. Each round one player is the trickster: they do not run, but look around the map, flip levers and drop spikes for a few seconds. Everyone else has 3 lives and must reach the finish first. If nobody makes it, the trickster wins. The trickster role passes to the next player every round."
     }
   ]
 }

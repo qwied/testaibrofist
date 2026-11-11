@@ -139,6 +139,17 @@
           .catch(function () { location.href = 'game?mode=race&room=duel-1'; });
       });
       box.appendChild(du);
+      // Trials: один ловкач мешает, остальные бегут с 3 жизнями (см. /getTrialsRoom)
+      var tr = document.createElement('button');
+      tr.type = 'button'; tr.className = 'rlTrials';
+      tr.textContent = T('trialsBtn', 'Trials');
+      tr.style.cssText = mk.style.cssText;
+      tr.addEventListener('click', function () {
+        fetch('/getTrialsRoom', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+          .then(function (d) { location.href = 'game?mode=race&room=' + encodeURIComponent(d.room); })
+          .catch(function () { location.href = 'game?mode=race&room=trials-1'; });
+      });
+      box.appendChild(tr);
     }
     box.appendChild(msg);
     el.parentNode.insertBefore(box, el.nextSibling);

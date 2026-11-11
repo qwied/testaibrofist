@@ -260,16 +260,16 @@ body{background:#eef2f8;overflow:hidden}
         <script src="offline.js?v=9"></script>
         <script src="offlineServer.js?v=10"></script>
         <script src="offlineModes.js?v=11"></script>
-<script src="device.js?v=234"></script>
-        <script src="sound.js?v=234"></script>
-        <script src="skinRender.js?v=234"></script>
-        <script src="skinCanvas.js?v=234"></script>
-        <script src="gifuct.bundle.js?v=234"></script>
-        <script src="gifPlayer.js?v=234"></script>
-        <script src="coin.js?v=234"></script>
-        <script src="liveText.js?v=234"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=234">
-        <script src="theme.js?v=234"></script>
+<script src="device.js?v=235"></script>
+        <script src="sound.js?v=235"></script>
+        <script src="skinRender.js?v=235"></script>
+        <script src="skinCanvas.js?v=235"></script>
+        <script src="gifuct.bundle.js?v=235"></script>
+        <script src="gifPlayer.js?v=235"></script>
+        <script src="coin.js?v=235"></script>
+        <script src="liveText.js?v=235"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=235">
+        <script src="theme.js?v=235"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1394,7 +1394,7 @@ var apoc = false;
    Deathrun — 3); raceTimeMin — время на карту в минутах (0 — обычные 2, лабиринту — 5 или 10);
    raceGoal — цель общего раунда (см. raceRooms в server.js): "" — финишируют все, "first" —
    побеждает первый, "last" — Last bro standing, только с жизнями. */
-var raceLives = 0, raceTimeMin = 0, raceGoal = "";
+var raceLives = 0, raceTimeMin = 0, raceGoal = "", trialTrapN = 0;
 /* Ещё две опции карты гонки (идеи игроков): двойной прыжок и урон от падения с большой высоты. */
 var raceDJ = false, raceFall = false, raceSprint = false, raceAuto = false, raceHook = false, FALL_DMG_H = 620;
 /* Атмосфера карты (идеи «дождь/снег», «день и ночь», «туман войны») — для любого режима:
@@ -2433,6 +2433,8 @@ function liftOffset(o, k){
 
 function step(){
   anim++;
+  // Trials: шипы ловкача живут несколько секунд (см. BRIDGE.trialTrap)
+  if(trialTrapN){ var tn = Date.now(), tl = objects.length; objects = objects.filter(function(o){ return !(o._trialUntil && o._trialUntil < tn); }); if(objects.length !== tl){ trialTrapN = objects.filter(function(o){ return o._trialUntil; }).length; markDirty(); } }
   /* Кто из движущихся объектов на самом деле привязан к кнопке/рычагу —
      ID любой цели из ЧЬЕГО-ЛИБО targetIds. Только у таких платформа
      стоит на месте, пока её не «держат» (button/lever._act) — обычная
@@ -5162,6 +5164,17 @@ window.GAME = BRIDGE = {
   get apoc(){ return apoc; },
   // правила гонки карты (см. raceLives/raceTimeMin) и счётчик смертей текущего забега
   get raceLives(){ return raceLives; },
+  // Trials (см. game.js): жизни бегущих, рычаг, который дёрнул ловкач, и его временные шипы
+  setLives: function(n){ raceLives = n | 0; },
+  trialToggle: function(id){
+    for(var i = 0; i < objects.length; i++){ var o = objects[i];
+      if(o.id === id && o.type === "lever"){ o._act = !o._act; drive(o); if(window.BFSound) BFSound.toggle(); return true; } }
+    return false;
+  },
+  trialTrap: function(x, y, ms){
+    objects.push({ id: 900000 + Math.floor(Math.random() * 99999), type: "triangle", x: x - 40, y: y - 30, w: 80, h: 30, fill: "#dc2626", deadly: true, _trialUntil: Date.now() + (ms || 5000) });
+    trialTrapN++; markDirty();
+  },
   get raceTimeMin(){ return raceTimeMin; },
   get raceGoal(){ return raceGoal; },
   restartRun: restartRun,         // общий раунд гонки: все с самого старта (см. racePhase в game.js)
@@ -5330,9 +5343,9 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="cosmDraw.js?v=234"></script>
-<script src="game.js?v=234"></script>
-        <script src="i18n.js?v=234"></script>
-        <script src="skinAvatar.js?v=234" defer></script>
+<script src="cosmDraw.js?v=235"></script>
+<script src="game.js?v=235"></script>
+        <script src="i18n.js?v=235"></script>
+        <script src="skinAvatar.js?v=235" defer></script>
 </body>
 </html>

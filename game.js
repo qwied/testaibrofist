@@ -60,6 +60,9 @@
      (старый сервер) гонка, как раньше, идёт сама по себе. raceGoal — цель раунда из правил
      карты: '' — финишируют все, 'first' — побеждает первый, 'last' — Last bro standing. */
   var raceSync = false, raceGoal = '', raceOutMe = false;
+  // Trials (см. isTrialsRoom в server.js): кто ловкач этого раунда и сколько жизней у бегущих
+  var trialsInfo = null;
+  function trialsMeNow() { return !!(trialsInfo && socket && trialsInfo.trickster === socket.id); }
 
   var me = { name: '', role: 'hider', caught: false };
 
@@ -732,7 +735,7 @@
     document.addEventListener('click', function (e) { if (box.style.display !== 'none' && !box.contains(e.target) && e.target !== b) box.style.display = 'none'; });
     setInterval(function () {
       b.style.display = MODE === 'hideAndSeek' && !STORY && !VIEW && huntNow() ? '' : 'none';
-      if (GAME.freeCam && (phase !== 'round' || !me.caught)) setFreeCam(false);
+      if (GAME.freeCam && MODE !== 'race' && (phase !== 'round' || !me.caught)) setFreeCam(false);
       if (GAME.freeCam && GAME.keys) {
         var k = GAME.keys, sp = 14;
         GAME.freeCam.x += ((k.r ? 1 : 0) - (k.l ? 1 : 0)) * sp;
@@ -856,6 +859,16 @@
     return { x: (clientX - r.left - v.x) / v.s, y: (clientY - r.top - v.y) / v.s };
   }
   var gDraw = $('gDraw');
+  // Trials: клик ловкача — по рычагу дёргает его у всех, по пустому месту ставит шипы на 5 секунд
+  canvasEl.addEventListener('mousedown', function (e) {
+    if (MODE !== 'race' || phase !== 'round' || !trialsMeNow() || drawMode || !socket) return;
+    var w = toWorld(e.clientX, e.clientY), objs = GAME.objects || [];
+    for (var i = objs.length - 1; i >= 0; i--) {
+      var o = objs[i];
+      if (o.type === 'lever' && w.x >= o.x - 12 && w.x <= o.x + o.w + 12 && w.y >= o.y - 12 && w.y <= o.y + o.h + 12) { socket.emit('trialToggle', { id: o.id }); return; }
+    }
+    socket.emit('trialTrap', { x: Math.round(w.x), y: Math.round(w.y) });
+  });
 
   /* кому показать линию: по умолчанию всем в комнате, но можно выбрать
      конкретного игрока — тогда линию увидит только он (и сам рисующий,
@@ -2499,7 +2512,7 @@
      (см. die() в game.html) — для сервера это новый забег. */
   GAME.onOutOfLives = function () {
     // Last bro standing: выбыл до конца раунда — стоит на месте серым, ждёт следующую карту
-    if (MODE === 'race' && raceSync && raceGoal === 'last' && phase === 'round') {
+    if (MODE === 'race' && raceSync && (raceGoal === 'last' || trialsInfo) && phase === 'round') {
       raceOutMe = true; GAME.frozen = true; applyColor();
       if (socket) socket.emit('raceOut');
       log(TR('raceOutMe', 'Жизни кончились — ты выбыл до конца раунда'));
@@ -2595,6 +2608,7 @@
      начинается заново с самого старта — время, смерти и чекпоинты сброшены. */
   function raceLobby(d) {
     raceOutMe = false; applyColor();
+    if (GAME.freeCam && MODE === 'race') GAME.freeCam = null;
     skipVotes = null; skipMine = false; skipTick();
     GAME.frozen = true;
     loadServerMap(d.map, function () { GAME.frozen = true; if (GAME.restartRun) GAME.restartRun(); });
@@ -2605,6 +2619,9 @@
     loadServerMap(d.map, function () {
       if (!raceOutMe) GAME.frozen = false;
       if (GAME.restartRun) GAME.restartRun();
+      if (trialsInfo && GAME.setLives) GAME.setLives(trialsMeNow() ? 0 : trialsInfo.lives || 3);
+      // ловкач не бежит: стоит, а камеру водит стрелками по всей карте
+      if (trialsMeNow() && GAME.pl) { GAME.frozen = true; GAME.freeCam = { x: GAME.pl.x + GAME.pl.w / 2, y: GAME.pl.y + GAME.pl.h / 2 }; }
       finSent = false;
       if (currentMap) { pendingRaceStart = { author: currentMap.author, mapName: currentMap.mapName }; flushPendingRaceStart(); }
     });
@@ -2615,7 +2632,11 @@
     if (MODE !== 'race' || STORY || VIEW || !d) return;
     raceSync = true;
     raceGoal = d.goal || '';
+    trialsInfo = d.trials || null;
     phase = d.phase === 'lobby' ? 'lobby' : 'round';
+    if (trialsInfo && d.phase === 'lobby' && !late) log(!trialsInfo.trickster ? TR('trialsWait', 'Trials: ждём второго игрока…')
+      : trialsMeNow() ? TR('trialsYouTrick', 'Trials: ты ловкач! Кликай по рычагам и ставь шипы — не дай никому дойти до финиша.')
+      : TR('trialsRunner', 'Trials: ловкач — {n}. У тебя 3 жизни — дойди до финиша первым!').replace('{n}', '<b>' + esc(trialsInfo.name) + '</b>'));
     phaseEnds = Date.now() + (Number(d.msLeft) || 0);
     if (phase === 'lobby') raceLobby(d); else raceGo(d, late);
   }
@@ -3102,6 +3123,8 @@
     });
 
     // ---------- общая гонка: фазы, финиши, выбывшие, итог (см. raceRooms в server.js) ----------
+    socket.on('trialToggle', function (d) { if (d && GAME.trialToggle) GAME.trialToggle(d.id); });
+    socket.on('trialTrap', function (d) { if (d && GAME.trialTrap) GAME.trialTrap(d.x, d.y, d.ms); });
     socket.on('racePhase', function (d) {
       racePhaseIn(d, false);
       if (MODE === 'race' && d && d.phase === 'lobby' && d.mood) log(d.mood === 'easy' ? TR('moodEasy', 'Прошлую карту прошли немногие — следующая попроще.')

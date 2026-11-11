@@ -411,6 +411,18 @@ app.get('/getDuelRoom', (req, res) => {
   if (!best) { let i = 1; while (gameState.rooms.has('race:duel-' + i)) i++; best = 'duel-' + i; }
   res.json({ room: best });
 });
+/* Trials (идея #1592): комната race:trials-N. Каждый раунд один игрок — «ловкач»: он не бежит,
+   а смотрит на карту и мешает — дёргает рычаги кликом и ставит на время шипы. Остальные бегут
+   с 3 жизнями; кто первым финишировал — победил, никто не дошёл — победил ловкач. */
+const TRIALS_ROOM = /^race:trials-\d+$/;
+const TRIALS_MAX = 8;
+function isTrialsRoom(key) { return TRIALS_ROOM.test(String(key || '')); }
+app.get('/getTrialsRoom', (req, res) => {
+  let best = null, bestN = -1;
+  gameState.rooms.forEach((set, key) => { if (isTrialsRoom(key) && set.size < TRIALS_MAX && set.size > bestN) { best = key.slice(5); bestN = set.size; } });
+  if (!best) { let i = 1; while (gameState.rooms.has('race:trials-' + i)) i++; best = 'trials-' + i; }
+  res.json({ room: best });
+});
 const PRIVATE_CODE = /^p[a-z0-9]{6}$/;
 function isPrivateRoom(roomName) {
   // годится и имя комнаты («war-pk3x9aq»), и ключ с режимом («race:pk3x9aq»)
@@ -459,7 +471,7 @@ app.get('/getBestRoom', (req, res) => {
   const variant = mode === 'hideAndSeek' ? hsFixedOf(cleanName(req.query.variant) + '-1') : null;
   let best = null, bestCount = -1;
   gameState.rooms.forEach((set, key) => {
-    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant) || isPrivateRoom(key) || isDuelRoom(key)) return;
+    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant) || isPrivateRoom(key) || isDuelRoom(key) || isTrialsRoom(key)) return;
     const n = set.size;
     if (n >= ROOM_FULL) return;
     if (n > bestCount) { bestCount = n; best = key.slice(mode.length + 1); }
@@ -488,7 +500,7 @@ app.get('/getRoomList', (req, res) => {
   const now = Date.now();
   const list = [];
   gameState.rooms.forEach((set, key) => {
-    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant) || isPrivateRoom(key) || isDuelRoom(key)) return;
+    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant) || isPrivateRoom(key) || isDuelRoom(key) || isTrialsRoom(key)) return;
     const n = set.size;
     const status = n >= ROOM_FULL ? 'red'
                  : (now - (roomLeftAt.get(key) || 0) < ROOM_RECENT_LEFT_MS) ? 'yellow'
@@ -698,15 +710,27 @@ function raceStartLobby(io, room, st) {
   st.rules = raceRulesOf(m);
   const duel = isDuelRoom(room);
   if (duel) st.rules.goal = 'first';           // в дуэли раунд выигрывает тот, кто финишировал первым
+  const trials = isTrialsRoom(room);
+  st.trickster = null;
+  if (trials) {
+    st.rules.goal = 'first';
+    const ids = raceIds(room);
+    if (ids.length >= 2) {
+      // ловкачом — по очереди: следующий после прошлого
+      const i = ids.indexOf(st.trickLast);
+      st.trickster = ids[(i + 1) % ids.length];
+      st.trickLast = st.trickster;
+    }
+  }
   st.phase = 'lobby';
   st.roundNum++;
   st.finished = []; st.out = new Set(); st.ending = false; st.winner = null; st.members = new Set();
   st.skip = new Set();
   st.endsAt = Date.now() + RACE_LOBBY_MS;
-  io.to(room).emit('racePhase', { phase: 'lobby', map: st.map, msLeft: RACE_LOBBY_MS, goal: st.rules.goal, roundNum: st.roundNum, mood });
+  io.to(room).emit('racePhase', { phase: 'lobby', map: st.map, msLeft: RACE_LOBBY_MS, goal: st.rules.goal, roundNum: st.roundNum, mood, trials: raceTrialsInfo(room, st) });
   // карт гонки нет вовсе — заглядываем снова, вдруг владелец добавит
   // дуэль начинается, только когда соперник на месте
-  st.timer = setTimeout(() => st.map && (!duel || raceIds(room).length >= 2) ? raceStartRound(io, room, st) : raceStartLobby(io, room, st),
+  st.timer = setTimeout(() => st.map && (!duel || raceIds(room).length >= 2) && (!trials || raceIds(room).indexOf(st.trickster) !== -1) ? raceStartRound(io, room, st) : raceStartLobby(io, room, st),
                         st.map ? RACE_LOBBY_MS : 15000);
   if (duel) io.to(room).emit('duelScore', { wins: st.duelWins || {}, waiting: raceIds(room).length < 2 });
 }
@@ -714,14 +738,19 @@ function raceStartRound(io, room, st) {
   const ms = st.rules.timeMin ? st.rules.timeMin * 60000 : RACE_ROUND_MS;
   st.phase = 'round';
   st.endsAt = Date.now() + ms;
-  st.members = new Set(raceIds(room));     // кто стартовал — только их ждём на финише
+  st.members = new Set(raceIds(room).filter(id => id !== st.trickster));     // кто стартовал — только их ждём на финише (ловкач не бежит)
   if (st.map) require('./maps.js').countPlay(st.map.author, st.map.mapName);   // счётчик игр карты
-  io.to(room).emit('racePhase', { phase: 'round', map: st.map, msLeft: ms, goal: st.rules.goal, roundNum: st.roundNum });
+  io.to(room).emit('racePhase', { phase: 'round', map: st.map, msLeft: ms, goal: st.rules.goal, roundNum: st.roundNum, trials: raceTrialsInfo(room, st) });
   st.timer = setTimeout(() => raceEndRound(io, room, st, 'time'), ms);
 }
 function raceEndRound(io, room, st, why) {
   if (st.phase !== 'round') return;
   clearTimeout(st.timer);
+  // Trials: никто из бегущих не дошёл — победил ловкач
+  if (st.trickster && !st.winner && gameState.players.get(st.trickster)) {
+    st.winner = gameState.players.get(st.trickster).name;
+    raceCreditWin(io, st.trickster);
+  }
   const started = st.members ? st.members.size : 0;
   if (st.map && started) require('./maps.js').raceStat(st.map.author, st.map.mapName, started, st.finished.length);
   const rate = started ? st.finished.length / started : 0.5;
@@ -763,9 +792,15 @@ function raceCreditWin(io, id) {
 /* Честный финиш (его уже проверил raceFinish) на карте общего раунда. Возвращает false, если
    по правилам раунда этот финиш ничего не приносит: «побеждает первый» — не первый,
    Last bro standing — уже есть победитель или игрок выбыл. */
+function raceTrialsInfo(room, st) {
+  if (!isTrialsRoom(room)) return null;
+  const p = st.trickster && gameState.players.get(st.trickster);
+  return { trickster: st.trickster || null, name: p ? p.name : '', lives: 3 };
+}
 function raceOnFinish(io, player, mapKey, ms) {
   const st = raceRooms.get(player.room);
   if (!st || st.phase !== 'round' || !st.map || mapKey !== st.map.author + '|' + st.map.mapName) return true;
+  if (st.trickster === player.id) return false;          // ловкач Trials не бежит
   if (st.out.has(player.id) || st.finished.some(f => f.id === player.id)) return false;
   const place = st.finished.length + 1;
   st.finished.push({ id: player.id, name: player.name, place, ms });
@@ -795,7 +830,7 @@ function raceOnJoin(io, socket, room, roomName) {
     return;
   }
   socket.emit('raceState', { phase: st.phase, map: st.map, msLeft: Math.max(0, st.endsAt - Date.now()),
-    goal: st.rules.goal, roundNum: st.roundNum,
+    goal: st.rules.goal, roundNum: st.roundNum, trials: raceTrialsInfo(room, st),
     finished: st.finished.map(f => ({ id: f.id, name: f.name, place: f.place })), out: Array.from(st.out) });
 }
 function raceOnLeave(io, room) {
@@ -2517,12 +2552,38 @@ io.on('connection', (socket) => {
   });
   /* Last bro standing: у игрока кончились жизни — выбыл до конца раунда (см. raceCheckDone).
      Верить на слово тут можно: так игрок вредит только себе. */
+  // Trials: ловкач дёргает рычаг (по id объекта карты) или ставит шипы на 5 секунд
+  const trialsOf = () => {
+    const player = gameState.players.get(socket.id);
+    if (!player || !isTrialsRoom(player.room)) return null;
+    const st = raceRooms.get(player.room);
+    if (!st || st.phase !== 'round' || st.trickster !== socket.id) return null;
+    return { st, room: player.room };
+  };
+  socket.on('trialToggle', (data) => {
+    const t = trialsOf(); if (!t) return;
+    const now = Date.now();
+    if (now - (t.st.trickToggleAt || 0) < 1000) return;
+    t.st.trickToggleAt = now;
+    const id = Math.floor(Number(data && data.id));
+    if (!(id > 0)) return;
+    io.to(t.room).emit('trialToggle', { id });
+  });
+  socket.on('trialTrap', (data) => {
+    const t = trialsOf(); if (!t) return;
+    const now = Date.now();
+    if (now - (t.st.trickTrapAt || 0) < 3000) return;
+    t.st.trickTrapAt = now;
+    const x = Math.round(Number(data && data.x)), y = Math.round(Number(data && data.y));
+    if (!isFinite(x) || !isFinite(y) || Math.abs(x) > 99999 || Math.abs(y) > 99999) return;
+    io.to(t.room).emit('trialTrap', { x, y, ms: 5000 });
+  });
   socket.on('raceOut', () => {
     if (limRace()) return;
     const player = gameState.players.get(socket.id);
     if (!player || String(player.room).indexOf('race:') !== 0) return;
     const st = raceRooms.get(player.room);
-    if (!st || st.phase !== 'round' || st.rules.goal !== 'last' || st.ending || !st.members.has(socket.id)) return;
+    if (!st || st.phase !== 'round' || (st.rules.goal !== 'last' && !st.trickster) || st.ending || !st.members.has(socket.id)) return;
     if (st.out.has(socket.id) || st.finished.some(f => f.id === socket.id)) return;
     st.out.add(socket.id);
     io.to(player.room).emit('raceOut', { id: socket.id, name: player.name });
