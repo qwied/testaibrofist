@@ -526,6 +526,9 @@
     // приватная комната (см. isPrivateRoom в server.js): код, по клику — ссылка в буфер
     + '<button id="gPriv" style="display:none;padding:4px 9px;border-radius:8px;border:1px solid #d7dee7;background:#fff;'
     + 'color:#111827;font:700 12px ui-monospace,monospace;letter-spacing:1px;cursor:pointer;white-space:nowrap"></button>'
+    // настройки своей комнаты — только хосту приватной комнаты пряток (см. hsHostCfg в server.js)
+    + '<button id="gHost" style="display:none;padding:4px 9px;border-radius:8px;border:1px solid #d7dee7;background:#fff;'
+    + 'color:#111827;font:700 12px sans-serif;cursor:pointer;white-space:nowrap"></button>'
     // счёт команд в Capture the Flag и Domination (см. renderTeamHud)
     + '<span id="gTeamBox" style="display:none"></span>'
     // жизни на карте гонки (см. raceLives в движке) — только если карта их задаёт
@@ -769,6 +772,62 @@
     };
     setTimeout(function () { log(TR('privHello', 'Приватная комната. Код для друзей: {c} — нажми на код вверху, чтобы скопировать ссылку.').replace('{c}', '<b>' + code + '</b>')); }, 1200);
   })();
+  /* Настройки своей комнаты (идея #760): хост приватной комнаты пряток задаёт время пряток и
+     охоты, число искателей, лимит игроков, режим и карту — со следующего раунда. */
+  var hostInfo = null, hostMaps = null;
+  function hostCfgText(c) {
+    if (!c) return TR('hostDefault', 'обычные');
+    var V = { '': TR('hostAuto', 'Авто'), classic: TR('modeClassic', 'Classic'), cops: TR('modeCops', 'Cops & Robbers'), hottrap: TR('modeHotTrap', 'Hot Trap'), ninja: TR('modeNinja', 'Ниндзя') };
+    return TR('hostHide', 'Прятки') + ' ' + c.hideS + 's · ' + TR('hostHunt', 'Охота') + ' ' + c.roundS + 's · ' + TR('hostSeekers', 'Искателей') + ' ' + c.seekers
+      + ' · ' + TR('hostLimit', 'Мест') + ' ' + c.limit + ' · ' + V[c.variant || ''] + (c.map ? ' · ' + c.map.mapName : '');
+  }
+  function hostSync() {
+    var b = $('gHost');
+    if (!b) return;
+    var mine = !!(hostInfo && socket && hostInfo.host === socket.id);
+    b.style.display = mine && MODE === 'hideAndSeek' && !VIEW && !STORY ? '' : 'none';
+    b.textContent = '\u2699 ' + TR('hostBtn', 'Комната');
+    b.title = TR('hostTitle', 'Настройки комнаты: ты хост');
+  }
+  function hostPanel() {
+    var old = $('hostPanel'); if (old) { old.remove(); return; }
+    var c = (hostInfo && hostInfo.cfg) || { hideS: 30, roundS: 120, seekers: 1, limit: 40, variant: '', map: null };
+    var p = document.createElement('div'); p.id = 'hostPanel';
+    p.style.cssText = 'position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:60;background:#fff;color:#111827;border-radius:14px;'
+      + 'box-shadow:0 10px 40px rgba(0,0,0,.25);padding:14px 16px;width:min(360px,92vw);font:14px sans-serif';
+    var row = function (lbl, inner) { return '<label style="display:flex;align-items:center;gap:8px;margin:7px 0"><span style="flex:1">' + esc(lbl) + '</span>' + inner + '</label>'; };
+    var num = function (id, v, lo, hi) { return '<input id="' + id + '" type="number" min="' + lo + '" max="' + hi + '" value="' + v + '" style="width:76px;padding:4px 6px;border:1px solid #d7dee7;border-radius:8px">'; };
+    var sel = 'padding:4px 6px;border:1px solid #d7dee7;border-radius:8px;max-width:180px';
+    p.innerHTML = '<b style="font-size:16px">' + esc(TR('hostTitle', 'Настройки комнаты: ты хост')) + '</b>'
+      + row(TR('hostHideL', 'Время спрятаться, сек'), num('hcHide', c.hideS, 10, 90))
+      + row(TR('hostHuntL', 'Время охоты, сек'), num('hcHunt', c.roundS, 30, 600))
+      + row(TR('hostSeekersL', 'Искателей'), num('hcSeek', c.seekers, 1, 3))
+      + row(TR('hostLimitL', 'Мест в комнате'), num('hcLim', c.limit, 2, 40))
+      + row(TR('hostModeL', 'Режим'), '<select id="hcVar" style="' + sel + '">' + ['', 'classic', 'cops', 'hottrap', 'ninja'].map(function (v) {
+          return '<option value="' + v + '"' + ((c.variant || '') === v ? ' selected' : '') + '>' + esc(v ? variantName(v) : TR('hostAuto', 'Авто')) + '</option>'; }).join('') + '</select>')
+      + row(TR('hostMapL', 'Карта'), '<select id="hcMap" style="' + sel + '"><option value="">' + esc(TR('hostMapAny', 'Случайная / голосование')) + '</option></select>')
+      + '<div style="color:#6b7280;font-size:12px">' + esc(TR('hostHint', 'Применится со следующего раунда.')) + '</div>'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button id="hcCancel" style="padding:6px 12px;border-radius:9px;border:1px solid #d7dee7;background:#fff;cursor:pointer">'
+      + esc(TR('cancel', 'Отмена')) + '</button><button id="hcSave" style="padding:6px 12px;border-radius:9px;border:0;background:#2563eb;color:#fff;font-weight:700;cursor:pointer">'
+      + esc(TR('save', 'Сохранить')) + '</button></div>';
+    document.body.appendChild(p);
+    var fill = function () {
+      var s = $('hcMap'); if (!s || !hostMaps) return;
+      s.innerHTML = '<option value="">' + esc(TR('hostMapAny', 'Случайная / голосование')) + '</option>' + hostMaps.map(function (m, i) {
+        return '<option value="' + i + '"' + (c.map && c.map.author === m.author && c.map.mapName === m.mapName ? ' selected' : '') + '>' + esc(m.mapName + ' — ' + m.author) + '</option>';
+      }).join('');
+    };
+    if (hostMaps) fill();
+    else fetch('/hostMapList', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) { hostMaps = (d && d.maps) || []; fill(); }).catch(function () {});
+    $('hcCancel').onclick = function () { p.remove(); };
+    $('hcSave').onclick = function () {
+      var mi = $('hcMap').value;
+      socket.emit('hsHostCfg', { hideS: +$('hcHide').value, roundS: +$('hcHunt').value, seekers: +$('hcSeek').value, limit: +$('hcLim').value,
+        variant: $('hcVar').value, map: mi !== '' && hostMaps ? hostMaps[+mi] : null });
+      p.remove();
+    };
+  }
+  $('gHost').onclick = hostPanel;
   $('gExit').onclick = function () {
     // просмотр карты из Maps Browser идёt внутри её iframe (см. VIEW выше) —
     // там некуда уходить своей навигацией, просто просим родителя закрыть окно
@@ -3088,6 +3147,14 @@
     });
 
     // ---------- командные варианты: состав команд, флаги, точки захвата ----------
+    socket.on('hsHost', function (d) {
+      if (!d) return;
+      var was = hostInfo && hostInfo.host;
+      hostInfo = d;
+      hostSync();
+      if (d.changed) log(TR('hostChanged', 'Хост изменил настройки комнаты: {s}').replace('{s}', esc(hostCfgText(d.cfg))));
+      else if (d.host === socket.id && was !== d.host) log(TR('hostYou', 'Ты хост этой комнаты — нажми «Комната» вверху, чтобы настроить игру.'));
+    });
     socket.on('hsTeamFull', function () { log(TR('teamFull', 'В этой команде уже больше игроков')); });
     socket.on('hsTeams', function (d) {
       if (MODE !== 'hideAndSeek' || !d || !teamVariant()) return;
@@ -3241,6 +3308,8 @@
         if (d.seekerId) applySeeker(d.seekerId);
         // копы — все сразу; убийца тайный: его знает только он сам (fixVariantRole)
         (d.seekerIds || []).forEach(function (id) { hsSeekerIds[id] = true; });
+        // хост задал несколько искателей — добранные жребием тоже ищут
+        if (socket && hsSeekerIds[socket.id] && me.role !== 'seeker' && (hsVariant === 'classic' || hsVariant === 'ninja')) setRole('seeker');
         if (teamVariant()) {
           hsTeams = d.teams || hsTeams; hsBases = d.bases || hsBases; hsPoints = d.points || hsPoints;
           ctfState = d.ctf || null; domState = d.dom || null;

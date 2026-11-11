@@ -166,7 +166,7 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   // за это время у B прошло несколько раундов
   const seq = hs.filter((p, i) => i % 2 === 0).map(p => p.all('hsRoulette').map(d => d.variant));
   const flat = [].concat(...seq);
-  ok(flat.every(v => v === 'classic' || v === 'cops'), 'в прятках только Classic и Cops & Robbers', [...new Set(flat)].join(','));
+  ok(flat.every(v => v === 'classic' || v === 'cops' || v === 'hottrap' || v === 'ninja'), 'в прятках только Classic, Cops & Robbers, Hot Trap и Ninja', [...new Set(flat)].join(','));
   ok(flat.indexOf('cops') !== -1, 'Cops & Robbers выпадает', flat.filter(v => v === 'cops').length + ' из ' + flat.length);
   ok(seq.every(s => s.every((v, i) => !(v === 'cops' && s[i - 1] === 'cops'))), 'два раза подряд — никогда', seq.map(s => s.map(v => v === 'cops' ? 'K' : 'c').join('')).join(' '));
 
@@ -214,7 +214,7 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   const waitMsg = await until(() => sp.evaluate(() => { const l = document.getElementById('gLog'); return l && /Team Battle starts when there are 2 players/.test(l.textContent) ? l.textContent : null; }), 9000);
   ok(!!waitMsg, 'одиночке в игре сказано, что режим начнётся со вторым игроком', waitMsg);
   const pills = await until(() => sp.evaluate(() => { const t = [...document.querySelectorAll('#gRoulTrack .rName')].map(x => x.textContent); return t.length ? [...new Set(t)].sort().join(',') : null; }), 6000);
-  ok(pills === 'Capture the Flag,Domination,Waiting for players', 'рулетка режима — только ожидание, Capture the Flag и Domination (без пряток)', pills);
+  ok(pills === 'Capture the Flag,Domination,Soccer,Waiting for players', 'рулетка режима — только ожидание, Capture the Flag, Domination и футбол (без пряток)', pills);
   ok(!(await sp.evaluate(() => !!document.getElementById('gMini'))), 'мини-карты в игре больше нет');
   ok(errs.length === 0, 'без ошибок на страницах', errs.join(' | '));
   await browser.close();

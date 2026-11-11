@@ -128,6 +128,10 @@
     {
       "title": "Ninja rounds, team choice and bear traps",
       "text": "Hide and Seek has a new Ninja round where you only see players close to you. In Team Battle you can switch to a team with fewer players before the round starts. Hiders can buy a bear trap in the shop that stops a seeker for 3 seconds. In Race, the next map gets easier or harder depending on how many players finished the last one. Wind zones in the editor can switch direction on a timer."
+    },
+    {
+      "title": "Room settings for private rooms",
+      "text": "The host of a private Hide and Seek room can now change the game: time to hide, hunt time, number of seekers, player slots, the mode and the map. Changes apply from the next round. If the host leaves, another player becomes the host."
     }
   ]
 }

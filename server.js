@@ -417,6 +417,34 @@ function isPrivateRoom(roomName) {
   const n = String(roomName || '');
   return PRIVATE_CODE.test(n.slice(Math.max(n.lastIndexOf('-'), n.lastIndexOf(':')) + 1));
 }
+/* Настройки своей комнаты (идея #760, «#AddPrivateRooms»): в приватной комнате пряток хост —
+   первый вошедший (ушёл — следующий) — задаёт время пряток и охоты, число искателей, лимит
+   игроков, режим и карту. Действуют со следующего лобби/раунда. */
+const HOST_VARIANTS = ['', 'classic', 'cops', 'hottrap', 'ninja'];
+function hsCfgClean(d) {
+  const n = (v, lo, hi, def) => { const x = Math.round(Number(v)); return x >= lo && x <= hi ? x : def; };
+  const c = { hideS: n(d && d.hideS, 10, 90, 30), roundS: n(d && d.roundS, 30, 600, 120), seekers: n(d && d.seekers, 1, 3, 1),
+              limit: n(d && d.limit, 2, ROOM_FULL, ROOM_FULL), variant: HOST_VARIANTS.indexOf(d && d.variant) !== -1 ? d.variant : '', map: null };
+  const m = d && d.map && require('./maps.js').find(d.map.author, d.map.mapName);
+  if (m && require('./maps.js').familyOf(m.mapType) === 'hideAndSeek') c.map = { author: m.author, mapName: m.mapName };
+  return c;
+}
+function hsHostOf(room, st) {
+  const ids = hsMembers(room).map(m => m.id);
+  if (!st.host || ids.indexOf(st.host) === -1) st.host = ids[0] || null;
+  return st.host;
+}
+function hsHostInfo(room, st) {
+  const h = hsHostOf(room, st), p = h && gameState.players.get(h);
+  return { host: h, hostName: p ? p.name : '', cfg: st.cfg || null };
+}
+const hsLobbyMs = st => st.cfg ? st.cfg.hideS * 1000 : HS_LOBBY_MS;
+const hsRoundMs = st => st.cfg ? st.cfg.roundS * 1000 : HS_ROUND_MS;
+app.get('/hostMapList', (req, res) => {
+  const all = require('./maps.js').allMaps().filter(m => !m.showcase && require('./maps.js').familyOf(m.mapType) === 'hideAndSeek')
+    .sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 300);
+  res.json({ maps: all.map(m => ({ author: m.author, mapName: m.mapName })) });
+});
 // есть ли комната с таким кодом (вход по коду: чтобы опечатка не заводила пустую комнату)
 app.get('/getPrivateRoom', (req, res) => {
   const mode = cleanName(req.query.mode) || 'hideAndSeek';
@@ -1030,6 +1058,11 @@ function hsPickMap(st) {
     st.mapVoted = true;
     return;
   }
+  // карту выбрал хост своей комнаты
+  if (st.cfg && st.cfg.map && require('./maps.js').find(st.cfg.map.author, st.cfg.map.mapName)) {
+    st.map = { author: st.cfg.map.author, mapName: st.cfg.map.mapName };
+    return;
+  }
   const prev = st.map ? st.map.mapName : '';
   // комната отдельного режима берёт и карты своего вида (Map Editor → War и т.п.), и карты пряток
   const m = require('./maps.js').randomFor(st.fixedVariant ? [st.fixedVariant, 'hideAndSeek'] : 'hideAndSeek', prev, hsMapOk(st));
@@ -1218,6 +1251,7 @@ function hsPickVariant(st, n) {
   }
   if (st.apoc) return 'zombie';
   if (st.storyMap || n < 2) return 'classic';
+  if (st.cfg && st.cfg.variant) return st.cfg.variant;
   if (forced === 'classic' || forced === 'cops' || forced === 'hottrap' || forced === 'ninja') return forced;
   // Ninja (идея игроков): обычные прятки, но каждый видит других только рядом с собой
   if (st.variant !== 'ninja' && Math.random() < 0.15) return 'ninja';
@@ -1447,7 +1481,7 @@ function hsStartLobby(io, room, st) {
   st.phase = 'lobby';
   st.roundNum++;
   st.caughtSent = false;
-  st.endsAt = Date.now() + HS_LOBBY_MS;
+  st.endsAt = Date.now() + hsLobbyMs(st);
   /* Отметка одометра на входе в лобби. Прячутся именно в лобби, а сам
      раунд хороший игрок проводит неподвижно в укрытии — если считать
      путь только с начала раунда, награду за «дожил до конца» получал бы
@@ -1465,7 +1499,7 @@ function hsStartLobby(io, room, st) {
   // искателя — дальше он охотится и заражает ровно как человек-искатель
   // (см. hsStartRound/hsDoInfect), просто выглядит зомби (см. game.js)
   hsSpin(io, room, st);
-  io.to(room).emit('hsPhase', { phase: 'lobby', msLeft: HS_LOBBY_MS, roundNum: st.roundNum, map: hsMapOf(st), apoc: !!st.apoc,
+  io.to(room).emit('hsPhase', { phase: 'lobby', msLeft: st.endsAt - Date.now(), roundNum: st.roundNum, map: hsMapOf(st), apoc: !!st.apoc,
                                 voted: !!st.mapVoted, variant: st.variant });
   clearTimeout(st.timer);
   st.timer = setTimeout(() => hsStartRound(io, room, st), st.endsAt - Date.now());
@@ -1477,7 +1511,7 @@ function hsStartRound(io, room, st) {
   // мини-игра «Вечеринки» идёт своё время (см. roundMs в party.js) и кончается сама
   const roundMs = party.isGame(st.variant) ? party.roundMs(st, hsMembers(room).length)
     : adventure.isAdv(st.variant) ? adventure.roundMs(st) : st.variant === 'wait' ? HS_WAIT_MS
-    : st.variant === 'hottrap' ? Math.min(HS_ROUND_MS, HS_TRAP_MS) : HS_ROUND_MS;
+    : st.variant === 'hottrap' ? Math.min(hsRoundMs(st), HS_TRAP_MS) : hsRoundMs(st);
   st.endsAt = Date.now() + roundMs;
   st.roundStartedAt = Date.now();   // для медалей за время — см. hsDoInfect/hsCreditMapBest
   if (st.map) require('./maps.js').countPlay(st.map.author, st.map.mapName);   // счётчик игр карты
@@ -1488,6 +1522,11 @@ function hsStartRound(io, room, st) {
   const hunters = hsNoHunt(st.variant) ? []
     : (st.variant === 'cops' && st.copIds ? st.copIds : [st.seekerId]).filter(id => gameState.players.get(id));
   if (!hunters.length && st.seekerId && !hsNoHunt(st.variant)) hunters.push(st.seekerId);
+  // хост комнаты задал несколько искателей: добираем жребием, но хотя бы один прячется
+  if (st.cfg && st.cfg.seekers > 1 && (st.variant === 'classic' || st.variant === 'ninja') && hunters.length) {
+    const pool = hsMembers(room).map(m => m.id).filter(id => hunters.indexOf(id) === -1);
+    while (hunters.length < st.cfg.seekers && pool.length > 1) hunters.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  }
   st.roundMembers = hsMembers(room).filter((m) => hunters.indexOf(m.id) === -1)
     .map((m) => {
       const p = gameState.players.get(m.id);
@@ -1661,6 +1700,7 @@ function hsOnLeave(io, room, leftId) {
   });
   if (leftId && st.teams && st.teams.delete(leftId)) io.to(room).emit('hsTeams', { teams: hsTeamsObj(st) });
   if (leftId) { war.leave(st, room, leftId); party.leave(st, room, leftId); adventure.leave(st, room, leftId); }
+  if (leftId && leftId === st.host && isPrivateRoom(room)) { st.host = null; hsHostOf(room, st); io.to(room).emit('hsHost', hsHostInfo(room, st)); }
   const set = gameState.rooms.get(room);
   if (!set || set.size === 0) {
     clearTimeout(st.timer);
@@ -1780,7 +1820,8 @@ io.on('connection', (socket) => {
       socket.emit('joinDenied', { reason: 'serverBusy' });
       return;
     }
-    if (existingRoom && existingRoom.size >= (isDuelRoom(room) ? 2 : ROOM_FULL)
+    const cfgLim = hsRooms.has(room) && hsRooms.get(room).cfg ? hsRooms.get(room).cfg.limit : 0;
+    if (existingRoom && existingRoom.size >= (isDuelRoom(room) ? 2 : cfgLim || ROOM_FULL)
         && (!previousPlayer || previousPlayer.room !== room)) {
       socket.emit('joinDenied', { reason: 'roomFull' });
       return;
@@ -1980,6 +2021,9 @@ io.on('connection', (socket) => {
         }
       }
     }
+
+    // своя комната пряток: кто хост и какие настройки (см. hsHostCfg)
+    if (mode === 'hideAndSeek' && isPrivateRoom(room) && hsRooms.get(room)) socket.emit('hsHost', hsHostInfo(room, hsRooms.get(room)));
 
     // Гонка: новичку и всей комнате — актуальная табличка очков (новый участник входит в неё с нулём)
     if (mode === 'race') { broadcastRaceScores(io, room); raceOnJoin(io, socket, room, roomName); }
@@ -2184,6 +2228,15 @@ io.on('connection', (socket) => {
   });
   /* Выбор команды (идея игроков): пока лобби, после раздачи — перейти в команду, где людей
      меньше, чем в твоей. Так перекоса больше чем на одного не бывает. */
+  socket.on('hsHostCfg', (data) => {
+    if (limHsCatch()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('hideAndSeek:') !== 0 || !isPrivateRoom(player.room)) return;
+    const st = hsRooms.get(player.room);
+    if (!st || hsHostOf(player.room, st) !== socket.id) return;
+    st.cfg = hsCfgClean(data);
+    io.to(player.room).emit('hsHost', Object.assign(hsHostInfo(player.room, st), { changed: true }));
+  });
   socket.on('hsPickTeam', (team) => {
     if (limHsCatch()) return;
     const player = gameState.players.get(socket.id);
