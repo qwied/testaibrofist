@@ -373,15 +373,15 @@ body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="device.js?v=221"></script>
-        <script src="sound.js?v=221"></script>
-        <script src="skinRender.js?v=221"></script>
-        <script src="skinCanvas.js?v=221"></script>
-        <script src="gifuct.bundle.js?v=221"></script>
-        <script src="gifPlayer.js?v=221"></script>
-        <script src="coin.js?v=221"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=221">
-        <script src="theme.js?v=221"></script>
+<script src="device.js?v=222"></script>
+        <script src="sound.js?v=222"></script>
+        <script src="skinRender.js?v=222"></script>
+        <script src="skinCanvas.js?v=222"></script>
+        <script src="gifuct.bundle.js?v=222"></script>
+        <script src="gifPlayer.js?v=222"></script>
+        <script src="coin.js?v=222"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=222">
+        <script src="theme.js?v=222"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -984,6 +984,17 @@ var PAINT = {
     ctx.fillRect(s*0.26, s*0.05, s*0.07, s*0.12); ctx.fillRect(s*0.36, s*0.05, s*0.07, s*0.09);
     ctx.restore();
   },
+  zipline: function(o){
+    var a = zipEnds(o, true);
+    ctx.strokeStyle = "#78716c"; ctx.lineWidth = 5; ctx.lineCap = "round";
+    ctx.fillRect && (ctx.fillStyle = "#57534e");
+    // столбики на концах и сам канат
+    ctx.fillRect(a[0] - 4, a[1] - 6, 8, 34); ctx.fillRect(a[2] - 4, a[3] - 6, 8, 34);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(a[2], a[3]); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(a[0], a[1] - 1); ctx.lineTo(a[2], a[3] - 1); ctx.stroke();
+    ctx.lineCap = "butt";
+  },
   trigger: function(o){
     if(playing) return;                         // в игре зона не видна
     ctx.fillStyle = "rgba(236,72,153,.10)"; ctx.fillRect(0,0,o.w,o.h);
@@ -1087,6 +1098,9 @@ var TOOLS = [
   /* Триггер-эффект (идеи «тряска камеры», «вспышка», «надпись по триггеру»): невидимая в игре зона,
      вошёл — сработало: тряска экрана, вспышка или надпись на экране. */
   {t:"trigger",    n:"Триггер-эффект", k:"toolTrigger",  m:ALL},
+  /* Зиплайн (идея «зиплайны и скольжение»): канат от одного угла рамки к другому; в прыжке
+     игрок цепляется руками и скатывается вниз по нему, прыжок — отцепиться. */
+  {t:"zipline",    n:"Зиплайн",     k:"toolZip",        m:ALL},
   /* метка модификации Zombie Apocalypse — без неё карту не включить в
      этот режим (см. hsApplyApoc в server.js); только прятки: в гонке
      модификация не предлагается (см. #apoc ниже и TOOL_MODES.zombie в
@@ -1151,7 +1165,7 @@ var COLORS = {
   seekerSpot:"",                   // всегда синий, как и сам искатель — красить нечем
   cannon:"",                       // дерево и чугун — рисуется собой
   camera:"", spyFlag:"", enemy:"", crystal:"",           // рисуются собой
-  checkpoint:"", finishline:"", spawn:INK, teleport:"", star:"", key:"", gravzone:"", trigger:""
+  checkpoint:"", finishline:"", spawn:INK, teleport:"", star:"", key:"", gravzone:"", trigger:"", zipline:""
 };
 /* Базовая фигура — клетка 20x20: из неё удобно складывать всё остальное.
    Игрок 30x100 (круг-голова радиуса 15 над телом 30x65, см. FIG_GAP
@@ -1164,7 +1178,7 @@ var SIZES = {
   button:[34,18], lever:[22,42], laserFeed:[18,18], laserReceiver:[18,18],
   zombie:[30,100],                 // впритык как у игрока — по прямой просьбе
   seekerSpot:[30,100],              // тоже впритык как у игрока
-  checkpoint:[40,104], finishline:[52,126], spawn:[30,100], star:[44,44], key:[36,36], gravzone:[160,160], trigger:[120,120],
+  checkpoint:[40,104], finishline:[52,126], spawn:[30,100], star:[44,44], key:[36,36], gravzone:[160,160], trigger:[120,120], zipline:[320,120],
   teleport:[30,100],                // тоже впритык как у игрока — по прямой просьбе,
                                      // растягивать/сжимать нельзя (см. gripAt/num ниже)
   cannon:[72,44],                   // у всех пушек одна дальность — и размер один
@@ -1654,7 +1668,7 @@ function respawn(){
     if(pl.flag && !pl.cpFlag) spyNote("lost");
     pl.flag = !!pl.cpFlag;
   }
-  pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0; pl.airTop = undefined; pl.dj = false;
+  pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0; pl.airTop = undefined; pl.dj = false; pl.zip = null;
   pl.rideOn = null; pl.grab = null; grabCd = 0; pl.kick = 0; pl.climb = null; pl.jumpLock = false;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckSteer = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
 }
@@ -2345,6 +2359,40 @@ function step(){
      гравитация ниже не трогают игрока вовсе: он висит неподвижно. */
   var grabbing = false;
   if(!keys.u) pl.jumpLock = false;
+  /* Зиплайн: в воздухе руки (верх головы) у каната — цепляемся. Висим и едем вниз по склону,
+     разгоняясь; прыжок или конец каната — отцепляемся с той же скоростью. */
+  if(!pl.zip && !pl.ground && pl.vy > -3 && !(pl.zipCd > 0)){
+    for(var zi = 0; zi < near.length; zi++){
+      var zo = near[zi]; if(zo.type !== "zipline") continue;
+      var ze = zipEnds(zo), zdx = ze[2]-ze[0], zdy = ze[3]-ze[1], zl2 = zdx*zdx + zdy*zdy;
+      if(zl2 < 1) continue;
+      var hx = pl.x + pl.w/2, hy = pl.y, zt = ((hx-ze[0])*zdx + (hy-ze[1])*zdy) / zl2;
+      if(zt < 0 || zt > 1) continue;
+      var qx = ze[0] + zdx*zt, qy = ze[1] + zdy*zt;
+      if((hx-qx)*(hx-qx) + (hy-qy)*(hy-qy) < 18*18){
+        var zlen = Math.sqrt(zl2);
+        pl.zip = { o: zo, t: zt, v: (pl.vx*zdx + pl.vy*zdy) / zlen };
+        pl.jumpLock = !!keys.u;
+        break;
+      }
+    }
+  }
+  if(pl.zipCd > 0) pl.zipCd--;
+  if(pl.zip){
+    var zz = pl.zip, zE = zipEnds(zz.o), zx = zE[2]-zE[0], zy = zE[3]-zE[1], zL = Math.sqrt(zx*zx + zy*zy) || 1;
+    zz.v += G() * (zy / zL) * 0.9; zz.v *= 0.996;
+    zz.t += zz.v / zL;
+    var off = zz.t < 0 || zz.t > 1, jumpOff = keys.u && !pl.jumpLock;
+    zz.t = Math.max(0, Math.min(1, zz.t));
+    pl.x = zE[0] + zx*zz.t - pl.w/2; pl.y = zE[1] + zy*zz.t;
+    if(off || jumpOff || !zz.o || pl.dead){
+      pl.vx = zz.v * zx / zL; pl.vy = zz.v * zy / zL + (jumpOff ? jumpV() * 0.8 : 0);
+      if(jumpOff) pl.selfJump = true;
+      pl.zip = null; pl.zipCd = 20; pl.jumpLock = true; pl.kick = Math.abs(pl.vx) > 2 ? 18 : 0;
+    } else {
+      grabbing = true; pl.vx = 0; pl.vy = 0;
+    }
+  }
   /* Пойманный грабитель в Cops and Robbers стоит на месте, пока его не освободят (см.
      GAME.frozen в game.js): ни шагов, ни прыжков, ни залезания — падать при этом может. */
   var frz = typeof BRIDGE !== "undefined" && BRIDGE && BRIDGE.frozen;
@@ -3210,6 +3258,12 @@ function parallaxShift(){
   var sp = findSpawn();
   var cx = (VW()/2 - view.x)/view.s, cy = (VH()/2 - view.y)/view.s;
   return sp ? [cx - (sp.x + sp.w/2), cy - (sp.y + sp.h/2)] : [0, 0];
+}
+// концы зиплайна: из левого верхнего угла в правый нижний (flip — из правого верхнего в левый нижний);
+// local — в координатах самой рамки (для рисования), иначе — в мире
+function zipEnds(o, local){
+  var x0 = local ? 0 : o.x, y0 = local ? 0 : o.y;
+  return o.flip ? [x0 + o.w, y0, x0, y0 + o.h] : [x0, y0, x0 + o.w, y0 + o.h];
 }
 function crumbleMarks(o){
   ctx.save(); ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 1.5;
@@ -5636,6 +5690,10 @@ function inspect(){
   if(SOLID.indexOf(sel.type) !== -1)
     chk(TR("chkGhost","Проходимый (декорация)"), !sel.ghost, function(v){ sel.ghost = !v; },
         TR("descCollision","Выключи, чтобы игрок проходил сквозь"));
+  if(sel.type === "zipline"){
+    chk(TR("chkZipFlip","Наклон в другую сторону"), !!sel.flip, function(v){ if(v) sel.flip = true; else delete sel.flip; });
+    hint(TR("zipHint","Канат идёт из угла в угол рамки. В прыжке игрок цепляется за него и скатывается вниз, прыжок — отцепиться."));
+  }
   if(sel.type === "trigger"){
     var fr = pr(), fl = document.createElement("label"); fl.textContent = TR("lblFx","Эффект");
     var fs = document.createElement("select");
@@ -6088,12 +6146,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=221"></script>
-<script src="abuseShow.js?v=221" defer></script>
-<script src="editorHelp.js?v=221"></script>
-<script src="editorAI.js?v=221" defer></script>
-<script src="account.js?v=221" defer></script>
-<script src="owner.js?v=221" defer></script>
+<script src="i18n.js?v=222"></script>
+<script src="abuseShow.js?v=222" defer></script>
+<script src="editorHelp.js?v=222"></script>
+<script src="editorAI.js?v=222" defer></script>
+<script src="account.js?v=222" defer></script>
+<script src="owner.js?v=222" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -6210,7 +6268,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=221" defer></script>
+        <script src="skinAvatar.js?v=222" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */
