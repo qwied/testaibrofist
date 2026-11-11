@@ -100,6 +100,10 @@
     {
       "title": "Draw your own shapes",
       "text": "The map editor has a new Polygon tool: click to place corners, then press Enter, double-click or click the first corner to finish. You can stand on these shapes in the game like on any block. On small screens the editor's top bar no longer hides under the mode tabs."
+    },
+    {
+      "title": "Textures and a brush in the editor",
+      "text": "Blocks, circles and triangles can now use a texture instead of a plain color: brick, wood, grass, stone, metal or sand. A new Brush tool paints the map with small blocks on a grid, using the last color and texture you picked."
     }
   ]
 }

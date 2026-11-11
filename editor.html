@@ -374,15 +374,15 @@ body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="device.js?v=224"></script>
-        <script src="sound.js?v=224"></script>
-        <script src="skinRender.js?v=224"></script>
-        <script src="skinCanvas.js?v=224"></script>
-        <script src="gifuct.bundle.js?v=224"></script>
-        <script src="gifPlayer.js?v=224"></script>
-        <script src="coin.js?v=224"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=224">
-        <script src="theme.js?v=224"></script>
+<script src="device.js?v=225"></script>
+        <script src="sound.js?v=225"></script>
+        <script src="skinRender.js?v=225"></script>
+        <script src="skinCanvas.js?v=225"></script>
+        <script src="gifuct.bundle.js?v=225"></script>
+        <script src="gifPlayer.js?v=225"></script>
+        <script src="coin.js?v=225"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=225">
+        <script src="theme.js?v=225"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -660,7 +660,42 @@ function figure(w,h,col,accent,skin){
    когда-то сделало декоративные объекты «масляными» (см. grad() ниже,
    он для НИХ теперь всегда просто первый цвет); тут это только сама
    заливка, без rgba(255,255,255,..) поверх. */
+/* Текстуры блоков (идеи «текстуры для фигур», «тайлсеты»): встроенные узоры, рисуются один раз
+   в маленький холст 64×64 и кладутся повторяющимся узором — без загрузки чужих картинок. */
+var TEXTURES = ["brick", "wood", "grass", "stone", "metal", "sand"], texCache = {};
+function texCanvas(k){
+  if(texCache[k]) return texCache[k];
+  var c = document.createElement("canvas"); c.width = 64; c.height = 64;
+  var g = c.getContext("2d"), i, j;
+  var rnd = (function(seed){ return function(){ seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; })(k.length * 977 + 13);
+  if(k === "brick"){
+    g.fillStyle = "#b45309"; g.fillRect(0,0,64,64); g.fillStyle = "#e7c9a9";
+    for(j = 0; j < 4; j++){ g.fillRect(0, j*16 + 14, 64, 2); for(i = 0; i < 3; i++) g.fillRect(((j % 2) ? 16 : 0) + i*32 - 1, j*16, 2, 14); }
+    for(i = 0; i < 60; i++){ g.fillStyle = "rgba(0,0,0," + (rnd()*0.12).toFixed(2) + ")"; g.fillRect(rnd()*64, rnd()*64, 3, 2); }
+  } else if(k === "wood"){
+    g.fillStyle = "#a16207"; g.fillRect(0,0,64,64);
+    for(j = 0; j < 4; j++){ g.fillStyle = j % 2 ? "#92400e" : "#a16207"; g.fillRect(0, j*16, 64, 15); g.fillStyle = "#78350f"; g.fillRect(0, j*16 + 15, 64, 1); }
+    g.strokeStyle = "rgba(120,53,15,.45)"; g.lineWidth = 1;
+    for(i = 0; i < 10; i++){ var yy = rnd()*64; g.beginPath(); g.moveTo(0, yy); g.bezierCurveTo(20, yy + 3, 40, yy - 3, 64, yy); g.stroke(); }
+  } else if(k === "grass"){
+    g.fillStyle = "#4d7c0f"; g.fillRect(0,0,64,64);
+    for(i = 0; i < 120; i++){ g.fillStyle = rnd() < 0.5 ? "#65a30d" : "#3f6212"; var gx = rnd()*64, gy = rnd()*64; g.fillRect(gx, gy, 1.5, 4 + rnd()*4); }
+  } else if(k === "stone"){
+    g.fillStyle = "#6b7280"; g.fillRect(0,0,64,64);
+    for(i = 0; i < 9; i++){ g.fillStyle = ["#9ca3af","#78716c","#a8a29e"][i % 3]; g.beginPath(); g.ellipse((i % 3)*22 + 10 + rnd()*4, Math.floor(i/3)*22 + 10 + rnd()*4, 9 + rnd()*3, 8 + rnd()*2, rnd(), 0, 6.2832); g.fill(); }
+  } else if(k === "metal"){
+    var mg = g.createLinearGradient(0,0,64,64); mg.addColorStop(0, "#cbd5e1"); mg.addColorStop(1, "#94a3b8");
+    g.fillStyle = mg; g.fillRect(0,0,64,64); g.strokeStyle = "#64748b"; g.lineWidth = 2; g.strokeRect(1,1,62,62);
+    g.fillStyle = "#475569"; [[6,6],[58,6],[6,58],[58,58]].forEach(function(p){ g.beginPath(); g.arc(p[0], p[1], 2.4, 0, 6.2832); g.fill(); });
+  } else {
+    g.fillStyle = "#e7c98a"; g.fillRect(0,0,64,64);
+    for(i = 0; i < 160; i++){ g.fillStyle = rnd() < 0.5 ? "#d6b26a" : "#f3dfb0"; g.fillRect(rnd()*64, rnd()*64, 1.6, 1.6); }
+  }
+  return (texCache[k] = c);
+}
 function shapeFill(o){
+  // текстура — вместо цвета (см. TEXTURES); смену цвета и градиент она не отменяет — их галочки скрыты
+  if(o.tex && TEXTURES.indexOf(o.tex) !== -1) return ctx.createPattern(texCanvas(o.tex), "repeat");
   // «Смена цвета» перебивает и обычную заливку, и градиент — см. галочку
   // в инспекторе, там же гасится одно другим, чтобы не путать автора.
   if(o.colorCycle && playing) return "hsl(" + Math.round(o._hue||0) + ",70%,50%)";
@@ -1105,6 +1140,9 @@ var TOOLS = [
   /* Свой многоугольник (идеи «свои фигуры», «polygon tool»): клики ставят вершины, Enter, двойной
      клик или клик по первой точке — готово. Получается «треугольник» с формой custom. */
   {t:"poly",       n:"Многоугольник", k:"toolPoly",     m:ALL},
+  /* Кисть (идея «Tilemap»): водишь — ставит блоки 20×20 по клеткам цветом и текстурой последнего
+     настроенного блока; занятые клетки пропускает. */
+  {t:"brush",      n:"Кисть",       k:"toolBrush",      m:ALL},
   /* метка модификации Zombie Apocalypse — без неё карту не включить в
      этот режим (см. hsApplyApoc в server.js); только прятки: в гонке
      модификация не предлагается (см. #apoc ниже и TOOL_MODES.zombie в
@@ -4141,7 +4179,11 @@ addEventListener("bf-lang", retip);
 function drawIcon(cvs, type){
   var g = cvs.getContext("2d"), old = ctx;
   ctx = g; g.clearRect(0,0,48,48); g.save(); g.translate(4,4);
-  if(type === "poly"){
+  if(type === "brush"){
+    g.fillStyle = "#111827"; g.save(); g.translate(20, 20); g.rotate(-0.7);
+    g.fillRect(-3, -16, 6, 18); g.fillStyle = "#b45309"; g.beginPath(); g.moveTo(-5, 2); g.lineTo(5, 2); g.lineTo(3, 12); g.lineTo(-3, 12); g.closePath(); g.fill();
+    g.restore(); g.fillStyle = "#111827"; [[6,30],[12,30],[6,36],[12,36]].forEach(function(p){ g.fillRect(p[0], p[1], 5, 5); });
+  } else if(type === "poly"){
     g.fillStyle = "#111827"; g.beginPath();
     g.moveTo(8,30); g.lineTo(14,8); g.lineTo(30,6); g.lineTo(36,24); g.lineTo(22,36); g.closePath(); g.fill();
     g.fillStyle = "#fff"; [[8,30],[14,8],[30,6],[36,24],[22,36]].forEach(function(p){ g.beginPath(); g.arc(p[0], p[1], 2.4, 0, 6.2832); g.fill(); });
@@ -4591,6 +4633,10 @@ function down(x,y,alt,shift){
     inspect(); return;
   }
   if(!toolOK(tool)){ setTool("select"); return; }
+  if(tool === "brush"){
+    if(overLimit(1)) return;
+    commit(); brushAt(x, y); drag = {m:"brush"}; return;
+  }
   if(tool === "poly"){
     // клик по первой вершине (или рядом) при трёх и больше — замкнуть фигуру
     if(polyPts.length >= 3 && Math.hypot(x - polyPts[0][0], y - polyPts[0][1]) < 12 / view.s){ finishPoly(); return; }
@@ -4624,6 +4670,15 @@ function down(x,y,alt,shift){
   drag = {m:"new", ox:x, oy:y, moved:false, w:d[0], h:d[1]};
   inspect();
 }
+var BRUSH = 20, brushStyle = { fill: "#000000" };
+function brushAt(x, y){
+  var cx = Math.floor(x / BRUSH) * BRUSH, cy = Math.floor(y / BRUSH) * BRUSH;
+  for(var i = objects.length - 1; i >= 0; i--){ var q = objects[i]; if(q.type === "rect" && q.x === cx && q.y === cy && q.w === BRUSH && q.h === BRUSH) return; }
+  if(objects.length + 1 > OBJ_LIMIT) return;
+  var o = mk("rect", cx, cy, BRUSH, BRUSH);
+  o.fill = brushStyle.fill; if(brushStyle.tex) o.tex = brushStyle.tex;
+  objects.push(o); markDirty();
+}
 var polyPts = [];
 function finishPoly(){
   var p = polyPts; polyPts = [];
@@ -4643,6 +4698,7 @@ cv.addEventListener("dblclick", function(){ if(tool === "poly" && polyPts.length
 function move(x,y){
   if(tool === "poly") polyMouse = [x, y];
   if(!drag || playing) return;
+  if(drag.m === "brush"){ brushAt(x, y); return; }
   // точка маршрута и протяжка рисования — без inspect() на каждый сдвиг,
   // поля инспектора обновит up()
   if(drag.m === "pt"){
@@ -5422,8 +5478,24 @@ function inspect(){
     var ci = document.createElement("input"); ci.type = "color";
     ci.value = (sel.fill && sel.fill[0] === "#" && sel.fill.length === 7) ? sel.fill : "#4b5563";
     ci.addEventListener("focus", commit);
-    ci.addEventListener("input", function(){ sel.fill = ci.value; });
+    ci.addEventListener("input", function(){ sel.fill = ci.value; if(sel.type === "rect") brushStyle.fill = ci.value; });
     r.appendChild(ci);
+  }
+  // текстура вместо сплошного цвета: кирпич, дерево, трава, камень, металл, песок
+  if(SOLID.indexOf(sel.type) !== -1){
+    var txr = pr(), txl = document.createElement("label"); txl.textContent = TR("lblTex","Текстура");
+    var txs = document.createElement("select");
+    [""].concat(TEXTURES).forEach(function(k){
+      var op = document.createElement("option"); op.value = k;
+      op.textContent = k ? TR("tex_" + k, ({brick:"Кирпич",wood:"Дерево",grass:"Трава",stone:"Камень",metal:"Металл",sand:"Песок"})[k]) : TR("texNone","Без текстуры");
+      if((sel.tex || "") === k) op.selected = true; txs.appendChild(op);
+    });
+    txs.addEventListener("focus", commit);
+    txs.addEventListener("change", function(){
+      if(txs.value) sel.tex = txs.value; else delete sel.tex;
+      if(sel.type === "rect"){ brushStyle.tex = sel.tex || ""; brushStyle.fill = sel.fill || brushStyle.fill; }
+    });
+    txr.appendChild(txl); txr.appendChild(txs);
   }
   /* Формы и оформление из идей игроков: ромб, трапеция, полукруг, звезда… (у «треугольника»),
      зеркало, прозрачность, обводка нужной толщины, «невидим в игре». */
@@ -6256,12 +6328,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=224"></script>
-<script src="abuseShow.js?v=224" defer></script>
-<script src="editorHelp.js?v=224"></script>
-<script src="editorAI.js?v=224" defer></script>
-<script src="account.js?v=224" defer></script>
-<script src="owner.js?v=224" defer></script>
+<script src="i18n.js?v=225"></script>
+<script src="abuseShow.js?v=225" defer></script>
+<script src="editorHelp.js?v=225"></script>
+<script src="editorAI.js?v=225" defer></script>
+<script src="account.js?v=225" defer></script>
+<script src="owner.js?v=225" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -6378,7 +6450,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=224" defer></script>
+        <script src="skinAvatar.js?v=225" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */
