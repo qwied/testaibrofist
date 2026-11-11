@@ -738,7 +738,7 @@
     }, 33);
   })();
   // обычные прятки с охотой — не «Война», не «Вечеринка», не «Приключение», не «Копы»
-  function huntNow() { return !(hsVariant === 'wait' || hsVariant === 'cops' || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant)); }
+  function huntNow() { return !(hsVariant === 'wait' || hsVariant === 'cops' || teamVariant() || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant)); }
   function setFreeCam(on) {
     if (on && GAME.pl) { GAME.freeCam = { x: GAME.pl.x + GAME.pl.w / 2, y: GAME.pl.y + GAME.pl.h / 2 }; GAME.frozen = true; log(TR('hsCamHint', 'Свободная камера: стрелки — смотреть по карте.')); }
     else { GAME.freeCam = null; if (hsVariant !== 'cops') GAME.frozen = false; }
@@ -1702,13 +1702,15 @@
   /* Командные варианты (Capture the Flag, Domination): команда каждого (id -> red|blue), базы —
      укрытия карты, точки захвата и счёт присылает сервер (hsRoulette/hsPhase/ctfState/domState). */
   var hsTeams = {}, hsBases = null, hsPoints = null, ctfState = null, domState = null;
-  function teamVariant() { return hsVariant === 'ctf' || hsVariant === 'dom' || hsVariant === 'tdm' || hsVariant === 'cp' || hsVariant === 'pirate'; }
+  function teamVariant() { return hsVariant === 'ctf' || hsVariant === 'dom' || hsVariant === 'tdm' || hsVariant === 'cp' || hsVariant === 'pirate' || hsVariant === 'soccer'; }
+  // футбол (вариант Team Battle): мяч и счёт приходят с сервера (soccerState), рисуем с подтяжкой
+  var socState = null, socDraw = null;
   function myTeam() { return socket ? hsTeams[socket.id] || null : null; }
   function resetTeams() { applyTeamState({}); }
   // состав команд, базы, точки и счёт — целиком из hsState (вошедший посреди игры)
   function applyTeamState(d) {
     hsTeams = d.teams || {}; hsBases = d.bases || null; hsPoints = d.points || null;
-    ctfState = d.ctf || null; domState = d.dom || null;
+    ctfState = d.ctf || null; domState = d.dom || null; socState = null; socDraw = null;
     renderTeamHud();
   }
   // на базе стоят внизу укрытия, по центру
@@ -1772,7 +1774,7 @@
         + (lead ? ' · ' + esc(TR('warLeadLbl', 'Лидер')) + ': <b>' + esc(nameOfId(lead)) + ' ' + lk + '</b>' : '');
       return;
     }
-    var sc = (war && (war.v === 'tdm' || war.v === 'pirate') ? war.score : null) || (ctfState && ctfState.score) || (domState && domState.score);
+    var sc = (war && (war.v === 'tdm' || war.v === 'pirate') ? war.score : null) || (ctfState && ctfState.score) || (domState && domState.score) || (socState && socState.score);
     if (!teamVariant() || !sc) { box.style.display = 'none'; return; }
     box.style.display = '';
     var ts = teamsInPlay(sc);
@@ -1878,6 +1880,7 @@
     if (hsVariant === 'bro') return socket && socket.id === broId ? TR('hintBro', 'Ты Bro RED: здоровья много, удар тяжёлый. Продержись до конца раунда!')
       : TR('hintBroFighter', 'Все вместе против Bro RED — выбейте его до конца раунда!');
     if (hsVariant === 'ctf') return TR('hintCtf', 'Принеси вражеский флаг к своему. Коснись врага с вашим флагом — флаг вернётся домой.');
+    if (hsVariant === 'soccer') return TR('hintSoccer', 'Пинай мяч касанием — забей в ворота соперников (их база). Кто первым забьёт 3 — победил.');
     if (hsVariant === 'dom') return TR('hintDom', 'Стой на точках с командой, чтобы захватить их. Каждая точка приносит очки каждую секунду.');
     if (hsVariant === 'hottrap') return (me.role === 'seeker'
         ? TR('hintTrapSeeker', 'Hot Trap: поймай хотя бы {q} до конца короткого раунда — иначе сгоришь!')
@@ -2093,7 +2096,7 @@
   /* Рулетка режима крутит только то, что бывает в этой комнате: в прятках — Classic, Zombie
      Apocalypse и Cops & Robbers, в Team Battle — Capture the Flag и Domination, в Murder
      Mystery — он сам (пока игроков мало — «Ждём игроков», wait: без искателя и поимок, см. hsFixedWait в server.js). */
-  var VARIANTS = { hs: ['classic', 'zombie', 'cops', 'hottrap'], murder: ['wait', 'murder'], team: ['wait', 'ctf', 'dom'],
+  var VARIANTS = { hs: ['classic', 'zombie', 'cops', 'hottrap'], murder: ['wait', 'murder'], team: ['wait', 'ctf', 'dom', 'soccer'],
                    war: ['wait', 'ffa', 'tdm', 'hunger', 'cp', 'bro', 'pirate'],
                    party: ['wait', 'quiz', 'guess', 'build', 'ffa', 'murder', 'zombie', 'cops'],
                    adventure: ['quest', 'defense'] };
@@ -2104,7 +2107,7 @@
       : v === 'dom' ? TR('modeDom', 'Domination') : v === 'team' ? TR('modeTeam', 'Team Battle')
       : v === 'war' ? TR('modeWar', 'War') : v === 'ffa' ? TR('modeFfa', 'Free for All') : v === 'tdm' ? TR('modeTdm', 'Team War')
       : v === 'hunger' ? TR('modeHunger', 'Hunger Games') : v === 'cp' ? TR('modeCp', 'Control Points') : v === 'bro' ? TR('modeBro', 'Bro RED')
-      : v === 'pirate' ? TR('modePirate', 'Pirate War') : v === 'hottrap' ? TR('modeHotTrap', 'Hot Trap')
+      : v === 'pirate' ? TR('modePirate', 'Pirate War') : v === 'hottrap' ? TR('modeHotTrap', 'Hot Trap') : v === 'soccer' ? TR('modeSoccer', 'Футбол')
       : v === 'party' ? TR('modeParty', 'Вечеринка') : v === 'quiz' ? TR('modeQuiz', 'Викторина')
       : v === 'guess' ? TR('modeGuess', 'Угадай слово') : v === 'build' ? TR('modeBuild', 'Строительная битва')
       : v === 'adventure' ? TR('modeAdventure', 'Приключение') : v === 'quest' ? TR('modeQuest', 'Башня')
@@ -3047,6 +3050,16 @@
         if (window.BFSound) BFSound.win();
       } else if (e.ev === 'return') log(TR('ctfReturned', 'Флаг вернулся на базу: {t}').replace('{t}', tn));
     });
+    socket.on('soccerState', function (d) {
+      if (MODE !== 'hideAndSeek' || !d) return;
+      socState = d;
+      if (!socDraw || Math.abs(socDraw.x - d.x) + Math.abs(socDraw.y - d.y) > 400) socDraw = { x: d.x, y: d.y };
+      renderTeamHud();
+      if (d.goal) {
+        bigBanner(TR('socGoal', 'ГОЛ!'), COLOR_TEAM[d.goal] || '#16a34a');
+        log(TR('socGoalMsg', 'Гол команды {t}! {s}').replace('{t}', teamTag(d.goal)).replace('{s}', scoreLine(d.score)));
+      }
+    });
     socket.on('domState', function (d) {
       if (MODE !== 'hideAndSeek' || !d) return;
       var before = domState && domState.points ? domState.points.map(function (p) { return p.owner; }).join() : '';
@@ -3495,7 +3508,34 @@
     ctx.fillStyle = 'rgba(255,255,255,.88)';
     ctx.beginPath(); ctx.arc(x + fw * 0.52, top + fh / 2, 4.6 * k, 0, 6.2832); ctx.fill();
   }
+  function drawSoccerBall(ctx) {
+    if (!socState || hsVariant !== 'soccer' || phase !== 'round') return;
+    if (!socDraw) socDraw = { x: socState.x, y: socState.y };
+    socDraw.x += (socState.x - socDraw.x) * 0.35; socDraw.y += (socState.y - socDraw.y) * 0.35;
+    var r = socState.r || 18, x = socDraw.x, y = socDraw.y;
+    ctx.save();
+    // ворота — базы команд: штанги и сетка цвета команды
+    teamsInPlay().forEach(function (t) {
+      var g = hsBases && hsBases[t];
+      if (!g) return;
+      ctx.strokeStyle = COLOR_TEAM[t] || '#111827'; ctx.lineWidth = 4;
+      ctx.strokeRect(g.x, g.y, g.w, g.h);
+      ctx.globalAlpha = 0.25; ctx.lineWidth = 1.5;
+      for (var gx = g.x + 12; gx < g.x + g.w; gx += 12) { ctx.beginPath(); ctx.moveTo(gx, g.y); ctx.lineTo(gx, g.y + g.h); ctx.stroke(); }
+      for (var gy = g.y + 12; gy < g.y + g.h; gy += 12) { ctx.beginPath(); ctx.moveTo(g.x, gy); ctx.lineTo(g.x + g.w, gy); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    });
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x, y + r + 2, r * 0.9, r * 0.25, 0, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#111827'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#111827';
+    var rot = x / r;
+    ctx.beginPath(); ctx.arc(x, y, r * 0.32, 0, 6.2832); ctx.fill();
+    for (var i = 0; i < 5; i++) { var a = rot + i * 1.2566; ctx.beginPath(); ctx.arc(x + Math.cos(a) * r * 0.72, y + Math.sin(a) * r * 0.72, r * 0.17, 0, 6.2832); ctx.fill(); }
+    ctx.restore();
+  }
   function drawTeamObjects(ctx) {
+    drawSoccerBall(ctx);
     if (MODE !== 'hideAndSeek' || !teamVariant() || !hsBases) return;
     ctx.save();
     if (hsVariant === 'ctf') {

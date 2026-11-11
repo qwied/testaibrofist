@@ -929,7 +929,7 @@ function hsAwardRoundEnd(io, room, st) {
     return;
   }
   // командные варианты: монеты и очки — победившей команде (кто играл раунд с начала и двигался)
-  if (hsTeamVariant(st.variant) && (st.ctf || st.dom)) {
+  if (hsTeamVariant(st.variant) && (st.ctf || st.dom || st.soc)) {
     const win = hsTeamWinner(st);
     if (!win) return;
     members.forEach((m) => {
@@ -1066,6 +1066,7 @@ function hsApplyApoc(st) {
     const list = (data && (Array.isArray(data) ? data : data.objects)) || [];
     // укрытия карты — базы и точки командных вариантов (см. hsTeamSetup): до них автор
     // карты и так рассчитывал добежать
+    st.socSolids = soccer.solidsOf(list);   // от этих блоков отскакивает мяч футбола
     st.spots = list.filter(o => o && o.hideSpot === true && Number.isFinite(+o.x) && Number.isFinite(+o.y)).slice(0, 60)
       .map(o => ({ x: +o.x, y: +o.y, w: Math.max(1, Math.min(2000, +o.w || 1)), h: Math.max(1, Math.min(2000, +o.h || 1)) }));
     /* пушки «Пиратской войны» (см. war.js) — в том же порядке, что и у клиента в карте (см.
@@ -1142,7 +1143,8 @@ const HS_TEAM4_MIN = Number(process.env.HS_TEAM4_MIN) || 8;
 const HS_DOM_WIN = 120;
 const HS_DOM_TICKS = 3;          // столько секунд одна команда стоит на точке — точка её
 // командные варианты: Capture the Flag и Domination, а в войне — команды и контрольные точки
-function hsTeamVariant(v) { return v === 'ctf' || v === 'dom' || v === 'tdm' || v === 'cp' || v === 'pirate'; }
+function hsTeamVariant(v) { return v === 'ctf' || v === 'dom' || v === 'tdm' || v === 'cp' || v === 'pirate' || v === 'soccer'; }
+const soccer = require('./soccer.js');   // футбол — вариант Team Battle (мяч считает сервер)
 // идёт ли сейчас вариант своего отдельного режима (у Team Battle их два — ctf и dom)
 function hsFixedIs(st) {
   if (st.fixedVariant === 'war') return war.isWar(st.variant);
@@ -1179,9 +1181,11 @@ function hsPickVariant(st, n) {
       return v;
     }
     if (!HS_FIXED[st.fixedVariant].team) return st.fixedVariant;
-    if (forced === 'ctf' || forced === 'dom') return forced;
-    // Team Battle: Capture the Flag и Domination по очереди
-    st.teamLast = st.teamLast === 'ctf' ? 'dom' : 'ctf';
+    if (forced === 'ctf' || forced === 'dom' || forced === 'soccer') return forced;
+    // Team Battle: Capture the Flag, Domination и футбол по очереди; футбол — только когда команд
+    // две (на четыре команды — флаги и точки, как раньше)
+    const two = !(n >= HS_TEAM4_MIN && (st.spots || []).length >= 4);
+    st.teamLast = st.teamLast === 'ctf' ? 'dom' : st.teamLast === 'dom' && two ? 'soccer' : 'ctf';
     return st.teamLast;
   }
   if (st.apoc) return 'zombie';
@@ -1224,7 +1228,8 @@ function hsDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 function hsTeamSetup(st, members) {
   if (st.variant === 'pirate') return hsPirateSetup(st, members);
   const sp = st.spots;
-  const k = members.length >= HS_TEAM4_MIN && sp.length >= 4 ? 4 : 2;
+  // в футболе всегда две команды — ворот двое
+  const k = st.variant !== 'soccer' && members.length >= HS_TEAM4_MIN && sp.length >= 4 ? 4 : 2;
   let a = 0, b = 1, best = -1;
   for (let i = 0; i < sp.length; i++) for (let j = i + 1; j < sp.length; j++) {
     const d = hsDist(hsSpotC(sp[i]), hsSpotC(sp[j]));
@@ -1332,7 +1337,7 @@ function hsNearSpot(pos, s) {
 function hsCtfState(st, ev) { return { flags: Object.assign({}, st.ctf.flags), score: st.ctf.score, ev: ev || null }; }
 function hsDomState(st) { return { points: st.dom.points, score: st.dom.score }; }
 function hsTeamWinner(st) {
-  const sc = st.ctf ? st.ctf.score : st.dom ? st.dom.score : null;
+  const sc = st.ctf ? st.ctf.score : st.dom ? st.dom.score : st.soc ? st.soc.score : null;
   if (!sc) return null;
   const top = Math.max.apply(null, Object.keys(sc).map(t => sc[t]));
   const lead = Object.keys(sc).filter(t => sc[t] === top);
@@ -1370,8 +1375,8 @@ function hsRevealRound(io, room, st) {
   if (war.isWar(st.variant) && war.reveal(st, room)) return;
   if (party.isGame(st.variant) && party.reveal(st, room)) return;
   if (adventure.isAdv(st.variant) && adventure.reveal(st, room)) return;
-  if (hsTeamVariant(st.variant) && (st.ctf || st.dom)) {
-    io.to(room).emit('hsReveal', { variant: st.variant, winner: hsTeamWinner(st), score: (st.ctf || st.dom).score });
+  if (hsTeamVariant(st.variant) && (st.ctf || st.dom || st.soc)) {
+    io.to(room).emit('hsReveal', { variant: st.variant, winner: hsTeamWinner(st), score: (st.ctf || st.dom || st.soc).score });
     return;
   }
   if (st.variant !== 'murder' && st.variant !== 'cops') return;
@@ -1400,8 +1405,8 @@ function hsMurdererCaught(io, room, st) {
 function hsStartLobby(io, room, st) {
   if (st.phase === 'storyEnd') return;   // лимит Story уже вышел — новый раунд не начинаем
   if (st.phase === 'round') { hsAwardRoundEnd(io, room, st); hsRevealRound(io, room, st); }
-  clearInterval(st.domTimer);
-  st.ctf = null; st.dom = null; st.teams = null;
+  clearInterval(st.domTimer); clearInterval(st.socTimer);
+  st.ctf = null; st.dom = null; st.soc = null; st.teams = null;
   war.lobby(st, room);
   party.lobby(st, room);
   adventure.lobby(st, room);
@@ -1495,6 +1500,19 @@ function hsStartRound(io, room, st) {
   st.dom = teamVar && (st.variant === 'dom' || st.variant === 'cp') ? { points: st.domPoints.map(() => ({ owner: null, prog: 0, by: null })), score: perTeam(0) } : null;
   clearInterval(st.domTimer);
   if (st.dom) st.domTimer = setInterval(() => hsDomTick(io, room, st), 1000);
+  // футбол: мяч на середине между воротами, такт физики ~30 раз в секунду
+  clearInterval(st.socTimer); st.soc = null;
+  if (teamVar && st.variant === 'soccer') {
+    soccer.start(st);
+    let n = 0;
+    if (st.soc) st.socTimer = setInterval(() => {
+      if (st.phase !== 'round' || !st.soc || st.caughtSent) return;
+      const players = hsMembers(room).map(m => { const p = gameState.players.get(m.id); return { id: m.id, team: hsTeamOf(st, m.id), pos: p && p.position }; });
+      const goal = soccer.tick(st, players, Date.now());
+      if (goal || ++n % 2 === 0) io.to(room).emit('soccerState', Object.assign(soccer.state(st), goal ? { goal } : {}));
+      if (goal && st.soc.score[goal] >= soccer.SOC_WIN) hsEndRoundEarly(room, st);
+    }, soccer.TICK);
+  }
   const secret = st.variant === 'murder';
   war.start(st, room);
   adventure.start(st, room);
@@ -1617,6 +1635,7 @@ function hsOnLeave(io, room, leftId) {
     clearTimeout(st.timer);
     clearTimeout(st.storyTimer);
     clearInterval(st.domTimer);           // иначе такт Domination тикал бы в пустую комнату вечно
+    clearInterval(st.socTimer);           // и такт мяча футбола
     hsRooms.delete(room);
     return;
   }
@@ -2109,7 +2128,7 @@ io.on('connection', (socket) => {
     const player = gameState.players.get(socket.id);
     if (!player || String(player.room).indexOf('hideAndSeek:') !== 0) return;
     const st = hsRooms.get(player.room);
-    if (!st || st.phase !== 'round' || !st.seekerIds || st.caughtSent || hsNoHunt(st.variant) || st.variant === 'cops') return;
+    if (!st || st.phase !== 'round' || !st.seekerIds || st.caughtSent || hsNoHunt(st.variant) || st.variant === 'cops' || hsTeamVariant(st.variant)) return;
     if (st.seekerIds.has(socket.id) || (st.caughtSet && st.caughtSet.has(socket.id))) return;
     if (!(st.roundMembers || []).some(m => m.id === socket.id)) return;
     if (!st.caughtSet) st.caughtSet = new Set();
