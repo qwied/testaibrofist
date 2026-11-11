@@ -301,6 +301,24 @@
         + '<div class="bf-opt' + (!gon ? ' on' : '') + '" data-v="0">' + T2('ghostOff', 'Без призрака') + '</div>';
       Array.prototype.forEach.call(gr.querySelectorAll('.bf-opt'), function (el) { el.onclick = function () { ls('bfGhost', el.getAttribute('data-v')); drawGamePrefs(); }; });
     }
+    // скрытые и заглушённые игроки (идея «список игнора в профиле»): вернуть одним нажатием
+    var ig = box.querySelector('#bfIgnoreRow');
+    if (ig) {
+      var getL = function (k) { try { return JSON.parse(ls(k) || '[]') || []; } catch (e) { return []; } };
+      var mu = getL('bfMutedPlayers'), hi = getL('bfHiddenPlayers');
+      var all = [];
+      mu.forEach(function (n) { all.push({ n: n, k: 'bfMutedPlayers', t: T2('igMuted', 'заглушён') }); });
+      hi.forEach(function (n) { all.push({ n: n, k: 'bfHiddenPlayers', t: T2('igHidden', 'скрыт') }); });
+      ig.innerHTML = all.length ? all.map(function (x, i) {
+        return '<div class="bf-opt" data-ig="' + i + '">' + escapeHtml(x.n) + ' · ' + x.t + ' &times;</div>';
+      }).join('') : '<div class="bf-h">' + T2('igEmpty', 'Никого не скрыто и не заглушено.') + '</div>';
+      Array.prototype.forEach.call(ig.querySelectorAll('[data-ig]'), function (el) {
+        el.onclick = function () {
+          var x = all[+el.getAttribute('data-ig')], l = getL(x.k).filter(function (n) { return String(n).toLowerCase() !== String(x.n).toLowerCase(); });
+          ls(x.k, JSON.stringify(l)); drawGamePrefs();
+        };
+      });
+    }
     var row = box.querySelector('#bfKeyRow');
     if (!row) return;
     var keys = {};
@@ -372,6 +390,8 @@
        + '<div class="bf-row" id="bfGhostRow"></div>'
        + '<div class="bf-h">' + T('keysHint', 'Свои клавиши — вдобавок к стрелкам и WASD. Нажми на действие, потом на клавишу.') + '</div>'
        + '<div class="bf-row" id="bfKeyRow" style="flex-wrap:wrap"></div>'
+       + '<div class="bf-sec">' + T('ignoreSection', 'Скрытые и заглушённые игроки') + '</div>'
+       + '<div class="bf-row" id="bfIgnoreRow" style="flex-wrap:wrap"></div>'
        + '<div class="bf-sec">' + T('promoSection', 'Промокод') + '</div>'
        + '<div class="bf-row"><input id="bfPromo" maxlength="24" placeholder="CODE" style="flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid var(--line,#d7dee7);text-transform:uppercase">'
        + '<div class="bf-opt" id="bfPromoGo">' + T('promoRedeem', 'Активировать') + '</div></div>'

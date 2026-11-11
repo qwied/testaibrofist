@@ -43,7 +43,7 @@ async function signUp(S, ctx, name) {
     const av = await ca.newPage(); av.on('pageerror', e => errs.push('avatar: ' + e.message.slice(0, 200)));
     await av.goto(S.base + '/avatar');
     await until(() => av.evaluate(() => document.querySelectorAll('.avCosmItem').length > 10), 8000);
-    ok(await av.evaluate(() => document.querySelectorAll('.avCosmItem').length) === 18, 'в магазине 18 вещей в 6 разделах');
+    ok(await av.evaluate(() => document.querySelectorAll('.avCosmItem').length) === 20, 'в магазине 20 вещей в 7 разделах');
     await av.click('[data-buy="hat_crown"]');
     ok(/coins/i.test(await until(() => av.evaluate(() => document.getElementById('avCosmErr').textContent), 3000) || ''), 'без монет купить нельзя');
     await av.screenshot({ path: path.join(os.tmpdir(), 'wave8-shop.png'), fullPage: true });

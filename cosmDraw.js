@@ -8,7 +8,8 @@
     cape_red: 'Red cape', cape_blue: 'Blue cape', wings_bat: 'Bat wings', wings_angel: 'Angel wings',
     trail_spark: 'Sparkle trail', trail_fire: 'Fire trail', trail_rainbow: 'Rainbow trail',
     pet_slime: 'Pet slime', pet_cat: 'Pet cat', pet_dog: 'Pet dog',
-    death_confetti: 'Confetti death', death_ghost: 'Ghost death', glow_rgb: 'Rainbow glow'
+    death_confetti: 'Confetti death', death_ghost: 'Ghost death', glow_rgb: 'Rainbow glow',
+    nick_gold: 'Golden nick', nick_glow: 'Glowing nick'
   };
   function hat(ctx, id, w, h, face) {
     var r = w / 2, cx = w / 2, top = 0;
@@ -125,7 +126,16 @@
     drawFig(ctx, c, w, h, 1, 'front', t);
     ctx.restore();
     if (slot === 'pet') drawPet(ctx, id, W / 2 + 22, H - 6, -1, t);
+    if (slot === 'nick') {
+      ctx.save(); ctx.font = '700 16px sans-serif'; ctx.textAlign = 'center';
+      nickStyle(ctx, id, Date.now()); ctx.fillText('Nick', W / 2, 18); ctx.restore();
+    }
     if (slot === 'death') { for (var j = 0; j < 14; j++) { ctx.fillStyle = id === 'death_ghost' ? 'rgba(226,232,240,.9)' : 'hsl(' + j * 26 + ',90%,55%)'; ctx.fillRect(W / 2 + Math.cos(j) * 26, H / 2 + Math.sin(j * 1.7) * 22, 4, 4); } }
   }
-  window.BFCosm = { NAMES: NAMES, drawFig: drawFig, drawTrail: drawTrail, drawPet: drawPet, preview: preview };
+  // ник под фигурой: золотой или переливающийся со свечением (идея «светящийся текст»)
+  function nickStyle(ctx, id, t) {
+    if (id === 'nick_gold') { ctx.fillStyle = '#f59e0b'; ctx.shadowColor = 'rgba(245,158,11,.8)'; ctx.shadowBlur = 6; }
+    else if (id === 'nick_glow') { var c = 'hsl(' + ((t / 10) % 360) + ',95%,60%)'; ctx.fillStyle = c; ctx.shadowColor = c; ctx.shadowBlur = 12; }
+  }
+  window.BFCosm = { nickStyle: nickStyle, NAMES: NAMES, drawFig: drawFig, drawTrail: drawTrail, drawPet: drawPet, preview: preview };
 })();

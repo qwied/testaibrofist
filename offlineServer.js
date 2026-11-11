@@ -181,7 +181,7 @@
 
   /* ---------- модули сервера: исходники грузим разом, require — синхронно из кэша ---------- */
   var FILES = ['accounts', 'maps', 'ranks', 'quests', 'themes', 'extras', 'messages', 'notifications', 'clans',
-               'userSkins', 'skins', 'dailyRewards', 'serversInfo', 'fsAtomic', 'abuse', 'progress', 'cosmShop'];
+               'userSkins', 'skins', 'dailyRewards', 'serversInfo', 'fsAtomic', 'abuse', 'progress', 'cosmShop', 'social'];
   var BUILTIN = ['serversinfo', 'piratebay', 'spybase', 'starhunt', 'brotower', 'crystaldefense', 'broarena'];
   var src = {}, cache = {};
   function env() {
@@ -275,6 +275,7 @@
     req('quests').register(app, acc);
     req('progress').register(app, acc);              // уровень, значки, промокоды, подарки монет
     req('cosmShop').register(app, acc);
+    req('social').register(app, acc);
     req('serversInfo').register(app, { snapshot: snapshot, extra: function () { return { maps: req('maps').allMaps().length, accounts: Object.keys(acc.getDb().users).length, discord: null }; } });
     // вышел из аккаунта — остаёшься гостем, как на сайте; войти снова — окно входа (account.js) или TestPanel
   }

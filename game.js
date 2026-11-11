@@ -1478,7 +1478,7 @@
   /* Список игроков комнаты (идеи «Tab — list of players», «Mute player», «Hide player»):
      Tab или клик по «Игроков: N» в шапке. У каждого — «Заглушить» (его чат не показывается)
      и «Скрыть» (не рисуется). Всё локально: другим об этом ничего не уходит. */
-  var plOpen = false;
+  var plOpen = false, chatHist = [];
   function plBox() {
     var b = $('gPlayers');
     if (b) return b;
@@ -1524,6 +1524,9 @@
             + '<button data-pa="mute" data-pn="' + esc(n) + '" style="' + (m ? on : btn) + '">' + esc(m ? TR('plUnmute', 'Вернуть чат') : TR('plMute', 'Заглушить')) + '</button>'
             + '<button data-pa="hide" data-pn="' + esc(n) + '" style="' + (h ? on : btn) + '">' + esc(h ? TR('plShow', 'Показать') : TR('plHide', 'Скрыть')) + '</button>');
         }).join('')
+      + (chatHist.length ? '<div style="margin-top:10px;font-weight:700">' + esc(TR('chatHistTitle', 'История чата')) + '</div>'
+        + '<div style="max-height:160px;overflow:auto;font-size:12.5px;border-top:1px solid #eef0f3;padding-top:4px">'
+        + chatHist.slice().reverse().map(function (c) { return '<div><b>' + esc(c.n) + ':</b> ' + esc(c.t) + '</div>'; }).join('') + '</div>' : '')
       + '<div style="color:#6b7280;font-size:12px;margin-top:8px">' + esc(TR('plHint', 'Tab — список игроков. «Заглушить» прячет чат игрока, «Скрыть» убирает его с твоего экрана. Это видишь только ты.')) + '</div>';
   }
   // друзья в комнате (идея «показывать друзей на твоём сервере»): отмечены в списке игроков
@@ -2857,6 +2860,8 @@
 
     socket.on('chatMessage', function (m) {
       setChatColor(m.playerName, m.color);
+      // история чата (идея игроков): последние 40 реплик — в списке игроков (Tab)
+      if (!isMuted(m.playerName) && !hideChatPref) { chatHist.push({ n: m.playerName, t: m.text }); if (chatHist.length > 40) chatHist.shift(); if (plOpen) plRender(); }
       if (m.playerName !== me.name && !isMuted(m.playerName) && !hideChatPref) {
         speak(m.playerName, m.text);
         if (window.BFSound) BFSound.chat();
@@ -5184,6 +5189,12 @@
       nameX = x0 + wTag;
     }
     ctx.textAlign = clan ? 'left' : 'center';
+    var nc = name === me.name ? GAME.myCosm : cosmCache[name];
+    if (nc && nc.nick && window.BFCosm) {
+      // золотой/светящийся ник из магазина: обводка как обычно, поверх — цвет и свечение
+      inkText(ctx, name, nameX, nameY, tk, tagColor || '#ffffff');
+      ctx.save(); BFCosm.nickStyle(ctx, nc.nick, Date.now()); ctx.fillText(name, nameX, nameY); ctx.restore();
+    } else
     inkText(ctx, name, nameX, nameY, tk, tagColor || '#ffffff');
     ctx.textAlign = 'center';
 

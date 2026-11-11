@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <title>AIBrofist — Profile</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=228">
+<link rel="stylesheet" href="ui.css?v=229">
 <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="theme.js?v=228"></script>
-<script src="device.js?v=228"></script>
-<script src="sound.js?v=228"></script>
+<script src="theme.js?v=229"></script>
+<script src="device.js?v=229"></script>
+<script src="sound.js?v=229"></script>
 <style>
 .upSearch{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
 .upSearch .bfInput{margin-bottom:0;flex:1 1 180px}
@@ -145,6 +145,11 @@
 .upBadge.b-hunter{background:#e0e7ff;border-color:#6366f1}
 .upBadge.b-survivor{background:#ffedd5;border-color:#f97316}
 .upBadge.b-streak{background:#fce7f3;border-color:#ec4899}
+.upStatus{font-size:13px;font-style:italic;margin-top:4px}
+.upLink{display:inline-block;font-size:12px;margin-top:2px;word-break:break-all}
+.upRep{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:13px}
+.upRep button{padding:2px 8px;border-radius:8px;border:1px solid var(--line,#d7dee7);background:transparent;cursor:pointer;font-size:13px}
+.upRep button.on{background:#111827;color:#fff}
 </style>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -176,15 +181,15 @@
   <div class="bfMsg" id="upMsg"></div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=228">
-<script src="i18n.js?v=228"></script>
-<script src="coin.js?v=228"></script>
-<script src="skinRender.js?v=228"></script>
-<script src="skinAvatar.js?v=228" defer></script>
-<script src="shell.js?v=228"></script>
-<script src="abuseShow.js?v=228" defer></script>
-<script src="account.js?v=228" defer></script>
-<script src="owner.js?v=228" defer></script>
+<link rel="stylesheet" href="mobile.css?v=229">
+<script src="i18n.js?v=229"></script>
+<script src="coin.js?v=229"></script>
+<script src="skinRender.js?v=229"></script>
+<script src="skinAvatar.js?v=229" defer></script>
+<script src="shell.js?v=229"></script>
+<script src="abuseShow.js?v=229" defer></script>
+<script src="account.js?v=229" defer></script>
+<script src="owner.js?v=229" defer></script>
 <script>
 (function () {
   'use strict';
@@ -206,7 +211,31 @@
   }
   /* Уровень, опыт и значки (см. progress.js): уровень растёт от очков Race и Hide and Seek,
      звезда — за каждые 50 пройденных карт. */
+  /* Репутация, статус и ссылка (идеи «репутация игрока», «статус и соцссылка в профиле»). */
+  function drawExtra() {
+    get('/profileExtra?name=' + encodeURIComponent(who)).then(function (x) {
+      var box = $('upExtra');
+      if (!box || !x) return;
+      var canVote = me && !me.guest && !isMe;
+      box.innerHTML = (x.status ? '<div class="upStatus">' + esc(x.status) + '</div>' : '')
+        + (x.link ? '<a class="upLink" href="' + esc(x.link) + '" target="_blank" rel="noopener nofollow ugc">' + esc(x.link.replace(/^https?:\/\//, '').slice(0, 40)) + '</a>' : '')
+        + '<div class="upRep"><span>' + esc(T('repLbl', 'Репутация')) + ': <b>' + (x.rep > 0 ? '+' : '') + x.rep + '</b></span>'
+        + (canVote ? '<button data-rep="1" class="' + (x.myVote > 0 ? 'on' : '') + '">\uD83D\uDC4D</button><button data-rep="-1" class="' + (x.myVote < 0 ? 'on' : '') + '">\uD83D\uDC4E</button>' : '')
+        + (isMe ? '<button id="upEditStatus">' + esc(T('statusEdit', 'Статус и ссылка')) + '</button>' : '') + '</div>';
+      Array.prototype.forEach.call(box.querySelectorAll('[data-rep]'), function (b) {
+        b.onclick = function () { var v = +b.dataset.rep; post('/rep', { name: who, v: x.myVote === v ? 0 : v }).then(drawExtra); };
+      });
+      if ($('upEditStatus')) $('upEditStatus').onclick = function () {
+        var st = prompt(T('statusAsk', 'Статус (до 60 знаков):'), x.status || '');
+        if (st === null) return;
+        var ln = prompt(T('linkAsk', 'Ссылка (YouTube, Discord и т.п.), можно пусто:'), x.link || '');
+        if (ln === null) return;
+        post('/setStatus', { status: st, link: ln }).then(drawExtra);
+      };
+    }).catch(function () {});
+  }
   function drawProgress() {
+    drawExtra();
     get('/getProgress?name=' + encodeURIComponent(who)).then(function (p) {
       var box = $('upProg');
       if (!box || !p) return;
@@ -310,6 +339,7 @@
       +     '</div>'
       +     rankRow(d.rank)
       +   '</div>'
+      +   '<div id="upExtra"></div>'
       +   '<div class="upProg" id="upProg"></div>'
       +   '<div class="upActs">' + acts + '</div>'
       + '</div></div>'

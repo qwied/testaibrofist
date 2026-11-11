@@ -20,11 +20,13 @@ const CATALOG = [
   { id: 'pet_dog',       slot: 'pet',   price: 150 },
   { id: 'death_confetti',slot: 'death', price: 60 },
   { id: 'death_ghost',   slot: 'death', price: 80 },
-  { id: 'glow_rgb',      slot: 'glow',  price: 300 }
+  { id: 'glow_rgb',      slot: 'glow',  price: 300 },
+  { id: 'nick_gold',     slot: 'nick',  price: 120 },
+  { id: 'nick_glow',     slot: 'nick',  price: 200 }
 ];
 const BY_ID = {};
 CATALOG.forEach(c => { BY_ID[c.id] = c; });
-const SLOTS = ['hat', 'back', 'trail', 'pet', 'death', 'glow'];
+const SLOTS = ['hat', 'back', 'trail', 'pet', 'death', 'glow', 'nick'];
 
 function equippedOf(u) {
   const out = {};

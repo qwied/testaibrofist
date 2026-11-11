@@ -76,7 +76,7 @@ const PUBLIC_JS = new Set([
   'dailyreward.js', 'device.js', 'editorai.js', 'editorhelp.js', 'game.js',
   'gifplayer.js', 'gifuct.bundle.js', 'i18n.js', 'nav.js', 'owner.js',
   'roomlist.js', 'shell.js', 'skinavatar.js', 'skincanvas.js', 'skinrender.js',
-  'sound.js', 'theme.js', 'livetext.js', 'cosmdraw.js'
+  'sound.js', 'theme.js', 'livetext.js', 'cosmdraw.js', 'lobbychat.js'
 ]);
 // owner.js и adminAbuse.js разрешены здесь только затем, чтобы запрос дошёл
 // до своих маршрутов выше — там они проверяют права владельца отдельно.
@@ -267,6 +267,21 @@ app.get('/favicon.ico', (req, res) => {
    первым, до того как маршрут до него доберётся. */
 const PAGE_FILES = ['avatar', 'clans', 'daily', 'editor', 'game', 'hide-and-seek',
   'leaderboard', 'logs', 'mapsBrowser', 'messages', 'quests', 'race', 'servers', 'story', 'users'];
+/* Превью ссылки на профиль (идея «og-meta профиля»): в мессенджерах и Discord ссылка
+   users?name=… показывает ник игрока, а не общий заголовок сайта. */
+app.get('/users', (req, res, next) => {
+  const name = String(req.query.name || '').slice(0, 40);
+  if (!name) return next();
+  require('fs').readFile(path.join(__dirname, 'users.html'), 'utf8', (err, html) => {
+    if (err) return next();
+    const esc = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const t = esc(name) + ' — AIBrofist';
+    const meta = '<meta property="og:title" content="' + t + '"><meta property="og:description" content="' + esc(name) + "'s profile on AIBrofist" + '">'
+      + '<meta property="og:type" content="profile">';
+    res.set('Cache-Control', 'no-cache');
+    res.type('html').send(html.replace(/<title>[^<]*<\/title>/, '<title>' + t + '</title>' + meta));
+  });
+});
 app.get(PAGE_FILES.map(p => '/' + p + '.html'), (req, res) => {
   const qs = req.originalUrl.split('?')[1];
   res.redirect(301, req.path.slice(0, -5) + (qs ? '?' + qs : ''));
@@ -364,6 +379,7 @@ require('./dailyRewards.js').register(app, accounts);
 require('./quests.js').register(app, accounts);
 require('./progress.js').register(app, accounts);   // уровень, значки, промокоды, подарки монет
 require('./cosmShop.js').register(app, accounts);  // косметика за монеты: шляпы, плащи, след, питомец
+require('./social.js').register(app, accounts);    // репутация, статус, зал славы, общий чат на главной
 require('./story.js').register(app, accounts);
 
 // адреса, на которые ссылается шапка сайта

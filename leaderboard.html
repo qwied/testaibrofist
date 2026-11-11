@@ -4,12 +4,12 @@
         <title>AIBrofist — Leaderboards</title>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-        <link rel="stylesheet" type="text/css" href="style.css?v=228">
+        <link rel="stylesheet" type="text/css" href="style.css?v=229">
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="device.js?v=228"></script>
-        <script src="sound.js?v=228"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=228">
+<script src="device.js?v=229"></script>
+        <script src="sound.js?v=229"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=229">
         <style>
                 /* Обёртка страницы обычно .bfWrap, 1080px, как у остальных
                    разделов — но на этой странице теперь до двух колонок
@@ -88,9 +88,17 @@
                 .lbArrow:disabled{opacity:.35;cursor:default}
                 @media (pointer:coarse){ .lbArrow{width:44px;height:44px} }
                 .lbPageLabel{color:#8b93a1;font-size:13px;min-width:40px;text-align:center}
-        </style>
-        <link rel="stylesheet" href="ui.css?v=228">
-        <script src="theme.js?v=228"></script>
+        .lbHall{max-width:980px;margin:22px auto 0}
+.lbHallTitle{font-weight:800;font-size:18px;margin-bottom:10px}
+.lbHallGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.lbHallCol{border:1px solid var(--line,#e5e7eb);border-radius:12px;padding:10px 12px;background:var(--card,#fff)}
+.lbHallRow{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:14px}
+.lbHallRow b{color:#f59e0b;width:16px}
+.lbHallRow .lbName{flex:1;cursor:pointer;font-weight:600}
+.lbHallRow i{font-style:normal;color:var(--muted,#6b7280);font-size:12px}
+</style>
+        <link rel="stylesheet" href="ui.css?v=229">
+        <script src="theme.js?v=229"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -147,9 +155,11 @@
                         <div id="lbRankMine" class="mine" style="display:none"></div>
                 </div>
         </div>
+        <!-- Зал славы (идея игроков): лучшие авторы карт, гонщики, охотники и уровни за всё время -->
+        <div class="lbHall" id="lbHall"></div>
 </div>
 
-<script src="account.js?v=228" defer></script>
+<script src="account.js?v=229" defer></script>
 <script>
 (function () {
         var listEl = document.getElementById('lbList');
@@ -317,17 +327,31 @@
         listEl.addEventListener('click', nameClick);
         rankListEl.addEventListener('click', nameClick);
 
+        fetch('/hallOfFame', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (h) {
+                var box = document.getElementById('lbHall');
+                if (!box || !h) return;
+                var col = function (k, t, unit) {
+                        var list = h[k] || [];
+                        return '<div class="lbHallCol"><div class="lbColTitle">' + t + '</div>' + (list.length ? list.map(function (x, i) {
+                                return '<div class="lbHallRow"><b>' + (i + 1) + '</b><span class="lbName" data-n="' + String(x.name).replace(/"/g, '&quot;') + '">' + String(x.name).replace(/[<>&]/g, '') + '</span><i>' + x.v + ' ' + unit + '</i></div>';
+                        }).join('') : '<div class="empty">—</div>') + '</div>';
+                };
+                box.innerHTML = '<div class="lbHallTitle">' + T('hallTitle', 'Зал славы') + '</div><div class="lbHallGrid">'
+                        + col('creators', T('hallCreators', 'Авторы карт'), '\uD83D\uDC4D') + col('racers', T('hallRacers', 'Гонщики'), T('hallFin', 'финишей'))
+                        + col('hunters', T('hallHunters', 'Охотники'), T('hallCaught', 'поймано')) + col('levels', T('hallLevels', 'Опыт'), 'XP') + '</div>';
+                box.addEventListener('click', nameClick);
+        }).catch(function () {});
         load();
         loadRanks();
         setInterval(function () { load(); loadRanks(); }, 15000);
 })();
 </script>
-        <script src="i18n.js?v=228"></script>
-        <script src="owner.js?v=228" defer></script>
-        <script src="coin.js?v=228"></script>
-        <script src="skinRender.js?v=228"></script>
-        <script src="skinAvatar.js?v=228" defer></script>
-        <script src="shell.js?v=228"></script>
-<script src="abuseShow.js?v=228" defer></script>
+        <script src="i18n.js?v=229"></script>
+        <script src="owner.js?v=229" defer></script>
+        <script src="coin.js?v=229"></script>
+        <script src="skinRender.js?v=229"></script>
+        <script src="skinAvatar.js?v=229" defer></script>
+        <script src="shell.js?v=229"></script>
+<script src="abuseShow.js?v=229" defer></script>
 </body>
 </html>

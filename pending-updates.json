@@ -116,6 +116,10 @@
     {
       "title": "More map tools: crush, checkpoint lives, morphing",
       "text": "Moving blocks can now crush you. Checkpoints can have a number of lives: lose them all and you start over. New effect triggers recolor blocks or toggle targets whenever the player dies, and blocks can smoothly grow or shrink with a lever. New sand floor slows you down, blocks can have rounded corners, there are quarter-circle and cloud shapes, and levers move smoothly. Race maps can set a 1 or 3 minute time, choose their own background color, use night by the real clock, and show an arrow pointing to the finish when it is off screen."
+    },
+    {
+      "title": "Profiles, hall of fame and a lobby chat",
+      "text": "Profiles now have reputation, a short status and a link. The leaderboard has a Hall of Fame. The home page has a shared chat for signed-in players. The shop sells gold and glowing nicknames. The players list shows recent chat, and settings list the players you muted or hid."
     }
   ]
 }
