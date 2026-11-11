@@ -1019,10 +1019,11 @@ var PAINT = {
     ctx.beginPath(); ctx.arc(0,0,Math.max(2,w*.035),0,6.2832); ctx.fill();
     ctx.restore();
     // Хвостовой винт тоже вращается вокруг оси, сохраняя постоянный размер.
-    ctx.save(); ctx.translate(w*.94,h*.36); ctx.rotate(-rot*1.7);
+    ctx.save(); ctx.translate(w*.91,h*.36); ctx.rotate(-rot*1.7);
     ctx.fillStyle = "#1f2937";
-    rr(-h*.12,-1.5,h*.24,3,1.5); rr(-1.5,-h*.12,3,h*.24,1.5);
-    ctx.fill(); ctx.restore();
+    rr(-h*.12,-1.5,h*.24,3,1.5); ctx.fill();
+    rr(-1.5,-h*.12,3,h*.24,1.5); ctx.fill();
+    ctx.restore();
     ctx.restore();
   },
   zipline: function(o){
