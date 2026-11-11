@@ -63,6 +63,22 @@ function register(app, acc) {
     acc.save();
     res.json({ status: 'success', coins: u.coins, owned: u.cosmOwned, equipped: equippedOf(u) });
   });
+  // «Случайный образ» (идея «случайный скин кнопкой»): в каждом слоте — случайная из купленных вещей или ничего
+  app.post('/cosm/random', (req, res) => {
+    const u = acc.currentUser(req);
+    if (!u) return res.json({ status: 'error', message: 'Sign in first' });
+    const owned = Array.isArray(u.cosmOwned) ? u.cosmOwned.filter(id => BY_ID[id]) : [];
+    if (!owned.length) return res.json({ status: 'error', message: 'Buy some accessories first' });
+    u.cosm = {};
+    SLOTS.forEach((sl) => {
+      const mine = owned.filter(id => BY_ID[id].slot === sl);
+      const pick = Math.floor(Math.random() * (mine.length + 1));
+      if (pick < mine.length) u.cosm[sl] = mine[pick];
+    });
+    if (!Object.keys(u.cosm).length) u.cosm[BY_ID[owned[0]].slot] = owned[0];
+    acc.save();
+    res.json({ status: 'success', equipped: equippedOf(u) });
+  });
   app.post('/cosm/equip', (req, res) => {
     const u = acc.currentUser(req);
     if (!u) return res.json({ status: 'error', message: 'Sign in first' });

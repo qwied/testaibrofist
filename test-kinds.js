@@ -102,9 +102,10 @@ function server(port) {
   ok(kinds.join() === 'hideAndSeek,race,murder,team,war,party,adventure', 'семь режимов карты', kinds.join());
   // все семь режимов — равные кнопки на виду; панель не залезает ни под панель сцены, ни на модификацию
   const lay = await ed.evaluate(() => { const r = id => document.getElementById(id).getBoundingClientRect(), a = r('modes'), b = r('scene'), c = r('apoc');
-    return { modesRight: Math.round(a.right), sceneLeft: Math.round(b.left), modesBottom: Math.round(a.bottom), apocTop: Math.round(c.top),
+    return { modesRight: Math.round(a.right), sceneLeft: Math.round(b.left), modesTop: Math.round(a.top), sceneBottom: Math.round(b.bottom), modesBottom: Math.round(a.bottom), apocTop: Math.round(c.top),
              shown: [...document.querySelectorAll('.modeBtn')].every(e => e.offsetParent !== null) }; });
-  ok(lay.shown && lay.modesRight <= lay.sceneLeft && lay.modesBottom <= lay.apocTop, 'семь режимов видны и не залезают на соседние панели', JSON.stringify(lay));
+  // на узком экране панель режимов стоит под панелью сцены (см. fitTools) — это тоже не наложение
+  ok(lay.shown && (lay.modesRight <= lay.sceneLeft || lay.modesTop >= lay.sceneBottom) && lay.modesBottom <= lay.apocTop, 'семь режимов видны и не залезают на соседние панели', JSON.stringify(lay));
   const vis = (t) => ed.evaluate((t) => { const e = document.querySelector('.tool[data-tool="' + t + '"]'); return !!e && e.style.display !== 'none'; }, t);
   await pick('adventure');
   ok(await vis('enemy') && await vis('crystal'), 'в «Приключении» есть Враг и Кристалл');

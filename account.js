@@ -301,6 +301,15 @@
         + '<div class="bf-opt' + (!gon ? ' on' : '') + '" data-v="0">' + T2('ghostOff', 'Без призрака') + '</div>';
       Array.prototype.forEach.call(gr.querySelectorAll('.bf-opt'), function (el) { el.onclick = function () { ls('bfGhost', el.getAttribute('data-v')); drawGamePrefs(); }; });
     }
+    toggleRow('#bfPadSideRow', 'bfPadSwap', T2('padRight', 'Прыжок справа'), T2('padLeft', 'Прыжок слева'));
+    var pz = box.querySelector('#bfPadSizeRow');
+    if (pz) {
+      var cur = ls('bfPadSize') || 'm';
+      pz.innerHTML = [['s', T2('padS', 'Кнопки меньше')], ['m', T2('padM', 'Обычные')], ['l', T2('padL', 'Кнопки больше')]].map(function (o) {
+        return '<div class="bf-opt' + (cur === o[0] ? ' on' : '') + '" data-v="' + o[0] + '">' + o[1] + '</div>';
+      }).join('');
+      Array.prototype.forEach.call(pz.querySelectorAll('.bf-opt'), function (el) { el.onclick = function () { ls('bfPadSize', el.getAttribute('data-v')); drawGamePrefs(); }; });
+    }
     // скрытые и заглушённые игроки (идея «список игнора в профиле»): вернуть одним нажатием
     var ig = box.querySelector('#bfIgnoreRow');
     if (ig) {
@@ -388,6 +397,9 @@
        + '<div class="bf-row" id="bfFxRow"></div>'
        + '<div class="bf-row" id="bfCbRow"></div>'
        + '<div class="bf-row" id="bfGhostRow"></div>'
+       + '<div class="bf-h">' + T('padHint', 'Кнопки на телефоне: где прыжок и какого размера кнопки.') + '</div>'
+       + '<div class="bf-row" id="bfPadSideRow"></div>'
+       + '<div class="bf-row" id="bfPadSizeRow"></div>'
        + '<div class="bf-h">' + T('keysHint', 'Свои клавиши — вдобавок к стрелкам и WASD. Нажми на действие, потом на клавишу.') + '</div>'
        + '<div class="bf-row" id="bfKeyRow" style="flex-wrap:wrap"></div>'
        + '<div class="bf-sec">' + T('ignoreSection', 'Скрытые и заглушённые игроки') + '</div>'

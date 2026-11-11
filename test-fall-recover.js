@@ -14,7 +14,7 @@ const ok = (n, c) => { if (!c) fails++; console.log('  ', c ? '✓' : '✗', n);
   const src = fs.readFileSync(__dirname + '/' + f, 'utf8');
   console.log(f + ':');
   ok('в прятках провал за карту зовёт respawn(), а не молчащий die()',
-      /if\(pl\.y > 5000\)\{\s*\/\*[\s\S]{0,600}?\*\/\s*if\(mode === "hideAndSeek"\) respawn\(\);\s*else die\(\);\s*\}/.test(src));
+      /if\(pl\.y > 5000( \|\| pl\.y < -6000)?\)\{\s*\/\*[\s\S]{0,600}?\*\/\s*if\(mode === "hideAndSeek"\) respawn\(\);\s*else die\(\);\s*\}/.test(src));
   // die() для гонки не трогали — она по-прежнему единственная точка входа
   // для смерти от шипов и остаётся no-op в прятках
   // (в прятках die() только сообщает игре о касании яда — см. onHazard в game.js — и не убивает)

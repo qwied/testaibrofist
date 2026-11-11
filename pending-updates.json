@@ -136,6 +136,10 @@
     {
       "title": "Upside-down gravity",
       "text": "Gravity zones in the editor can now go below zero. Inside such a zone gravity pulls up: you walk on the ceiling upside down and jump downwards. Leave the zone and you fall back to the floor."
+    },
+    {
+      "title": "Editor hotkeys, layers and a winter theme",
+      "text": "The map editor has new hotkeys: V select, B brush, P polygon, arrow keys move the selected object, [ and ] change its order. Press L to work only on gameplay objects or only on decorations. A Random outfit button puts on a random mix of your accessories. On phones you can move the jump button to the left and make the buttons smaller or bigger in Settings. From December 15 to January 10 snow falls on the site; the snowflake button turns it off."
     }
   ]
 }

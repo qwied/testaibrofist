@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <title>AIBrofist — Avatar</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=233">
+<link rel="stylesheet" href="ui.css?v=234">
 <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="theme.js?v=233"></script>
-<script src="device.js?v=233"></script>
-<script src="sound.js?v=233"></script>
+<script src="theme.js?v=234"></script>
+<script src="device.js?v=234"></script>
+<script src="sound.js?v=234"></script>
 <style>
   /* Тот же приём, что и у карточек Settings/профиля: рамка var(--line),
      фон var(--panel) — никаких своих цветов, чтобы страница не выбивалась
@@ -116,16 +116,16 @@
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=233">
-<script src="i18n.js?v=233"></script>
-<script src="coin.js?v=233"></script>
-<script src="skinRender.js?v=233"></script>
-<script src="cosmDraw.js?v=233"></script>
-<script src="skinAvatar.js?v=233" defer></script>
-<script src="shell.js?v=233"></script>
-<script src="abuseShow.js?v=233" defer></script>
-<script src="account.js?v=233" defer></script>
-<script src="owner.js?v=233" defer></script>
+<link rel="stylesheet" href="mobile.css?v=234">
+<script src="i18n.js?v=234"></script>
+<script src="coin.js?v=234"></script>
+<script src="skinRender.js?v=234"></script>
+<script src="cosmDraw.js?v=234"></script>
+<script src="skinAvatar.js?v=234" defer></script>
+<script src="shell.js?v=234"></script>
+<script src="abuseShow.js?v=234" defer></script>
+<script src="account.js?v=234" defer></script>
+<script src="owner.js?v=234" defer></script>
 <script>
 (function () {
   'use strict';
@@ -244,7 +244,8 @@
       if (!d || !box) return;
       var slots = [];
       d.items.forEach(function (it) { if (slots.indexOf(it.slot) === -1) slots.push(it.slot); });
-      box.innerHTML = slots.map(function (sl) {
+      box.innerHTML = (d.owned.length ? '<button class="bfBtn go" data-rand="1" style="margin-bottom:10px">\uD83C\uDFB2 ' + T('cosmRandom', 'Random outfit') + '</button>' : '')
+        + slots.map(function (sl) {
         return '<div class="avCosmSlot">' + T(SLOT_T[sl][0], SLOT_T[sl][1]) + '</div><div class="avCosmGrid">'
           + d.items.filter(function (it) { return it.slot === sl; }).map(function (it) {
               var own = d.owned.indexOf(it.id) !== -1, on = d.equipped[it.slot] === it.id;
@@ -260,7 +261,8 @@
         var b = e.target.closest('button'); if (!b) return;
         var err = document.getElementById('avCosmErr'); err.textContent = '';
         var done = function (r) { if (r && r.status === 'success') drawCosm(); else err.textContent = (r && r.message) || 'Error'; };
-        if (b.dataset.buy) post('/cosm/buy', { id: b.dataset.buy }, done);
+        if (b.dataset.rand) post('/cosm/random', {}, done);
+        else if (b.dataset.buy) post('/cosm/buy', { id: b.dataset.buy }, done);
         else if (b.dataset.eq) post('/cosm/equip', { slot: b.dataset.slot, id: b.dataset.eq }, done);
         else if (b.dataset.off) post('/cosm/equip', { slot: b.dataset.off, id: '' }, done);
       };

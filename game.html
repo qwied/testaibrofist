@@ -194,6 +194,10 @@ body.play.mob #pad{display:flex}
 .pBtn:active{background:var(--accent);color:#fff;transform:scale(.93)}
 #pJump{width:78px;height:78px;font-size:13px;font-weight:800;letter-spacing:.5px}
 .pBtn{touch-action:none;-webkit-touch-callout:none}
+/* свой вид пада (Настройки → Игра): прыжок слева, кнопки меньше или больше */
+#pad.swap{flex-direction:row-reverse}
+#pad.sz-s .padG{zoom:.8}
+#pad.sz-l .padG{zoom:1.22}
 /* на телефоне кнопки крупнее: играют большими пальцами, и ничего не должно
    залезать под системные полосы iPhone (чёлка сбоку в альбомной, жесты снизу) */
 @media (pointer:coarse){
@@ -256,16 +260,16 @@ body{background:#eef2f8;overflow:hidden}
         <script src="offline.js?v=9"></script>
         <script src="offlineServer.js?v=10"></script>
         <script src="offlineModes.js?v=11"></script>
-<script src="device.js?v=233"></script>
-        <script src="sound.js?v=233"></script>
-        <script src="skinRender.js?v=233"></script>
-        <script src="skinCanvas.js?v=233"></script>
-        <script src="gifuct.bundle.js?v=233"></script>
-        <script src="gifPlayer.js?v=233"></script>
-        <script src="coin.js?v=233"></script>
-        <script src="liveText.js?v=233"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=233">
-        <script src="theme.js?v=233"></script>
+<script src="device.js?v=234"></script>
+        <script src="sound.js?v=234"></script>
+        <script src="skinRender.js?v=234"></script>
+        <script src="skinCanvas.js?v=234"></script>
+        <script src="gifuct.bundle.js?v=234"></script>
+        <script src="gifPlayer.js?v=234"></script>
+        <script src="coin.js?v=234"></script>
+        <script src="liveText.js?v=234"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=234">
+        <script src="theme.js?v=234"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -4393,6 +4397,12 @@ function pad(id, fn){
   ["touchstart","mousedown"].forEach(function(t){ e.addEventListener(t,function(ev){ fn(true); ev.preventDefault(); },{passive:false}); });
   ["touchend","touchcancel","mouseup","mouseleave"].forEach(function(t){ e.addEventListener(t,function(ev){ fn(false); ev.preventDefault(); },{passive:false}); });
 }
+(function(){
+  var e = document.getElementById("pad"), sw = "", sz = "";
+  try { sw = localStorage.getItem("bfPadSwap"); sz = localStorage.getItem("bfPadSize"); } catch(x){}
+  if(sw === "1") e.classList.add("swap");
+  if(sz === "s" || sz === "l") e.classList.add("sz-" + sz);
+})();
 pad("pLeft",  function(v){ keys.l = v; });
 pad("pRight", function(v){ keys.r = v; });
 pad("pJump",  function(v){ keys.u = v; if(v) buf = BUFFER; });
@@ -5130,9 +5140,9 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="cosmDraw.js?v=233"></script>
-<script src="game.js?v=233"></script>
-        <script src="i18n.js?v=233"></script>
-        <script src="skinAvatar.js?v=233" defer></script>
+<script src="cosmDraw.js?v=234"></script>
+<script src="game.js?v=234"></script>
+        <script src="i18n.js?v=234"></script>
+        <script src="skinAvatar.js?v=234" defer></script>
 </body>
 </html>

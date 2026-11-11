@@ -374,15 +374,15 @@ body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="device.js?v=233"></script>
-        <script src="sound.js?v=233"></script>
-        <script src="skinRender.js?v=233"></script>
-        <script src="skinCanvas.js?v=233"></script>
-        <script src="gifuct.bundle.js?v=233"></script>
-        <script src="gifPlayer.js?v=233"></script>
-        <script src="coin.js?v=233"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=233">
-        <script src="theme.js?v=233"></script>
+<script src="device.js?v=234"></script>
+        <script src="sound.js?v=234"></script>
+        <script src="skinRender.js?v=234"></script>
+        <script src="skinCanvas.js?v=234"></script>
+        <script src="gifuct.bundle.js?v=234"></script>
+        <script src="gifPlayer.js?v=234"></script>
+        <script src="coin.js?v=234"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=234">
+        <script src="theme.js?v=234"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -3719,6 +3719,7 @@ function paintFrame(){
     // то же самое для места ожидания искателя — там уже стоит настоящий
     // искатель (см. teleportToSeekerSpot в game.html), вторую фигуру не рисуем
     if(playing && ro.type === "seekerSpot") continue;
+    if(!playing && !inLayer(ro)){ ctx.save(); ctx.globalAlpha = 0.18; paint(ro, false); ctx.restore(); drawn++; continue; }
     paint(ro, !playing && ro === sel); drawn++;
   }
   /* Луч рисуется отдельным проходом, не в PAINT.laserFeed: его трасса (с
@@ -4428,6 +4429,7 @@ function at(x,y){
   // и круглые объекты ловятся мимо картинки
   for(var i = objects.length-1; i >= 0; i--){
     var o = objects[i];
+    if(!inLayer(o)) continue;
     if(o.type === "text"){
       if(x >= o.x && x <= o.x+o.w && y >= o.y && y <= o.y+o.h) return o;
       continue;
@@ -5054,7 +5056,38 @@ document.addEventListener("keydown", function(e){
   if(e.key === "+" || e.key === "=") zoomAt(VW()/2, VH()/2, 1.15);
   if(e.key === "-" || e.key === "_") zoomAt(VW()/2, VH()/2, 1/1.15);
   if(e.key === "0") resetView();
+  if(mod) return;
+  /* Горячие клавиши (идея игроков): V — выбор, B — кисть, P — многоугольник, L — слои,
+     [ и ] — назад/вперёд, стрелки — сдвинуть выделенное на 1 px (с Shift — на 10). */
+  if(e.code === "KeyV") setTool("select");
+  if(e.code === "KeyB" && toolOK("brush")) setTool("brush");
+  if(e.code === "KeyP" && toolOK("poly")) setTool("poly");
+  if(e.code === "KeyL") cycleLayer();
+  if(sel && (e.code === "BracketLeft" || e.code === "BracketRight")){
+    commit();
+    objects = objects.filter(function(o){ return o !== sel; });
+    e.code === "BracketRight" ? objects.push(sel) : objects.unshift(sel);
+  }
+  if(sel && /^Arrow/.test(e.code)){
+    e.preventDefault();
+    var st = e.shiftKey ? 10 : 1;
+    if(!e.repeat) commit();
+    if(e.code === "ArrowLeft") sel.x -= st; if(e.code === "ArrowRight") sel.x += st;
+    if(e.code === "ArrowUp") sel.y -= st; if(e.code === "ArrowDown") sel.y += st;
+    markDirty(); inspect();
+  }
 });
+/* Слои (идея игроков «фон / игровая зона»): L переключает, что сейчас правим — всё, только
+   игровые объекты или только декорации (проходимые и надписи). Остальное бледнеет и не выделяется. */
+var layerView = 0;
+function isDecor(o){ return o.ghost === true || o.type === "text"; }
+function inLayer(o){ return !layerView || isDecor(o) === (layerView === 2); }
+function cycleLayer(){
+  layerView = (layerView + 1) % 3;
+  if(sel && !inLayer(sel)){ sel = null; inspect(); }
+  var nm = [TR("layerAll","Слои: всё"), TR("layerGame","Слой: игровые объекты"), TR("layerDecor","Слой: декорации")][layerView];
+  showMsg(nm, TR("layerHint","L — сменить слой. Объекты других слоёв бледные и не выделяются.")); setTimeout(hideMsg, 1600);
+}
 document.addEventListener("keyup", function(e){
   if(inSomeField()) return;
   if(e.code === "Space") spaceDown = false;
@@ -6263,6 +6296,7 @@ window.GAME = BRIDGE = {
   pasteAt: pasteAt,
   get sel(){ return sel; },
   setSel: function(o){ sel = o || null; inspect(); },   // автотесты: выделить объект без клика
+  get layerView(){ return layerView; }, at: function(x, y){ return at(x, y); },   // автотесты: слои (см. cycleLayer)
   undo: undo, redo: redo,           // откат и возврат правок
   commit: commit,                   // снимок перед действием — так же зовёт инструмент
   myColor: null, onDraw: null,
@@ -6456,12 +6490,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=233"></script>
-<script src="abuseShow.js?v=233" defer></script>
-<script src="editorHelp.js?v=233"></script>
-<script src="editorAI.js?v=233" defer></script>
-<script src="account.js?v=233" defer></script>
-<script src="owner.js?v=233" defer></script>
+<script src="i18n.js?v=234"></script>
+<script src="abuseShow.js?v=234" defer></script>
+<script src="editorHelp.js?v=234"></script>
+<script src="editorAI.js?v=234" defer></script>
+<script src="account.js?v=234" defer></script>
+<script src="owner.js?v=234" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -6578,7 +6612,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=233" defer></script>
+        <script src="skinAvatar.js?v=234" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */

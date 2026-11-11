@@ -519,3 +519,47 @@
 
   window.BFUpdate = { refresh: refresh };
 })();
+
+/* ---------- Новогодняя тема (идея игроков) ----------
+   С 15 декабря по 10 января по сайту падает снег. Кнопка-снежинка в углу выключает его
+   (запоминается в браузере). ?snow=1 в адресе включает снег в любой день — для проверки. */
+(function () {
+  'use strict';
+  var d = new Date(), m = d.getMonth() + 1, day = d.getDate();
+  var season = (m === 12 && day >= 15) || (m === 1 && day <= 10) || /[?&]snow=1\b/.test(location.search);
+  if (!season) return;
+  var off = false;
+  try { off = localStorage.getItem('bfNoSnow') === '1'; } catch (e) {}
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) off = true;
+  function start() {
+    var cv = document.createElement('canvas'); cv.id = 'bfSnow';
+    cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9998';
+    var btn = document.createElement('button'); btn.id = 'bfSnowBtn'; btn.type = 'button'; btn.textContent = '❄';
+    btn.title = (window.I18N && I18N.t('snowToggle') !== 'snowToggle') ? I18N.t('snowToggle') : 'Snow on/off';
+    btn.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9999;width:34px;height:34px;border-radius:50%;border:1px solid rgba(0,0,0,.12);'
+      + 'background:rgba(255,255,255,.85);font-size:17px;cursor:pointer;line-height:1';
+    document.body.appendChild(cv); document.body.appendChild(btn);
+    var ctx = cv.getContext('2d'), flakes = [], W = 0, H = 0, raf = 0;
+    function size() { W = cv.width = innerWidth; H = cv.height = innerHeight; }
+    size(); addEventListener('resize', size);
+    for (var i = 0; i < 70; i++) flakes.push({ x: Math.random() * W, y: Math.random() * H, r: 1 + Math.random() * 2.6, s: 0.4 + Math.random() * 1.1, w: Math.random() * 6.28 });
+    function tick() {
+      ctx.clearRect(0, 0, W, H); ctx.fillStyle = 'rgba(255,255,255,.9)';
+      ctx.shadowColor = 'rgba(120,150,190,.6)'; ctx.shadowBlur = 3;
+      flakes.forEach(function (f) {
+        f.y += f.s; f.w += 0.02; f.x += Math.sin(f.w) * 0.4;
+        if (f.y > H + 5) { f.y = -5; f.x = Math.random() * W; }
+        ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, 6.283); ctx.fill();
+      });
+      raf = requestAnimationFrame(tick);
+    }
+    function set(on) {
+      off = !on; cv.style.display = on ? '' : 'none'; btn.style.opacity = on ? '1' : '.55';
+      cancelAnimationFrame(raf); if (on) tick(); else ctx.clearRect(0, 0, W, H);
+      try { localStorage.setItem('bfNoSnow', on ? '0' : '1'); } catch (e) {}
+    }
+    btn.onclick = function () { set(off); };
+    set(!off);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
