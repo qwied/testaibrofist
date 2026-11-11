@@ -126,7 +126,21 @@
     });
     inp.style.cssText = 'padding:9px 12px;border-radius:10px;border:1px solid var(--line,#d7dee7);background:var(--card,#fff);'
       + 'color:inherit;font:600 14px ui-monospace,monospace;width:150px;text-transform:uppercase;letter-spacing:1px';
-    box.appendChild(mk); box.appendChild(inp); box.appendChild(join); box.appendChild(msg);
+    box.appendChild(mk); box.appendChild(inp); box.appendChild(join);
+    // дуэль 1 на 1 — только в гонке: ждёт соперника в комнате на двоих (см. /getDuelRoom)
+    if (mode === 'race' && !variant) {
+      var du = document.createElement('button');
+      du.type = 'button'; du.className = 'rlDuel';
+      du.textContent = T('duelBtn', 'Дуэль 1 на 1');
+      du.style.cssText = mk.style.cssText;
+      du.addEventListener('click', function () {
+        fetch('/getDuelRoom', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+          .then(function (d) { location.href = 'game?mode=race&room=' + encodeURIComponent(d.room); })
+          .catch(function () { location.href = 'game?mode=race&room=duel-1'; });
+      });
+      box.appendChild(du);
+    }
+    box.appendChild(msg);
     el.parentNode.insertBefore(box, el.nextSibling);
 
     mk.addEventListener('click', function () { go(mode, variant, newCode()); });

@@ -80,6 +80,10 @@
     {
       "title": "Ghost runs and editor helpers",
       "text": "In Race, a see-through ghost now runs your best path on maps you've already finished, so you can race yourself (you can turn it off in Settings). In the editor you can cut a block in half, put your own picture under the map to trace over, and let other players copy your map: such maps get a Copy to editor link in Maps Browser."
+    },
+    {
+      "title": "New modes: duel, auto-run and Hot Trap",
+      "text": "Race has a new 1v1 duel button: you are matched with one opponent, every round is won by whoever finishes first, and the duel score keeps adding up while you both stay. Race maps can turn on auto-run: your character runs by itself and you only jump (hold Left to slow down). Hide and Seek has a new Hot Trap round: a shorter round where the seeker must catch at least a third of the hiders, or the seeker burns and the hiders win."
     }
   ]
 }

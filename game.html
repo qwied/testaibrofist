@@ -256,16 +256,16 @@ body{background:#eef2f8;overflow:hidden}
         <script src="offline.js?v=9"></script>
         <script src="offlineServer.js?v=10"></script>
         <script src="offlineModes.js?v=11"></script>
-<script src="device.js?v=219"></script>
-        <script src="sound.js?v=219"></script>
-        <script src="skinRender.js?v=219"></script>
-        <script src="skinCanvas.js?v=219"></script>
-        <script src="gifuct.bundle.js?v=219"></script>
-        <script src="gifPlayer.js?v=219"></script>
-        <script src="coin.js?v=219"></script>
-        <script src="liveText.js?v=219"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=219">
-        <script src="theme.js?v=219"></script>
+<script src="device.js?v=220"></script>
+        <script src="sound.js?v=220"></script>
+        <script src="skinRender.js?v=220"></script>
+        <script src="skinCanvas.js?v=220"></script>
+        <script src="gifuct.bundle.js?v=220"></script>
+        <script src="gifPlayer.js?v=220"></script>
+        <script src="coin.js?v=220"></script>
+        <script src="liveText.js?v=220"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=220">
+        <script src="theme.js?v=220"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1206,7 +1206,7 @@ var apoc = false;
    побеждает первый, "last" — Last bro standing, только с жизнями. */
 var raceLives = 0, raceTimeMin = 0, raceGoal = "";
 /* Ещё две опции карты гонки (идеи игроков): двойной прыжок и урон от падения с большой высоты. */
-var raceDJ = false, raceFall = false, raceSprint = false, FALL_DMG_H = 620;
+var raceDJ = false, raceFall = false, raceSprint = false, raceAuto = false, FALL_DMG_H = 620;
 /* Атмосфера карты (идеи «дождь/снег», «день и ночь», «туман войны») — для любого режима:
    "" — ясно, rain, snow, night (темно, свет вокруг игрока), fog (видно только рядом). */
 var ATMOS = ["", "rain", "snow", "night", "fog"], atmo = "", flashA = 0;
@@ -1219,11 +1219,12 @@ function cleanRaceRules(d){
   atmo = (d && ATMOS.indexOf(d.atmo) > 0) ? d.atmo : "";
   raceFall = mode === "race" && !!(d && d.fallDmg);
   raceSprint = mode === "race" && !!(d && d.sprint);
+  raceAuto = mode === "race" && !!(d && d.autoRun);
 }
 // поля правил гонки для сохранения карты — пустые не пишем
 function withRaceRules(m){
   if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; if(raceGoal) m.goal = raceGoal;
-    if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; if(raceSprint) m.sprint = 1; }
+    if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; if(raceSprint) m.sprint = 1; if(raceAuto) m.autoRun = 1; }
   if(atmo) m.atmo = atmo;
   return m;
 }
@@ -2373,6 +2374,8 @@ function step(){
   if(grabCd > 0) grabCd--;
 
   var dir = (grabbing || frz) ? 0 : (keys.r?1:0)-(keys.l?1:0);
+  // «Авто-бег» (идея Brodash/Runner): бежит вправо сам, игрок только прыгает; «влево» — притормозить
+  if(raceAuto && !grabbing && !frz && !done) dir = keys.l ? 0 : 1;
   // отброс от бока рикошета (см. RICO_KICK) кончается раньше, если игрок
   // уже встал — упёрся в обычную стену или повис на уступе
   if(pl.kick > 0 && (grabbing || Math.abs(pl.vx) < 0.05)) pl.kick = 0;
@@ -4895,9 +4898,9 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="cosmDraw.js?v=219"></script>
-<script src="game.js?v=219"></script>
-        <script src="i18n.js?v=219"></script>
-        <script src="skinAvatar.js?v=219" defer></script>
+<script src="cosmDraw.js?v=220"></script>
+<script src="game.js?v=220"></script>
+        <script src="i18n.js?v=220"></script>
+        <script src="skinAvatar.js?v=220" defer></script>
 </body>
 </html>

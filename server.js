@@ -385,6 +385,16 @@ function roomVariantOk(mode, key, variant) {
    нет ни в списке комнат, ни в подборе «Играть», ни в /api/online и на Servers — попасть в неё
    можно только по коду или ссылке. Кода никто не выдаёт: его придумывает клиент создателя
    (roomList.js), а комната появляется, когда в неё зашли, и пропадает, когда все вышли. */
+/* Дуэль 1 на 1 в гонке (идеи «1v1», «дуэль на 10 карт»): комната race:duel-N на двоих, цель
+   каждого раунда — финишировать первым, счёт побед копится, пока оба в комнате. */
+const DUEL_ROOM = /^race:duel-\d+$/;
+function isDuelRoom(key) { return DUEL_ROOM.test(String(key || '')); }
+app.get('/getDuelRoom', (req, res) => {
+  let best = null;
+  gameState.rooms.forEach((set, key) => { if (!best && isDuelRoom(key) && set.size === 1) best = key.slice(5); });
+  if (!best) { let i = 1; while (gameState.rooms.has('race:duel-' + i)) i++; best = 'duel-' + i; }
+  res.json({ room: best });
+});
 const PRIVATE_CODE = /^p[a-z0-9]{6}$/;
 function isPrivateRoom(roomName) {
   // годится и имя комнаты («war-pk3x9aq»), и ключ с режимом («race:pk3x9aq»)
@@ -405,7 +415,7 @@ app.get('/getBestRoom', (req, res) => {
   const variant = mode === 'hideAndSeek' ? hsFixedOf(cleanName(req.query.variant) + '-1') : null;
   let best = null, bestCount = -1;
   gameState.rooms.forEach((set, key) => {
-    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant) || isPrivateRoom(key)) return;
+    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant) || isPrivateRoom(key) || isDuelRoom(key)) return;
     const n = set.size;
     if (n >= ROOM_FULL) return;
     if (n > bestCount) { bestCount = n; best = key.slice(mode.length + 1); }
@@ -434,7 +444,7 @@ app.get('/getRoomList', (req, res) => {
   const now = Date.now();
   const list = [];
   gameState.rooms.forEach((set, key) => {
-    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant) || isPrivateRoom(key)) return;
+    if (key.indexOf(mode + ':') !== 0 || !roomVariantOk(mode, key, variant) || isPrivateRoom(key) || isDuelRoom(key)) return;
     const n = set.size;
     const status = n >= ROOM_FULL ? 'red'
                  : (now - (roomLeftAt.get(key) || 0) < ROOM_RECENT_LEFT_MS) ? 'yellow'
@@ -638,6 +648,8 @@ function raceStartLobby(io, room, st) {
   const m = /:daily$/.test(room) ? require('./maps.js').dailyMap() : require('./maps.js').randomFor('race', st.map ? st.map.mapName : '');
   st.map = m ? { author: m.author, mapName: m.mapName } : null;
   st.rules = raceRulesOf(m);
+  const duel = isDuelRoom(room);
+  if (duel) st.rules.goal = 'first';           // в дуэли раунд выигрывает тот, кто финишировал первым
   st.phase = 'lobby';
   st.roundNum++;
   st.finished = []; st.out = new Set(); st.ending = false; st.winner = null; st.members = new Set();
@@ -645,7 +657,10 @@ function raceStartLobby(io, room, st) {
   st.endsAt = Date.now() + RACE_LOBBY_MS;
   io.to(room).emit('racePhase', { phase: 'lobby', map: st.map, msLeft: RACE_LOBBY_MS, goal: st.rules.goal, roundNum: st.roundNum });
   // карт гонки нет вовсе — заглядываем снова, вдруг владелец добавит
-  st.timer = setTimeout(() => st.map ? raceStartRound(io, room, st) : raceStartLobby(io, room, st), st.map ? RACE_LOBBY_MS : 15000);
+  // дуэль начинается, только когда соперник на месте
+  st.timer = setTimeout(() => st.map && (!duel || raceIds(room).length >= 2) ? raceStartRound(io, room, st) : raceStartLobby(io, room, st),
+                        st.map ? RACE_LOBBY_MS : 15000);
+  if (duel) io.to(room).emit('duelScore', { wins: st.duelWins || {}, waiting: raceIds(room).length < 2 });
 }
 function raceStartRound(io, room, st) {
   const ms = st.rules.timeMin ? st.rules.timeMin * 60000 : RACE_ROUND_MS;
@@ -706,6 +721,11 @@ function raceOnFinish(io, player, mapKey, ms) {
   if (st.rules.goal === 'first' || st.rules.goal === 'last') {
     if (place !== 1) return false;
     st.winner = player.name;
+    if (isDuelRoom(player.room)) {
+      if (!st.duelWins) st.duelWins = {};
+      st.duelWins[player.name] = (st.duelWins[player.name] || 0) + 1;
+      io.to(player.room).emit('duelScore', { wins: st.duelWins, winner: player.name });
+    }
     raceSoonEnd(io, player.room, st, st.rules.goal === 'first' ? RACE_FIRST_GRACE_MS : 2000);
     return true;
   }
@@ -925,6 +945,15 @@ function hsAwardRoundEnd(io, room, st) {
   }
   const caught = st.caughtSet || new Set();
   const mapKey = st.map ? (st.map.author + '|' + st.map.mapName) : null;
+  /* Hot Trap: искатель поймал норму — монеты ему; не поймал — «сгорел», и все уцелевшие получают
+     награду как обычно (ниже). Итог — всем в комнате. */
+  if (st.variant === 'hottrap') {
+    const got = members.filter(m => caught.has(m.id)).length, quota = st.trapQuota || 1, okTrap = got >= quota;
+    io.to(room).emit('hotTrap', { ok: okTrap, got, quota, seeker: st.seekerName || '' });
+    const sSock = okTrap && st.seekerId && io.sockets.sockets.get(st.seekerId);
+    const sAcct = sSock && sessionName(sSock.handshake.headers.cookie);
+    if (sAcct) { hsCreditAndNotify(sSock, sAcct, 3 + Math.floor(Math.random() * 4), 'hsWin'); accountsRef.creditHsScore(sAcct, HS_PTS_SURVIVE); }
+  }
   members.forEach((m) => {
     if (caught.has(m.id)) return;
     const sock = io.sockets.sockets.get(m.id);
@@ -1080,6 +1109,9 @@ function hsApplyApoc(st) {
    этой комнаты и для него всего хватает. */
 const HS_COPS_MIN = Number(process.env.HS_COPS_MIN) || 6;
 const HS_MURDER_GRACE_MS = Number(process.env.HS_MURDER_GRACE_MS) || 20000;
+// Hot Trap: раунд короче обычного, норма — треть прячущихся (минимум один)
+const HS_TRAP_MS = Number(process.env.HS_TRAP_MS) || 75000;
+const HS_TRAP_SHARE = 1 / 3;
 const HS_FIXED = { murder: { min: 3 }, team: { min: 2, team: true }, war: { min: 2 }, party: { min: 2 }, adventure: { min: 1 } };
 function hsFixedOf(roomName) {
   const m = /^(murder|team|war|party|adventure)-(\d+|p[a-z0-9]{6})$/.exec(String(roomName || ''));
@@ -1154,7 +1186,9 @@ function hsPickVariant(st, n) {
   }
   if (st.apoc) return 'zombie';
   if (st.storyMap || n < 2) return 'classic';
-  if (forced === 'classic' || forced === 'cops') return forced;
+  if (forced === 'classic' || forced === 'cops' || forced === 'hottrap') return forced;
+  // Hot Trap (идея игроков): короткий раунд, искатель обязан поймать норму — иначе «сгорел»
+  if (n >= 3 && st.variant !== 'hottrap' && Math.random() < 0.25) return 'hottrap';
   // большая комната: Cops and Robbers через раунд с classic, два раза подряд — нет
   if (n >= HS_COPS_MIN && st.variant !== 'cops' && Math.random() < 0.5) return 'cops';
   return 'classic';
@@ -1407,7 +1441,8 @@ function hsStartRound(io, room, st) {
   st.phase = 'round';
   // мини-игра «Вечеринки» идёт своё время (см. roundMs в party.js) и кончается сама
   const roundMs = party.isGame(st.variant) ? party.roundMs(st, hsMembers(room).length)
-    : adventure.isAdv(st.variant) ? adventure.roundMs(st) : st.variant === 'wait' ? HS_WAIT_MS : HS_ROUND_MS;
+    : adventure.isAdv(st.variant) ? adventure.roundMs(st) : st.variant === 'wait' ? HS_WAIT_MS
+    : st.variant === 'hottrap' ? Math.min(HS_ROUND_MS, HS_TRAP_MS) : HS_ROUND_MS;
   st.endsAt = Date.now() + roundMs;
   st.roundStartedAt = Date.now();   // для медалей за время — см. hsDoInfect/hsCreditMapBest
   if (st.map) require('./maps.js').countPlay(st.map.author, st.map.mapName);   // счётчик игр карты
@@ -1469,7 +1504,8 @@ function hsStartRound(io, room, st) {
     seekerIds: secret ? [] : hunters, variant: st.variant, map: hsMapOf(st), apoc: !!st.apoc,
     teams: teamVar ? hsTeamsObj(st) : null, bases: teamVar ? st.bases : null, points: st.domPoints || null,
     ctf: st.ctf ? hsCtfState(st) : null, dom: st.dom ? hsDomState(st) : null,
-    grace: secret ? HS_MURDER_GRACE_MS : 0, war: war.state(st), adv: adventure.state(st) });
+    grace: secret ? HS_MURDER_GRACE_MS : 0, war: war.state(st), adv: adventure.state(st),
+    trap: st.variant === 'hottrap' ? (st.trapQuota = Math.max(1, Math.ceil(st.roundMembers.length * HS_TRAP_SHARE))) : 0 });
   war.spawnAll(st, room);
   war.tokRoundStart(st, room, hsMembers(room).length);
   party.start(st, room);
@@ -1694,7 +1730,7 @@ io.on('connection', (socket) => {
       socket.emit('joinDenied', { reason: 'serverBusy' });
       return;
     }
-    if (existingRoom && existingRoom.size >= ROOM_FULL
+    if (existingRoom && existingRoom.size >= (isDuelRoom(room) ? 2 : ROOM_FULL)
         && (!previousPlayer || previousPlayer.room !== room)) {
       socket.emit('joinDenied', { reason: 'roomFull' });
       return;

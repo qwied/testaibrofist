@@ -373,15 +373,15 @@ body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="device.js?v=219"></script>
-        <script src="sound.js?v=219"></script>
-        <script src="skinRender.js?v=219"></script>
-        <script src="skinCanvas.js?v=219"></script>
-        <script src="gifuct.bundle.js?v=219"></script>
-        <script src="gifPlayer.js?v=219"></script>
-        <script src="coin.js?v=219"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=219">
-        <script src="theme.js?v=219"></script>
+<script src="device.js?v=220"></script>
+        <script src="sound.js?v=220"></script>
+        <script src="skinRender.js?v=220"></script>
+        <script src="skinCanvas.js?v=220"></script>
+        <script src="gifuct.bundle.js?v=220"></script>
+        <script src="gifPlayer.js?v=220"></script>
+        <script src="coin.js?v=220"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=220">
+        <script src="theme.js?v=220"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1221,7 +1221,7 @@ var apoc = false;
    побеждает первый, "last" — Last bro standing, только с жизнями. */
 var raceLives = 0, raceTimeMin = 0, raceGoal = "";
 /* Ещё две опции карты гонки (идеи игроков): двойной прыжок и урон от падения с большой высоты. */
-var raceDJ = false, raceFall = false, raceSprint = false, FALL_DMG_H = 620;
+var raceDJ = false, raceFall = false, raceSprint = false, raceAuto = false, FALL_DMG_H = 620;
 /* Атмосфера карты (идеи «дождь/снег», «день и ночь», «туман войны») — для любого режима:
    "" — ясно, rain, snow, night (темно, свет вокруг игрока), fog (видно только рядом). */
 var ATMOS = ["", "rain", "snow", "night", "fog"], atmo = "", flashA = 0;
@@ -1237,11 +1237,12 @@ function cleanRaceRules(d){
   copyable = !!(d && d.copyable);
   raceFall = mode === "race" && !!(d && d.fallDmg);
   raceSprint = mode === "race" && !!(d && d.sprint);
+  raceAuto = mode === "race" && !!(d && d.autoRun);
 }
 // поля правил гонки для сохранения карты — пустые не пишем
 function withRaceRules(m){
   if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; if(raceGoal) m.goal = raceGoal;
-    if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; if(raceSprint) m.sprint = 1; }
+    if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; if(raceSprint) m.sprint = 1; if(raceAuto) m.autoRun = 1; }
   if(atmo) m.atmo = atmo;
   if(copyable) m.copyable = 1;
   return m;
@@ -2393,6 +2394,8 @@ function step(){
   if(grabCd > 0) grabCd--;
 
   var dir = (grabbing || frz) ? 0 : (keys.r?1:0)-(keys.l?1:0);
+  // «Авто-бег» (идея Brodash/Runner): бежит вправо сам, игрок только прыгает; «влево» — притормозить
+  if(raceAuto && !grabbing && !frz && !done) dir = keys.l ? 0 : 1;
   // отброс от бока рикошета (см. RICO_KICK) кончается раньше, если игрок
   // уже встал — упёрся в обычную стену или повис на уступе
   if(pl.kick > 0 && (grabbing || Math.abs(pl.vx) < 0.05)) pl.kick = 0;
@@ -3827,13 +3830,15 @@ function showModeBtn(){
   add("rrBtn", TR("rrFall","Урон от падения"), "opt", "fall");
   tip = TR("rrSprintTip","Спринт: с зажатым Shift бег быстрее");
   add("rrBtn", TR("rrSprint","Спринт (Shift)"), "opt", "sprint");
+  tip = TR("rrAutoTip","Авто-бег: персонаж бежит сам, игрок только прыгает");
+  add("rrBtn", TR("rrAuto","Авто-бег"), "opt", "auto");
 })();
 function goalName(g){
   return g === "first" ? TR("rrGoalFirst","Первый") : g === "last" ? TR("rrGoalLast","Последний") : TR("rrGoalAll","Финиш");
 }
 function syncRaceBtns(){
   document.querySelectorAll(".rrBtn").forEach(function(b){
-    var on = b.dataset.opt ? (b.dataset.opt === "dj" ? raceDJ : b.dataset.opt === "sprint" ? raceSprint : raceFall)
+    var on = b.dataset.opt ? (b.dataset.opt === "dj" ? raceDJ : b.dataset.opt === "sprint" ? raceSprint : b.dataset.opt === "auto" ? raceAuto : raceFall)
       : b.dataset.lives !== undefined ? +b.dataset.lives === raceLives
       : b.dataset.goal !== undefined ? b.dataset.goal === raceGoal : +b.dataset.time === raceTimeMin;
     b.classList.toggle("on", on);
@@ -3887,7 +3892,7 @@ document.getElementById("apoc").addEventListener("click", function(e){
   if(r){
     if(playing) return;
     if(r.dataset.opt){
-      if(r.dataset.opt === "dj") raceDJ = !raceDJ; else if(r.dataset.opt === "sprint") raceSprint = !raceSprint; else raceFall = !raceFall;
+      if(r.dataset.opt === "dj") raceDJ = !raceDJ; else if(r.dataset.opt === "sprint") raceSprint = !raceSprint; else if(r.dataset.opt === "auto") raceAuto = !raceAuto; else raceFall = !raceFall;
     } else if(r.dataset.lives !== undefined){
       raceLives = +r.dataset.lives;
       if(!raceLives && raceGoal === "last") raceGoal = "";      // Last bro standing без жизней не бывает
@@ -3992,6 +3997,7 @@ function retip(){
   });
   Array.prototype.forEach.call(document.querySelectorAll(".rrBtn"), function(b){
     if(b.dataset.opt === "dj"){ b.textContent = TR("rrDJ","Двойной прыжок"); b.title = TR("rrDJTip","Двойной прыжок: ещё один прыжок в воздухе"); return; }
+    if(b.dataset.opt === "auto"){ b.textContent = TR("rrAuto","Авто-бег"); b.title = TR("rrAutoTip","Авто-бег: персонаж бежит сам, игрок только прыгает"); return; }
     if(b.dataset.opt === "sprint"){ b.textContent = TR("rrSprint","Спринт (Shift)"); b.title = TR("rrSprintTip","Спринт: с зажатым Shift бег быстрее"); return; }
     if(b.dataset.opt === "fall"){ b.textContent = TR("rrFall","Урон от падения"); b.title = TR("rrFallTip","Урон от падения: упал с большой высоты — смерть"); return; }
     b.title = b.dataset.time !== undefined ? TR("rrTimeTip","Время на эту карту")
@@ -6082,12 +6088,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=219"></script>
-<script src="abuseShow.js?v=219" defer></script>
-<script src="editorHelp.js?v=219"></script>
-<script src="editorAI.js?v=219" defer></script>
-<script src="account.js?v=219" defer></script>
-<script src="owner.js?v=219" defer></script>
+<script src="i18n.js?v=220"></script>
+<script src="abuseShow.js?v=220" defer></script>
+<script src="editorHelp.js?v=220"></script>
+<script src="editorAI.js?v=220" defer></script>
+<script src="account.js?v=220" defer></script>
+<script src="owner.js?v=220" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -6204,7 +6210,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=219" defer></script>
+        <script src="skinAvatar.js?v=220" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */

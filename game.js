@@ -1695,6 +1695,7 @@
   /* Вариант раунда (см. hsPickVariant в server.js): classic | zombie | murder | cops.
      В Murder Mystery роль у каждого своя и тайная — её присылает только сервер (hsSecret). */
   var hsVariant = 'classic';
+  var trapQuota = 0;   // Hot Trap: сколько искателю нужно поймать (приходит в hsPhase round)
   var hsSecret = null;            // murderer | sheriff | innocent
   var hsSecretAt = null;          // Murder Mystery: укрытие, у которого я появляюсь (см. hsSecret)
   var mmGraceUntil = 0;           // Murder Mystery: до этого момента убийца никого не трогает
@@ -1878,6 +1879,9 @@
       : TR('hintBroFighter', 'Все вместе против Bro RED — выбейте его до конца раунда!');
     if (hsVariant === 'ctf') return TR('hintCtf', 'Принеси вражеский флаг к своему. Коснись врага с вашим флагом — флаг вернётся домой.');
     if (hsVariant === 'dom') return TR('hintDom', 'Стой на точках с командой, чтобы захватить их. Каждая точка приносит очки каждую секунду.');
+    if (hsVariant === 'hottrap') return (me.role === 'seeker'
+        ? TR('hintTrapSeeker', 'Hot Trap: поймай хотя бы {q} до конца короткого раунда — иначе сгоришь!')
+        : TR('hintTrapHider', 'Hot Trap: искателю нужно поймать {q} — продержись, и он сгорит!')).replace('{q}', String(trapQuota || 1));
     if (hsVariant === 'cops') return me.role === 'seeker' ? TR('hintCop', 'Лови грабителей — пойманные замирают на месте.')
       : TR('hintRobber', 'Прячься от копов и касанием освобождай пойманных.');
     return hsSecret === 'murderer' ? TR('hintMurderer', 'Касанием выбивай игроков. Берегись шерифа — его касание тебя поймает!')
@@ -2089,7 +2093,7 @@
   /* Рулетка режима крутит только то, что бывает в этой комнате: в прятках — Classic, Zombie
      Apocalypse и Cops & Robbers, в Team Battle — Capture the Flag и Domination, в Murder
      Mystery — он сам (пока игроков мало — «Ждём игроков», wait: без искателя и поимок, см. hsFixedWait в server.js). */
-  var VARIANTS = { hs: ['classic', 'zombie', 'cops'], murder: ['wait', 'murder'], team: ['wait', 'ctf', 'dom'],
+  var VARIANTS = { hs: ['classic', 'zombie', 'cops', 'hottrap'], murder: ['wait', 'murder'], team: ['wait', 'ctf', 'dom'],
                    war: ['wait', 'ffa', 'tdm', 'hunger', 'cp', 'bro', 'pirate'],
                    party: ['wait', 'quiz', 'guess', 'build', 'ffa', 'murder', 'zombie', 'cops'],
                    adventure: ['quest', 'defense'] };
@@ -2100,7 +2104,7 @@
       : v === 'dom' ? TR('modeDom', 'Domination') : v === 'team' ? TR('modeTeam', 'Team Battle')
       : v === 'war' ? TR('modeWar', 'War') : v === 'ffa' ? TR('modeFfa', 'Free for All') : v === 'tdm' ? TR('modeTdm', 'Team War')
       : v === 'hunger' ? TR('modeHunger', 'Hunger Games') : v === 'cp' ? TR('modeCp', 'Control Points') : v === 'bro' ? TR('modeBro', 'Bro RED')
-      : v === 'pirate' ? TR('modePirate', 'Pirate War')
+      : v === 'pirate' ? TR('modePirate', 'Pirate War') : v === 'hottrap' ? TR('modeHotTrap', 'Hot Trap')
       : v === 'party' ? TR('modeParty', 'Вечеринка') : v === 'quiz' ? TR('modeQuiz', 'Викторина')
       : v === 'guess' ? TR('modeGuess', 'Угадай слово') : v === 'build' ? TR('modeBuild', 'Строительная битва')
       : v === 'adventure' ? TR('modeAdventure', 'Приключение') : v === 'quest' ? TR('modeQuest', 'Башня')
@@ -2893,6 +2897,11 @@
     };
 
     // Классика: пойманный просто выходит из игры (см. applyOut/hsDoInfect)
+    socket.on('hotTrap', function (d) {
+      if (!d) return;
+      if (d.ok) { bigBanner(TR('trapOk', 'Ловушка сработала!'), '#2563eb'); log(TR('trapOkMsg', '{n} поймал {g} из {q} — норма выполнена.').replace('{n}', esc(d.seeker)).replace('{g}', d.got).replace('{q}', d.quota)); }
+      else { bigBanner(TR('trapFail', 'Искатель сгорел!'), '#ea580c'); log(TR('trapFailMsg', '{n} поймал только {g} из {q} — прячущиеся победили.').replace('{n}', esc(d.seeker)).replace('{g}', d.got).replace('{q}', d.quota)); }
+    });
     socket.on('hsOut', function (d) {
       if (MODE !== 'hideAndSeek' || !d || !d.id) return;
       applyOut(d.id, d.name, d);
@@ -2994,6 +3003,14 @@
       if (!d || !d.place) return;
       log(TR('mapRecordMsg', 'Рекорд! Ты {p}-й в таблице лучших времён этой карты ({t} с).').replace('{p}', d.place).replace('{t}', (d.ms / 1000).toFixed(2)));
       if (d.place === 1) bigBanner(TR('mapRecordBig', 'Рекорд карты!'), '#ca8a04');
+    });
+    // дуэль 1 на 1 (комната duel-N): счёт серии и ожидание соперника
+    socket.on('duelScore', function (d) {
+      if (!d) return;
+      var names = Object.keys(d.wins || {});
+      if (d.waiting) { log(TR('duelWait', 'Дуэль: ждём соперника…')); return; }
+      if (d.winner) bigBanner(TR('duelRound', '{n} выиграл раунд!').replace('{n}', d.winner), '#ca8a04');
+      if (names.length) log(TR('duelScoreMsg', 'Счёт дуэли: {s}').replace('{s}', names.map(function (n) { return '<b>' + esc(n) + '</b> ' + d.wins[n]; }).join(' : ')));
     });
     socket.on('dailyDone', function (d) {
       log(TR('dailyDoneMsg', 'Карта дня пройдена! Серия: {n} дн.').replace('{n}', (d && d.streak) || 1));
@@ -3145,6 +3162,7 @@
         // у apoc нет искателя-человека, applySeeker ниже не позовут вовсе
         hsApocRound = !!d.apoc;
         if (d.variant) hsVariant = d.variant;
+        trapQuota = d.trap || 0;
         warSet(isWarV(hsVariant) ? d.war : null);
         advSet(advV(hsVariant) ? d.adv : null);
         if (war && war.bro) broId = war.bro;
@@ -3170,7 +3188,7 @@
         };
         if (!STORY) loadServerMap(d.map, teleportSeeker); else teleportSeeker();
         log(d.apoc ? TR('roundStartApoc', 'Раунд начался! Зомби уже идёт за кем-то...')
-          : hsVariant === 'wait' || hsVariant === 'murder' || hsVariant === 'cops' || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant) ? variantHint()
+          : hsVariant === 'wait' || hsVariant === 'murder' || hsVariant === 'cops' || hsVariant === 'hottrap' || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant) ? variantHint()
           : TR('roundStart', 'Раунд начался! 2 минуты'));
         // Murder Mystery: первые секунды охоты убийца никого не трогает (см. HS_MURDER_GRACE_MS)
         mmGraceUntil = hsVariant === 'murder' ? Date.now() + (Number(d.grace) || 0) : 0;
