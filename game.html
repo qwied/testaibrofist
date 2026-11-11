@@ -256,16 +256,16 @@ body{background:#eef2f8;overflow:hidden}
         <script src="offline.js?v=9"></script>
         <script src="offlineServer.js?v=10"></script>
         <script src="offlineModes.js?v=11"></script>
-<script src="device.js?v=227"></script>
-        <script src="sound.js?v=227"></script>
-        <script src="skinRender.js?v=227"></script>
-        <script src="skinCanvas.js?v=227"></script>
-        <script src="gifuct.bundle.js?v=227"></script>
-        <script src="gifPlayer.js?v=227"></script>
-        <script src="coin.js?v=227"></script>
-        <script src="liveText.js?v=227"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=227">
-        <script src="theme.js?v=227"></script>
+<script src="device.js?v=228"></script>
+        <script src="sound.js?v=228"></script>
+        <script src="skinRender.js?v=228"></script>
+        <script src="skinCanvas.js?v=228"></script>
+        <script src="gifuct.bundle.js?v=228"></script>
+        <script src="gifPlayer.js?v=228"></script>
+        <script src="coin.js?v=228"></script>
+        <script src="liveText.js?v=228"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=228">
+        <script src="theme.js?v=228"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -596,8 +596,10 @@ var PAINT = {
     if(o.look === "spring") return PAINT.bounce(o);
     if(o.look === "ice") return PAINT.ice(o);
     if(o.look === "lock") return PAINT.lockdoor(o);
-    ctx.fillStyle = shapeFill(o);
-    ctx.fillRect(0,0,o.w,o.h);
+    ctx.fillStyle = o.look === "sand" && !o.tex ? ctx.createPattern(texCanvas("sand"), "repeat") : shapeFill(o);
+    // скруглённые углы (идея «скруглённые линии»): только картинка, столкновения — по рамке
+    if(+o.radius > 0){ rr(0, 0, o.w, o.h, Math.min(+o.radius, o.w/2, o.h/2)); ctx.fill(); }
+    else ctx.fillRect(0,0,o.w,o.h);
   },
   circle: function(o){
     ctx.fillStyle = shapeFill(o);
@@ -710,7 +712,9 @@ var PAINT = {
     rr(0, o.h*0.8, o.w, o.h*0.2, Math.min(4,o.w*0.14)); ctx.fill();
     ctx.save();
     ctx.translate(o.w*0.5, o.h*0.82);
-    ctx.rotate(on ? -0.5 : 0.5);
+    if(o._la === undefined) o._la = on ? -0.5 : 0.5;
+    o._la += ((on ? -0.5 : 0.5) - o._la) * 0.25;         // ручка рычага переходит плавно
+    ctx.rotate(o._la);
     ctx.strokeStyle = "#64748b";
     ctx.lineWidth = Math.max(2, o.w*0.17);
     ctx.lineCap = "round";
@@ -1271,14 +1275,15 @@ var raceLives = 0, raceTimeMin = 0, raceGoal = "";
 var raceDJ = false, raceFall = false, raceSprint = false, raceAuto = false, raceHook = false, FALL_DMG_H = 620;
 /* Атмосфера карты (идеи «дождь/снег», «день и ночь», «туман войны») — для любого режима:
    "" — ясно, rain, snow, night (темно, свет вокруг игрока), fog (видно только рядом). */
-var ATMOS = ["", "rain", "snow", "night", "fog"], atmo = "", flashA = 0;
-var RACE_LIVES = [0, 1, 3, 5], RACE_TIMES = [0, 5, 10], RACE_GOALS = ["", "first", "last"];
+var ATMOS = ["", "rain", "snow", "night", "fog", "real"], atmo = "", flashA = 0, mapBg = "";
+var RACE_LIVES = [0, 1, 3, 5], RACE_TIMES = [0, 1, 3, 5, 10], RACE_GOALS = ["", "first", "last"];
 function cleanRaceRules(d){
   raceLives = (mode === "race" && d && RACE_LIVES.indexOf(+d.lives) !== -1) ? +d.lives : 0;
   raceTimeMin = (mode === "race" && d && RACE_TIMES.indexOf(+d.timeMin) !== -1) ? +d.timeMin : 0;
   raceGoal = (mode === "race" && d && (d.goal === "first" || (d.goal === "last" && raceLives))) ? d.goal : "";
   raceDJ = mode === "race" && !!(d && d.djump);
   atmo = (d && ATMOS.indexOf(d.atmo) > 0) ? d.atmo : "";
+  mapBg = (d && /^#[0-9a-f]{6}$/i.test(d.bg || "")) ? d.bg : "";
   raceFall = mode === "race" && !!(d && d.fallDmg);
   raceSprint = mode === "race" && !!(d && d.sprint);
   raceAuto = mode === "race" && !!(d && d.autoRun);
@@ -1289,6 +1294,7 @@ function withRaceRules(m){
   if(mode === "race"){ if(raceLives) m.lives = raceLives; if(raceTimeMin) m.timeMin = raceTimeMin; if(raceGoal) m.goal = raceGoal;
     if(raceDJ) m.djump = 1; if(raceFall) m.fallDmg = 1; if(raceSprint) m.sprint = 1; if(raceAuto) m.autoRun = 1; if(raceHook) m.hook = 1; }
   if(atmo) m.atmo = atmo;
+  if(mapBg) m.bg = mapBg;
   return m;
 }
 
@@ -1367,7 +1373,7 @@ var movers = [];
 function indexMovers(){
   // толкаемые объекты тоже меняют клетку каждый кадр, как платформы и
   // роторы — тем же способом обходим устаревающую сетку (см. nearby)
-  movers = objects.filter(function(o){ return o.moves || o.chase || o.spins || o.pushable || o.pulse; });
+  movers = objects.filter(function(o){ return o.moves || o.chase || o.spins || o.pushable || o.pulse || o.morph; });
 }
 function overLimit(extra){
   if(objects.length + (extra||1) <= OBJ_LIMIT) return false;
@@ -1651,6 +1657,7 @@ function play(){
 function stop(){
   playing = false; document.body.classList.remove("play"); hideMsg(); parts.length = 0;
   objects.forEach(function(o){ if(o._hx !== undefined){ o.x = o._hx; o.y = o._hy; }
+    if(o._fill0 !== undefined){ o.fill = o._fill0; delete o._fill0; } o._ms = 1;
     o._act = false; o._reached = false; o._spin = 0; o._got = false; o._off = false; o._gone = false; o._cr = 0; o._offAt = 0; o._in = false; o._done = false; });
   starHud();
   resetView();
@@ -1665,11 +1672,12 @@ function restartRun(){
   objects.forEach(function(o){
     o._reached = false; o._got = false;
     if(o.chase && o._hx !== undefined){ o.x = o._hx; o.y = o._hy; o._dx = 0; o._dy = 0; }
+    if(o._fill0 !== undefined){ o.fill = o._fill0; delete o._fill0; } o._ms = 1;
     o._act = !!o.startsOpen; o._latch = false; o._off = false; o._gone = false; o._cr = 0; o._offAt = 0; o._in = false; o._done = false;
   });
   var sp = findSpawn();
   if(sp){ spawnPt = {x:sp.x, y:sp.y}; lastSafePos = {x:sp.x, y:sp.y}; }
-  pl.flag = false; pl.cpFlag = false;
+  pl.flag = false; pl.cpFlag = false; pl.cpLives = 0;
   stat(); starHud(); respawn();
 }
 
@@ -1711,6 +1719,14 @@ function die(){
   if(godMode) return;   // Practice: неуязвимость — та же единая точка входа
   if(pl.dead || done) return;
   pl.dead = true; deaths++; shake = 13; stat();
+  if(pl.cpLives > 0 && --pl.cpLives === 0){
+    var sp0 = findSpawn(); if(sp0){ spawnPt = {x:sp0.x, y:sp0.y}; lastSafePos = {x:sp0.x, y:sp0.y}; }
+    objects.forEach(function(q){ if(q.type === "checkpoint") q._reached = false; });
+    showMsg(TR("cpLivesTitle","Жизни чекпоинта"), TR("cpLivesOut","Жизни на чекпоинте кончились — снова со старта."));
+    clearTimeout(starMsgT); starMsgT = setTimeout(function(){ if(!done) hideMsg(); }, 1800);
+  }
+  // триггеры «при смерти» (идея «death trigger»): каждая смерть переключает их цели
+  objects.forEach(function(q){ if(q.type === "trigger" && q.fx === "death"){ q._act = !q._act; drive(q); } });
   if(window.BFSound) BFSound.death();
   // эффект смерти из магазина косметики: конфетти или призрак вместо красных брызг
   var dfx = BRIDGE && BRIDGE.myCosm && BRIDGE.myCosm.death;
@@ -1849,7 +1865,7 @@ function ricochet(o, cx, cy){
 
 /* Формы фигуры «треугольник» (идеи игроков: ромб, трапеция, полукруг, пятиугольник, звезда…):
    один и тот же тип, другой многоугольник — столкновения считаются по нему же. flip — зеркально. */
-var SHAPES = ["", "right", "rhombus", "trapezoid", "parallelogram", "semicircle", "pentagon", "hexagon", "star5"];
+var SHAPES = ["", "right", "rhombus", "trapezoid", "parallelogram", "semicircle", "pentagon", "hexagon", "star5", "sector", "cloud"];
 function shapePts(o){
   var w = o.w, h = o.h, pts, i, a, n;
   switch(o.shape){
@@ -1868,6 +1884,15 @@ function shapePts(o){
     case "star5":
       pts = [];
       for(i=0;i<10;i++){ a = -Math.PI/2 + i*Math.PI/5; var q = i%2 ? 0.45 : 1; pts.push([w/2 + Math.cos(a)*w/2*q, h/2 + Math.sin(a)*h/2*q]); }
+      break;
+    case "sector":
+      pts = [[0,h]];
+      for(i=0;i<=12;i++){ a = -i/12*Math.PI/2; pts.push([Math.cos(a)*w, h + Math.sin(a)*h]); }
+      break;
+    case "cloud":
+      pts = [];
+      for(i=0;i<=24;i++){ a = Math.PI + i/24*Math.PI; var bump = 1 + 0.18*Math.abs(Math.sin(a*3)); pts.push([w/2 + Math.cos(a)*w/2, h*0.9 + Math.sin(a)*h*0.8*bump]); }
+      pts.push([w, h]); pts.push([0, h]);
       break;
     case "custom":
       // свой многоугольник из редактора (инструмент «Многоугольник»): точки в долях рамки 0..1
@@ -1905,6 +1930,7 @@ function rawPoly(o){
    пульс уходил вниз. */
 var PULSE_DEF_MIN = 0.78;
 function pulseScale(o){
+  if(o.morph && playing) return o._ms || 1;
   if(!o.pulse || !playing) return 1;
   var m = o.pulseMin > 0 && o.pulseMin < 1 ? +o.pulseMin : PULSE_DEF_MIN;
   return m + (1 - m) * (0.5 + 0.5*Math.cos(o._pulseT || 0));
@@ -2329,6 +2355,8 @@ function step(){
     var heldOk = !(drivenIds && o.customId && drivenIds[o.customId]) || o._act;
     if(o.spins && heldOk) o._spin += (o.spin||2)*0.02;
     if(o.pulse && heldOk) o._pulseT = (o._pulseT||0) + 0.05;
+    // «Меняет размер по кнопке» (идея «morphing»): включили — плавно к morph, выключили — обратно к 1
+    if(o.morph && playing){ var mt = o._act ? Math.max(0.2, Math.min(3, +o.morph)) : 1; o._ms = (o._ms || 1) + (mt - (o._ms || 1)) * 0.06; }
     if(o.colorCycle) o._hue = ((o._hue||0) + 1.2) % 360;
     if(o._squash) o._squash *= 0.82;
     if(playing){
@@ -2497,7 +2525,7 @@ function step(){
        короткий разбег читался как вялость — особенно на коротких
        перебежках, где игрок отпускал кнопку, не дойдя до максимума.
        Инерция при отпускании остаётся: см. FRIC в ветке ниже. */
-    pl.vx = dir * maxVX() * (pl.crouch ? 0.5 : 1) * platBoost(pl.standPlat) * (raceSprint && keys.sh ? 1.45 : 1) * bMul("speedMul"); pl.face = dir;
+    pl.vx = dir * maxVX() * (pl.crouch ? 0.5 : 1) * (pl.ground && pl.standPlat && pl.standPlat.look === "sand" ? 0.6 : 1) * platBoost(pl.standPlat) * (raceSprint && keys.sh ? 1.45 : 1) * bMul("speedMul"); pl.face = dir;
   } else {
     pl.vx *= pl.ground ? FRIC : AIR;
     if(Math.abs(pl.vx) < .05) pl.vx = 0;
@@ -2907,6 +2935,10 @@ function step(){
       if(!(o.once && o._done)){
         o._done = true;
         if(o.fx === "toggle"){ o._act = !o._act; drive(o); }
+        else if(o.fx === "color" && o.targetIds){
+          var cids = o.targetIds.split(",").map(function(x){ return x.trim(); });
+          objects.forEach(function(t){ if(t.customId && cids.indexOf(t.customId) !== -1){ if(t._fill0 === undefined) t._fill0 = t.fill; t.fill = o.color || "#ef4444"; } });
+        }
         else if(o.fx === "random" && o.targetIds){
           // случайная цель из «Связей»: открыть/включить её одну, остальные — закрыть
           var rids = o.targetIds.split(",").map(function(x){ return x.trim(); }).filter(Boolean), pick = rids[Math.floor(Math.random()*rids.length)];
@@ -2935,6 +2967,8 @@ function step(){
     }
     if(o.type === "checkpoint" && !o._reached){
       o._reached = true; spawnPt = {x:o.x, y:o.y+o.h-pl.h}; lastSafePos = {x:spawnPt.x, y:spawnPt.y};
+      // чекпоинт с жизнями (идея игроков): после стольких смертей — снова с самого старта
+      pl.cpLives = +o.lives > 0 ? +o.lives : 0;
       burst(o.x+o.w/2, o.y+o.h*0.25, 14, "#4ade80", 2.6, 30);
       if(window.BFSound) BFSound.checkpoint();
     }
@@ -2996,6 +3030,15 @@ function step(){
       pl.kick = 6;
     }
     if(pl.dead) pl.hook = null;
+  }
+  /* Раздавило (идея игроков): подвижная твёрдая фигура глубоко вошла в игрока — выйти некуда. */
+  if(!pl.dead && !grabbing){
+    for(var ci2 = 0; ci2 < sol.length; ci2++){
+      var co = sol[ci2];
+      if(!(co.moves || co.chase || co.pushable || co.morph)) continue;
+      var cb = bbox(co), ox = Math.min(pl.x + pl.w, cb[2]) - Math.max(pl.x, cb[0]), oy = Math.min(pl.y + pl.h, cb[3]) - Math.max(pl.y, cb[1]);
+      if(ox > pl.w*0.6 && oy > pl.h*0.45 && inside(co, pl.x + pl.w/2, pl.y + pl.h/2)){ if(mode === "hideAndSeek") respawn(); else die(); break; }
+    }
   }
   // пыль при приземлении (идея «частицы при приземлении»; «Слабый ПК» их выключает — см. burst)
   if(pl.ground && !pl._wasG && (pl._airVy || 0) > 9 * TEMPO) burst(pl.x + pl.w/2, pl.y + pl.h, 10, "#cbd5e1", 1.8, 18);
@@ -3301,12 +3344,29 @@ function drawAtmo(){
     }
     if(atmo === "rain") ctx.stroke();
   } else atmoParts.length = 0;
-  if(atmo === "night" || atmo === "fog"){
+  // «по реальному времени» (идея «время суток»): с 20 до 6 по часам игрока — ночь
+  var nightNow = atmo === "real" && (new Date().getHours() >= 20 || new Date().getHours() < 6);
+  if(atmo === "night" || atmo === "fog" || nightNow){
     var cx = (pl.x + pl.w/2)*view.s + view.x, cy = (pl.y + pl.h/2)*view.s + view.y;
-    var r = (atmo === "night" ? 300 : 190) * view.s, dark = atmo === "night" ? "rgba(8,12,32,.86)" : "rgba(40,44,52,.94)";
+    var r = (atmo === "fog" ? 190 : 300) * view.s, dark = atmo === "fog" ? "rgba(40,44,52,.94)" : "rgba(8,12,32,.86)";
     var g = ctx.createRadialGradient(cx, cy, r*0.35, cx, cy, r);
     g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, dark);
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  // стрелка к финишу у края экрана (идея «стрелка к объекту за экраном») — только в гонке
+  if(mode === "race" && !done){
+    var fin = null; for(var fi = 0; fi < objects.length; fi++) if(objects[fi].type === "finishline"){ fin = objects[fi]; break; }
+    if(fin){
+      var fx = (fin.x + fin.w/2)*view.s + view.x, fy = (fin.y + fin.h/2)*view.s + view.y;
+      if(fx < 0 || fx > W || fy < 0 || fy > H){
+        var pcx = W/2, pcy = H/2, ang = Math.atan2(fy - pcy, fx - pcx);
+        var ex = Math.max(28, Math.min(W - 28, pcx + Math.cos(ang)*W)), ey = Math.max(70, Math.min(H - 28, pcy + Math.sin(ang)*H));
+        ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
+        ctx.fillStyle = "rgba(251,191,36,.95)"; ctx.strokeStyle = "rgba(17,24,39,.6)"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-10, -11); ctx.lineTo(-4, 0); ctx.lineTo(-10, 11); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.restore();
+      }
+    }
   }
   if(flashA > 0.01){ ctx.fillStyle = "rgba(255,255,255," + flashA.toFixed(3) + ")"; ctx.fillRect(0, 0, W, H); flashA *= 0.9; }
   ctx.restore();
@@ -3594,7 +3654,7 @@ function paintFrame(){
     bgGrad.addColorStop(0,"#fbfcfe"); bgGrad.addColorStop(1,"#eef2f8");
     bgH = VH();
   }
-  ctx.fillStyle = bgGrad; ctx.fillRect(0,0,VW(),VH());
+  ctx.fillStyle = (playing && mapBg) ? mapBg : bgGrad; ctx.fillRect(0,0,VW(),VH());
   drawGrid();
 
   var sx = shake > .4 && !PREFS.lowFx ? (Math.random()-.5)*shake : 0, sy = shake > .4 && !PREFS.lowFx ? (Math.random()-.5)*shake : 0;
@@ -5059,9 +5119,9 @@ requestAnimationFrame(loop);
 <!-- Administrative/account panels are not part of the game screen. -->
 
 
-<script src="cosmDraw.js?v=227"></script>
-<script src="game.js?v=227"></script>
-        <script src="i18n.js?v=227"></script>
-        <script src="skinAvatar.js?v=227" defer></script>
+<script src="cosmDraw.js?v=228"></script>
+<script src="game.js?v=228"></script>
+        <script src="i18n.js?v=228"></script>
+        <script src="skinAvatar.js?v=228" defer></script>
 </body>
 </html>

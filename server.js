@@ -632,7 +632,7 @@ function raceRulesOf(m) {
   try {
     const d = m && m.mapData && JSON.parse(m.mapData);
     if (!d) return r;
-    if (d.timeMin === 5 || d.timeMin === 10) r.timeMin = d.timeMin;
+    if ([1, 3, 5, 10].indexOf(d.timeMin) !== -1) r.timeMin = d.timeMin;
     if (d.goal === 'first') r.goal = 'first';
     else if (d.goal === 'last' && [1, 3, 5].indexOf(d.lives) !== -1) r.goal = 'last';
   } catch (e) { /* битая карта — обычная гонка */ }
@@ -2359,7 +2359,7 @@ io.on('connection', (socket) => {
       const data = rec && rec.mapData && JSON.parse(rec.mapData);
       // лабиринту автор даёт больше времени (timeMin, см. правила гонки в редакторе) —
       // шкала очков растягивается на это время, максимум за забег тот же
-      if (data && (data.timeMin === 5 || data.timeMin === 10)) gate.capMs = data.timeMin * 60000;
+      if (data && [1, 3, 5, 10].indexOf(data.timeMin) !== -1) gate.capMs = Math.max(data.timeMin * 60000, gate.capMs || 0);
       const list = (data && (Array.isArray(data) ? data : data.objects)) || [];
       let sp = null, fin = null;
       for (let i = 0; i < list.length; i++) {

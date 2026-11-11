@@ -112,6 +112,10 @@
     {
       "title": "Rescue helicopter in zombie rounds",
       "text": "Zombie maps can now have a rescue helicopter. In a zombie round, a hider who reaches it is rescued and flies away: the zombies can no longer catch them, and they count as survivors at the end of the round."
+    },
+    {
+      "title": "More map tools: crush, checkpoint lives, morphing",
+      "text": "Moving blocks can now crush you. Checkpoints can have a number of lives: lose them all and you start over. New effect triggers recolor blocks or toggle targets whenever the player dies, and blocks can smoothly grow or shrink with a lever. New sand floor slows you down, blocks can have rounded corners, there are quarter-circle and cloud shapes, and levers move smoothly. Race maps can set a 1 or 3 minute time, choose their own background color, use night by the real clock, and show an arrow pointing to the finish when it is off screen."
     }
   ]
 }
