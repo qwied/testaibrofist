@@ -1063,6 +1063,16 @@ function weekPlays(m) {
   Object.keys(m.playDays).forEach(k => { if (k >= from) n += m.playDays[k] || 0; });
   return n;
 }
+/* Адаптивная сложность гонки (идея игроков): сколько стартовало и дошло до финиша на карте —
+   по этой доле подбираем следующую карту полегче или посложнее (см. raceStartLobby). */
+function raceStat(author, mapName, starts, fins) {
+  const m = find(author, mapName);
+  if (!m || !(starts > 0)) return;
+  m.raceStarts = (m.raceStarts || 0) + starts;
+  m.raceFins = (m.raceFins || 0) + Math.min(starts, fins || 0);
+  save();
+}
+function finishRate(m) { return m && m.raceStarts >= 3 ? (m.raceFins || 0) / m.raceStarts : null; }
 function addRecord(author, mapName, name, ms) {
   const m = find(author, mapName);
   if (!m || !(ms > 0) || !name) return null;
@@ -1160,4 +1170,4 @@ function newFromFriends(user) {
   return out;
 }
 
-module.exports = { CATEGORIES, PROMO_PRICE, countPlay, addRecord, dailyMap, dayKey, register, reload: load, MODES, FAMILY, familyOf, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, allMaps, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, candidatesFor, renameAuthor };
+module.exports = { raceStat, finishRate, CATEGORIES, PROMO_PRICE, countPlay, addRecord, dailyMap, dayKey, register, reload: load, MODES, FAMILY, familyOf, COIN_LIMIT, OBJ_LIMIT, OBJ_MIN, TEXT_MAX_RATIO, REWARD, TOOL_MODES, find, allMaps, setBoost, setInGame, inGameList, tally, newFromFriends, randomFor, candidatesFor, renameAuthor };

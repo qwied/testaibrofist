@@ -124,6 +124,10 @@
     {
       "title": "Map categories, promotion and a weekly map pack",
       "text": "Authors can set a category for their maps and filter the Maps Browser by it. A new Shuffle sort shows maps in random order. Authors can promote a map for 50 coins to show it first among the newest maps for a day. Map authors get a coin for each new like. Every week there is a pack of 5 race maps with a coin reward for finishing all of them."
+    },
+    {
+      "title": "Ninja rounds, team choice and bear traps",
+      "text": "Hide and Seek has a new Ninja round where you only see players close to you. In Team Battle you can switch to a team with fewer players before the round starts. Hiders can buy a bear trap in the shop that stops a seeker for 3 seconds. In Race, the next map gets easier or harder depending on how many players finished the last one. Wind zones in the editor can switch direction on a timer."
     }
   ]
 }

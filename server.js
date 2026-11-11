@@ -661,7 +661,11 @@ function raceIds(room) {
 function raceStartLobby(io, room, st) {
   clearTimeout(st.timer);
   // комната «Карта дня» (race:daily) всегда играет карту дня (см. dailyMap в maps.js)
-  const m = /:daily$/.test(room) ? require('./maps.js').dailyMap() : require('./maps.js').randomFor('race', st.map ? st.map.mapName : '');
+  /* после раунда, где почти никто не дошёл, — карта полегче; где дошли почти все — потруднее */
+  const MP = require('./maps.js'), mood = st.mood || '';
+  const pred = mood === 'easy' ? (x => { const r = MP.finishRate(x); return r === null || r >= 0.5; })
+    : mood === 'hard' ? (x => { const r = MP.finishRate(x); return r !== null && r < 0.6; }) : undefined;
+  const m = /:daily$/.test(room) ? MP.dailyMap() : MP.randomFor('race', st.map ? st.map.mapName : '', pred);
   st.map = m ? { author: m.author, mapName: m.mapName } : null;
   st.rules = raceRulesOf(m);
   const duel = isDuelRoom(room);
@@ -671,7 +675,7 @@ function raceStartLobby(io, room, st) {
   st.finished = []; st.out = new Set(); st.ending = false; st.winner = null; st.members = new Set();
   st.skip = new Set();
   st.endsAt = Date.now() + RACE_LOBBY_MS;
-  io.to(room).emit('racePhase', { phase: 'lobby', map: st.map, msLeft: RACE_LOBBY_MS, goal: st.rules.goal, roundNum: st.roundNum });
+  io.to(room).emit('racePhase', { phase: 'lobby', map: st.map, msLeft: RACE_LOBBY_MS, goal: st.rules.goal, roundNum: st.roundNum, mood });
   // карт гонки нет вовсе — заглядываем снова, вдруг владелец добавит
   // дуэль начинается, только когда соперник на месте
   st.timer = setTimeout(() => st.map && (!duel || raceIds(room).length >= 2) ? raceStartRound(io, room, st) : raceStartLobby(io, room, st),
@@ -690,6 +694,10 @@ function raceStartRound(io, room, st) {
 function raceEndRound(io, room, st, why) {
   if (st.phase !== 'round') return;
   clearTimeout(st.timer);
+  const started = st.members ? st.members.size : 0;
+  if (st.map && started) require('./maps.js').raceStat(st.map.author, st.map.mapName, started, st.finished.length);
+  const rate = started ? st.finished.length / started : 0.5;
+  st.mood = !started || isDuelRoom(room) ? '' : rate < 0.34 ? 'easy' : rate >= 0.75 && started >= 2 ? 'hard' : '';
   io.to(room).emit('raceResult', { why, goal: st.rules.goal, winner: st.winner,
     places: st.finished.slice(0, 10).map(f => ({ name: f.name, place: f.place })) });
   raceStartLobby(io, room, st);
@@ -1210,7 +1218,9 @@ function hsPickVariant(st, n) {
   }
   if (st.apoc) return 'zombie';
   if (st.storyMap || n < 2) return 'classic';
-  if (forced === 'classic' || forced === 'cops' || forced === 'hottrap') return forced;
+  if (forced === 'classic' || forced === 'cops' || forced === 'hottrap' || forced === 'ninja') return forced;
+  // Ninja (идея игроков): обычные прятки, но каждый видит других только рядом с собой
+  if (st.variant !== 'ninja' && Math.random() < 0.15) return 'ninja';
   // Hot Trap (идея игроков): короткий раунд, искатель обязан поймать норму — иначе «сгорел»
   if (n >= 3 && st.variant !== 'hottrap' && Math.random() < 0.25) return 'hottrap';
   // большая комната: Cops and Robbers через раунд с classic, два раза подряд — нет
@@ -2172,6 +2182,21 @@ io.on('connection', (socket) => {
     if (!st.caughtSet) st.caughtSet = new Set();
     hsDoInfect(io, player.room, st, socket.id, player, 'giveup');
   });
+  /* Выбор команды (идея игроков): пока лобби, после раздачи — перейти в команду, где людей
+     меньше, чем в твоей. Так перекоса больше чем на одного не бывает. */
+  socket.on('hsPickTeam', (team) => {
+    if (limHsCatch()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('hideAndSeek:') !== 0) return;
+    const st = hsRooms.get(player.room);
+    if (!st || st.phase !== 'lobby' || !hsTeamVariant(st.variant) || !st.teams || !st.teams.has(socket.id)) return;
+    const t = String(team || ''), cur = st.teams.get(socket.id);
+    if (t === cur || (st.teamList || []).indexOf(t) === -1) return;
+    const c = hsTeamCounts(st);
+    if (c[t].length >= c[cur].length) return socket.emit('hsTeamFull', { team: t });
+    st.teams.set(socket.id, t);
+    io.to(player.room).emit('hsTeams', { teams: hsTeamsObj(st) });
+  });
   socket.on('hsPref', (data) => {
     const player = gameState.players.get(socket.id);
     if (!player) return;
@@ -2240,6 +2265,7 @@ io.on('connection', (socket) => {
   socket.on('warHit', (data) => { if (limHit()) return; const h = hsOf(); if (h) war.hit(h.st, h.room, socket.id, data); });
   socket.on('warHazard', () => { if (limPoison()) return; const h = hsOf(); if (h) war.hazard(h.st, h.room, socket.id); });
   socket.on('tokTake', (data) => { if (limTok()) return; const h = hsOf(); if (h) war.take(h.st, h.room, socket.id, data); });
+  socket.on('trapHit', (data) => { if (limHit()) return; const h = hsOf(); if (h) war.trapHit(h.st, h.room, socket.id, data); });
   socket.on('shopBuy', (data) => { if (limShop()) return; const h = hsOf(); if (h) war.buy(h.st, h.room, socket.id, data); });
   // «Вечеринка» (см. party.js): ответ викторины, догадка и рисунок, модель и оценка
   socket.on('partyAns', (data) => { if (limParty()) return; const h = hsOf(); if (h) party.answer(h.st, h.room, socket.id, data); });

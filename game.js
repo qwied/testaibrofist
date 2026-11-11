@@ -1768,6 +1768,38 @@
     GAME.myOutfit = o;
   }
   // счёт в шапке: «Red 1 : 0 Blue», у четырёх команд — «Red 1 · Blue 0 · Green 2 · Yellow 0»
+  /* Выбор команды в лобби командных режимов: кнопка каждой команды, переход — только в ту,
+     где игроков меньше (проверяет сервер, см. hsPickTeam). */
+  var teamPickEl = null, teamPickKey = '';
+  function teamPickTick() {
+    var show = MODE === 'hideAndSeek' && !VIEW && phase === 'lobby' && teamVariant() && !!myTeam();
+    if (!show) { if (teamPickEl) { teamPickEl.style.display = 'none'; teamPickKey = ''; } return; }
+    var list = Object.keys(hsBases || {});
+    if (!list.length) Object.keys(hsTeams).forEach(function (id) { if (list.indexOf(hsTeams[id]) === -1) list.push(hsTeams[id]); });
+    var cnt = {}; list.forEach(function (t) { cnt[t] = 0; });
+    Object.keys(hsTeams).forEach(function (id) { if (cnt[hsTeams[id]] !== undefined) cnt[hsTeams[id]]++; });
+    var key = myTeam() + '|' + list.map(function (t) { return t + cnt[t]; }).join();
+    if (!teamPickEl) {
+      teamPickEl = document.createElement('div'); teamPickEl.id = 'teamPick';
+      teamPickEl.style.cssText = 'position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:30;display:flex;gap:6px;align-items:center;'
+        + 'background:rgba(255,255,255,.94);border-radius:12px;padding:6px 10px;box-shadow:0 4px 16px rgba(0,0,0,.18);font:600 13px sans-serif;color:#111827';
+      teamPickEl.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-team]');
+        if (b && socket) socket.emit('hsPickTeam', b.getAttribute('data-team'));
+      });
+      document.body.appendChild(teamPickEl);
+    }
+    teamPickEl.style.display = 'flex';
+    if (key === teamPickKey) return;
+    teamPickKey = key;
+    teamPickEl.innerHTML = esc(TR('teamPick', 'Команда:')) + list.map(function (t) {
+      var mine = t === myTeam();
+      return '<button data-team="' + esc(t) + '" style="border:2px solid ' + COLOR_TEAM[t] + ';background:' + (mine ? COLOR_TEAM[t] : '#fff')
+        + ';color:' + (mine ? '#fff' : '#111827') + ';border-radius:9px;padding:4px 10px;font:700 12.5px sans-serif;cursor:pointer">'
+        + esc(teamName(t)) + ' · ' + cnt[t] + '</button>';
+    }).join('');
+  }
+  setInterval(teamPickTick, 400);
   function renderTeamHud() {
     var box = $('gTeamBox');
     if (!box) return;
@@ -1896,6 +1928,7 @@
     if (hsVariant === 'hottrap') return (me.role === 'seeker'
         ? TR('hintTrapSeeker', 'Hot Trap: поймай хотя бы {q} до конца короткого раунда — иначе сгоришь!')
         : TR('hintTrapHider', 'Hot Trap: искателю нужно поймать {q} — продержись, и он сгорит!')).replace('{q}', String(trapQuota || 1));
+    if (hsVariant === 'ninja') return TR('hintNinja', 'Ниндзя: других игроков видно только рядом с тобой. Двигайся тихо!');
     if (hsVariant === 'cops') return me.role === 'seeker' ? TR('hintCop', 'Лови грабителей — пойманные замирают на месте.')
       : TR('hintRobber', 'Прячься от копов и касанием освобождай пойманных.');
     return hsSecret === 'murderer' ? TR('hintMurderer', 'Касанием выбивай игроков. Берегись шерифа — его касание тебя поймает!')
@@ -2107,7 +2140,7 @@
   /* Рулетка режима крутит только то, что бывает в этой комнате: в прятках — Classic, Zombie
      Apocalypse и Cops & Robbers, в Team Battle — Capture the Flag и Domination, в Murder
      Mystery — он сам (пока игроков мало — «Ждём игроков», wait: без искателя и поимок, см. hsFixedWait в server.js). */
-  var VARIANTS = { hs: ['classic', 'zombie', 'cops', 'hottrap'], murder: ['wait', 'murder'], team: ['wait', 'ctf', 'dom', 'soccer'],
+  var VARIANTS = { hs: ['classic', 'zombie', 'cops', 'hottrap', 'ninja'], murder: ['wait', 'murder'], team: ['wait', 'ctf', 'dom', 'soccer'],
                    war: ['wait', 'ffa', 'tdm', 'hunger', 'cp', 'bro', 'pirate'],
                    party: ['wait', 'quiz', 'guess', 'build', 'ffa', 'murder', 'zombie', 'cops'],
                    adventure: ['quest', 'defense'] };
@@ -2118,7 +2151,7 @@
       : v === 'dom' ? TR('modeDom', 'Domination') : v === 'team' ? TR('modeTeam', 'Team Battle')
       : v === 'war' ? TR('modeWar', 'War') : v === 'ffa' ? TR('modeFfa', 'Free for All') : v === 'tdm' ? TR('modeTdm', 'Team War')
       : v === 'hunger' ? TR('modeHunger', 'Hunger Games') : v === 'cp' ? TR('modeCp', 'Control Points') : v === 'bro' ? TR('modeBro', 'Bro RED')
-      : v === 'pirate' ? TR('modePirate', 'Pirate War') : v === 'hottrap' ? TR('modeHotTrap', 'Hot Trap') : v === 'soccer' ? TR('modeSoccer', 'Футбол')
+      : v === 'pirate' ? TR('modePirate', 'Pirate War') : v === 'hottrap' ? TR('modeHotTrap', 'Hot Trap') : v === 'ninja' ? TR('modeNinja', 'Ниндзя') : v === 'soccer' ? TR('modeSoccer', 'Футбол')
       : v === 'party' ? TR('modeParty', 'Вечеринка') : v === 'quiz' ? TR('modeQuiz', 'Викторина')
       : v === 'guess' ? TR('modeGuess', 'Угадай слово') : v === 'build' ? TR('modeBuild', 'Строительная битва')
       : v === 'adventure' ? TR('modeAdventure', 'Приключение') : v === 'quest' ? TR('modeQuest', 'Башня')
@@ -3010,7 +3043,11 @@
     });
 
     // ---------- общая гонка: фазы, финиши, выбывшие, итог (см. raceRooms в server.js) ----------
-    socket.on('racePhase', function (d) { racePhaseIn(d, false); });
+    socket.on('racePhase', function (d) {
+      racePhaseIn(d, false);
+      if (MODE === 'race' && d && d.phase === 'lobby' && d.mood) log(d.mood === 'easy' ? TR('moodEasy', 'Прошлую карту прошли немногие — следующая попроще.')
+        : TR('moodHard', 'Прошлую карту прошли почти все — следующая посложнее!'));
+    });
     socket.on('raceState', function (d) { racePhaseIn(d, true); });
     socket.on('raceFinished', function (d) {
       if (MODE !== 'race' || !d) return;
@@ -3051,6 +3088,7 @@
     });
 
     // ---------- командные варианты: состав команд, флаги, точки захвата ----------
+    socket.on('hsTeamFull', function () { log(TR('teamFull', 'В этой команде уже больше игроков')); });
     socket.on('hsTeams', function (d) {
       if (MODE !== 'hideAndSeek' || !d || !teamVariant()) return;
       var had = myTeam();
@@ -3221,7 +3259,7 @@
         };
         if (!STORY) loadServerMap(d.map, teleportSeeker); else teleportSeeker();
         log(d.apoc ? TR('roundStartApoc', 'Раунд начался! Зомби уже идёт за кем-то...')
-          : hsVariant === 'wait' || hsVariant === 'murder' || hsVariant === 'cops' || hsVariant === 'hottrap' || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant) ? variantHint()
+          : hsVariant === 'wait' || hsVariant === 'murder' || hsVariant === 'cops' || hsVariant === 'hottrap' || hsVariant === 'ninja' || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant) ? variantHint()
           : TR('roundStart', 'Раунд начался! 2 минуты'));
         // Murder Mystery: первые секунды охоты убийца никого не трогает (см. HS_MURDER_GRACE_MS)
         mmGraceUntil = hsVariant === 'murder' ? Date.now() + (Number(d.grace) || 0) : 0;
@@ -3671,13 +3709,30 @@
     jump:   { price: 2, key: 'shopJump', ru: 'Суперпрыжок', dKey: 'shopJumpD', dRu: 'Прыгаешь на треть выше 10 секунд' },
     invis:  { price: 4, key: 'shopInvis', ru: 'Невидимость', dKey: 'shopInvisD', dRu: 'Тебя не видно 6 секунд (только прячущимся)', hider: true },
     radar:  { price: 3, key: 'shopRadar', ru: 'Радар', dKey: 'shopRadarD', dRu: 'Стрелка к ближнему прячущемуся 8 секунд (только искателю)', seeker: true },
+    trap:   { price: 5, key: 'shopTrap', ru: 'Капкан', dKey: 'shopTrapD', dRu: 'Ставишь у ног: искатель, наступив, застрянет на 3 секунды (только прячущимся)', hider: true },
     sling:  { price: 3, key: 'shopSling', ru: 'Рогатка ×10', dKey: 'shopSlingD', dRu: '10 камней: летят далеко, 15 урона' },
     bomb:   { price: 4, key: 'shopBomb', ru: 'Бомба ×3', dKey: 'shopBombD', dRu: '3 бомбы: взрыв задевает всех рядом' },
     magic:  { price: 5, key: 'shopMagic', ru: 'Магия ×5', dKey: 'shopMagicD', dRu: '5 огненных шаров: быстрые, 32 урона' },
     heal:   { price: 3, key: 'shopHeal', ru: 'Аптечка', dKey: 'shopHealD', dRu: '+50 здоровья' },
     shield: { price: 4, key: 'shopShield', ru: 'Щит', dKey: 'shopShieldD', dRu: 'Вдвое меньше урона 10 секунд' }
   };
-  var SHOP_HS = ['speed', 'jump', 'invis', 'radar'];
+  var SHOP_HS = ['speed', 'jump', 'invis', 'radar', 'trap'];
+  /* Капканы прячущихся: видят их все, кроме искателей; искатель, наступив, застревает. */
+  var hsTraps = [], trapFrozenUntil = 0;
+  function trapTick(ctx) {
+    if (MODE !== 'hideAndSeek' || phase !== 'round') { if (hsTraps.length) hsTraps = []; return; }
+    var p = GAME.pl, seeker = me.role === 'seeker';
+    if (trapFrozenUntil && Date.now() > trapFrozenUntil) { trapFrozenUntil = 0; GAME.frozen = false; }
+    hsTraps.forEach(function (t) {
+      if (seeker && p && !t.sent && Math.abs(p.x + p.w / 2 - t.x) < 34 && Math.abs(p.y + p.h - t.y) < 40) { t.sent = true; socket.emit('trapHit', { id: t.id }); }
+      if (seeker) return;
+      ctx.save(); ctx.translate(t.x, t.y);
+      ctx.fillStyle = '#5b6170'; ctx.fillRect(-16, -5, 32, 5);
+      ctx.strokeStyle = '#8b93a5'; ctx.lineWidth = 2; ctx.beginPath();
+      for (var i = -14; i <= 14; i += 7) { ctx.moveTo(i - 3, -5); ctx.lineTo(i, -12); ctx.lineTo(i + 3, -5); }
+      ctx.stroke(); ctx.restore();
+    });
+  }
   var SHOP_WAR = ['sling', 'bomb', 'magic', 'heal', 'shield', 'speed', 'jump'];
   var war = null;                 // состояние боя раунда: { v, hp, max, kills, score, out, bro }
   var weapon = 'fist', ammo = { sling: 0, bomb: 0, magic: 0 }, lastFire = {}, shotSeq = 1;
@@ -4225,6 +4280,14 @@
       if (!d) return;
       log(d.why === 'tokens' ? TR('shopNoTokens', 'Не хватает жетонов') : d.why === 'role' ? TR('shopNoRole', 'Это не для твоей роли')
         : TR('shopNoNow', 'Сейчас это купить нельзя'));
+    });
+    socket.on('trapSet', function (d) { if (d && phase === 'round') hsTraps.push({ id: d.id, x: d.x, y: d.y }); });
+    socket.on('trapGone', function (d) {
+      if (!d) return;
+      hsTraps = hsTraps.filter(function (t) { return t.id !== d.id; });
+      if (d.victim === socket.id) { trapFrozenUntil = Date.now() + (d.ms || 3000); GAME.frozen = true; log(TR('trapCaughtMe', 'Ты попал в капкан!')); }
+      else log(TR('trapCaught', '{n} попал в капкан!').replace('{n}', '<b>' + esc(d.name || '') + '</b>'));
+      if (window.BFSound && BFSound.land) BFSound.land();
     });
     socket.on('boost', function (d) {
       if (!d || !d.id || !d.item) return;
@@ -4999,6 +5062,8 @@
     setInterval(function () { if (advOn() && myCls() === 'mage') renderAdvHud(); }, 500);
   }
 
+  var NINJA_R = 300;
+  function ninjaOn() { return MODE === 'hideAndSeek' && hsVariant === 'ninja' && phase === 'round' && !VIEW; }
   // ---------- отрисовка чужих игроков ----------
   GAME.onDraw = function (ctx) {
     syncMyOutfit();
@@ -5035,6 +5100,7 @@
       if (boostOn(id, 'invis')) return;            // невидимость из магазина
       if (isHiddenP(o.name)) return;               // «Скрыть» в списке игроков (Tab)
       if (o.rescued && phase === 'round') return;  // улетел на вертолёте
+      if (ninjaOn() && mp && Math.hypot(o.x - mp.x, o.y - mp.y) > NINJA_R) return;   // Ниндзя: дальних не видно
       var w = o.w || 22, h = o.h || 74;
       // куда смотрит — по движению (в сеть поворот не уходит)
       if (o._fx !== undefined && Math.abs(o.x - o._fx) > 0.4) o._face = o.x > o._fx ? 1 : -1;
@@ -5059,6 +5125,13 @@
       ctx.restore();
       drawTag(ctx, o.name || '', hideChatPref ? '' : o.say, o.x + w / 2, o.y, (o.h || 74));
     });
+    if (ninjaOn() && mp) {
+      // темнота вокруг круга видимости
+      var cx = mp.x + mp.w / 2, cy = mp.y + mp.h / 2, g = ctx.createRadialGradient(cx, cy, NINJA_R * 0.75, cx, cy, NINJA_R * 1.1);
+      g.addColorStop(0, 'rgba(10,12,24,0)'); g.addColorStop(1, 'rgba(10,12,24,0.72)');
+      ctx.save(); ctx.fillStyle = g; ctx.fillRect(cx - 6000, cy - 6000, 12000, 12000); ctx.restore();
+    }
+    trapTick(ctx);
     drawGhost(ctx);
     drawTeamObjects(ctx);
     drawWar(ctx);

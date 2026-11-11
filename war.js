@@ -58,6 +58,7 @@ const SHOP = {
   jump:   { price: 2, ms: 10000, hs: true, war: true },
   invis:  { price: 4, ms: 6000, hs: true, hider: true },
   radar:  { price: 3, ms: 8000, hs: true, seeker: true },
+  trap:   { price: 5, hs: true, hider: true },
   sling:  { price: 3, war: true },
   bomb:   { price: 4, war: true },
   magic:  { price: 5, war: true },
@@ -167,6 +168,7 @@ module.exports = function createWar(d) {
     if (it.seeker && !hunter) return no('role');
     if (it.hider && st.caughtSet && st.caughtSet.has(id)) return no('role');
     if (war && st.war && st.phase === 'round' && !alive(st, id)) return no('dead');
+    if (item === 'trap' && (st.phase !== 'round' || !posOf(id) || liveTraps(st).length >= TRAP_MAX)) return no(st.phase !== 'round' ? 'phase' : 'closed');
     if (item === 'heal' && !(st.war && st.phase === 'round' && st.war.hp.get(id) < st.war.max.get(id))) return no('full');
     if (bankOf(st, id) < it.price) return no('tokens');
     addBank(st, id, -it.price);
@@ -182,11 +184,31 @@ module.exports = function createWar(d) {
     } else if (item === 'shield') {
       warAmmoState(st).shield.set(id, Date.now() + it.ms);
       io.to(room).emit('boost', { id, item, ms: it.ms });
+    } else if (item === 'trap') {
+      // капкан у ног: искатель, наступивший на него, застревает (см. trapHit)
+      const p = posOf(id), t = { id: (st.trapSeq = (st.trapSeq || 0) + 1), x: Math.round(p.x + (p.w || 30) / 2), y: Math.round(p.y + (p.h || 74)), round: st.roundNum };
+      st.hsTraps = liveTraps(st).concat([t]);
+      io.to(room).emit('trapSet', { id: t.id, x: t.x, y: t.y });
     } else if (item === 'invis') {
       // невидимость — другие перестают его рисовать (сам он видит себя бледным)
       io.to(room).emit('boost', { id, item, ms: it.ms });
     }
     io.to(id).emit('shopOk', out);
+  }
+
+  /* ---------- капкан для искателя (идея игроков) ---------- */
+  const TRAP_MAX = 6, TRAP_MS = 3000;
+  function liveTraps(st) { return (st.hsTraps || []).filter(t => t.round === st.roundNum); }
+  function trapHit(st, room, id, data) {
+    if (st.phase !== 'round' || !st.seekerIds || !st.seekerIds.has(id)) return;
+    const list = liveTraps(st), i = list.findIndex(t => t.id === Number(data && data.id));
+    const p = posOf(id);
+    if (i === -1 || !p) return;
+    const c = center(p), t = list[i];
+    if (Math.abs(c.x - t.x) > 70 || Math.abs((p.y + (p.h || 74)) - t.y) > 90) return;
+    list.splice(i, 1);
+    st.hsTraps = list;
+    io.to(room).emit('trapGone', { id: t.id, victim: id, ms: TRAP_MS, name: nameOf(id) });
   }
 
   /* ---------- война ---------- */
@@ -478,6 +500,6 @@ module.exports = function createWar(d) {
              war: state(st), ammo: st.warAmmo && st.warAmmo.ammo.get(id) ? Object.assign({}, st.warAmmo.ammo.get(id)) : null,
              shop: tokensOn(st) };
   }
-  return { isWar, pick, start, spawnAll, lobby, state, shot, hit, hazard, reveal, award, join, leave, joinState,
+  return { trapHit, isWar, pick, start, spawnAll, lobby, state, shot, hit, hazard, reveal, award, join, leave, joinState,
            take, buy, track, tokRoundStart, tokensOn, alive, WEAPONS, SHOP, AMMO_PACK };
 };
