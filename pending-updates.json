@@ -132,6 +132,10 @@
     {
       "title": "Room settings for private rooms",
       "text": "The host of a private Hide and Seek room can now change the game: time to hide, hunt time, number of seekers, player slots, the mode and the map. Changes apply from the next round. If the host leaves, another player becomes the host."
+    },
+    {
+      "title": "Upside-down gravity",
+      "text": "Gravity zones in the editor can now go below zero. Inside such a zone gravity pulls up: you walk on the ceiling upside down and jump downwards. Leave the zone and you fall back to the floor."
     }
   ]
 }
