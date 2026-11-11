@@ -3580,7 +3580,34 @@ function paint(o, isSel){
   // прозрачность фигуры (0.1…1) и полупрозрачность невидимого в игре — в редакторе
   if(o.alpha !== undefined && +o.alpha < 1) ctx.globalAlpha *= Math.max(0.1, +o.alpha);
   if(o.inv) ctx.globalAlpha *= 0.45;
+  /* Единый визуальный финиш для игровых моделей: мягкая контактная тень
+     и тонкий контур по реальному игровому силуэту. Не меняет хитбоксы,
+     цвета объектов, физику или сохранённые параметры карт. */
+  var modelHasSolidShape = SOLID.indexOf(o.type) !== -1;
+  if(modelHasSolidShape){
+    ctx.shadowColor = "rgba(15,23,42,.24)";
+    ctx.shadowBlur = Math.max(2, Math.min(7, Math.min(o.w,o.h)*0.035));
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = Math.max(1, Math.min(3, Math.min(o.w,o.h)*0.012));
+  }
   (PAINT[o.type] || PAINT.rect)(o);
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  // Общий тонкий тёмный контур делает разные по форме модели частью одного
+  // мультяшного набора. Пользовательская толщина/цвет контура остаются главнее.
+  if(modelHasSolidShape && !(+o.strokeW > 0)){
+    var modelOutline = rawPoly(o);
+    ctx.beginPath();
+    ctx.moveTo(modelOutline[0][0], modelOutline[0][1]);
+    for(var moi=1; moi<modelOutline.length; moi++) ctx.lineTo(modelOutline[moi][0], modelOutline[moi][1]);
+    ctx.closePath();
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(15,23,42,.62)";
+    ctx.lineWidth = Math.max(1, Math.min(2.2, Math.min(o.w,o.h)*0.018));
+    ctx.stroke();
+  }
   // обводка с толщиной (идея «outline»): по силуэту фигуры
   if(+o.strokeW > 0 && SOLID.indexOf(o.type) !== -1){
     var sp = rawPoly(o);
