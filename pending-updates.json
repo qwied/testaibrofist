@@ -104,6 +104,10 @@
     {
       "title": "Textures and a brush in the editor",
       "text": "Blocks, circles and triangles can now use a texture instead of a plain color: brick, wood, grass, stone, metal or sand. A new Brush tool paints the map with small blocks on a grid, using the last color and texture you picked."
+    },
+    {
+      "title": "Crouching",
+      "text": "Hold Down while standing to crouch: you get shorter, move at half speed and can squeeze under low blocks. You stand up again when you let go and there is room above your head."
     }
   ]
 }

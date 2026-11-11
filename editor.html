@@ -374,15 +374,15 @@ body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="device.js?v=225"></script>
-        <script src="sound.js?v=225"></script>
-        <script src="skinRender.js?v=225"></script>
-        <script src="skinCanvas.js?v=225"></script>
-        <script src="gifuct.bundle.js?v=225"></script>
-        <script src="gifPlayer.js?v=225"></script>
-        <script src="coin.js?v=225"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=225">
-        <script src="theme.js?v=225"></script>
+<script src="device.js?v=226"></script>
+        <script src="sound.js?v=226"></script>
+        <script src="skinRender.js?v=226"></script>
+        <script src="skinCanvas.js?v=226"></script>
+        <script src="gifuct.bundle.js?v=226"></script>
+        <script src="gifPlayer.js?v=226"></script>
+        <script src="coin.js?v=226"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=226">
+        <script src="theme.js?v=226"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1712,6 +1712,7 @@ function respawn(){
     pl.flag = !!pl.cpFlag;
   }
   pl.x = p.x; pl.y = p.y; pl.vx = 0; pl.vy = 0; pl.dead = false; coy = 0; buf = 0; pl.airTop = undefined; pl.dj = false; pl.zip = null; pl.hook = null;
+  if(pl.crouch){ pl.crouch = false; pl.h = SIZES.spawn[1]; }
   pl.rideOn = null; pl.grab = null; grabCd = 0; pl.kick = 0; pl.climb = null; pl.jumpLock = false;
   stuckFrames = 0; stuckAir = 0; stuckHeld = 0; stuckSteer = 0; stuckMinX = stuckMaxX = pl.x; stuckMinY = stuckMaxY = pl.y;
 }
@@ -2490,6 +2491,12 @@ function step(){
   }
   if(grabCd > 0) grabCd--;
 
+  /* Присед (идея игроков): «вниз» на земле — фигура ниже на CROUCH_H, пролезает под низкими блоками
+     и идёт вдвое медленнее; отпустил — встаёт, только если над головой есть место. */
+  if(keys.dn && pl.ground && !pl.crouch && !grabbing && !pl.zip){ pl.crouch = true; pl.y += CROUCH_H; pl.h -= CROUCH_H; }
+  if(pl.crouch && (!keys.dn || !pl.ground) && !blockedAt(pl.x + 1, pl.y - CROUCH_H, pl.w - 2, CROUCH_H)){
+    pl.crouch = false; pl.y -= CROUCH_H; pl.h += CROUCH_H;
+  }
   var dir = (grabbing || frz) ? 0 : (keys.r?1:0)-(keys.l?1:0);
   // «Авто-бег» (идея Brodash/Runner): бежит вправо сам, игрок только прыгает; «влево» — притормозить
   if(raceAuto && !grabbing && !frz && !done) dir = keys.l ? 0 : 1;
@@ -2504,7 +2511,7 @@ function step(){
        короткий разбег читался как вялость — особенно на коротких
        перебежках, где игрок отпускал кнопку, не дойдя до максимума.
        Инерция при отпускании остаётся: см. FRIC в ветке ниже. */
-    pl.vx = dir * maxVX() * platBoost(pl.standPlat) * (raceSprint && keys.sh ? 1.45 : 1); pl.face = dir;
+    pl.vx = dir * maxVX() * (pl.crouch ? 0.5 : 1) * platBoost(pl.standPlat) * (raceSprint && keys.sh ? 1.45 : 1); pl.face = dir;
   } else {
     pl.vx *= pl.ground ? FRIC : AIR;
     if(Math.abs(pl.vx) < .05) pl.vx = 0;
@@ -3343,6 +3350,13 @@ function throwHook(){
       return;
     }
   }
+}
+var CROUCH_H = 40;
+// есть ли твёрдое в прямоугольнике (для «встать из приседа»)
+function blockedAt(x, y, w, h){
+  var nr = nearby(x, y, w, h);
+  for(var i = 0; i < nr.length; i++) if(solid(nr[i]) && overlaps(nr[i], x, y, w, h)) return true;
+  return false;
 }
 function crumbleMarks(o){
   ctx.save(); ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 1.5;
@@ -6328,12 +6342,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=225"></script>
-<script src="abuseShow.js?v=225" defer></script>
-<script src="editorHelp.js?v=225"></script>
-<script src="editorAI.js?v=225" defer></script>
-<script src="account.js?v=225" defer></script>
-<script src="owner.js?v=225" defer></script>
+<script src="i18n.js?v=226"></script>
+<script src="abuseShow.js?v=226" defer></script>
+<script src="editorHelp.js?v=226"></script>
+<script src="editorAI.js?v=226" defer></script>
+<script src="account.js?v=226" defer></script>
+<script src="owner.js?v=226" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -6450,7 +6464,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=225" defer></script>
+        <script src="skinAvatar.js?v=226" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */
