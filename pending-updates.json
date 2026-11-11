@@ -108,6 +108,10 @@
     {
       "title": "Crouching",
       "text": "Hold Down while standing to crouch: you get shorter, move at half speed and can squeeze under low blocks. You stand up again when you let go and there is room above your head."
+    },
+    {
+      "title": "Rescue helicopter in zombie rounds",
+      "text": "Zombie maps can now have a rescue helicopter. In a zombie round, a hider who reaches it is rescued and flies away: the zombies can no longer catch them, and they count as survivors at the end of the round."
     }
   ]
 }

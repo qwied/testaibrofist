@@ -1058,6 +1058,7 @@ function hsApplyApoc(st) {
   st.hasPoison = false;
   st.spots = [];
   st.cannons = [];
+  st.helis = [];
   st.advMap = null;
   if (!st.map) return;
   try {
@@ -1072,6 +1073,9 @@ function hsApplyApoc(st) {
     /* пушки «Пиратской войны» (см. war.js) — в том же порядке, что и у клиента в карте (см.
        gunList в game.js): по номеру пушки клиент и сервер понимают, из какой выстрелили */
     const fin = (v, lo, hi) => Number.isFinite(+v) ? Math.max(lo, Math.min(hi, +v)) : 0;
+    // вертолёты спасения зомби-карты (см. hsRescue): только их прямоугольники
+    st.helis = list.filter(o => o && o.type === 'heli').slice(0, 8)
+      .map(o => ({ x: fin(o.x, -1e5, 1e5), y: fin(o.y, -1e5, 1e5), w: 160, h: 90 }));
     st.cannons = list.filter(o => o && o.type === 'cannon').slice(0, 24)
       .map(o => ({ x: fin(o.x, -1e5, 1e5), y: fin(o.y, -1e5, 1e5), w: 72, h: 44, aim: fin(o.aim, -360, 360) }));
     // приключение: этажи и враги или волны (см. adventure.js) — их пишет только встроенная карта
@@ -1490,6 +1494,7 @@ function hsStartRound(io, room, st) {
   // заражение: кто сейчас охотится — сначала только те, кого выбрала рулетка
   st.seekerIds = new Set(hunters);
   st.everCaught = new Set();      // Cops and Robbers: награда только за первый арест каждого
+  st.rescued = new Set();         // зомби-раунд: улетевшие на вертолёте (см. hsRescue)
   st.murderCaught = false;
   // командные варианты: путь за раунд (для действий с флагом), флаги, точки захвата
   st.teamOdo = new Map(hsMembers(room).map(m => [m.id, odoOf(m.id)]));
@@ -1583,7 +1588,7 @@ function hsDoInfect(io, room, st, targetId, target, how) {
     io.to(room).emit('hsOut', { id: targetId, name: target.name, jail: st.variant === 'cops' });
   }
   // прячущихся не осталось — раунд можно заканчивать, не дожидаясь таймера
-  const stillHiding = (st.roundMembers || []).some(m => !st.caughtSet.has(m.id));
+  const stillHiding = (st.roundMembers || []).some(m => !st.caughtSet.has(m.id) && !(st.rescued && st.rescued.has(m.id)));
   if (!stillHiding) {
     /* Зачистка всей карты — медаль за скорость искателю. Только живому
        охотнику, выбранному рулеткой: в apoc-раунде ловит зомби без
@@ -1612,7 +1617,7 @@ function hsOnCaught(room, socketId) {
   const st = hsRooms.get(room);
   if (!st || st.phase !== 'round' || st.caughtSent) return;
   if (!st.seekerIds || !st.seekerIds.has(socketId)) return;
-  const stillHiding = (st.roundMembers || []).some(m => !st.caughtSet.has(m.id));
+  const stillHiding = (st.roundMembers || []).some(m => !st.caughtSet.has(m.id) && !(st.rescued && st.rescued.has(m.id)));
   if (stillHiding) return;
   hsEndRoundEarly(room, st);
 }
@@ -2123,6 +2128,23 @@ io.on('connection', (socket) => {
      или переиграв в уже пойманного, не выйдет. */
   /* Прятки (идеи игроков): «Сдаться» — прячущийся сам выходит из раунда, как пойманный
      (в зомби-раунде — становится зомби); и пожелание роли на следующую рулетку (см. hsChances). */
+  /* Зомби-раунд (идея «infection: добежать до вертолёта»): прячущийся у вертолёта — спасён, его
+     уже не поймать, в конце раунда он выжил. Близость сверяем по присланной позиции и карте. */
+  socket.on('hsRescue', () => {
+    if (limHsCatch()) return;
+    const player = gameState.players.get(socket.id);
+    if (!player || String(player.room).indexOf('hideAndSeek:') !== 0) return;
+    const st = hsRooms.get(player.room);
+    if (!st || st.phase !== 'round' || !st.apoc || st.caughtSent || !(st.helis || []).length) return;
+    if ((st.seekerIds && st.seekerIds.has(socket.id)) || (st.caughtSet && st.caughtSet.has(socket.id)) || st.rescued.has(socket.id)) return;
+    if (!(st.roundMembers || []).some(m => m.id === socket.id)) return;
+    const p = player.position;
+    if (!p || !st.helis.some(h => p.x + (p.w || 30) > h.x - 40 && p.x < h.x + h.w + 40 && p.y + (p.h || 100) > h.y - 40 && p.y < h.y + h.h + 40)) return;
+    st.rescued.add(socket.id);
+    io.to(player.room).emit('hsRescued', { id: socket.id, name: player.name });
+    const left = (st.roundMembers || []).some(m => !st.caughtSet.has(m.id) && !st.rescued.has(m.id));
+    if (!left) hsEndRoundEarly(player.room, st);
+  });
   socket.on('hsGiveUp', () => {
     if (limHsCatch()) return;
     const player = gameState.players.get(socket.id);
@@ -2157,7 +2179,7 @@ io.on('connection', (socket) => {
     const sheriff = st.variant === 'murder' && socket.id === st.sheriffId && !st.caughtSet.has(socket.id);
     if (sheriff) { if (targetId !== st.seekerId) return; }
     else if (!st.seekerIds.has(socket.id) || st.seekerIds.has(targetId)) return;
-    if (st.caughtSet.has(targetId)) return;
+    if (st.caughtSet.has(targetId) || (st.rescued && st.rescued.has(targetId))) return;   // спасённого вертолётом не поймать
     const target = gameState.players.get(targetId);
     if (!target || target.room !== room) return;
     const sp = player.position, tp = target.position;

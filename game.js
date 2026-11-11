@@ -737,6 +737,14 @@
       }
     }, 33);
   })();
+  // вертолёт спасения: подбежал прячущийся в зомби-раунде — просим сервер засчитать спасение
+  setInterval(function () {
+    if (!socket || MODE !== 'hideAndSeek' || phase !== 'round' || !hsApocRound || me.caught || me.rescued || me.role === 'seeker' || !GAME.pl || !GAME.objects) return;
+    var p = GAME.pl;
+    var at = GAME.objects.some(function (o) { return o.type === 'heli' && p.x + p.w > o.x - 30 && p.x < o.x + o.w + 30 && p.y + p.h > o.y - 30 && p.y < o.y + o.h + 30; });
+    if (at && !p._heliSent) { p._heliSent = Date.now(); socket.emit('hsRescue'); }
+    if (p._heliSent && Date.now() - p._heliSent > 1500) p._heliSent = 0;
+  }, 200);
   // обычные прятки с охотой — не «Война», не «Вечеринка», не «Приключение», не «Копы»
   function huntNow() { return !(hsVariant === 'wait' || hsVariant === 'cops' || teamVariant() || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant)); }
   function setFreeCam(on) {
@@ -1676,9 +1684,9 @@
      фигуры оставались помеченными навсегда, а искатель не мог поймать
      их снова. */
   function clearCaught() {
-    me.caught = false;
+    me.caught = false; me.rescued = false;
     GAME.frozen = false;          // Cops and Robbers: новый раунд — из тюрьмы все выходят
-    Object.keys(others).forEach(function (id) { others[id].caught = false; });
+    Object.keys(others).forEach(function (id) { others[id].caught = false; others[id].rescued = false; });
     caughtNames = {};
     hsSeekerIds = {};
     applyColor();
@@ -2866,6 +2874,13 @@
     });
 
     // заражение подтверждает только сервер (см. hsCatch) — не чат
+    // зомби-раунд: игрок улетел на вертолёте — его больше нет на карте; если это я — раунд для меня окончен
+    socket.on('hsRescued', function (d) {
+      if (MODE !== 'hideAndSeek' || !d || !d.id) return;
+      if (d.id === socket.id) { me.rescued = true; GAME.frozen = true; bigBanner(TR('heliSaved', 'Спасён!'), '#15803d'); }
+      else if (others[d.id]) others[d.id].rescued = true;
+      log(TR('heliMsg', '{n} улетел на вертолёте!').replace('{n}', '<b>' + esc(d.name || '') + '</b>'));
+    });
     socket.on('hsInfected', function (d) {
       if (MODE !== 'hideAndSeek' || !d || !d.id) return;
       applyInfected(d.id, d.name);
@@ -5014,6 +5029,7 @@
       if (o.hid && MODE !== 'hideAndSeek') return;
       if (boostOn(id, 'invis')) return;            // невидимость из магазина
       if (isHiddenP(o.name)) return;               // «Скрыть» в списке игроков (Tab)
+      if (o.rescued && phase === 'round') return;  // улетел на вертолёте
       var w = o.w || 22, h = o.h || 74;
       // куда смотрит — по движению (в сеть поворот не уходит)
       if (o._fx !== undefined && Math.abs(o.x - o._fx) > 0.4) o._face = o.x > o._fx ? 1 : -1;
