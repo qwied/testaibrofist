@@ -374,15 +374,15 @@ body.mob #hint{display:none}
 </style>
         <script src="offline.js?v=9"></script>
 <script src="offlineServer.js?v=10"></script>
-<script src="device.js?v=235"></script>
-        <script src="sound.js?v=235"></script>
-        <script src="skinRender.js?v=235"></script>
-        <script src="skinCanvas.js?v=235"></script>
-        <script src="gifuct.bundle.js?v=235"></script>
-        <script src="gifPlayer.js?v=235"></script>
-        <script src="coin.js?v=235"></script>
-        <link rel="stylesheet" type="text/css" href="mobile.css?v=235">
-        <script src="theme.js?v=235"></script>
+<script src="device.js?v=236"></script>
+        <script src="sound.js?v=236"></script>
+        <script src="skinRender.js?v=236"></script>
+        <script src="skinCanvas.js?v=236"></script>
+        <script src="gifuct.bundle.js?v=236"></script>
+        <script src="gifPlayer.js?v=236"></script>
+        <script src="coin.js?v=236"></script>
+        <link rel="stylesheet" type="text/css" href="mobile.css?v=236">
+        <script src="theme.js?v=236"></script>
         <link rel="icon" href="favicon.ico" sizes="any">
         <link rel="icon" type="image/svg+xml" href="favicon.svg">
         <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -3869,6 +3869,7 @@ function paintFrame(){
     if(!playing && !inLayer(ro)){ ctx.save(); ctx.globalAlpha = 0.18; paint(ro, false); ctx.restore(); drawn++; continue; }
     paint(ro, !playing && ro === sel); drawn++;
   }
+  coopDrawCursors();
   /* Луч рисуется отдельным проходом, не в PAINT.laserFeed: его трасса (с
      отражениями от стен) зависит от игрока и от всей карты, а не только
      от самого объекта. Во время игры путь уже посчитан в laserFeeds();
@@ -4145,7 +4146,7 @@ sceneEl.appendChild(Object.assign(document.createElement("div"),{className:"sep"
 [["bUndo",SVG.undo,"btnUndoTip","Отменить (Ctrl+Z)"],["bRedo",SVG.redo,"btnRedoTip","Вернуть (Ctrl+Y)"],
  ["bCopy",SVG.copy,"btnCopyTip","Дубликат (Ctrl+D)"],["bDel",SVG.trash,"btnDelTip","Удалить (Del)"],["bGrid",SVG.grid,"btnGridTip","Сетка (G)"]]
   .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2],a[3])); });
-[["bAtmo",SVG.cloud,"btnAtmoTip","Атмосфера карты"],["bCopyable",SVG.copy,"btnCopyableTip","Разрешить другим копировать карту"],["bUnder",SVG.image,"btnUnderTip","Картинка-подложка"],["bToSpawn",SVG.spawnPin,"btnToSpawnTip","К точке старта"],["bViewBox",SVG.viewBox,"btnViewBoxTip","Рамка обзора игрока"]]
+[["bCoop",'<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M15.5 14.3c2.6.4 4.5 2.6 4.5 5.7"/>',"btnCoopTip","Совместный редактор"],["bAtmo",SVG.cloud,"btnAtmoTip","Атмосфера карты"],["bCopyable",SVG.copy,"btnCopyableTip","Разрешить другим копировать карту"],["bUnder",SVG.image,"btnUnderTip","Картинка-подложка"],["bToSpawn",SVG.spawnPin,"btnToSpawnTip","К точке старта"],["bViewBox",SVG.viewBox,"btnViewBoxTip","Рамка обзора игрока"]]
   .forEach(function(a){ sceneEl.appendChild(sBtn(a[0],a[1],a[2],a[3])); });
 (function(){
   // фон самой карты (идея «свой фон»): сохраняется в карте и виден в игре; двойной клик — обычный
@@ -6361,6 +6362,116 @@ document.getElementById("file").addEventListener("change", function(e){
   rd.readAsText(f); e.target.value = "";
 });
 // mode в ответе — вид карты (тип при публикации), а в самих данных — механика (mode) и вид (kind)
+/* ══════════════════════════════════════════════════
+   СОВМЕСТНЫЙ РЕДАКТОР (идея игроков): сеанс по коду, правки объектов уходят остальным
+   (см. coopEdit.js). Раз в 250 мс сравниваем карту с тем, что уже отправили, и шлём разницу:
+   изменённые объекты целиком и id удалённых. Поля с «_» — состояние игры, их не шлём.
+   ══════════════════════════════════════════════════ */
+var coop = null;
+function coopJson(o){ return JSON.stringify(o, function(k, v){ return k.charAt(0) === "_" ? undefined : v; }); }
+function coopSnapAll(){ var m = {}; objects.forEach(function(o){ m[o.id] = coopJson(o); }); return m; }
+function coopLink(code){ return location.origin + location.pathname + "?coop=" + code; }
+function coopStart(code){
+  if(coop) return;
+  var go = function(){
+    var sock = window.io({ transports: ["websocket", "polling"] });
+    coop = { sock: sock, code: code, last: coopSnapAll(), cursors: {}, members: [] };
+    sock.on("connect", function(){ sock.emit("coopJoin", { code: code }); });
+    sock.on("coopDenied", function(){ showMsg(TR("coopFull","Сеанс заполнен"), TR("coopFullBody","В совместном редакторе уже 6 человек.")); setTimeout(hideMsg, 2500); sock.close(); coop = null; coopBtn(); });
+    sock.on("coopJoined", function(d){
+      coop.members = d.members || [];
+      // свои id — с большим случайным сдвигом, чтобы новые объекты разных людей не совпали
+      uid = Math.max(uid, 1) + 1000 * (1 + Math.floor(Math.random() * 900));
+      coopBtn();
+      if(d.first){
+        try { if(navigator.clipboard) navigator.clipboard.writeText(coopLink(code)).catch(function(){}); } catch(e){}
+        showMsg(TR("coopStarted","Совместный редактор включён"), TR("coopStartedBody","Код: {c}. Ссылка скопирована — отправь её друзьям.").replace("{c}", code.toUpperCase()));
+        setTimeout(hideMsg, 3500);
+      }
+    });
+    sock.on("coopRoster", function(d){
+      coop.members = d.members || [];
+      if(d.leftId) delete coop.cursors[d.leftId];
+      if(d.joined || d.left){ showMsg(TR("coopTitle","Совместный редактор"), (d.joined ? TR("coopJoinedP","{n} присоединился") : TR("coopLeftP","{n} вышел")).replace("{n}", d.joined || d.left)); setTimeout(hideMsg, 1800); }
+      coopBtn();
+    });
+    sock.on("coopNeedSnap", function(d){ sock.emit("coopSnap", { to: d.to, mode: mode, objects: objects.map(function(o){ return JSON.parse(coopJson(o)); }) }); });
+    sock.on("coopSnap", function(d){
+      if(!d || !Array.isArray(d.objects)) return;
+      objects = [];
+      if(d.mode && d.mode !== mode){ var mb = document.querySelector('.modeBtn[data-kind="' + d.mode + '"]'); if(mb) mb.click(); }
+      objects = d.objects;
+      objects.forEach(function(o){ if(o.id >= uid) uid = o.id + 1; });
+      uid += 1000 * (1 + Math.floor(Math.random() * 900));
+      sel = null; markDirty(); indexMovers(); inspect();
+      coop.last = coopSnapAll();
+    });
+    sock.on("coopOps", function(d){
+      if(!d || !Array.isArray(d.ops)) return;
+      var resel = false;
+      d.ops.forEach(function(op){
+        if(op.op === "del"){
+          objects = objects.filter(function(o){ return o.id !== op.id; });
+          if(sel && sel.id === op.id){ sel = null; resel = true; }
+          delete coop.last[op.id];
+        } else if(op.op === "set" && op.obj){
+          var i = -1;
+          for(var k = 0; k < objects.length; k++) if(objects[k].id === op.obj.id){ i = k; break; }
+          if(i === -1) objects.push(op.obj);
+          else { if(sel === objects[i]){ sel = op.obj; resel = true; } objects[i] = op.obj; }
+          if(op.obj.id >= uid) uid = op.obj.id + 1;
+          coop.last[op.obj.id] = coopJson(op.obj);
+        }
+      });
+      markDirty(); indexMovers(); if(resel) inspect();
+      edDirty = true;
+    });
+    sock.on("coopCursor", function(d){ if(d && d.id) coop.cursors[d.id] = { x: d.x, y: d.y, name: d.name, t: Date.now() }; });
+  };
+  if(window.io) go();
+  else { var sc = document.createElement("script"); sc.src = "/socket.io/socket.io.js"; sc.onload = go; document.head.appendChild(sc); }
+}
+setInterval(function(){
+  if(!coop || !coop.sock.connected || playing) return;
+  var cur = coopSnapAll(), ops = [], id;
+  for(id in cur) if(cur[id] !== coop.last[id]) ops.push({ op: "set", obj: JSON.parse(cur[id]) });
+  for(id in coop.last) if(!(id in cur)) ops.push({ op: "del", id: +id });
+  if(ops.length){ coop.sock.emit("coopOps", { ops: ops.slice(0, 600) }); coop.last = cur; }
+  coop.sock.emit("coopCursor", { x: mouseW.x, y: mouseW.y });
+}, 250);
+function coopDrawCursors(){
+  if(!coop || playing) return;
+  var now = Date.now(), k = 1 / (view.s || 1);
+  Object.keys(coop.cursors).forEach(function(id){
+    var c = coop.cursors[id];
+    if(now - c.t > 8000) return;
+    ctx.save(); ctx.translate(c.x, c.y); ctx.scale(k, k);
+    ctx.fillStyle = "#7c3aed"; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 16); ctx.lineTo(4.5, 12); ctx.lineTo(10, 12); ctx.closePath(); ctx.fill();
+    ctx.font = "600 12px sans-serif"; var w = ctx.measureText(c.name).width + 10;
+    ctx.fillRect(10, 14, w, 18); ctx.fillStyle = "#fff"; ctx.fillText(c.name, 15, 27);
+    ctx.restore();
+  });
+}
+function coopBtn(){
+  var b = document.getElementById("bCoop"); if(!b) return;
+  b.classList.toggle("on", !!coop);
+  b.setAttribute("data-tip", coop ? TR("coopOnTip","Совместный редактор: {n} чел. Нажми — скопировать ссылку").replace("{n}", (coop.members || []).length || 1) : TR("btnCoopTip","Совместный редактор"));
+}
+document.getElementById("bCoop").addEventListener("click", function(){
+  if(playing) return;
+  if(coop){
+    try { if(navigator.clipboard) navigator.clipboard.writeText(coopLink(coop.code)).catch(function(){}); } catch(e){}
+    showMsg(TR("coopTitle","Совместный редактор"), TR("coopInfo","Код {c} · в сеансе: {m}. Ссылка скопирована.").replace("{c}", coop.code.toUpperCase())
+      .replace("{m}", (coop.members || []).map(function(m){ return m.name; }).join(", ")));
+    setTimeout(hideMsg, 3500);
+    return;
+  }
+  var abc = "abcdefghijkmnpqrstuvwxyz23456789", code = "";
+  for(var i = 0; i < 6; i++) code += abc.charAt(Math.floor(Math.random() * abc.length));
+  coopStart(code);
+});
+(function(){ var m = /[?&]coop=([a-z0-9]{6})\b/i.exec(location.search); if(m) setTimeout(function(){ coopStart(m[1].toLowerCase()); }, 600); })();
+
 window.getEditorMap = function(){
   var k = KIND_FAMILY[mapKind] === mode ? mapKind : mode;
   var data = {mode:mode,apoc:apoc,gravity:gravityScale,objects:clean()};
@@ -6478,7 +6589,7 @@ window.GAME = BRIDGE = {
   pasteAt: pasteAt,
   get sel(){ return sel; },
   setSel: function(o){ sel = o || null; inspect(); },   // автотесты: выделить объект без клика
-  get layerView(){ return layerView; }, at: function(x, y){ return at(x, y); },   // автотесты: слои (см. cycleLayer)
+  get layerView(){ return layerView; }, get coop(){ return coop ? { code: coop.code, members: coop.members.length } : null; }, at: function(x, y){ return at(x, y); },   // автотесты: слои (см. cycleLayer)
   undo: undo, redo: redo,           // откат и возврат правок
   commit: commit,                   // снимок перед действием — так же зовёт инструмент
   myColor: null, onDraw: null,
@@ -6672,12 +6783,12 @@ requestAnimationFrame(loop);
    обычными HTTP-запросами — realtime соединение редактору не нужно. */
 
 </script>
-<script src="i18n.js?v=235"></script>
-<script src="abuseShow.js?v=235" defer></script>
-<script src="editorHelp.js?v=235"></script>
-<script src="editorAI.js?v=235" defer></script>
-<script src="account.js?v=235" defer></script>
-<script src="owner.js?v=235" defer></script>
+<script src="i18n.js?v=236"></script>
+<script src="abuseShow.js?v=236" defer></script>
+<script src="editorHelp.js?v=236"></script>
+<script src="editorAI.js?v=236" defer></script>
+<script src="account.js?v=236" defer></script>
+<script src="owner.js?v=236" defer></script>
 
 <script>
 /* Публикация карты в Maps Browser */
@@ -6794,7 +6905,7 @@ requestAnimationFrame(loop);
   };
 })();
 </script>
-        <script src="skinAvatar.js?v=235" defer></script>
+        <script src="skinAvatar.js?v=236" defer></script>
 <script>
 /* Маленькая кнопка возврата: полноценная шапка на весь экран редактора
    не помещается, но уйти со страницы должно быть чем. */

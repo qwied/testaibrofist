@@ -1803,6 +1803,8 @@ const adventure = require('./adventure.js')({ io, gameState, hsMembers, sessionN
   endEarly: hsEndRoundEarly });
 
 // Инициализация
+// совместный редактор карт: только пересылка правок между участниками (см. coopEdit.js)
+require('./coopEdit.js').register(io, (s) => sessionName(s.handshake.headers.cookie));
 io.on('connection', (socket) => {
   gameState.stats.totalPlayers++;
   // временная диагностика для выбора датацентра — см. recordGeoHit в extras.js
