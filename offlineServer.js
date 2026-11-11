@@ -356,6 +356,8 @@
       '#bfSandboxBtn{position:fixed;left:50%;transform:translateX(-50%);bottom:10px;z-index:2147483000;background:#111827;color:#fff;border:0;border-radius:999px;' +
       'padding:8px 14px;font:600 12px/1 system-ui,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:.88;touch-action:none}' +
       '#bfSandboxBtn:hover{opacity:1}' +
+      // на телефоне — маленький круглый значок, чтобы не закрывать страницу
+      '@media (max-width:700px){#bfSandboxBtn{font-size:0;width:34px;height:34px;padding:0;opacity:.7}#bfSandboxBtn::before{content:"\\2699";font-size:17px}}' +
       '#bfSandbox{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483001;width:380px;max-width:calc(100vw - 24px);max-height:calc(100vh - 40px);' +
       'display:none;flex-direction:column;background:#fff;color:#111827;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);font:13px/1.35 system-ui,sans-serif}' +
       '#bfSandbox.open{display:flex}' +

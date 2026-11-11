@@ -321,6 +321,8 @@
     + 'background:rgba(255,255,255,.96);border-radius:0 0 12px 12px;'
     + 'box-shadow:0 8px 20px -12px rgba(15,23,42,.4)}'
     + '#gScoresBox.open #gScoresList{display:block}'
+    + '#gScoresBox.open #gScoresList:empty{display:none}#gScoresBox.open #gScoresBtn:only-child{border-radius:20px}'
+    + '#gScoresList{font-family:inherit;font-size:12.5px}'
     + '.gScoreRow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;color:#191919}'
     + '.gScoreRow.me{font-weight:bold;color:#111827}'
     + '.gScoreRow b{color:#e2a600;flex:0 0 auto}'
@@ -1070,7 +1072,7 @@
           var mine = r.name === me.name;
           return '<div class="gScoreRow' + (mine ? ' me' : '') + '">'
             + '<span class="gScoreN">' + esc(r.name) + '</span>'
-            + '<span class="gScoreAmt"><span class="gScoreBadge">' + TR('raceScoresTitle', 'Scores') + '</span><b>' + (r.score || 0) + '</b></span></div>';
+            + '<span class="gScoreAmt"><b>' + (r.score || 0) + '</b></span></div>';
         }).join('')
       : '<div id="gScoresEmpty">' + TR('topScoresEmpty', 'No scores yet') + '</div>';
     var mine = list && list.filter(function (r) { return r.name === me.name; })[0];

@@ -108,7 +108,11 @@
     if (!el || !el.parentNode || el.parentNode.querySelector('.rlPriv')) return;
     var box = document.createElement('div');
     box.className = 'rlPriv';
-    box.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-8px 0 18px';
+    box.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin:-8px 0 18px';
+    // два ряда: «код + Войти» и кнопки новых комнат — равными долями, без переноса по одной
+    var row1 = document.createElement('div'), row2 = document.createElement('div');
+    row1.style.cssText = 'display:flex;gap:8px';
+    row2.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
     var mk = document.createElement('button');
     mk.type = 'button'; mk.className = 'rlPrivNew';
     mk.textContent = T('privCreate', 'Создать приватную комнату');
@@ -122,11 +126,13 @@
     msg.className = 'rlPrivMsg'; msg.style.cssText = 'flex-basis:100%;font-size:13px;color:#b91c1c;min-height:0';
     [mk, join].forEach(function (b) {
       b.style.cssText = 'padding:9px 14px;border-radius:10px;border:1px solid var(--line,#d7dee7);background:var(--card,#fff);'
-        + 'color:inherit;font:600 14px inherit;cursor:pointer';
+        + 'color:inherit;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;flex:1 1 auto';
     });
+    join.style.flex = '0 0 auto';
     inp.style.cssText = 'padding:9px 12px;border-radius:10px;border:1px solid var(--line,#d7dee7);background:var(--card,#fff);'
-      + 'color:inherit;font:600 14px ui-monospace,monospace;width:150px;text-transform:uppercase;letter-spacing:1px';
-    box.appendChild(mk); box.appendChild(inp); box.appendChild(join);
+      + 'color:inherit;font:600 14px ui-monospace,monospace;flex:1 1 0;min-width:0;width:auto;text-transform:uppercase;letter-spacing:1px';
+    row1.appendChild(inp); row1.appendChild(join); row2.appendChild(mk);
+    box.appendChild(row1); box.appendChild(row2);
     // дуэль 1 на 1 — только в гонке: ждёт соперника в комнате на двоих (см. /getDuelRoom)
     if (mode === 'race' && !variant) {
       var du = document.createElement('button');
@@ -138,7 +144,7 @@
           .then(function (d) { location.href = 'game?mode=race&room=' + encodeURIComponent(d.room); })
           .catch(function () { location.href = 'game?mode=race&room=duel-1'; });
       });
-      box.appendChild(du);
+      row2.appendChild(du);
       // Trials: один ловкач мешает, остальные бегут с 3 жизнями (см. /getTrialsRoom)
       var tr = document.createElement('button');
       tr.type = 'button'; tr.className = 'rlTrials';
@@ -149,7 +155,7 @@
           .then(function (d) { location.href = 'game?mode=race&room=' + encodeURIComponent(d.room); })
           .catch(function () { location.href = 'game?mode=race&room=trials-1'; });
       });
-      box.appendChild(tr);
+      row2.appendChild(tr);
     }
     box.appendChild(msg);
     el.parentNode.insertBefore(box, el.nextSibling);

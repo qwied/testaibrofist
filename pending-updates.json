@@ -156,6 +156,10 @@
     {
       "title": "Player collisions",
       "text": "Race maps have a new option in the editor: Player collisions. On such maps you can stand on top of other players to reach higher places. You still pass through them from the side and from below, so nobody gets stuck."
+    },
+    {
+      "title": "Cleaner look across the site",
+      "text": "Maps Browser filters line up in one row and the map cards are more compact. The room buttons on mode pages no longer spill onto extra lines. The Hall of Fame, the lobby chat, profile reputation, the Servers page, Messages and the accessories shop on phones look tidier. The race score box in the game is cleaner."
     }
   ]
 }

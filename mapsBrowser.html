@@ -11,16 +11,17 @@
      фактором масштаба. Теперь полноразмерный масштаб 1:1, а колонки
      Play/Vote доступны свайпом вбок внутри каждой строки, как и раньше. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="stylesheet" href="ui.css?v=238">
+<link rel="stylesheet" href="ui.css?v=239">
 <script src="offline.js?v=9"></script>
-<script src="offlineServer.js?v=10"></script>
-<script src="theme.js?v=238"></script>
-<script src="device.js?v=238"></script>
-<script src="sound.js?v=238"></script>
+<script src="offlineServer.js?v=11"></script>
+<script src="theme.js?v=239"></script>
+<script src="device.js?v=239"></script>
+<script src="sound.js?v=239"></script>
 <style>
-.mbFilters{display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:9px;margin-bottom:6px;align-items:center}
-.mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0}
-.mbFilters .bfBtn{margin-bottom:0;width:auto;padding:11px 22px}
+.mbFilters{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:12px;align-items:center}
+.mbFilters .bfInput,.mbFilters .bfSelect{margin-bottom:0;flex:1 1 170px;min-width:0;width:auto}
+.mbFilters .mbFavOnly{flex:0 0 auto}
+.mbFilters .bfBtn{margin-bottom:0;width:auto;padding:11px 26px;flex:0 0 auto}
 
 /* Вся таблица — шапка-колонки и список карт — одно целое: на телефоне
    они едут по горизонтали СИНХРОННО, одним общим скроллом .mbScroll,
@@ -171,8 +172,8 @@
   /* Фильтры в пять колонок сжимали выпадашки до 26px (текста не видно),
      а «Обновить» уезжал за правый край. Здесь — по два в ряд, кнопка
      на всю ширину. */
-  .mbFilters{grid-template-columns:1fr 1fr}
-  .mbFilters .bfBtn{grid-column:1/-1;width:100%}
+  .mbFilters .bfInput,.mbFilters .bfSelect{flex:1 1 100%}
+  .mbFilters .bfBtn{flex:1 1 auto}
 }
 /* палец: звезда, оценки, чекбоксы с подписью, листалка и ник автора —
    площадь нажатия не меньше 44×44 */
@@ -184,12 +185,14 @@
   .mbHead .bfPager button{width:44px;height:44px}
   .mbAuthor a{display:block;line-height:44px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
-.mbPlays{font-size:12px;color:var(--muted,#6b7280);margin:2px 0 4px}
+.mbPlays{font-size:12px;color:var(--muted,#6b7280);margin:0}
+.mbTools{display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px}
+.mbTools .mbPracticeOpts{padding-left:0}
 .mbPlays a{color:inherit;text-decoration:underline;cursor:pointer}
 .mbDaily{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:12px 14px;border-radius:14px;
   background:linear-gradient(90deg,#fef3c7,#fde68a);color:#111827;border:1px solid #f59e0b;font-size:14px}
 .mbDaily b{font-size:15px}
-.mbDaily .go{margin-left:auto}
+.mbDaily .go{margin-left:auto;width:auto;display:inline-block;padding:8px 22px;font-size:14px;text-decoration:none;text-align:center}
 .mbPack{flex-direction:column;align-items:stretch}
 .mbPackHead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .mbPackList{display:flex;gap:6px;flex-wrap:wrap}
@@ -299,15 +302,15 @@
   </div>
 </div>
 
-<link rel="stylesheet" href="mobile.css?v=238">
-<script src="i18n.js?v=238"></script>
-<script src="coin.js?v=238"></script>
-<script src="skinRender.js?v=238"></script>
-<script src="skinAvatar.js?v=238" defer></script>
-<script src="shell.js?v=238"></script>
-<script src="abuseShow.js?v=238" defer></script>
-<script src="account.js?v=238" defer></script>
-<script src="owner.js?v=238" defer></script>
+<link rel="stylesheet" href="mobile.css?v=239">
+<script src="i18n.js?v=239"></script>
+<script src="coin.js?v=239"></script>
+<script src="skinRender.js?v=239"></script>
+<script src="skinAvatar.js?v=239" defer></script>
+<script src="shell.js?v=239"></script>
+<script src="abuseShow.js?v=239" defer></script>
+<script src="account.js?v=239" defer></script>
+<script src="owner.js?v=239" defer></script>
 <script>
 (function () {
   'use strict';
@@ -415,6 +418,7 @@
       +   (m.copyable && !mine ? ' · <a href="editor?editMap=' + encodeURIComponent(m.mapName) + '&editAuthor=' + encodeURIComponent(m.author) + '&copy=1">' + T('copyMap', 'Копировать в редактор') + '</a>' : '')
       +   (me && !me.guest && !mine ? ' · <a href="#" data-report="1">' + T('reportMap', 'Пожаловаться') + '</a>' : '') + '</div>'
       + medalsRow(m)
+      + '<div class="mbTools">'
       + '<label class="mbPractice" title="' + T('practiceHint', 'Умирая, возвращаешься туда, где умер, а не на старт')
       +   '"><input type="checkbox" data-practice="1"> ' + T('practiceTxt', 'Practice') + '</label>'
       + '<span class="mbPracticeOpts" style="display:none">'
@@ -425,6 +429,7 @@
       + '</span>'
       + '<button class="mbCommentsToggle" data-comments-toggle="1" data-count="' + (m.commentCount || 0) + '">' + COMMENT_ICON
       +   ' <span>' + T('commentsTxt', 'Комментарии') + ' (' + (m.commentCount || 0) + ')</span></button>'
+      + '</div>'
       + '<div class="mbComments" style="display:none">'
       +   '<div class="mbCommentsList"></div>'
       +   (me && !me.guest
