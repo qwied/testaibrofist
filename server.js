@@ -432,7 +432,7 @@ function isPrivateRoom(roomName) {
 /* Настройки своей комнаты (идея #760, «#AddPrivateRooms»): в приватной комнате пряток хост —
    первый вошедший (ушёл — следующий) — задаёт время пряток и охоты, число искателей, лимит
    игроков, режим и карту. Действуют со следующего лобби/раунда. */
-const HOST_VARIANTS = ['', 'classic', 'cops', 'hottrap', 'ninja'];
+const HOST_VARIANTS = ['', 'classic', 'cops', 'hottrap', 'ninja', 'medic'];
 function hsCfgClean(d) {
   const n = (v, lo, hi, def) => { const x = Math.round(Number(v)); return x >= lo && x <= hi ? x : def; };
   const c = { hideS: n(d && d.hideS, 10, 90, 30), roundS: n(d && d.roundS, 30, 600, 120), seekers: n(d && d.seekers, 1, 3, 1),
@@ -1287,7 +1287,9 @@ function hsPickVariant(st, n) {
   if (st.apoc) return 'zombie';
   if (st.storyMap || n < 2) return 'classic';
   if (st.cfg && st.cfg.variant) return st.cfg.variant;
-  if (forced === 'classic' || forced === 'cops' || forced === 'hottrap' || forced === 'ninja') return forced;
+  if (forced === 'classic' || forced === 'cops' || forced === 'hottrap' || forced === 'ninja' || forced === 'medic') return forced;
+  // Медик (идея #761): один из прячущихся может один раз за раунд вернуть пойманного в игру
+  if (n >= 3 && st.variant !== 'medic' && Math.random() < 0.12) return 'medic';
   // Ninja (идея игроков): обычные прятки, но каждый видит других только рядом с собой
   if (st.variant !== 'ninja' && Math.random() < 0.15) return 'ninja';
   // Hot Trap (идея игроков): короткий раунд, искатель обязан поймать норму — иначе «сгорел»
@@ -1558,7 +1560,7 @@ function hsStartRound(io, room, st) {
     : (st.variant === 'cops' && st.copIds ? st.copIds : [st.seekerId]).filter(id => gameState.players.get(id));
   if (!hunters.length && st.seekerId && !hsNoHunt(st.variant)) hunters.push(st.seekerId);
   // хост комнаты задал несколько искателей: добираем жребием, но хотя бы один прячется
-  if (st.cfg && st.cfg.seekers > 1 && (st.variant === 'classic' || st.variant === 'ninja') && hunters.length) {
+  if (st.cfg && st.cfg.seekers > 1 && (st.variant === 'classic' || st.variant === 'ninja' || st.variant === 'medic') && hunters.length) {
     const pool = hsMembers(room).map(m => m.id).filter(id => hunters.indexOf(id) === -1);
     while (hunters.length < st.cfg.seekers && pool.length > 1) hunters.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
   }
@@ -1572,6 +1574,9 @@ function hsStartRound(io, room, st) {
       return m;
     });
   st.caughtSet = new Set();
+  // Медик — случайный из прячущихся; спасти может один раз за раунд (см. hsFree)
+  st.medicId = st.variant === 'medic' && st.roundMembers.length ? st.roundMembers[Math.floor(Math.random() * st.roundMembers.length)].id : null;
+  st.medicUsed = false;
   /* От этой отметки в hsCatch считается, сколько искатель реально
      пробежал за раунд. Без неё хватало одного честного шага за всю
      сессию, чтобы дальше ловить телепортом в каждом следующем раунде.
@@ -1628,6 +1633,7 @@ function hsStartRound(io, room, st) {
     teams: teamVar ? hsTeamsObj(st) : null, bases: teamVar ? st.bases : null, points: st.domPoints || null,
     ctf: st.ctf ? hsCtfState(st) : null, dom: st.dom ? hsDomState(st) : null,
     grace: secret ? HS_MURDER_GRACE_MS : 0, war: war.state(st), adv: adventure.state(st),
+    medic: st.medicId || null,
     trap: st.variant === 'hottrap' ? (st.trapQuota = Math.max(1, Math.ceil(st.roundMembers.length * HS_TRAP_SHARE))) : 0 });
   war.spawnAll(st, room);
   war.tokRoundStart(st, room, hsMembers(room).length);
@@ -2429,7 +2435,8 @@ io.on('connection', (socket) => {
     if (!player || String(player.room).indexOf('hideAndSeek:') !== 0) return;
     const room = player.room;
     const st = hsRooms.get(room);
-    if (!st || st.phase !== 'round' || st.variant !== 'cops' || st.caughtSent || !st.caughtSet) return;
+    const medic = !!st && st.variant === 'medic' && st.medicId === socket.id && !st.medicUsed;
+    if (!st || st.phase !== 'round' || (st.variant !== 'cops' && !medic) || st.caughtSent || !st.caughtSet) return;
     if (st.seekerIds.has(socket.id) || st.caughtSet.has(socket.id)) return;
     if (!(st.roundMembers || []).some(m => m.id === socket.id)) return;
     const targetId = String((data && data.targetId) || '');
@@ -2439,7 +2446,8 @@ io.on('connection', (socket) => {
     const sp = player.position, tp = target.position;
     if (!sp || !tp || Math.abs(sp.x - tp.x) > 80 || Math.abs(sp.y - tp.y) > 120) return;
     st.caughtSet.delete(targetId);
-    io.to(room).emit('hsFreed', { id: targetId, name: target.name, by: player.name });
+    if (medic) st.medicUsed = true;
+    io.to(room).emit('hsFreed', { id: targetId, name: target.name, by: player.name, medic });
   });
 
 

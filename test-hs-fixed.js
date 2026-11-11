@@ -166,7 +166,7 @@ const mapOf = p => { const l = p.last('hsPhase', d => d.phase === 'lobby'); retu
   // за это время у B прошло несколько раундов
   const seq = hs.filter((p, i) => i % 2 === 0).map(p => p.all('hsRoulette').map(d => d.variant));
   const flat = [].concat(...seq);
-  ok(flat.every(v => v === 'classic' || v === 'cops' || v === 'hottrap' || v === 'ninja'), 'в прятках только Classic, Cops & Robbers, Hot Trap и Ninja', [...new Set(flat)].join(','));
+  ok(flat.every(v => v === 'classic' || v === 'cops' || v === 'hottrap' || v === 'ninja' || v === 'medic'), 'в прятках только Classic, Cops & Robbers, Hot Trap, Ninja и Medic', [...new Set(flat)].join(','));
   ok(flat.indexOf('cops') !== -1, 'Cops & Robbers выпадает', flat.filter(v => v === 'cops').length + ' из ' + flat.length);
   ok(seq.every(s => s.every((v, i) => !(v === 'cops' && s[i - 1] === 'cops'))), 'два раза подряд — никогда', seq.map(s => s.map(v => v === 'cops' ? 'K' : 'c').join('')).join(' '));
 

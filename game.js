@@ -780,7 +780,7 @@
   var hostInfo = null, hostMaps = null;
   function hostCfgText(c) {
     if (!c) return TR('hostDefault', 'обычные');
-    var V = { '': TR('hostAuto', 'Авто'), classic: TR('modeClassic', 'Classic'), cops: TR('modeCops', 'Cops & Robbers'), hottrap: TR('modeHotTrap', 'Hot Trap'), ninja: TR('modeNinja', 'Ниндзя') };
+    var V = { '': TR('hostAuto', 'Авто'), classic: TR('modeClassic', 'Classic'), cops: TR('modeCops', 'Cops & Robbers'), hottrap: TR('modeHotTrap', 'Hot Trap'), ninja: TR('modeNinja', 'Ниндзя'), medic: TR('modeMedic', 'Медик') };
     return TR('hostHide', 'Прятки') + ' ' + c.hideS + 's · ' + TR('hostHunt', 'Охота') + ' ' + c.roundS + 's · ' + TR('hostSeekers', 'Искателей') + ' ' + c.seekers
       + ' · ' + TR('hostLimit', 'Мест') + ' ' + c.limit + ' · ' + V[c.variant || ''] + (c.map ? ' · ' + c.map.mapName : '');
   }
@@ -806,7 +806,7 @@
       + row(TR('hostHuntL', 'Время охоты, сек'), num('hcHunt', c.roundS, 30, 600))
       + row(TR('hostSeekersL', 'Искателей'), num('hcSeek', c.seekers, 1, 3))
       + row(TR('hostLimitL', 'Мест в комнате'), num('hcLim', c.limit, 2, 40))
-      + row(TR('hostModeL', 'Режим'), '<select id="hcVar" style="' + sel + '">' + ['', 'classic', 'cops', 'hottrap', 'ninja'].map(function (v) {
+      + row(TR('hostModeL', 'Режим'), '<select id="hcVar" style="' + sel + '">' + ['', 'classic', 'cops', 'hottrap', 'ninja', 'medic'].map(function (v) {
           return '<option value="' + v + '"' + ((c.variant || '') === v ? ' selected' : '') + '>' + esc(v ? variantName(v) : TR('hostAuto', 'Авто')) + '</option>'; }).join('') + '</select>')
       + row(TR('hostMapL', 'Карта'), '<select id="hcMap" style="' + sel + '"><option value="">' + esc(TR('hostMapAny', 'Случайная / голосование')) + '</option></select>')
       + '<div style="color:#6b7280;font-size:12px">' + esc(TR('hostHint', 'Применится со следующего раунда.')) + '</div>'
@@ -2000,6 +2000,8 @@
     if (hsVariant === 'hottrap') return (me.role === 'seeker'
         ? TR('hintTrapSeeker', 'Hot Trap: поймай хотя бы {q} до конца короткого раунда — иначе сгоришь!')
         : TR('hintTrapHider', 'Hot Trap: искателю нужно поймать {q} — продержись, и он сгорит!')).replace('{q}', String(trapQuota || 1));
+    if (hsVariant === 'medic') return hsMedic === (socket && socket.id) ? TR('hintMedicMe', 'Ты медик! Коснись пойманного — он вернётся в игру. Только один раз за раунд.')
+      : TR('hintMedic', 'Медик: {n} может один раз вернуть пойманного в игру.').replace('{n}', esc(nameOfId(hsMedic) || '?'));
     if (hsVariant === 'ninja') return TR('hintNinja', 'Ниндзя: других игроков видно только рядом с тобой. Двигайся тихо!');
     if (hsVariant === 'cops') return me.role === 'seeker' ? TR('hintCop', 'Лови грабителей — пойманные замирают на месте.')
       : TR('hintRobber', 'Прячься от копов и касанием освобождай пойманных.');
@@ -2212,7 +2214,7 @@
   /* Рулетка режима крутит только то, что бывает в этой комнате: в прятках — Classic, Zombie
      Apocalypse и Cops & Robbers, в Team Battle — Capture the Flag и Domination, в Murder
      Mystery — он сам (пока игроков мало — «Ждём игроков», wait: без искателя и поимок, см. hsFixedWait в server.js). */
-  var VARIANTS = { hs: ['classic', 'zombie', 'cops', 'hottrap', 'ninja'], murder: ['wait', 'murder'], team: ['wait', 'ctf', 'dom', 'soccer'],
+  var VARIANTS = { hs: ['classic', 'zombie', 'cops', 'hottrap', 'ninja', 'medic'], murder: ['wait', 'murder'], team: ['wait', 'ctf', 'dom', 'soccer'],
                    war: ['wait', 'ffa', 'tdm', 'hunger', 'cp', 'bro', 'pirate'],
                    party: ['wait', 'quiz', 'guess', 'build', 'ffa', 'murder', 'zombie', 'cops'],
                    adventure: ['quest', 'defense'] };
@@ -2223,7 +2225,7 @@
       : v === 'dom' ? TR('modeDom', 'Domination') : v === 'team' ? TR('modeTeam', 'Team Battle')
       : v === 'war' ? TR('modeWar', 'War') : v === 'ffa' ? TR('modeFfa', 'Free for All') : v === 'tdm' ? TR('modeTdm', 'Team War')
       : v === 'hunger' ? TR('modeHunger', 'Hunger Games') : v === 'cp' ? TR('modeCp', 'Control Points') : v === 'bro' ? TR('modeBro', 'Bro RED')
-      : v === 'pirate' ? TR('modePirate', 'Pirate War') : v === 'hottrap' ? TR('modeHotTrap', 'Hot Trap') : v === 'ninja' ? TR('modeNinja', 'Ниндзя') : v === 'soccer' ? TR('modeSoccer', 'Футбол')
+      : v === 'pirate' ? TR('modePirate', 'Pirate War') : v === 'hottrap' ? TR('modeHotTrap', 'Hot Trap') : v === 'ninja' ? TR('modeNinja', 'Ниндзя') : v === 'medic' ? TR('modeMedic', 'Медик') : v === 'soccer' ? TR('modeSoccer', 'Футбол')
       : v === 'party' ? TR('modeParty', 'Вечеринка') : v === 'quiz' ? TR('modeQuiz', 'Викторина')
       : v === 'guess' ? TR('modeGuess', 'Угадай слово') : v === 'build' ? TR('modeBuild', 'Строительная битва')
       : v === 'adventure' ? TR('modeAdventure', 'Приключение') : v === 'quest' ? TR('modeQuest', 'Башня')
@@ -3230,8 +3232,10 @@
     // Cops and Robbers: пойманного освободили
     socket.on('hsFreed', function (d) {
       if (MODE !== 'hideAndSeek' || !d || !d.id) return;
+      if (d.medic) hsMedicUsed = true;
       if (d.id === socket.id) { me.caught = false; GAME.frozen = false; applyColor(); }
       else if (others[d.id]) others[d.id].caught = false;
+      if (d.medic) { log(TR('hsMedicSaved', 'Медик {b} вернул {n} в игру!').replace('{b}', '<b>' + esc(d.by || '') + '</b>').replace('{n}', '<b>' + esc(d.name || nameOfId(d.id)) + '</b>')); return; }
       log(TR('hsFreed', '{b} освободил {n}!').replace('{b}', '<b>' + esc(d.by || '') + '</b>').replace('{n}', '<b>' + esc(d.name || nameOfId(d.id)) + '</b>'));
     });
 
@@ -3324,6 +3328,7 @@
         hsApocRound = !!d.apoc;
         if (d.variant) hsVariant = d.variant;
         trapQuota = d.trap || 0;
+        hsMedic = d.medic || null; hsMedicUsed = false;
         warSet(isWarV(hsVariant) ? d.war : null);
         advSet(advV(hsVariant) ? d.adv : null);
         if (war && war.bro) broId = war.bro;
@@ -3332,7 +3337,7 @@
         // копы — все сразу; убийца тайный: его знает только он сам (fixVariantRole)
         (d.seekerIds || []).forEach(function (id) { hsSeekerIds[id] = true; });
         // хост задал несколько искателей — добранные жребием тоже ищут
-        if (socket && hsSeekerIds[socket.id] && me.role !== 'seeker' && (hsVariant === 'classic' || hsVariant === 'ninja')) setRole('seeker');
+        if (socket && hsSeekerIds[socket.id] && me.role !== 'seeker' && (hsVariant === 'classic' || hsVariant === 'ninja' || hsVariant === 'medic')) setRole('seeker');
         if (teamVariant()) {
           hsTeams = d.teams || hsTeams; hsBases = d.bases || hsBases; hsPoints = d.points || hsPoints;
           ctfState = d.ctf || null; domState = d.dom || null;
@@ -3351,7 +3356,7 @@
         };
         if (!STORY) loadServerMap(d.map, teleportSeeker); else teleportSeeker();
         log(d.apoc ? TR('roundStartApoc', 'Раунд начался! Зомби уже идёт за кем-то...')
-          : hsVariant === 'wait' || hsVariant === 'murder' || hsVariant === 'cops' || hsVariant === 'hottrap' || hsVariant === 'ninja' || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant) ? variantHint()
+          : hsVariant === 'wait' || hsVariant === 'murder' || hsVariant === 'cops' || hsVariant === 'hottrap' || hsVariant === 'ninja' || hsVariant === 'medic' || isWarV(hsVariant) || partyGame(hsVariant) || advV(hsVariant) ? variantHint()
           : TR('roundStart', 'Раунд начался! 2 минуты'));
         // Murder Mystery: первые секунды охоты убийца никого не трогает (см. HS_MURDER_GRACE_MS)
         mmGraceUntil = hsVariant === 'murder' ? Date.now() + (Number(d.grace) || 0) : 0;
@@ -3560,7 +3565,7 @@
     /* Murder Mystery и Cops and Robbers: решает только сервер — заранее никого не помечаем
        и в чат «caught!» не пишем (выдало бы убийцу). Повтор по той же цели — не чаще раза
        в 1.2 с: пока сервер не ответил, касание длится десятки кадров. */
-    var special = hsVariant === 'murder' || hsVariant === 'cops';
+    var special = hsVariant === 'murder' || hsVariant === 'cops' || (hsVariant === 'medic' && hsMedic === socket.id && !hsMedicUsed);
     function touching(o) { return Math.abs(o.tx - p.x) < 34 && Math.abs(o.ty - p.y) < 60; }
     function sendOnce(ev, id) {
       var now = Date.now();
@@ -3575,7 +3580,7 @@
         // шериф: касание проверяет сервер — убийцу поймает, невиновному ничего не будет
         if (hsVariant === 'murder' && hsSecret === 'sheriff' && !o.caught) sendOnce('hsCatch', id);
         // грабитель освобождает пойманного своего
-        if (hsVariant === 'cops' && o.caught && !hsSeekerIds[id]) sendOnce('hsFree', id);
+        if ((hsVariant === 'cops' || hsVariant === 'medic') && o.caught && !hsSeekerIds[id]) sendOnce('hsFree', id);
       });
     }
     /* Capture the Flag: взять вражеский флаг, донести до своего, вернуть свой у соперника —
@@ -3811,6 +3816,7 @@
   var SHOP_HS = ['speed', 'jump', 'invis', 'radar', 'trap'];
   /* Капканы прячущихся: видят их все, кроме искателей; искатель, наступив, застревает. */
   var hsTraps = [], trapFrozenUntil = 0;
+  var hsMedic = null, hsMedicUsed = false;   // вариант «Медик»: кто медик и потратил ли спасение
   function trapTick(ctx) {
     if (MODE !== 'hideAndSeek' || phase !== 'round') { if (hsTraps.length) hsTraps = []; return; }
     var p = GAME.pl, seeker = me.role === 'seeker';

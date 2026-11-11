@@ -148,6 +148,10 @@
     {
       "title": "Co-op map editor",
       "text": "The map editor has a new Co-op button. It starts a shared session and copies a link; friends who open it see the same map and every change anyone makes, along with each other's cursors. Up to 6 people can build together."
+    },
+    {
+      "title": "Medic rounds in Hide and Seek",
+      "text": "Hide and Seek has a new Medic round. One of the hiders is the medic and can touch a caught player once per round to bring them back into the game. Hosts of private rooms can pick this mode too."
     }
   ]
 }
