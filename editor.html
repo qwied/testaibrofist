@@ -1242,6 +1242,13 @@ var PAINT = {
    TOOL TABLE
    ══════════════════════════════════════════════════ */
 var ALL = "hideAndSeek race";
+/* Дополнительные кнопки палитры используют уже поддерживаемые движком
+   типы объектов: это сохраняет совместимость карт, физики и публикации. */
+var FIGURE_TOOL = {
+  diamond: {type:"triangle", shape:"rhombus"},
+  oval: {type:"circle"},
+  semicircle: {type:"triangle", shape:"semicircle"}
+};
 /* У каждого режима свои объекты. Общие есть везде, остальные привязаны
    к одному режиму и в другом просто не существуют — ни в палитре,
    ни при загрузке карты, ни при публикации (это проверяет сервер). */
@@ -1251,6 +1258,9 @@ var TOOLS = [
   {t:"rect",       n:"Блок",        k:"toolBlock",      m:ALL},
   {t:"circle",     n:"Круг",        k:"toolCircle",     m:ALL},
   {t:"triangle",   n:"Треугольник", k:"toolTriangle",   m:ALL},
+  {t:"diamond",    n:"Ромб",         k:"toolDiamond",    m:ALL},
+  {t:"oval",       n:"Овал",         k:"toolOval",       m:ALL},
+  {t:"semicircle", n:"Полукруг",     k:"toolSemicircle", m:ALL},
   {t:"text",       n:"Текст",       k:"toolText",       m:ALL},
   {t:"spawn",      n:"Точка старта",k:"toolSpawn",      m:ALL},
   {t:"button",     n:"Кнопка",      k:"toolButton",     m:ALL},
@@ -4472,7 +4482,8 @@ function drawIcon(cvs, type){
     g.roundRect ? g.roundRect(11,22,25,16,7) : g.rect(11,22,25,16);
     g.fill(); g.restore();
   } else {
-    var s = SIZES[type] || [40,40];
+    var model = FIGURE_TOOL[type] || {type:type};
+    var s = SIZES[type] || SIZES[model.type] || [40,40];
     var preview = document.createElement("canvas");
     preview.width = preview.height = 512;
     var p = preview.getContext("2d");
@@ -4481,15 +4492,16 @@ function drawIcon(cvs, type){
     p.save();
     p.translate((512-s[0]*unit)/2,(512-s[1]*unit)/2);
     p.scale(unit,unit);
-    var o = mk(type,0,0,s[0],s[1]); uid--;
-    var solidModel = SOLID.indexOf(type) !== -1;
+    var o = mk(model.type,0,0,s[0],s[1]); uid--;
+    if(model.shape) o.shape = model.shape;
+    var solidModel = SOLID.indexOf(model.type) !== -1;
     if(solidModel){
       p.shadowColor = "rgba(15,23,42,.24)";
       p.shadowBlur = Math.max(2,Math.min(7,Math.min(o.w,o.h)*.035));
       p.shadowOffsetX = 0;
       p.shadowOffsetY = Math.max(1,Math.min(3,Math.min(o.w,o.h)*.012));
     }
-    (PAINT[type] || PAINT.rect)(o);
+    (PAINT[model.type] || PAINT.rect)(o);
     p.shadowColor = "transparent"; p.shadowBlur = 0; p.shadowOffsetX = 0; p.shadowOffsetY = 0;
     if(solidModel && !(+o.strokeW > 0)){
       var outline = rawPoly(o);
@@ -4968,8 +4980,10 @@ function down(x,y,alt,shift){
   }
   // кристалл обороны на карте один — новый заменяет старый
   if(tool === "crystal") objects = objects.filter(function(o){ return o.type !== "crystal"; });
-  var d = SIZES[tool] || [50,50];
-  var o = mk(tool, x, y, 1, 1);
+  var model = FIGURE_TOOL[tool] || {type:tool};
+  var d = SIZES[tool] || SIZES[model.type] || [50,50];
+  var o = mk(model.type, x, y, 1, 1);
+  if(model.shape) o.shape = model.shape;
   // размер этих типов задан движком с первого кадра — см. move() ниже,
   // где для них перетаскивание двигает объект, а не растягивает
   if(tool === "spawn" || tool === "zombie" || tool === "teleport" || tool === "seekerSpot" || tool === "cannon" || tool === "camera" || tool === "spyFlag" || tool === "enemy" || tool === "crystal" || tool === "heli"){ o.w = d[0]; o.h = d[1]; }
